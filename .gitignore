@@ -6,6 +6,7 @@ DerivedData/
 .build/
 .swiftpm/
 *.xcresult
+Package.resolved
 # macOS
 .DS_Store
 # Python (Tools/migrate)

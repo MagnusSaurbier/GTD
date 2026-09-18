@@ -1,0 +1,14 @@
+---
+time: "07:00"
+---
+- [ ] Wake up
+- [ ] Record dreams
+- [ ] Drink TPS/Water
+    - [ ] Creatine if morning sport
+- [ ] 5 min workout
+- [ ] Cold shower
+- [ ] Frühstück
+    - [ ] Brainsmoothie
+    - [ ] Maybe Brötchen
+- [ ] Sonnencreme
+- [ ] Get things done

@@ -1,0 +1,84 @@
+import Foundation
+
+// Platform-free half of the token set (STYLEGUIDE §2.4, §5). Colours, fonts, shapes and
+// animations need SwiftUI and live in `Colors.swift` / `Typography.swift` / `Motion.swift`.
+
+/// 4-pt grid (STYLEGUIDE §2.4). Feature code never writes a literal padding.
+public enum Spacing {
+    public static let xs: CGFloat = 4
+    public static let s: CGFloat = 8
+    public static let m: CGFloat = 12
+    public static let l: CGFloat = 16
+    public static let xl: CGFloat = 24
+    public static let xxl: CGFloat = 32
+
+    /// Horizontal page inset: 16 on iPhone, 20 in Mac content.
+    #if os(macOS)
+    public static let screenMargin: CGFloat = 20
+    #else
+    public static let screenMargin: CGFloat = 16
+    #endif
+
+    /// Inside inbox and routine cards.
+    public static let cardPadding: CGFloat = 20
+    /// Between chips, both axes.
+    public static let chipGap: CGFloat = 8
+    /// Row top/bottom padding.
+    public static let rowVertical: CGFloat = 10
+
+    /// Minimum hit target (STYLEGUIDE §2.4).
+    #if os(macOS)
+    public static let minHitTarget: CGFloat = 24
+    public static let chipHeight: CGFloat = 24
+    #else
+    public static let minHitTarget: CGFloat = 44
+    public static let chipHeight: CGFloat = 34
+    #endif
+
+    /// Max width of a card on wide layouts.
+    public static let cardMaxWidth: CGFloat = 560
+}
+
+/// Corner radii. `Radius.chipShape` (a `Capsule`) lives in the SwiftUI half.
+public enum Radius {
+    public static let card: CGFloat = 24
+    public static let tile: CGFloat = 12
+    /// Heatmap cells.
+    public static let cell: CGFloat = 4
+}
+
+/// The one shadow in the app (STYLEGUIDE §2.4). Dark mode uses a hairline stroke instead.
+public enum Elevation {
+    public static let cardShadowOpacity: Double = 0.10
+    public static let cardShadowRadius: CGFloat = 16
+    public static let cardShadowY: CGFloat = 6
+    public static let hairlineWidth: CGFloat = 0.5
+}
+
+/// Durations behind `Motion` (STYLEGUIDE §5). No other curves exist.
+public enum MotionTiming {
+    public static let standard: Double = 0.3
+    public static let cardExit: Double = 0.25
+    public static let cardReturnResponse: Double = 0.35
+    public static let cardReturnDamping: Double = 0.8
+    /// Reduce Motion replaces movement with a cross-fade of this length.
+    public static let reducedCrossfade: Double = 0.2
+    /// Check-draw on completing an action, then the row collapses.
+    public static let checkDraw: Double = 0.25
+    public static let rowCollapse: Double = 0.4
+    /// Undo toast auto-dismiss.
+    public static let toastDuration: Double = 5
+}
+
+/// Inbox-card drag behaviour (STYLEGUIDE §3.6). Pure numbers so the gesture logic is testable.
+public enum DragThresholds {
+    /// The drag locks onto one axis after this distance.
+    public static let axisLock: CGFloat = 12
+    /// Fraction of the card width that files horizontally.
+    public static let horizontal: CGFloat = 0.35
+    /// Fraction of the card height that files upward.
+    public static let vertical: CGFloat = 0.25
+    /// Trash needs a longer pull.
+    public static let trash: CGFloat = 0.40
+    public static let maxRotationDegrees: Double = 4
+}
