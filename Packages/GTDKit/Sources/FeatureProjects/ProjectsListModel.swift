@@ -44,4 +44,24 @@ public final class ProjectsListModel {
     public func demotionCount(for project: NoteID) -> Int {
         model.snapshot.actions.count { $0.project == project && $0.status.countsTowardCap }
     }
+
+    /// Toggles one status in the list's filter set (E4 "Sections/filters"). Empty means "all" —
+    /// `sections` treats it that way, so clearing the last filter shows every status again.
+    public func toggleStatus(_ status: ProjectStatus) {
+        if statuses.contains(status) {
+            statuses.remove(status)
+        } else {
+            statuses.insert(status)
+        }
+    }
+
+    // MARK: - Create area / project
+
+    public func createArea(title: String) async throws {
+        try await model.send(.createArea(title: title))
+    }
+
+    public func createProject(_ draft: ProjectDraft) async throws {
+        try await model.send(.createProject(draft))
+    }
 }
