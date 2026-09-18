@@ -59,7 +59,7 @@ FeatureOverview → all other Feature* (it is the Mac shell's content router)
 App → everything
 ```
 
-Features depend on `GTDAppCore` + `DesignSystem` only — never on `GTDVault`/`GTDServices`.
+Features depend on `GTDAppCore` + `DesignSystem` (plus `GTDFixtures`, for `#Preview`s only) — never on `GTDVault`/`GTDServices`.
 They are developed against `InMemoryBackend` + `GTDFixtures` and SwiftUI previews.
 
 ## 3. Vault layout
