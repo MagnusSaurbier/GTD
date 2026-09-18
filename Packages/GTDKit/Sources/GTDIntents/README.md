@@ -1,24 +1,53 @@
 # GTDIntents
 
-App Intents for capture and routines, plus the Shortcuts recipes (C1, C2, R3).
-
-**Owned by T30.** T00 created a compiling shell: the public root views with the exact signatures
-from the task brief, plus the Linux-compilable model listed below. The visuals and behaviour are
-T30's work; `docs/STYLEGUIDE.md` is binding and its §9 checklist is part of the gate.
+App Intents for capture and routines, plus the Shortcuts recipes (`Shortcuts/README.md`).
+**Owned by T30.** Requirements: C1, C2, C3 (C4 out of scope), R3.
 
 ## Public API
 
-`CaptureToInboxIntent`, `StartRoutineIntent`, `ProcessInboxIntent` (all inside `#if canImport(AppIntents)`).
-Linux-compilable: `CaptureRequest` (normalisation + the write, testable with a fake writer),
-`CaptureStamp` (the `yyyy-MM-dd HHmmss` file-name format), `CaptureError`.
+Linux-testable (Foundation-only):
+- `CaptureRequest` — normalises text (rejects empty/whitespace-only, trims, keeps line breaks)
+  and routes to `GTDVault.InboxWriter`; `perform(writer:now:) throws(CaptureError)`.
+- `CaptureError` — `.emptyText`, `.noVaultSelected`, `.bookmarkStale`, `.writeFailed(String)`;
+  conforms to `LocalizedError` so a thrown one is a usable spoken/visible message on its own.
+- `CaptureStamp` — the `yyyy-MM-dd HHmmss` file-name format, hand-written (locale/platform-free).
+- `RoutineDeepLink` / `InboxDeepLink` — build the `gtd://routine/<id>` / `gtd://inbox` strings
+  `StartRoutineIntent` / `ProcessInboxIntent` hand to `PendingRoute`.
+- `PendingRoute` (+ `PendingRouteStore`, `InMemoryPendingRouteStore`, `UserDefaultsPendingRouteStore`)
+  — where a background-launched intent leaves "where the app should navigate once foregrounded";
+  see its doc comment for why (`openAppWhenRun` carries no payload, and this app has no separate
+  App Intents extension). T40 should `consume()` it on launch and on every foreground, alongside
+  its existing `onOpenURL`/`NotificationRoute` handling.
+
+`#if canImport(AppIntents)` (`CaptureIntents.swift`, unverified — no Xcode here):
+`CaptureToInboxIntent(text:)`, `StartRoutineIntent(routine:)`, `ProcessInboxIntent`,
+`GTDAppShortcuts: AppShortcutsProvider`.
 
 ## Platform guards (ARCHITECTURE §5)
 
-Views live in files wrapped entirely in `#if canImport(SwiftUI)`. The logic worth testing lives
-in the Linux-compilable file(s) named above, so `swift test` covers it without Xcode. Every
-SwiftUI file in this target was written without a compiler and is **unverified** — say so in your
-Result until it has been built on a Mac.
+All AppIntents machinery lives in `CaptureIntents.swift`, guarded entirely by
+`#if canImport(AppIntents)`. Everything worth unit-testing (`CaptureRequest`, `CaptureError`,
+`CaptureStamp`, `RoutineDeepLink`, `InboxDeepLink`, `PendingRoute`) is Foundation-only and lives
+outside that guard, so `swift test` covers it without Xcode.
+
+## Gotchas
+
+- **`CaptureError.bookmarkStale` is currently unreachable through `InboxWriter`.**
+  `VaultBookmark.startAccess()` does `try? resolve()`, so a stale/corrupt bookmark and a
+  never-picked one both come out as `VaultError.noVaultSelected`. `.noVaultSelected`'s message is
+  worded to cover both; `.bookmarkStale` is kept for if/when `GTDVault` starts distinguishing them.
+- **`RoutineDeepLink` assumes `VaultLayout.default`** — the intent has no loaded `GTDConfig` (it
+  must not load/index the vault), so a vault with a customised `routines` folder gets a path that
+  won't resolve. T40 should fall back to matching by title.
+- **Unverified on a Mac (device subtlety flagged by the brief):** whether
+  `CaptureToInboxIntent.perform()` can resolve the security-scoped bookmark and write with the app
+  fully suspended, not just backgrounded — this project has no separate App Intents extension.
+  See `Shortcuts/README.md` §B.
+- Control Center / Lock Screen `ControlWidget` was **not** built: it needs its own widget
+  extension target, which `project.yml` doesn't declare. Flagged for T40.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDIntentsTests`
+`cd Packages/GTDKit && swift test --filter GTDIntentsTests`. The `NoteCodec.decodeInboxItem`
+round-trip suite (`CaptureCodecRoundTripTests`) self-gates on a local `codecIsImplemented` probe
+(mirroring `GTDVaultTests`) and turns on once T10 lands.

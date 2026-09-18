@@ -105,6 +105,13 @@ let package = Package(
         .testTarget(name: "FeatureOverviewTests", dependencies: ["FeatureOverview", "GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "FeatureSettingsTests", dependencies: ["FeatureSettings", "GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "FeatureReviewTests", dependencies: ["FeatureReview", "GTDFixtures"], swiftSettings: swiftSettings),
-        .testTarget(name: "GTDIntentsTests", dependencies: ["GTDIntents", "GTDFixtures"], swiftSettings: swiftSettings),
+        // GTDVault and GTDMarkdown added (T30, test-only): GTDIntentsTests exercises
+        // `CaptureRequest` against `InboxWriter` + `InMemoryFileSystem` (the "fake writer" the
+        // brief asks for — both are GTDVault, already a production dependency of GTDIntents, but
+        // a test target needs its own `import`) and pins the written file's format to
+        // `NoteCodec.decodeInboxItem` once T10 lands (gated on a local `codecIsImplemented`
+        // probe, mirroring GTDVaultTests). GTDIntents itself still depends only on GTDModel and
+        // GTDVault — the production dependency graph (ARCHITECTURE §2) is unchanged.
+        .testTarget(name: "GTDIntentsTests", dependencies: ["GTDIntents", "GTDFixtures", "GTDVault", "GTDMarkdown"], swiftSettings: swiftSettings),
     ]
 )
