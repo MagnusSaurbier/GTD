@@ -6,7 +6,6 @@ DerivedData/
 .build/
 .swiftpm/
 *.xcresult
-Package.resolved
 # macOS
 .DS_Store
 # Python (Tools/migrate)
@@ -18,3 +17,4 @@ migration-report.md
 GTD-migration-backup-*/
 # agent worktrees
 .worktrees/
+.claude/worktrees/
