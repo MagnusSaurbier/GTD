@@ -16,6 +16,15 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     case review
     case routines
 
+    /// The counted sections, in the order of STYLEGUIDE §4.1 — they form the first sidebar group
+    /// and own `⌘1…⌘7`.
+    public static let counted: [SidebarItem] = [
+        .inbox, .next, .backlog, .waiting, .maybe, .projects, .deferred,
+    ]
+
+    /// The second sidebar group: the two guided flows.
+    public static let flows: [SidebarItem] = [.review, .routines]
+
     public var title: String {
         switch self {
         case .inbox: Copy.inbox
@@ -23,10 +32,10 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         case .backlog: Copy.backlog
         case .waiting: Copy.waiting
         case .maybe: Copy.maybe
-        case .projects: Copy.project
-        case .deferred: Copy.deferLabel
+        case .projects: OverviewCopy.projects
+        case .deferred: OverviewCopy.deferred
         case .review: Copy.weeklyReview
-        case .routines: Copy.routine
+        case .routines: OverviewCopy.routines
         }
     }
 
@@ -44,17 +53,33 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         }
     }
 
-    /// `⌘1…⌘7` — the first seven items only (STYLEGUIDE §4.5).
+    /// `⌘1…⌘7` — the counted sections only (STYLEGUIDE §4.5).
     public var shortcutNumber: Int? {
+        SidebarItem.counted.firstIndex(of: self).map { $0 + 1 }
+    }
+
+    /// The section `⌘<n>` selects, or `nil` when no section has that number.
+    public init?(shortcutNumber: Int) {
+        let index = shortcutNumber - 1
+        guard SidebarItem.counted.indices.contains(index) else { return nil }
+        self = SidebarItem.counted[index]
+    }
+
+    /// The action status this section lists, if it is a plain status list.
+    public var listedStatus: ActionStatus? {
         switch self {
-        case .inbox: 1
-        case .next: 2
-        case .backlog: 3
-        case .waiting: 4
-        case .maybe: 5
-        case .projects: 6
-        case .deferred: 7
+        case .backlog: .backlog
+        case .maybe: .maybe
         default: nil
+        }
+    }
+
+    /// Sections that show the generic action list/detail pair; the others route to the feature
+    /// that owns them (T20–T24, T27).
+    public var showsCalendarStrip: Bool {
+        switch self {
+        case .review, .routines: false
+        default: true
         }
     }
 
