@@ -1,14 +1,52 @@
 # GTDVault
 
-The only module that touches the file system: security-scoped bookmark, `NSFileCoordinator`-mediated I/O, the change watcher, and the scan that builds a `VaultSnapshot`. Public types: `VaultStore`, `FileVaultStore`, `VaultBookmark`, `InboxWriter`, `VaultError`.
+The only module that touches the file system. Owned by T15.
 
-**Owned by T15** — T00 created only the public signatures listed in `docs/ARCHITECTURE.md` §4
-so that dependants compile. The bodies throw `notImplemented` or return empty values.
+## Public API
 
-## Platform guards (ARCHITECTURE §5)
+- `VaultStore` (protocol) — `snapshots()`, `read(path:)`, `commit(_:)`.
+- `FileVaultStore` (actor) — scans, watches and commits. `init(root:layout:)` picks the platform
+  pieces; the full `init(fileSystem:layout:parser:watcher:debounce:clock:today:)` is what tests use.
+  Also `scan()`, `currentSnapshot`, `startWatching()`, `stopWatching()`, `close()`.
+- `VaultBookmark` + `BookmarkStore` / `PathBookmarkStore` — durable folder access.
+- `InboxWriter` — standalone capture (C1/C3); needs only the bookmark, no index, no codec.
+- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem`, `VaultIndex`, `VaultClassifier`,
+  `VaultNoteParser` / `NoteCodecParser`, `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
+  `DebounceState` / `ChangeDebouncer`, `VaultClock`, `VaultError`.
 
-Keep the store, the path logic and an in-memory fake file system Foundation-only so they run on Linux. Bookmarks, `NSFileCoordinator`, `NSFilePresenter` and `startDownloadingUbiquitousItem` are Apple-only: put them in files wrapped entirely in `#if os(iOS) || os(macOS)` behind the `CoordinatedFileSystem` protocol, and note in your Result that they are unverified.
+## Invariants
+
+1. **Nothing is ever hard-deleted.** `VaultFileSystem` has no delete method at all;
+   `VaultFileOp.delete` moves the file into `GTD/Trash/` with a free name.
+2. `commit` is all-or-nothing: a failure rolls back what was applied. If rollback itself fails,
+   `VaultError.rollbackFailed` carries both reasons — the vault is mixed and the user must hear it.
+3. `commit` returns the inverse ops **already in undo order**: feeding them back into `commit`
+   restores the previous state (T16's undo journal relies on this).
+4. A `.move` never overwrites (`VaultError.destinationExists`); the caller picks another name.
+5. Decode failures, evicted iCloud items and conflict copies become `VaultIssue`s. Conflict
+   copies are reported, never resolved, and are still indexed so nothing disappears.
+6. `Action.modified` is the file mtime — the only field the codec cannot supply.
+7. `GTDMarkdown.NoteCodec` is reached only through `VaultNoteParser`.
+
+## Platform split (ARCHITECTURE §5)
+
+Everything above is Foundation-only and runs on Linux. `Platform/` holds the four files wrapped
+entirely in `#if os(iOS) || os(macOS)`: `CoordinatedFileSystem` (`NSFileCoordinator`, iCloud
+downloads), `SecurityScopedBookmarkStore`, `PresenterVaultWatcher` (`NSFilePresenter` + polling
+safety net) and `VaultPlatform+Apple`; `VaultPlatform+Portable` is their non-Apple counterpart.
+**All four are compiled blind** — verify with `scripts/check.sh` on a Mac.
+
+## Gotchas
+
+- Change detection reports only *that* something changed; the index decides what to re-read, so a
+  missed or duplicated event costs at most one extra scan.
+- The index cache key is `size + mtime`. A second-granularity file system can hide a same-size
+  edit within one second; the watcher's next poll picks it up.
+- `Projects/X/X.md` is an area or a project depending on its `kind:` key — `Frontmatter.scalar`
+  peeks at it for classification only; all real parsing is the codec's.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDVaultTests`
+`cd Packages/GTDKit && swift test --filter GTDVaultTests` (109 tests, never the real vault).
+`SampleVaultScanTests` and `captureRoundTripsThroughTheCodec` are `.enabled(if:
+NoteCodecParser.codecIsImplemented)` and turn themselves on when T10 lands.

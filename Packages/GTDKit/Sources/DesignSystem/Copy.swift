@@ -48,6 +48,8 @@ public enum Copy {
 
     public static let whyPlaceholder = "What do I gain?"
     public static let whatPlaceholder = "The next physical action"
+    public static let whoPlaceholder = "Who or what"
+    public static let showAll = "Show all"
 
     /// `3 of 14 left`
     public static func counter(remaining: Int, total: Int) -> String {

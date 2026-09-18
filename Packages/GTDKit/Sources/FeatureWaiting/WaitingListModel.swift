@@ -31,17 +31,54 @@ public final class WaitingListModel {
             .filter { ($0.deferDate?.days(since: today) ?? .max) > 7 }
     }
 
-    /// Days since the item entered `waiting` — the "waiting since N days" column.
+    /// Days since the item was last touched — the "waiting since N days" column. Uses the file
+    /// modification date (ARCHITECTURE §5's definition of "untouched": a status change rewrites
+    /// the file), falling back to `created` for notes `GTDVault` hasn't stamped yet.
     public func waitingSinceDays(_ action: Action) -> Int {
-        guard let created = action.created else { return 0 }
-        return today.days(since: Day(created))
+        guard let reference = action.modified ?? action.created else { return 0 }
+        return today.days(since: Day(reference))
+    }
+
+    /// A waiting item's follow-up date has passed — the row is overdue (W2).
+    public func isOverdue(_ action: Action) -> Bool {
+        guard let followUp = action.followUpDate else { return false }
+        return followUp <= today
     }
 
     public func badges(for action: Action) -> [BadgeContent] {
         SignalPresentation.badges(for: Rules.signals(for: action, today: today), today: today)
     }
 
-    /// Markers for the 14-day calendar strip (D3), grouped per day.
+    /// The action's current `who` + follow-up, for `WaitingInfoSheet(initial:)` when editing.
+    public func waitingInfo(for action: Action) -> WaitingInfo? { action.waiting }
+
+    /// The suggested "bump" follow-up date — `today` + 7 days — offered as a **suggested**
+    /// (dashed) chip. Never written until the user confirms it (§1 "no lying defaults").
+    public var suggestedBump: Day { WaitingInfo.suggestedFollowUp(from: today) }
+
+    /// The `WaitingInfo` a "chase done → bump" confirms: same `who`, a new follow-up date.
+    /// `nil` if the action has no `who` yet (shouldn't happen for a `.waiting` action, but a
+    /// hand-edited file could still be missing it).
+    public func bumped(_ action: Action, to date: Day) -> WaitingInfo? {
+        guard let who = action.waitingFor else { return nil }
+        return WaitingInfo(who: who, followUp: date)
+    }
+
+    /// The action with its `deferDate` cleared — "un-defer now" (D1).
+    public func unDeferred(_ action: Action) -> Action {
+        var copy = action
+        copy.deferDate = nil
+        return copy
+    }
+
+    /// The action with a new `deferDate` — "change date" (D1).
+    public func redeferred(_ action: Action, to date: Day?) -> Action {
+        var copy = action
+        copy.deferDate = date
+        return copy
+    }
+
+    /// Markers for the Mac calendar strip (D3), grouped per day, `today` first.
     public func timeline(days: Int) -> [(day: Day, entries: [Rules.TimelineEntry])] {
         let to = today.adding(days: days - 1)
         let all = Rules.timeline(model.snapshot, from: today, to: to)
@@ -51,12 +88,37 @@ public final class WaitingListModel {
         }
     }
 
-    /// Follow-ups that are already overdue — piled on the left edge of the strip.
+    /// Defer, due and follow-up dates already in the past — piled on the left edge of the strip
+    /// instead of being lost off the front of the 14-day window (D3).
     public var overduePile: [Rules.TimelineEntry] {
         Rules.timeline(model.snapshot, from: today.adding(days: -365), to: today.adding(days: -1))
     }
 
-    /// "Recent who" values offered as suggestions in `WaitingInfoSheet`.
+    /// The signal step a calendar-strip marker should be tinted with, or `nil` for a plain,
+    /// untinted symbol. Per STYLEGUIDE §3.10, a marker "takes a signal colour only when §2.2
+    /// says so": `due` and follow-up markers use the same thresholds as their row badges;
+    /// `deferred` markers are never tinted (the only defer-related signal, `back`, is itself a
+    /// neutral badge, not a colour).
+    public func signalStep(for entry: Rules.TimelineEntry, policy: StalenessPolicy = .default) -> SignalStep? {
+        let delta = entry.day.days(since: today)
+        switch entry.kind {
+        case .due:
+            if delta < 0 { return .overdue }
+            if delta == 0 { return .attention }
+            if delta <= policy.dueSoonDays { return .aging }
+            return nil
+        case .followUp:
+            if delta <= 0 { return .attention }
+            if delta <= policy.followUpSoonDays { return .aging }
+            return nil
+        case .deferred:
+            return nil
+        }
+    }
+
+    /// "Recent who" values offered as suggestions in `WaitingInfoSheet`, most recently seen
+    /// first (`waiting` is already sorted by staleness, so this is oldest-waiting-first — good
+    /// enough as a first cut; there is no separate "last used" timestamp to sort by).
     public var recentWho: [String] {
         var seen: [String] = []
         for action in waiting {

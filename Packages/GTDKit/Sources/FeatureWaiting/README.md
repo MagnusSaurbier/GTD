@@ -1,23 +1,39 @@
 # FeatureWaiting
 
-Waiting-for, deferred items and the Mac calendar strip (W2, D1, D3).
-
-**Owned by T23.** T00 created a compiling shell: the public root views with the exact signatures
-from the task brief, plus the Linux-compilable model listed below. The visuals and behaviour are
-T23's work; `docs/STYLEGUIDE.md` is binding and its §9 checklist is part of the gate.
+Waiting-for, deferred items and the Mac calendar strip (W2, D1, D3). **Owned by T23.**
 
 ## Public API
 
 `WaitingView(onOpen:)`, `DeferredView(onOpen:)`, `CalendarStrip(days:onOpen:)`.
-Linux-compilable: `WaitingListModel` (staleness sort, defer grouping, timeline columns,
-"recent who" suggestions for `DesignSystem.WaitingInfoSheet`).
+
+`WaitingListModel(model:)` — Linux-compilable, `@MainActor @Observable`, no SwiftUI. Wraps
+`Rules.waitingList`/`deferredList`/`timeline` for the three views:
+- `waiting` (staleness order), `isOverdue(_:)`, `waitingSinceDays(_:)` (uses `Action.modified`,
+  falling back to `created` — the app has no separate "entered waiting" timestamp).
+- `waitingInfo(for:)`, `suggestedBump`, `bumped(_:to:)` — back the "chase done → bump" and
+  "edit who" row actions (`WaitingInfoSheet`); nothing is written until the sheet or date picker
+  is confirmed (STYLEGUIDE §1).
+- `deferredThisWeek` / `deferredLater`, `unDeferred(_:)`, `redeferred(_:to:)` — back "un-defer
+  now" / "change date" in `DeferredView`.
+- `timeline(days:)`, `overduePile`, `signalStep(for:policy:)` — calendar-strip columns and the
+  marker tint (STYLEGUIDE §3.10: coloured only where §2.2 defines a signal; `deferred` markers
+  are never tinted). `badges(for:)`, `recentWho` (deduped, capped at 5, for
+  `WaitingInfoSheet(suggestedWho:)`).
 
 ## Platform guards (ARCHITECTURE §5)
 
-Views live in files wrapped entirely in `#if canImport(SwiftUI)`. The logic worth testing lives
-in the Linux-compilable file(s) named above, so `swift test` covers it without Xcode. Every
-SwiftUI file in this target was written without a compiler and is **unverified** — say so in your
-Result until it has been built on a Mac.
+Views live in `WaitingViews.swift`, wrapped entirely in `#if canImport(SwiftUI)` — **unverified
+on Linux, blind-written.** Row actions use only stock SwiftUI (`.swipeActions`, `.contextMenu`,
+`.sheet(item:)`, `DateValueChip`'s own `.popover`); nothing beyond what `DesignSystem` and
+`GTDAppCore` already export. Verify on a Mac: the two custom rows (`WaitingRow`, `DeferredRow`)
+compile and look right, `CalendarStrip`'s `ScrollView`/column layout, and that `.swipeActions`
+stacked with `.contextMenu` on the same row behaves as expected on both platforms.
+
+All logic worth testing (staleness ordering, defer grouping, timeline bucketing across month/year
+boundaries, overdue detection, the calendar-strip signal mapping, recent-who dedupe) lives in
+`WaitingListModel` and is covered by `FeatureWaitingTests`, built against hand-built
+`VaultSnapshot`s with a fixed `today` (not only `GTDFixtures.sampleSnapshot`, so date-boundary
+cases are exact).
 
 ## Testing
 
