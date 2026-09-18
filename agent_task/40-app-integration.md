@@ -25,12 +25,13 @@ N1, N5 (device split), N6, D2, R3, E2, E3, P5/A2 prompt presentation, I7.
 - **Composition root:** launch → resolve `VaultBookmark` → none/stale: `OnboardingView` →
   `FileVaultStore` → `VaultBackend` → `AppModel` in the environment. Debug launch argument
   `-useFixtures` runs on `InMemoryBackend` (used by UI tests and screenshots).
+- Shell structure, keyboard map and menu commands follow STYLEGUIDE §4 (three tabs, `fullScreenCover` for processing/routines, gear on Next; Mac `⌘` map in §4.5 mirrored in stock `Commands`).
 - **iPhone shell (N5):** tabs/home with **Next (on-the-go)**, **Inbox** (count + Process button →
   full-screen `InboxProcessingView`), **Routines**; quick-capture button; no full task overview.
   Action detail reachable from Next rows. Settings behind a gear.
 - **Mac shell:** `OverviewView` as the main window, `Settings` scene, menu commands, weekly review
   as its own full-window mode with `ReviewResumeBanner`.
-- **Prompt host:** present `AppModel.prompt` → `WhatsNextSheet` / `ConvertToProjectSheet`.
+- **Prompt host:** present `AppModel.prompt` → `WhatsNextSheet` (A2's `ConvertToProjectSheet` is opened by the inline button in the views, not by a prompt).
   Global handling of `GTDError` fallthroughs (alert with the message).
 - **Quick capture → immediate processing (I7):** capture writes to inbox, then opens processing on that card.
 - **Notifications:** request permission (after onboarding), re-plan via `NotificationPlanner` +

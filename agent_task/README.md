@@ -4,6 +4,7 @@ Each `NN-*.md` file is a self-contained brief for one subagent. Before starting,
 
 1. `docs/REQUIREMENTS.md` (the sections listed in its task)
 2. `docs/ARCHITECTURE.md` (all of it — it contains the frozen contracts)
+   and, for any task that produces UI (00, 12, 20–27, 40, 41), `docs/STYLEGUIDE.md` (all of it — binding)
 3. its own task doc
 
 ## Waves and dependencies
@@ -28,7 +29,7 @@ Wave 3   40 app integration (needs everything)   →   41 QA + hardening   →  
 | 02 | Migration script | `Tools/migrate/` | — | Sonnet |
 | 10 | Markdown codec | `GTDMarkdown` | 00 | Opus |
 | 11 | Reducer & rules | `GTDModel/Reducer`, `GTDModel/Rules` | 00 | Opus |
-| 12 | Design system | `GTDDesign` | 00 | Sonnet |
+| 12 | Design system | `DesignSystem` | 00 | Sonnet |
 | 13 | Notifications | `GTDNotifications` | 00 | Sonnet |
 | 14 | Stats & routine audit | `GTDStats` | 00 | Sonnet |
 | 15 | Vault store | `GTDVault` | 00 (10 for integration tests) | Opus |
@@ -65,6 +66,8 @@ and get a quick review before merge.
   package) must pass before you report done. Report failures verbatim; do not disable tests.
 - **Never touch the real vault** (`~/Library/Mobile Documents/iCloud~md~obsidian/…`). Use
   `GTDFixtures` or a temp directory. Only T01 and T02 deal with real data, and only through a human.
+- **UI tasks:** the style guide's §9 checklist is part of your gate; where your brief names a
+  component or interaction differently from the style guide, the style guide wins (ARCHITECTURE §5).
 - **No new dependencies** beyond Yams without writing the reason into your task doc.
 - **Status:** when finished, fill in the `## Result` section at the bottom of your task doc
   (what was built, deviations, contract changes, open issues, gotchas worth keeping) and commit it on your branch.

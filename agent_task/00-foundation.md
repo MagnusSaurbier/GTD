@@ -16,7 +16,7 @@ compiling code, an in-memory backend, fixtures, minimal design components, and a
 
 ## Requirements covered
 
-Structural only. Read REQUIREMENTS §1, §2, §5 (schema), §6 and all of ARCHITECTURE.md.
+Structural only. Read REQUIREMENTS §1, §2, §5 (schema), §6, all of ARCHITECTURE.md, and STYLEGUIDE §0–§3 (for `DesignSystem`).
 
 ## Owns
 
@@ -25,11 +25,11 @@ Everything listed in ARCHITECTURE §2 that doesn't exist yet. After this task, o
 ## Deliverables
 
 1. **Tooling:** `brew install xcodegen` (document in README). `project.yml` with one multiplatform
-   target `GTD` (iOS 18, macOS 15, bundle id `com.magnussaurbier.gtd`, Swift 6), depending on the
+   target `GTD` (iOS 26, macOS 26, bundle id `com.magnussaurbier.gtd`, Swift 6), depending on the
    local package. `App/GTDApp.swift` shows a placeholder root view using `AppModel` +
    `InMemoryBackend`. `.xcodeproj` stays git-ignored.
 2. **`Packages/GTDKit/Package.swift`** declaring *every* target and test target from ARCHITECTURE §2
-   with the dependency graph given there, platforms iOS 18 / macOS 15, Swift language mode 6, Yams
+   with the dependency graph given there, platforms iOS 26 / macOS 26, `defaultLocalization: "en"`, a `Resources` folder processed for every UI target, Swift language mode 6, Yams
    pinned. Each not-yet-implemented target gets one placeholder source file and one placeholder test
    so the package builds.
 3. **`GTDModel`:** all types, drafts, commands, errors, prompts, `VaultFileOp`, `ReducerEnv`,
@@ -49,9 +49,19 @@ Everything listed in ARCHITECTURE §2 that doesn't exist yet. After this task, o
    the template below, 10 days of routine log). Also `Fixtures/SampleVault/` on disk with the same
    content as real markdown files (resource bundle) plus a helper
    `SampleVault.copyToTemporaryDirectory()`.
-7. **`GTDDesign` minimal but working, API frozen:** `ChipPicker` (single/multi select, empty
-   state), `TimeBucketChips`, `ContextChips`, `ActionRow`, `Badge` (due, deferred-returned,
-   stalled, chase), `CardContainer`, `WaitingInfoSheet(initial:onSave:)` (who + follow-up date, both required, default +7 d). T12 refines visuals behind the same API.
+7. **`DesignSystem` minimal but working, API frozen** — names and states exactly as in
+   `docs/STYLEGUIDE.md` §2–§3: token namespaces (`Spacing`, `Radius`, `Typo`, `Motion`, `Elevation`,
+   colour tokens + asset catalog with the accent/signal colour sets), `Chip` with
+   `ChipState { unset, suggested, confirmed, disabled }`, `FlowLayout`, thin group helpers
+   `ContextChipGroup` / `TimeBucketChipGroup` / `DateValueChip` (stock graphical `DatePicker`, no
+   quick-pick menu), `Badge` (+ `Signal` → badge mapping), `ActionRow`, `ProjectRow`, `ItemCard`,
+   `UndoToast`, `GlassActionBar`, `WaitingInfoSheet(initial:suggestedWho:onSave:)` (who + follow-up
+   date both required; +7 d shown as a *suggested* chip, not pre-filled), `Symbols` (icon map §7)
+   and `Copy` (canonical strings §6.3). Empty states use stock `ContentUnavailableView` — no
+   custom component. T12 refines visuals behind the same API.
+   **Verify first:** asset catalog + per-target `Localizable.xcstrings` in a SwiftPM package with
+   `bundle: .module` — works under `xcodebuild`, degrades harmlessly under `swift build`/`swift test`
+   (ARCHITECTURE §5). If not, record the workaround as a contract change before Wave 1 starts.
 8. **Codec / vault / stats / notifications API stubs:** public signatures from ARCHITECTURE §4 with
    `fatalError("T10")`-style bodies so dependants compile.
 9. **`scripts/check.sh`:** `swift build` + `swift test` in the package, then
@@ -66,7 +76,7 @@ Everything listed in ARCHITECTURE §2 that doesn't exist yet. After this task, o
     intentionally future or git-ignored, e.g. `*.xcodeproj`); fails if the
     `<!-- PHASE: build-out -->` marker is present while `agent_task/` is gone, or vice versa.
 13. A `README.md` in every target directory you create (stub for unimplemented targets: one line
-    purpose + "owned by TNN"); full ones for `GTDModel`, `GTDAppCore`, `GTDFixtures`, `GTDDesign`.
+    purpose + "owned by TNN"); full ones for `GTDModel`, `GTDAppCore`, `GTDFixtures`, `DesignSystem`.
 
 Routine template source (convert to two files under `SampleVault/GTD/Routines/`):
 Morning — wake up · Record dreams · Drink TPS/Water (creatine if morning sport) · 5 min workout ·

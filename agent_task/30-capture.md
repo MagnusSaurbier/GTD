@@ -37,7 +37,7 @@ Two capture paths — ship both, recommend A as the default because it has zero 
   `ProcessInboxIntent` (opens processing). `AppShortcutsProvider` with phrases; parameter summary;
   dialog result "Captured."
   Failure modes return a useful spoken/visible error (no vault picked yet, bookmark stale).
-- Optional if trivial: interactive Control Center / Lock Screen control (iOS 18 `ControlWidget`) that runs `CaptureToInboxIntent`. Skip if it needs a widget extension the project doesn't have yet — note it for T40 instead.
+- Optional if trivial: interactive Control Center / Lock Screen control (`ControlWidget`) that runs `CaptureToInboxIntent`. Skip if it needs a widget extension the project doesn't have yet — note it for T40 instead.
 
 ## Acceptance
 

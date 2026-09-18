@@ -25,18 +25,16 @@ Everything driven by dates: the waiting list, the deferred list, and the Mac tim
 ```swift
 public struct WaitingView: View { public init(onOpen: @escaping (NoteID) -> Void) }
 public struct DeferredView: View { public init(onOpen: @escaping (NoteID) -> Void) }
-public struct CalendarStrip: View { public init(days: Int = 28, onOpen: @escaping (NoteID) -> Void) }   // Mac
+public struct CalendarStrip: View { public init(days: Int = 14, onOpen: @escaping (NoteID) -> Void) }   // Mac
 ```
 
 ## Deliverables
 
 - **WaitingView:** columns what · who · waiting since N days · follow-up date; sorted by staleness
-  (`Rules.waitingList`); overdue highlighted. Row actions: *chase done → bump* (+7 d default,
-  `DateChip`), *resolved → back to Next/Backlog* or *done*, edit who.
+  (`Rules.waitingList`); overdue highlighted. Row actions: *chase done → bump* (`DateValueChip`, +7 d offered as a suggested chip), *resolved → back to Next/Backlog* or *done*, edit who.
 - **DeferredView:** deferred actions grouped by return date (this week / later), action: un-defer now, change date.
-- **CalendarStrip (D3):** horizontal timeline of days with three marker kinds — defer-returns,
-  due, follow-ups — from `Rules.timeline`; today anchored; hover/tap shows the items; overdue pile on the left edge.
-- Uses `GTDDesign.WaitingInfoSheet` for editing who/follow-up; contributes "recent who" suggestions to it as ghost chips (suggestion styling per §1) via its public parameters — coordinate through T12's API, additions only.
+- **CalendarStrip (D3):** per STYLEGUIDE §3.10 — 14-day strip, up to 3 markers per day distinguished by **symbol** (not hue), signal colour only when §2.2 says so, accent underline for today; data from `Rules.timeline`; today anchored; hover/tap shows the items; overdue pile on the left edge.
+- Uses `DesignSystem.WaitingInfoSheet` for editing who/follow-up; contributes "recent who" suggestions to it as ghost chips (suggestion styling per §1) via its public parameters — coordinate through T12's API, additions only.
 
 ## Acceptance
 

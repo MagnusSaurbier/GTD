@@ -26,8 +26,8 @@ Prove the app meets REQUIREMENTS v1 and is safe to point at the real vault.
    vault + mutated files; verify unknown frontmatter survives every command (golden-file tests).
 3. **Sync torture tests** on a temp vault: external edits during a commit, rename while open in
    detail view, conflict copies, evicted-file placeholders, two simulated devices writing routine logs for the same day.
-4. **"No lying defaults" audit:** walk every form; no pre-filled values except the documented
-   defaults (follow-up +7 d, last-used knowledge folder shown as *suggestion*).
+4. **"No lying defaults" audit:** walk every form; no pre-filled values at all; the only proposals (follow-up +7 d,
+   last-used knowledge folder) render as *suggested* chips/rows and are not persisted until confirmed. Also run the STYLEGUIDE §9 checklist over every screen.
 5. **Performance:** cold launch to usable Next view with 1 000 notes; snapshot rebuild; typing latency in the detail editor.
 6. **Accessibility pass** (VoiceOver through inbox card + routine runner, Dynamic Type XXL, keyboard-only on Mac).
 7. **First-real-use checklist** for the user: back up vault → run T02 migration dry run → apply →

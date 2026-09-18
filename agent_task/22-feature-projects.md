@@ -26,7 +26,7 @@ All of §6 (P1–P7), E4, A2 (convert action to project).
 public struct ProjectsListView: View { public init(onOpenProject: @escaping (NoteID) -> Void, onOpenAction: @escaping (NoteID) -> Void) }
 public struct ProjectDetailView: View { public init(project: NoteID, onOpenAction: @escaping (NoteID) -> Void) }
 public struct WhatsNextSheet: View { public init(project: NoteID) }                 // P5, presented by the shell
-public struct ConvertToProjectSheet: View { public init(action: NoteID) }           // A2, presented by the shell
+public struct ConvertToProjectSheet: View { public init(action: NoteID) }           // A2, opened from the inline "Turn into project" button (T20 card, T25 detail)
 public struct ProjectPicker: View { public init(selection: Binding<NoteID?>) }      // reusable chip/sheet picker
 ```
 

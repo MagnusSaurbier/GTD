@@ -34,15 +34,18 @@ public struct InboxStartButton: View { public init(action: @escaping () -> Void)
   card draft (edited text, why, what, contexts, time bucket, optional defer/due/project), counter
   "3 of 14 left", exit only via quit. New captures arriving mid-session go on top (LIFO).
 - Card: editable raw text, **Why?**, **What?** (multi-line; checklist allowed), chips for
-  context(s) and time bucket, optional `DateChip`s and project chip. Nothing pre-filled (§1).
+  context(s) and time bucket, optional value chips `+ defer` `+ due` `+ project`. A second checkbox in *What?* shows the inline `Turn into project` button (→ Project flow). Nothing pre-filled (§1).
   Title for the action note is derived from the first line of *What?* (editable before filing).
 - Targets defined once in `CardTargets.swift`: swipe → Next, ← Backlog, ↑ Maybe, ↓ Trash; buttons
-  Knowledge, Project, Waiting, Defer-to-review; Mac keys `N B M T K P W R`, `⌘Z` undo, `⎋` quit.
+  Project, Knowledge, Waiting; `⋯` menu → Defer to review. Mac: arrow keys for the four swipe targets,
+  `P K W R`, `⌘Z` undo, `Esc` quit, `1…8` contexts, `⇧1…⇧4` time bucket (only when no field is focused).
+  **STYLEGUIDE §3.5–§3.6 is the full spec** (card content order, drag thresholds, axis lock, tints, swipes disabled
+  while a field is focused, shake-instead-of-alert validation, action bar, key legend, counter) — follow it exactly.
   Validation before leaving: Next/Backlog require a non-empty *What?*.
 - Sub-flows (sheets):
   - **Knowledge**: category list + free browsing/creating folders in the `knowledgeFolders` tree, last used preselected (device-local), editable title.
   - **Project**: pick existing (grouped by area) or create new (title, area pick/create, outcome, why), then define first next action(s) → `.newProject` / `.existingProject`.
-  - **Waiting**: `GTDDesign.WaitingInfoSheet` (who + follow-up date, default +7 d, both required).
+  - **Waiting**: `DesignSystem.WaitingInfoSheet` (who + follow-up date both required; +7 d appears as a *suggested* chip the user must confirm).
   - **Defer to review**: reason required.
   - **Cap reached** (on `GTDError.nextCapReached`): list current Next items to demote one, or send the card to Backlog. No automatic choice.
 - Undo last card → `AppModel.undo()` and the card returns with its draft restored.

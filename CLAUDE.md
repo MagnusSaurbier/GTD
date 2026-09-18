@@ -9,6 +9,7 @@ this file is stale: fix it (see "Keeping this file current").
 ## Where things are
 
 - `docs/REQUIREMENTS.md` — what the app does. Snapshot; the living copy is a note in the user's vault.
+- `docs/STYLEGUIDE.md` — binding UI rules (tokens, components, gestures, keys, copy, icons). Snapshot of a vault note, like the requirements.
 - `docs/ARCHITECTURE.md` — modules, dependency direction, vault layout, contracts, decisions.
 - `Packages/GTDKit/Sources/<Target>/README.md` — per-module notes (purpose, public API, invariants, gotchas). Read the one for the module you touch.
 - `agent_task/` — *(build-out only)* task briefs; shared rules in `agent_task/README.md`.
@@ -24,11 +25,11 @@ in simulator, regenerate the Xcode project). Until then nothing is buildable._
    `~/Library/Mobile Documents/iCloud~md~obsidian/`. Use `GTDFixtures` / temp directories.
 2. The app never hard-deletes vault files, and only `GTDVault` touches the file system.
 3. All GTD semantics live in `GTDModel` (`Reducer`, `Rules`). UI and backends don't re-implement rules.
-4. Every mutation is a `GTDCommand`. Features depend on `GTDAppCore` + `GTDDesign`, never on `GTDVault`/`GTDServices`.
+4. Every mutation is a `GTDCommand`. Features depend on `GTDAppCore` + `DesignSystem`, never on `GTDVault`/`GTDServices`.
 5. The codec round-trips unknown frontmatter and body sections losslessly. Any change to
    `GTDMarkdown` must keep the round-trip tests green.
-6. Product principles for every screen: few inputs, chips not dropdowns, **no lying defaults**
-   (undecided = empty; suggestions look different from confirmed values).
+6. UI follows `docs/STYLEGUIDE.md` (run its §9 checklist). Core principle: **no lying defaults** —
+   undecided = empty; a suggestion is dashed, never persisted until confirmed.
 7. Out of scope unless the user says otherwise: everything in REQUIREMENTS §12.
 8. Gate before reporting done: `scripts/check.sh` (includes `scripts/check-docs.sh`). Report failures verbatim.
 
@@ -53,7 +54,7 @@ Update triggers:
 | Made or reversed a product/technical decision | ARCHITECTURE §6 (one row, with date) |
 | Learned a non-obvious gotcha (build quirk, platform trap, flaky test) | the module README; here only if it affects *every* task |
 | Finished a build-out task | its `## Result`, its module README, and anything above that it invalidated |
-| Requirements changed in the vault note | re-copy to `docs/REQUIREMENTS.md`, note the date at its top |
+| Requirements or style guide changed in the vault note | re-copy to `docs/REQUIREMENTS.md` / `docs/STYLEGUIDE.md`, then check ARCHITECTURE §5–§6 still agree |
 
 Rules for editing this file:
 

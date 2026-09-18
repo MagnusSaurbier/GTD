@@ -33,7 +33,7 @@ Type definitions elsewhere in `GTDModel` are frozen (contract change procedure a
 - `waiting` requires `WaitingInfo` (W1). Leaving `waiting` clears `waitingFor`/`followUpDate`.
 - `complete`: `status = done`, `completedDate = now`; if the action has a project → append a dated
   log entry to the project, tick the promoted step, emit `.whatsNext` (P5).
-- `toggleCheckbox`/`updateAction`: when the checkbox count goes from 1 to 2 → `.suggestTurnIntoProject` (A2).
+- A2 is a query, not a prompt: `Rules.suggestsProject(_ action:)` is true at ≥ 2 checkboxes; views show the inline button.
 - `fileInbox`: all five `InboxDecision`s; unique filenames (title sanitising for the file system,
   collision → `.titleCollision`); knowledge + trash via `extraOps` moves; `created` carried over.
 - `deferInboxToReview` sets `reviewReason`; such items leave the processing queue.
@@ -49,7 +49,8 @@ Type definitions elsewhere in `GTDModel` are frozen (contract change procedure a
 plus chase items), `onTheGoNextList`, `chaseItems` (waiting with `followUpDate ≤ today`),
 `waitingList` sorted by staleness, `deferredList`, `dueBadge`, `returnedFromDeferBadge`,
 `stalledProjects` (active, zero open actions), `projectRows` (active actions, remaining steps),
-`sidebarCounts`, `countsTowardCap`, `archiveCandidates`, `timeline(from:to:)` for the calendar strip (D3).
+`sidebarCounts`, `countsTowardCap`, `StalenessPolicy` (14 d / 30 d / inbox 7 d, one struct) and
+`signals(for:today:) -> [Signal]` implementing every row of STYLEGUIDE §2.2 as semantic values (no strings, no colours), `archiveCandidates`, `timeline(from:to:)` for the calendar strip (D3).
 
 ## Acceptance
 

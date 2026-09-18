@@ -33,8 +33,7 @@ public struct RoutineRunnerView: View { public init(routine: NoteID, onFinished:
   first unlogged step; done / skip per step → `GTDCommand.logRoutineStep`; going back re-logs
   (reducer replaces the entry); finishing shows a summary (done x / skipped y).
 - Runner UI: one step per screen, large title, sub-steps inline as a tappable local checklist
-  (sub-steps are not logged), `BigChoiceButtons` done / skip, progress dots, swipe right = done,
-  left = skip. Journaling steps are plain done/skip — **no text input** (R4).
+  (sub-steps are not logged), `GlassActionBar` with `Skip` / `Done` (STYLEGUIDE §3.7), **no swipe filing** — horizontal swipe back = previous step only; Journaling steps are plain done/skip — **no text input** (R4).
 - Home: one big button per routine with its scheduled time and today's state (not started /
   3 of 8 / finished), so it can be the landing view for the routine notification deep link.
 - Template edits in Obsidian mid-day are tolerated (step ids = slugs; unknown logged steps ignored).

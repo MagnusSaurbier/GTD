@@ -27,7 +27,7 @@ E3, A1, A2, N4 (replaces TaskNotes views/modals), N5 (Mac = everything), N6.
 public struct OverviewView: View { public init() }                                  // Mac root
 public struct ActionDetailView: View { public init(action: NoteID) }                // also used on iPhone
 public struct ActionListView: View { public init(status: ActionStatus, onOpen: @escaping (NoteID) -> Void) }  // Backlog / Maybe
-public enum SidebarItem: Hashable { case inbox, next, backlog, waiting, maybe, projects, deferred, routines, review, settings }
+public enum SidebarItem: Hashable { case inbox, next, backlog, waiting, maybe, projects, deferred, review, routines }   // settings = stock `Settings` scene (T40), not a sidebar item
 ```
 
 ## Deliverables
@@ -37,7 +37,7 @@ public enum SidebarItem: Hashable { case inbox, next, backlog, waiting, maybe, p
   issue indicator when `snapshot.issues` is non-empty (click → list of issues).
   **Middle**: routes to the owning feature's view (`NextView(.full)`, `WaitingView`, …) or
   `ActionListView`. **Right**: `ActionDetailView` / `ProjectDetailView`.
-- Lists are grouped **by area / project** (E3); context and time are filters (chips), never groupings. "No project" group last.
+- Lists are grouped **by area / project** (E3); context and time are filters (chips), never groupings. Actions without a project come first, without a section header (ARCHITECTURE §6).
 - `ActionDetailView`: title (rename), status chips (cap + waiting errors handled), context +
   time chips, defer/due chips, project picker (`ProjectPicker`), *Why?* / *What?* editors
   (`MarkdownTextEditor`), "Open in Obsidian" (`obsidian://open?path=`). Autosave debounced →

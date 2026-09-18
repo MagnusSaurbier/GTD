@@ -38,14 +38,14 @@ public struct ReviewResumeBanner: View { public init(onResume: @escaping () -> V
      (d) stalled active projects → add next action (`WhatsNextSheet`) or change status.
   2. **Deck** — card stack (reuse `SwipeCard`): Next (keep / demote), then Backlog and Maybe
      (promote / keep / trash), then on-hold & someday projects (activate / keep / drop).
-     Live `CapMeter`; cannot leave the step while Next > cap.
+     Live cap count/badge (STYLEGUIDE §2.2); cannot leave the step while Next > cap.
   3. **Systems check** — the prompts from §10.3 as short free-text fields, next to live stats from
      `WeeklyStats` and the **routine audit heatmap** (rows = steps, 7 columns, completion %, trend
      arrow vs last week) from `RoutineAudit`. Heatmap built with plain SwiftUI grid (Swift Charts optional).
   4. **Reflection** — reminder to review the reMarkable journal; the 8 questions with last week's
      "goal for next week" shown alongside (`VaultSnapshot.lastReview`);
      save → `GTDCommand.saveWeeklyReview` → `GTD/Reviews/<yyyy>/KW <ww>.md`.
-- Progress rail with per-step completion, keyboard-driven (`⌘→` next step, card keys as in T20).
+- Wizard frame, deck cards (keys `K` keep · `D` demote · `P` promote · `T` trash), stat tiles and heatmap exactly per STYLEGUIDE §3.10; trends are not coloured.
 - Summary screen: what changed this review (processed, demoted, promoted, trashed, projects touched).
 
 ## Acceptance
