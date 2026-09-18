@@ -45,6 +45,7 @@ Tools/migrate/                  one-time Python migration                       
 Spikes/VaultAccess/             throw-away on-device spike                      (T01)
 Shortcuts/                      capture shortcut recipes                        (T30)
 scripts/check.sh                build + test gate used by every task            (T00)
+scripts/check-docs.sh           doc/path consistency check, called by check.sh   (T00)
 ```
 
 Dependency direction (no cycles, features never import each other except where listed):
