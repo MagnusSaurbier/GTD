@@ -322,6 +322,12 @@ public struct InboxWriter { public func capture(text: String, at: Date) throws -
 `GTDServices.VaultBackend` = `Reducer.reduce` → diff old/new snapshot → encode changed
 entities → `VaultStore.commit(ops + extraOps)` → push inverse onto the undo journal.
 
+**Commit semantics (T15-1, 2026-09-19).** `commit` applies the ops in order and is all-or-nothing:
+on failure it rolls back what it already applied and rethrows; a failing rollback throws
+`VaultError.rollbackFailed(reason:rollbackReason:)` and means the vault is in a mixed state. The
+returned inverse ops come back **already in undo order** — `commit(inverse)` restores the previous
+state. A `.move` never overwrites (`VaultError.destinationExists`): the caller picks another name.
+
 ## 5. UI conventions
 
 **`docs/STYLEGUIDE.md` is binding** for every view: tokens, components, states, gestures, keys,
