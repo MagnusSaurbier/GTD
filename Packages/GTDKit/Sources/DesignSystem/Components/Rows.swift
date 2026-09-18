@@ -1,5 +1,6 @@
 #if canImport(SwiftUI)
 import SwiftUI
+import Foundation
 import GTDModel
 
 /// Small capsule badge (STYLEGUIDE §3.2). Text comes from `SignalPresentation` — never invented
@@ -95,13 +96,28 @@ public struct ActionRow: View {
         .padding(.vertical, Spacing.rowVertical)
     }
 
+    /// STYLEGUIDE §3.3: tap draws the checkmark in `signalDone` over `MotionTiming.checkDraw`
+    /// with one `.success` haptic, then the actual completion (and the row's collapse) follows —
+    /// the visual reward plays before the data changes, not after.
+    @State private var isDrawingCheck = false
+
     @ViewBuilder private var completionControl: some View {
         Button {
-            onComplete?()
+            guard !isDrawingCheck else { return }
+            withAnimation(Motion.standard) { isDrawingCheck = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + MotionTiming.checkDraw) {
+                onComplete?()
+            }
         } label: {
             ZStack {
-                Circle().strokeBorder(Color.textTertiary, lineWidth: 1.5)
-                if action.status == .inProgress {
+                Circle().strokeBorder(isDrawingCheck ? Color.signalDone : Color.textTertiary, lineWidth: 1.5)
+                if isDrawingCheck {
+                    Circle().fill(Color.signalDone)
+                    Image(systemName: Symbols.done)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.inkInverse)
+                        .font(.system(size: 13, weight: .medium))
+                } else if action.status == .inProgress {
                     Circle().fill(Color.ink).frame(width: 11, height: 11)
                 }
             }
@@ -110,6 +126,7 @@ public struct ActionRow: View {
         }
         .buttonStyle(.plain)
         .disabled(onComplete == nil)
+        .sensoryFeedback(.success, trigger: isDrawingCheck)
         .accessibilityLabel(Copy.done)
     }
 
