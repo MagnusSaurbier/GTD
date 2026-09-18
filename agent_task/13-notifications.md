@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Medium · **Recommended model:** Sonnet
+
+The core is a pure, fully specified planner function with deterministic tests; the scheduler is a thin diff over a protocol-wrapped `UNUserNotificationCenter`. Watch items for review: DST/time-zone tests actually exercised, the 64-request cap ordering.
+
 ## Goal
 
 Compute and schedule all local notifications from a `VaultSnapshot`.

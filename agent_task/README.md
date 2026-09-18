@@ -21,29 +21,38 @@ Wave 2   16 vault backend (needs 10, 11, 15)     27 weekly review (needs 12, 14,
 Wave 3   40 app integration (needs everything)   →   41 QA + hardening
 ```
 
-| # | Task | Owns | Needs |
-| --- | --- | --- | --- |
-| 00 | Foundation & contracts | whole scaffold | — |
-| 01 | Spike: vault access on device | `Spikes/VaultAccess/` | — |
-| 02 | Migration script | `Tools/migrate/` | — |
-| 10 | Markdown codec | `GTDMarkdown` | 00 |
-| 11 | Reducer & rules | `GTDModel/Reducer`, `GTDModel/Rules` | 00 |
-| 12 | Design system | `GTDDesign` | 00 |
-| 13 | Notifications | `GTDNotifications` | 00 |
-| 14 | Stats & routine audit | `GTDStats` | 00 |
-| 15 | Vault store | `GTDVault` | 00 (10 for integration tests) |
-| 16 | Vault backend & undo | `GTDServices` | 10, 11, 15 |
-| 20 | Inbox processing | `FeatureInbox` | 00 |
-| 21 | Next view | `FeatureNext` | 00 |
-| 22 | Projects | `FeatureProjects` | 00 |
-| 23 | Waiting, deferred, calendar strip | `FeatureWaiting` | 00 |
-| 24 | Routines | `FeatureRoutines` | 00 |
-| 25 | Mac overview shell & lists | `FeatureOverview` | 00 (links 20–24 public views) |
-| 26 | Settings & onboarding | `FeatureSettings` | 00 |
-| 27 | Weekly review wizard | `FeatureReview` | 12, 14, 20 |
-| 30 | Capture: Shortcuts & App Intents | `GTDIntents`, `Shortcuts/` | 15 |
-| 40 | App integration | `App/`, `project.yml` | all |
-| 41 | QA & hardening | tests, fixes anywhere (small) | 40 |
+| # | Task | Owns | Needs | Model |
+| --- | --- | --- | --- | --- |
+| 00 | Foundation & contracts | whole scaffold | — | Opus |
+| 01 | Spike: vault access on device | `Spikes/VaultAccess/` | — | Opus |
+| 02 | Migration script | `Tools/migrate/` | — | Sonnet |
+| 10 | Markdown codec | `GTDMarkdown` | 00 | Opus |
+| 11 | Reducer & rules | `GTDModel/Reducer`, `GTDModel/Rules` | 00 | Opus |
+| 12 | Design system | `GTDDesign` | 00 | Sonnet |
+| 13 | Notifications | `GTDNotifications` | 00 | Sonnet |
+| 14 | Stats & routine audit | `GTDStats` | 00 | Sonnet |
+| 15 | Vault store | `GTDVault` | 00 (10 for integration tests) | Opus |
+| 16 | Vault backend & undo | `GTDServices` | 10, 11, 15 | Opus |
+| 20 | Inbox processing | `FeatureInbox` | 00 | Sonnet* |
+| 21 | Next view | `FeatureNext` | 00 | Sonnet |
+| 22 | Projects | `FeatureProjects` | 00 | Sonnet |
+| 23 | Waiting, deferred, calendar strip | `FeatureWaiting` | 00 | Sonnet |
+| 24 | Routines | `FeatureRoutines` | 00 | Sonnet |
+| 25 | Mac overview shell & lists | `FeatureOverview` | 00 (links 20–24 public views) | Sonnet* |
+| 26 | Settings & onboarding | `FeatureSettings` | 00 | Sonnet |
+| 27 | Weekly review wizard | `FeatureReview` | 12, 14, 20 | Opus |
+| 30 | Capture: Shortcuts & App Intents | `GTDIntents`, `Shortcuts/` | 15 | Sonnet |
+| 40 | App integration | `App/`, `project.yml` | all | Opus |
+| 41 | QA & hardening | tests, fixes anywhere (small) | 40 | Opus |
+
+`*` = borderline: start with Sonnet at high effort, escalate to Opus as described in the task doc.
+Each task doc has a **Model recommendation** section with difficulty and reasoning.
+
+Rule of thumb used: **Opus** where a mistake silently corrupts vault data, where other agents build
+on the output, or where the work is mostly judgment (00, 01, 10, 11, 15, 16, 27, 40, 41).
+**Sonnet** where the task is well-specified, isolated behind the in-memory backend, and failure is
+visible and cheap (02, 12, 13, 14, 20–26, 30). Every Sonnet result should still pass `scripts/check.sh`
+and get a quick review before merge.
 
 ## Rules for every agent
 

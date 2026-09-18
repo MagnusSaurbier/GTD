@@ -2,6 +2,12 @@
 
 **Wave 0 · parallel to T00 · needs the user (real iPhone + Mac, real iCloud)**
 
+## Model recommendation
+
+**Difficulty:** Medium (small code, high stakes) · **Recommended model:** Opus
+
+Only ~300 lines, but it depends on exact platform knowledge — security-scoped bookmarks into *another app's* iCloud container, sandbox entitlements, `NSFilePresenter` vs `NSMetadataQuery` semantics. A subtly wrong spike produces a false no-go that would overturn the whole architecture, and the go/no-go + fallback evaluation is a judgment call. Sonnet could write the app; Opus should own the verdict.
+
 ## Goal
 
 Prove or disprove the one assumption the whole stack rests on: a third-party app can durably

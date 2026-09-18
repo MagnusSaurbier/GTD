@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Medium–hard · **Recommended model:** Opus
+
+Pure functions and table-driven tests make it *look* Sonnet-sized, but this is the single definition of GTD semantics with many interacting rules (cap × project status × waiting × defer × promotion × undo-ability). The failure mode is omission — a rule quietly not enforced — which tests written by the same agent won't catch. Wants the more careful reader of the requirements.
+
 ## Goal
 
 Make `Reducer.reduce` and `Rules` the complete, tested definition of GTD semantics. Pure Swift,

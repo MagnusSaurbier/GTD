@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Easy–medium · **Recommended model:** Sonnet
+
+A filtered list with chips, badges and row actions over ready-made `Rules` queries; view model is plain and unit-tested. Low risk.
+
 ## Goal
 
 The default screen: "what can I do right now?" in one glance.

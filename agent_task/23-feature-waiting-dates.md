@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Easy–medium · **Recommended model:** Sonnet
+
+Two straightforward lists plus one custom view (`CalendarStrip`). Date bucketing comes from `Rules.timeline`; the strip is layout work with cosmetic failure modes.
+
 ## Goal
 
 Everything driven by dates: the waiting list, the deferred list, and the Mac timeline strip.

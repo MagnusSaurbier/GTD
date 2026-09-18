@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Easy–medium · **Recommended model:** Sonnet
+
+Pure aggregation over value types, no concurrency, no I/O, no UI. ISO-week edge cases are the only trap and they are called out in the acceptance tests.
+
 ## Goal
 
 Pure computations behind step 3 of the weekly review. Nothing is persisted (ARCHITECTURE §6).

@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00 · links the public root views of T20–T24, T26 (placeholders exist from T00)**
 
+## Model recommendation
+
+**Difficulty:** Medium–hard · **Recommended model:** Sonnet — borderline
+
+Mostly routing and standard `NavigationSplitView` work, which Sonnet does reliably. The risky parts are `ActionDetailView`'s debounced autosave (must not clobber a snapshot update arriving mid-edit, must handle rename changing the `NoteID`) and Mac focus/keyboard command plumbing. Sonnet is fine for the shell; ask for an Opus review of the autosave/rename logic, or give that view to Opus if Sonnet's version loses edits in testing.
+
 ## Goal
 
 The Mac three-pane overview plus the generic list/detail pieces nobody else owns

@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00 · develop against `InMemoryBackend` + fixtures**
 
+## Model recommendation
+
+**Difficulty:** Medium–hard (largest Wave-1 feature) · **Recommended model:** Sonnet — borderline
+
+Very explicitly specified, runs entirely on the in-memory backend (no data risk), and the tricky logic lives in `InboxSession`, which is unit-tested without SwiftUI. That makes it Sonnet-feasible. It is borderline because of sheer surface (card + 5 sub-flows + swipe/keyboard parity + undo restoring the draft) and because it is the UX centrepiece. Run Sonnet at high effort; if the first result cuts corners on the sub-flows or the cap/undo paths, hand the remainder to Opus rather than iterating.
+
 ## Goal
 
 The clarify flow: one card at a time, forced LIFO, swipe on iPhone, keys on Mac.

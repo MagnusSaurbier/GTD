@@ -2,6 +2,12 @@
 
 **Wave 0 · fully independent of the Swift code**
 
+## Model recommendation
+
+**Difficulty:** Medium · **Recommended model:** Sonnet
+
+Python + pytest against a synthetic fixture vault, rules spelled out one by one, dry-run by default, full backup before `--apply`, nothing deleted. Well inside Sonnet's reliable range. Safety net: before the user runs `--apply` on the real vault, have an Opus pass (or `/code-review`) read the script once — the only real risk is format-preserving YAML edits, and the dry-run report exposes those.
+
 ## Goal
 
 A reviewable, idempotent, dry-run-by-default Python script that brings the existing vault into

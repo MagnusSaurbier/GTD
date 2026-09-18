@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Hard · **Recommended model:** Opus
+
+Byte-for-byte lossless round-tripping is deceptively hard: Yams re-serialisation does not preserve formatting, so this needs a line-level patching strategy designed up front, plus tolerant parsing of legacy TaskNotes data. Bugs here silently corrupt the user's notes on every write. Sonnet tends to get the happy path and miss the nasty cases (CRLF, `---` in body, key order, empty keys).
+
 ## Goal
 
 Lossless conversion between vault markdown files and `GTDModel` entities.

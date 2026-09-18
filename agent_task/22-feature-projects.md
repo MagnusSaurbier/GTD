@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Medium · **Recommended model:** Sonnet
+
+Several views and two sheets, but standard SwiftUI list/detail/reorder work on the in-memory backend with semantics delegated to the reducer. Check in review: step reorder index maths and the cap-error path on promotion.
+
 ## Goal
 
 Projects list, the Mac project view, and the "What's next?" prompt.

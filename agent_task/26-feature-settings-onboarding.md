@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Easy · **Recommended model:** Sonnet
+
+Forms, a folder picker returning a `URL`, and a Codable settings struct. No GTD semantics, no file access. The simplest feature task.
+
 ## Goal
 
 First-run vault selection and the few settings the requirements call for.

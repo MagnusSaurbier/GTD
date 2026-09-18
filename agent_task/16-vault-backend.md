@@ -2,6 +2,12 @@
 
 **Wave 2 · needs T10, T11, T15**
 
+## Model recommendation
+
+**Difficulty:** Hard · **Recommended model:** Opus
+
+Snapshot diff → file transaction, undo with remote-change detection, wikilink upkeep on rename inside the same transaction, optimistic emission vs file-watcher echo. Correctness-critical integration of T10/T11/T15 with subtle ordering and consistency issues; parity with `InMemoryBackend` must hold.
+
 ## Goal
 
 The production `GTDBackend`: commands go through the reducer and come out as file transactions.

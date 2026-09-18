@@ -2,6 +2,12 @@
 
 **Wave 0 · blocks everything · run alone, merge before Wave 1**
 
+## Model recommendation
+
+**Difficulty:** Hard · **Recommended model:** Opus
+
+Keystone task: every other agent compiles against what this produces, so a subtle mistake (wrong dependency graph, a contract that doesn't survive Swift 6 strict concurrency, an `@Observable`/actor design that can't work) is multiplied by 15. Needs judgment to resolve gaps in ARCHITECTURE §4 rather than paper over them. Not a place to save tokens.
+
 ## Goal
 
 Create the scaffold that lets ~15 agents work in parallel without touching each other's files:

@@ -2,6 +2,12 @@
 
 **Wave 2 · needs T15 (`InboxWriter`, `VaultBookmark`)**
 
+## Model recommendation
+
+**Difficulty:** Medium · **Recommended model:** Sonnet
+
+Half documentation (the Shortcut recipe), half small App Intents with a fake-writer test suite. One platform subtlety to verify on device: resolving the security-scoped bookmark from a background intent without launching the app — flag it in Result for T40/T41 rather than guessing.
+
 ## Goal
 
 Capture in under 3 seconds without Obsidian or the app running, by text and by voice.

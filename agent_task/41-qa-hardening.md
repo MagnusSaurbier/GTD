@@ -2,6 +2,12 @@
 
 **Wave 3 · after T40**
 
+## Model recommendation
+
+**Difficulty:** Hard (judgment-heavy) · **Recommended model:** Opus
+
+An adversarial audit is only worth as much as the auditor: tracing every requirement to evidence, hunting data-safety violations, designing sync torture tests. A weaker model tends to confirm rather than challenge. The follow-up fixes it spawns can go to Sonnet.
+
 ## Goal
 
 Prove the app meets REQUIREMENTS v1 and is safe to point at the real vault.

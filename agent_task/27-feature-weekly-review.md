@@ -2,6 +2,12 @@
 
 **Wave 2 · needs T12, T14, T20 (and the public views of T22/T23)**
 
+## Model recommendation
+
+**Difficulty:** Medium–hard (largest feature overall) · **Recommended model:** Opus
+
+Composes four other modules (inbox card, projects, waiting, stats) into a gated, resumable multi-step wizard with persisted session state, a card deck with three phases, a heatmap and the review note. Each piece is ordinary; the difficulty is breadth plus state consistency across resume. Sonnet is likely to finish it shallowly. If budget matters: split into two Sonnet runs (steps 1–2, steps 3–4 + persistence) with Opus defining `ReviewSession` first.
+
 ## Goal
 
 The guided, resumable Mac weekly review.

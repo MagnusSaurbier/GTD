@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Easy–medium · **Recommended model:** Sonnet
+
+Small, linear state machine (`RoutineRun`) with clear tests and a simple card UI. The midnight-rollover and template-changed cases are listed explicitly.
+
 ## Goal
 
 Step-by-step routine runner, primarily for iPhone.

@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00 · integration tests need T10 · informed by T01's report if available**
 
+## Model recommendation
+
+**Difficulty:** Hard · **Recommended model:** Opus
+
+File coordination, security-scoped access, iCloud eviction and conflict copies, debounced change detection, incremental indexing on an actor, rollback on partial failure — concurrency plus platform quirks plus the user's real data. This is where data-loss bugs would come from. Opus, and review the result carefully even so.
+
 ## Goal
 
 The only module that touches the file system: durable folder access, coordinated I/O, change

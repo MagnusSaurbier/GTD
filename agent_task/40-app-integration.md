@@ -2,6 +2,12 @@
 
 **Wave 3 · needs everything merged**
 
+## Model recommendation
+
+**Difficulty:** Hard · **Recommended model:** Opus
+
+Integration is where mismatched assumptions between 18 independently built modules surface. Needs whole-codebase understanding, lifecycle/entitlement/background-task knowledge, UI tests on two platforms and simulator verification, and the judgment to fix glue problems minimally instead of rewriting modules.
+
 ## Goal
 
 Compose the modules into the shipping iOS + macOS app.

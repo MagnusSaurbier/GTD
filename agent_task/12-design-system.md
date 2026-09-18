@@ -2,6 +2,12 @@
 
 **Wave 1 · needs T00**
 
+## Model recommendation
+
+**Difficulty:** Medium · **Recommended model:** Sonnet
+
+Self-contained SwiftUI component work with a frozen API, a visual gallery for review, and no data risk. The only fiddly part is `SwipeCard` (4-direction drag + programmatic dismiss); its threshold logic is unit-tested separately. Mistakes are cosmetic and cheap to fix.
+
 ## Goal
 
 Turn the minimal T00 components into a coherent, calm visual language shared by all features —
