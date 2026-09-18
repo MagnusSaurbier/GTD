@@ -12,6 +12,10 @@ store is the markdown notes in my Obsidian vault (synced via iCloud).
 Planning done, no code yet. Next step: run `agent_task/00-foundation.md` (and, in parallel,
 `01-spike-vault-access.md` and `02-migration-script.md`).
 
+The build-out ends with `agent_task/42-docs-handover.md`, which rewrites `CLAUDE.md`, this file and
+the architecture doc to describe the code as built. Agent instructions live in `CLAUDE.md`;
+its "Keeping this file current" section says when and how to update them.
+
 ## Build (after T00)
 
 ```bash

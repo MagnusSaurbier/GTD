@@ -33,6 +33,8 @@ Prove the app meets REQUIREMENTS v1 and is safe to point at the real vault.
 7. **First-real-use checklist** for the user: back up vault → run T02 migration dry run → apply →
    pick vault in the app → first weekly review to settle Next vs Backlog.
 
+8. **Docs drift check:** list every place where CLAUDE.md / ARCHITECTURE / module READMEs disagree with the code as input for T42 (list only — T42 fixes).
+
 ## Acceptance
 
 - `docs/TRACEABILITY.md` complete; every "partial/missing" has a follow-up task doc.

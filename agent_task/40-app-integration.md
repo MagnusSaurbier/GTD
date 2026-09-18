@@ -49,6 +49,7 @@ N1, N5 (device split), N6, D2, R3, E2, E3, P5/A2 prompt presentation, I7.
 - UI tests with `-useFixtures`: (iOS) process two inbox cards by button, tick off a Next item,
   undo, run a routine to the end; (macOS) sidebar navigation, process a card by keyboard, complete
   a project action → "What's next?" appears.
+- `CLAUDE.md` "Commands" and `README.md` updated with verified run instructions: launching on macOS and in the iOS Simulator, `-useFixtures`, running UI tests, signing setup.
 - Manual test script for the user in `docs/MANUAL_TEST.md` covering real-vault, two-device sync and notification checks.
 - Verified in the iOS Simulator with screenshots attached to Result.
 

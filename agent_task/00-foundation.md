@@ -58,6 +58,15 @@ Everything listed in ARCHITECTURE §2 that doesn't exist yet. After this task, o
    `xcodebuild build` of the package scheme for `generic/platform=iOS Simulator`.
    Optional `--app` flag: `xcodegen && xcodebuild` the app for macOS.
 10. Root `README.md` update: setup steps, how to run checks.
+11. **`CLAUDE.md` "Commands" section:** replace the placeholder with the exact commands you ran
+    (package build, all tests, a single test target / single test, iOS-simulator build, app build,
+    Xcode project regeneration). Verified only.
+12. **`scripts/check-docs.sh`** (called from `check.sh`): extracts backticked repo-relative paths
+    from `CLAUDE.md` and `README.md` and fails if one doesn't exist (allow-list for paths that are
+    intentionally future or git-ignored, e.g. `*.xcodeproj`); fails if the
+    `<!-- PHASE: build-out -->` marker is present while `agent_task/` is gone, or vice versa.
+13. A `README.md` in every target directory you create (stub for unimplemented targets: one line
+    purpose + "owned by TNN"); full ones for `GTDModel`, `GTDAppCore`, `GTDFixtures`, `GTDDesign`.
 
 Routine template source (convert to two files under `SampleVault/GTD/Routines/`):
 Morning — wake up · Record dreams · Drink TPS/Water (creatine if morning sport) · 5 min workout ·

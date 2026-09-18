@@ -18,7 +18,7 @@ parallel)20 inbox   21 next   22 projects   23 waiting+dates   24 routines   25 
                                      ▼
 Wave 2   16 vault backend (needs 10, 11, 15)     27 weekly review (needs 12, 14, 20)     30 capture (needs 15)
                                      ▼
-Wave 3   40 app integration (needs everything)   →   41 QA + hardening
+Wave 3   40 app integration (needs everything)   →   41 QA + hardening   →   42 docs handover
 ```
 
 | # | Task | Owns | Needs | Model |
@@ -44,12 +44,13 @@ Wave 3   40 app integration (needs everything)   →   41 QA + hardening
 | 30 | Capture: Shortcuts & App Intents | `GTDIntents`, `Shortcuts/` | 15 | Sonnet |
 | 40 | App integration | `App/`, `project.yml` | all | Opus |
 | 41 | QA & hardening | tests, fixes anywhere (small) | 40 | Opus |
+| 42 | Docs handover (build-out → maintenance) | `CLAUDE.md`, `README.md`, `docs/`, archives `agent_task/` | 41 | Opus |
 
 `*` = borderline: start with Sonnet at high effort, escalate to Opus as described in the task doc.
 Each task doc has a **Model recommendation** section with difficulty and reasoning.
 
 Rule of thumb used: **Opus** where a mistake silently corrupts vault data, where other agents build
-on the output, or where the work is mostly judgment (00, 01, 10, 11, 15, 16, 27, 40, 41).
+on the output, or where the work is mostly judgment (00, 01, 10, 11, 15, 16, 27, 40, 41, 42).
 **Sonnet** where the task is well-specified, isolated behind the in-memory backend, and failure is
 visible and cheap (02, 12, 13, 14, 20–26, 30). Every Sonnet result should still pass `scripts/check.sh`
 and get a quick review before merge.
@@ -66,7 +67,15 @@ and get a quick review before merge.
   `GTDFixtures` or a temp directory. Only T01 and T02 deal with real data, and only through a human.
 - **No new dependencies** beyond Yams without writing the reason into your task doc.
 - **Status:** when finished, fill in the `## Result` section at the bottom of your task doc
-  (what was built, deviations, contract changes, open issues) and commit it on your branch.
+  (what was built, deviations, contract changes, open issues, gotchas worth keeping) and commit it on your branch.
+- **Docs are part of done.** The repo must stay usable by agents who never saw these briefs:
+  - Write/refresh `Packages/GTDKit/Sources/<YourTarget>/README.md` (≤ 40 lines): purpose, public
+    API entry points, invariants, how to test, gotchas. It lives in your own directory, so it
+    never conflicts with parallel tasks.
+  - If your work makes any statement in `CLAUDE.md`, `README.md` or `docs/ARCHITECTURE.md`
+    untrue, fix it in the same branch (see "Keeping this file current" in `CLAUDE.md`). Keep such
+    edits minimal — these are shared files; T42 does the full reconciliation at the end.
+  - Only document what you verified (commands were run, paths exist).
 - Commit messages: `TNN: <summary>`.
 - Keep scope: anything listed in REQUIREMENTS §12 is out of scope. Don't build it, don't stub it.
 
@@ -76,4 +85,8 @@ and get a quick review before merge.
 - Wave 1 merges are conflict-free by construction (disjoint directories). Merge 10/11/15 first, then launch 16.
 - 01 needs the user to run an app on their iPhone and Mac; schedule it early, since a negative
   result changes 15 (fallback: app-owned iCloud container + Obsidian vault relocated/symlinked).
+- When merging a branch, skim its `## Result` for contract changes and gotchas and make sure
+  `docs/ARCHITECTURE.md` reflects them before launching dependants — later agents read the doc, not the diff.
+- The build-out is not finished until 42 has run: it rewrites `CLAUDE.md`/README/ARCHITECTURE to
+  describe the code as built and archives this folder.
 - 02 produces a script only; the user runs it against the real vault after reviewing a dry-run.
