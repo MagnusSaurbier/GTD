@@ -16,41 +16,32 @@ this file is stale: fix it (see "Keeping this file current").
 
 ## Commands
 
-Run from the repo root. Everything below was run on Linux with Swift 6.4 unless marked otherwise.
+From the repo root. Verified on Linux with Swift 6.4:
 
 ```bash
-cd Packages/GTDKit && swift build            # build every target
-cd Packages/GTDKit && swift test             # all tests
-cd Packages/GTDKit && swift test --filter GTDModelTests          # one test target
-cd Packages/GTDKit && swift test --filter "RulesTests/sidebarCounts"   # one test
 scripts/check.sh                             # the gate: build + test + scripts/check-docs.sh
 scripts/check.sh --app                       # additionally xcodegen + build the app
+cd Packages/GTDKit && swift build
+cd Packages/GTDKit && swift test
+cd Packages/GTDKit && swift test --filter GTDModelTests               # one test target
+cd Packages/GTDKit && swift test --filter "RulesTests/sidebarCounts"  # one test
 ```
 
-**Not yet run in the Linux container — verify on a Mac** (`scripts/check.sh` skips them and
-still exits 0 when the tool is missing):
+**Not yet run here — verify on a Mac** (`scripts/check.sh` prints `SKIPPED` and still exits 0 without them):
+`brew install xcodegen`; `xcodegen generate`; `xcodebuild build -scheme GTDKit -destination
+'generic/platform=iOS Simulator'` (in `Packages/GTDKit`); `xcodebuild build -project
+GTD.xcodeproj -scheme GTD -destination 'platform=macOS'`.
 
-```bash
-brew install xcodegen
-cd Packages/GTDKit && xcodebuild build -scheme GTDKit -destination 'generic/platform=iOS Simulator'
-xcodegen generate                            # regenerates GTD.xcodeproj (git-ignored)
-xcodebuild build -project GTD.xcodeproj -scheme GTD -destination 'platform=macOS'
-```
+Regenerate the committed sample vault after editing
+`Packages/GTDKit/Sources/GTDFixtures/SampleSnapshot.swift`:
+`cd Packages/GTDKit && GTD_EXPORT_SAMPLE_VAULT="$PWD/Sources/GTDFixtures/Resources/SampleVault" swift test --filter exportSampleVault`
 
-Regenerating the committed sample vault after changing `Packages/GTDKit/Sources/GTDFixtures/SampleSnapshot.swift`:
-
-```bash
-cd Packages/GTDKit && GTD_EXPORT_SAMPLE_VAULT="$PWD/Sources/GTDFixtures/Resources/SampleVault" \
-  swift test --filter exportSampleVault
-```
-
-### Platform guards (every target)
-
-`swift build` / `swift test` must pass on Linux, so SwiftUI, UIKit, AppKit, UserNotifications and
-App Intents code lives in files wrapped **entirely** in `#if canImport(SwiftUI)` (or
-`canImport(UserNotifications)` / `canImport(AppIntents)`). Every target keeps at least one
-Linux-compilable file — the view model, session or planner that holds the logic worth testing.
-Details and the per-target split: `docs/ARCHITECTURE.md` §5 "Platform guards".
+**Platform guards (every target).** `swift build`/`swift test` must pass on Linux, so SwiftUI,
+UIKit, AppKit, UserNotifications and App Intents code lives in files wrapped **entirely** in
+`#if canImport(SwiftUI)` (or `canImport(UserNotifications)` / `canImport(AppIntents)`), and every
+target keeps at least one Linux-compilable file holding the logic worth testing. Per-target split:
+`docs/ARCHITECTURE.md` §5 "Platform guards". Expect 11 harmless
+`no rule to process file … xcstrings/assetcatalog` warnings on Linux.
 
 ## Durable rules (apply in every phase)
 
