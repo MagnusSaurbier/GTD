@@ -307,6 +307,15 @@ public enum NoteCodec {
 }
 ```
 
+**T10-1:** every `decode*`/`encode` that touches a timestamp also takes `timeZone: TimeZone = .current`
+(defaulted, so the signatures above still compile). Timestamps without an offset are read in it,
+and new ones are written with it. `GTDMarkdown` additionally exposes the pieces the codec is built
+from — `FrontmatterDocument`, `BodySections`, `CheckboxList`, `Wikilink`, `RawText`, `YAMLScalar` —
+plus `NoteCodec.noteKind(text:)` (dispatch by `kind:`), `routineLogName`,
+`unknownContexts(in:known:)`, `Keys`/`Headings`, and `NoteCodecError.vaultIssue`.
+Encoding **patches the original file line by line** (it is kept in `NotePassthrough`) instead of
+re-serialising, which is what makes N2 hold; see `Sources/GTDMarkdown/README.md`.
+
 ### GTDVault
 
 ```swift
