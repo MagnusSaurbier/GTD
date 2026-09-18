@@ -32,12 +32,22 @@ public enum StepReorder {
         return move(steps, from: index, to: index + 1)
     }
 
-    /// Drag reorder via `List.onMove`: SwiftUI reports `destination` as the insertion index in
-    /// the array **with the moved elements already removed**, which is exactly what
-    /// `Array.move(fromOffsets:toOffset:)` expects (it is not a plain "insert before index").
-    public static func move(_ steps: [ProjectStep], fromOffsets: IndexSet, toOffset: Int) -> [ProjectStep] {
+    /// Drag reorder via `List.onMove`. Reimplements `Array.move(fromOffsets:toOffset:)`'s exact
+    /// semantics by hand: that convenience lives in SwiftUI, which this file cannot import (it
+    /// must stay Linux-testable — ARCHITECTURE §5). `destination` is the insertion index SwiftUI
+    /// reports, computed **after** the moved elements are removed.
+    public static func move(_ steps: [ProjectStep], fromOffsets source: IndexSet, toOffset destination: Int) -> [ProjectStep] {
+        let validSource = source.filter { steps.indices.contains($0) }
+        guard !validSource.isEmpty else { return steps }
+        let itemsToMove = validSource.map { steps[$0] }
+
         var copy = steps
-        copy.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        for index in validSource.sorted(by: >) {
+            copy.remove(at: index)
+        }
+        let adjustedDestination = destination - validSource.count { $0 < destination }
+        let clamped = max(0, min(adjustedDestination, copy.count))
+        copy.insert(contentsOf: itemsToMove, at: clamped)
         return copy
     }
 }

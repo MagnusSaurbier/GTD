@@ -65,9 +65,9 @@ struct ProjectsListModelTests {
     @Test func openStepsExcludesDoneAndPromotedSteps() {
         let list = ProjectsListModel(model: makeModel())
         let open = list.openSteps(of: Fixtures.daadProject.id)
-        #expect(open.map(\.text) == [
-            "Write motivation letter", "Ask Prof. Weber for a reference", "Submit the online form",
-        ])
+        // "Collect transcripts" is done+promoted, "Write motivation letter" is already promoted
+        // (the in-progress action of the same name) — both excluded.
+        #expect(open.map(\.text) == ["Ask Prof. Weber for a reference", "Submit the online form"])
         #expect(!open.contains { $0.done })
         #expect(!open.contains { $0.promotedTo != nil })
     }
