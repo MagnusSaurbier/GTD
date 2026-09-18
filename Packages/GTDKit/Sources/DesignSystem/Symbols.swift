@@ -31,6 +31,11 @@ public enum Symbols {
     public static let journaling = "pencil.and.scribble"
     public static let promoteStep = "arrow.up.right.circle"
 
+    /// Inline checklist rows (A2, T21). Not yet in STYLEGUIDE §7 — flagged there is open;
+    /// these are the stock SF Symbols pair for a checked/unchecked list item.
+    public static let checkboxOn = "checkmark.square"
+    public static let checkboxOff = "square"
+
     public static let routineGeneric = "repeat"
     public static let routineMorning = "sunrise"
     public static let routineBedtime = "moon.stars"

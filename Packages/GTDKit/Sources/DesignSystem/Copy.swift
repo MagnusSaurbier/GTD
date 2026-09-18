@@ -35,6 +35,12 @@ public enum Copy {
     public static let demote = "Demote"
     public static let done = "Done"
     public static let skip = "Skip"
+    /// Row context menu (E1, T21) — start working on it now (→ `in-progress`).
+    public static let start = "Start"
+    /// Chase quick action (W2, T21) — whatever you were waiting for arrived.
+    public static let resolved = "Resolved"
+    /// Toolbar / `⌘N` quick capture (I7, T21).
+    public static let quickCapture = "Quick capture"
     public static let undo = "Undo"
     public static let clearFilters = "Clear filters"
 
@@ -74,6 +80,9 @@ public enum Copy {
     public static func stepsSummary(done: Int, total: Int) -> String { "\(done) of \(total) steps" }
 
     public static let onTheRemarkable = "On the reMarkable"
+
+    /// Chase quick action (W2, T21): `Bump +7d`.
+    public static func bumpFollowUp(days: Int) -> String { "Bump +\(DateText.age(days: days))" }
 
     // MARK: Status names
 
