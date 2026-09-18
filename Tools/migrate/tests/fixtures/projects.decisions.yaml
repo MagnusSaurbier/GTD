@@ -1,0 +1,4 @@
+# Sample decisions file for the "resolved" M5 test scenario.
+# "Misc" is deliberately left out so a test can also cover the "still unresolved" path.
+Projects/Applications: area
+Projects/Karriereplanung: project
