@@ -1,0 +1,19 @@
+# Xcode / SwiftPM
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+*.xcresult
+# macOS
+.DS_Store
+# Python (Tools/migrate)
+__pycache__/
+.venv/
+.pytest_cache/
+# never commit vault data or migration output
+migration-report.md
+GTD-migration-backup-*/
+# agent worktrees
+.worktrees/
