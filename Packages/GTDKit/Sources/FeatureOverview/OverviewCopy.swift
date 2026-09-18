@@ -1,0 +1,58 @@
+import Foundation
+
+/// Strings and symbols the Mac shell needs that `DesignSystem.Copy` / `DesignSystem.Symbols`
+/// do not (yet) carry. Same pattern as `DesignSystem.Copy`: feature code never inlines a
+/// user-facing string or an SF Symbol name, it references a constant.
+///
+/// T12 owns `DesignSystem`; when it adds these there (or turns `Copy` into
+/// `LocalizedStringResource`s backed by `Resources/Localizable.xcstrings`), this file folds into
+/// it without changing call sites.
+enum OverviewCopy {
+
+    // Sidebar section names: the plural forms of STYLEGUIDE §4.1, which `Copy` has only in
+    // the singular (§6.2 fixed vocabulary).
+    static let projects = "Projects"
+    static let routines = "Routines"
+    static let deferred = "Deferred"
+
+    // Shell chrome
+    static let go = "Go"
+    static let filter = "Filter"
+    static let filterPlaceholder = "Filter by title"
+    static let openInObsidian = "Open in Obsidian"
+    static let vaultIssues = "Vault issues"
+    static let calendar = "Calendar"
+    static let newCapture = "New capture"
+    static let status = "Status"
+    static let context = "Context"
+    static let time = "Time"
+
+    // Detail view
+    static let titlePlaceholder = "Action title"
+    static let noSelectionTitle = "Nothing selected"
+    static let noSelectionBody = "Pick an action from the list."
+    static let missingActionTitle = "Action is gone"
+    static let missingActionBody = "It was completed, trashed or renamed elsewhere."
+    static let notSaved = "Not saved"
+    static let titleTaken = "Another action already has that title."
+
+    /// `12 items` — the count under a list's title when it is filtered.
+    static func matches(_ count: Int) -> String { count == 1 ? "1 match" : "\(count) matches" }
+
+    static func emptyListTitle(_ status: String) -> String { "Nothing in \(status)" }
+    static let emptyListBody = "Process your inbox, or move something here."
+    static let emptyFilterTitle = "No match"
+    static let emptyFilterBody = "Nothing here fits this filter."
+}
+
+/// SF Symbols the shell needs beyond `DesignSystem.Symbols` (STYLEGUIDE §7 is exhaustive for
+/// concepts; these are plain chrome affordances). Folds into `Symbols` when T12 adds them.
+enum OverviewSymbols {
+    static let filter = "line.3.horizontal.decrease.circle"
+    static let issues = "exclamationmark.triangle"
+    static let openExternally = "arrow.up.forward.app"
+    static let collapse = "chevron.down"
+    static let expand = "chevron.up"
+    static let calendar = "calendar"
+    static let placeholder = "square.dashed"
+}
