@@ -1,0 +1,60 @@
+name: GTD
+options:
+  bundleIdPrefix: com.magnussaurbier
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: true
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: true
+
+packages:
+  GTDKit:
+    path: Packages/GTDKit
+
+targets:
+  GTD:
+    # One multiplatform target (ARCHITECTURE §1). T40 owns this file from here on.
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: App
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: GTD
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        NSHumanReadableCopyright: ""
+        CFBundleURLTypes:
+          # Notification deep links: gtd://routine/<id>, gtd://action/<path>, gtd://waiting
+          - CFBundleURLName: com.magnussaurbier.gtd
+            CFBundleURLSchemes: [gtd]
+    entitlements:
+      path: App/GTD.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.bookmarks.app-scope: true
+        com.apple.security.network.client: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.magnussaurbier.gtd
+        GENERATE_INFOPLIST_FILE: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    dependencies:
+      - package: GTDKit
+        product: GTDKit

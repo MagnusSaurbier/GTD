@@ -53,7 +53,7 @@ Dependency direction (no cycles, features never import each other except where l
 GTDModel ← GTDMarkdown ← GTDVault ← GTDServices
 GTDModel ← GTDAppCore ← DesignSystem ← Feature*
 GTDModel ← GTDNotifications, GTDStats
-FeatureReview → FeatureInbox (embeds the processing card), GTDStats
+FeatureReview → FeatureInbox (embeds the processing card), FeatureProjects (WhatsNextSheet), GTDStats
 FeatureOverview → all other Feature* (it is the Mac shell's content router)
 App → everything
 ```
@@ -236,15 +236,44 @@ The **reducer is the single place where GTD semantics live** (cap, waiting valid
 completion, promotion, demoting Next actions when their project leaves `active`, archive eligibility…). `extraOps` covers effects on files that are not
 snapshot entities (knowledge notes, weekly review note, trash moves).
 
+**extraOps vs. the snapshot diff (T00-1).** `GTDServices` diffs old and new snapshot and encodes
+changed entities into file operations; `extraOps` are applied alongside. One rule keeps the two
+from fighting: **a path named in `extraOps` is owned by `extraOps`** — the diff emits nothing for
+it. Every command that makes a note leave its collection therefore emits its own move:
+inbox filing (`.delete`, i.e. move to `GTD/Trash/`, or `.move` into `Knowledge/` for the
+knowledge decision, which keeps the capture file and its `created` frontmatter), archiving,
+renaming an action, converting an action into a project. A removed entity that no `extraOp`
+mentions means "move the file to `GTD/Trash/`".
+
+**`saveWeeklyReview` (T00-4)** sets `snapshot.lastReview` and emits **no** `extraOps`:
+`GTDServices` writes `GTD/Reviews/<yyyy>/KW <ww>.md` from the changed `lastReview` with
+`NoteCodec.encode(_: WeeklyReview)`. `GTDModel` never produces markdown.
+
 Derived queries (pure, in `GTDModel/Rules`, owned by T11), e.g.:
-`Rules.nextList(snapshot, today:)`, `chaseItems`, `visibleActions` (defer), `stalledProjects`,
-`countsTowardCap`, `sidebarCounts`, `dueBadge(for:today:)`, `archiveCandidates`.
+`Rules.nextList(snapshot, contexts:timeAvailable:today:)`, `onTheGoNextList`, `chaseItems`,
+`visibleActions` (defer), `deferredList`, `waitingList`, `stalledProjects`, `projectRows`,
+`countsTowardCap`, `capSignal`, `sidebarCounts`, `signals(for:today:)`, `dueBadge(for:today:)`,
+`returnedFromDeferBadge`, `suggestsProject`, `archiveCandidates`, `timeline(from:to:)`.
+The semantic value types they return live in `GTDModel/Rules`:
+
+```swift
+public enum SignalStep: Sendable, Comparable { case neutral, aging, attention, overdue }
+public enum SignalKind: Sendable, Hashable {   // one case per STYLEGUIDE §2.2 row
+  case untouched(days: Int), followUpSoon(Day), chase(days: Int), dueSoon(Day), dueToday
+  case overdue(days: Int), returnedFromDefer, stalled, cap(count: Int, cap: Int), inboxAge(days: Int) }
+public struct Signal: Sendable, Hashable { public var kind: SignalKind; public var step: SignalStep }
+public struct StalenessPolicy: Sendable, Equatable { /* 14 d / 30 d / inbox 7 d / due 3 d / follow-up 2 d / archive 30 d */ }
+public struct Rules.SidebarCounts / Rules.ProjectRow / Rules.TimelineEntry: Sendable, Equatable
+```
+`DesignSystem.SignalPresentation` is the only place that turns a `Signal` into badge text and a
+symbol; `DesignSystem.BadgeContent` is its platform-free result, so the §2.2 table is unit-tested.
 
 ### GTDAppCore
 
 ```swift
 public protocol GTDBackend: Sendable {
   func snapshots() -> AsyncStream<VaultSnapshot>             // emits on every local or remote change
+  func currentSnapshot() async -> VaultSnapshot              // T00-2: so AppModel.send never races the stream
   func perform(_ command: GTDCommand) async throws -> [AppPrompt]
   func undo() async throws                                    // N6: last filing/status change
   func undoLabel() async -> String? }
@@ -255,6 +284,8 @@ public protocol GTDBackend: Sendable {
   public var prompt: AppPrompt?                               // presented by the app shell
   public let today: () -> Day
   public init(backend: any GTDBackend, today: @escaping () -> Day = Day.today)
+  public private(set) var lastError: (any Error)?             // T00-3: a refused undo has nowhere else to go
+  public init(backend: any GTDBackend, snapshot: VaultSnapshot, today: @escaping () -> Day = Day.today)  // previews
   public func send(_ command: GTDCommand) async throws       // rethrows GTDError for the UI to handle
   public func undo() async }
 
@@ -317,7 +348,41 @@ How the style guide maps onto this repo:
   are constants in `DesignSystem`.
   Caveat: asset and string catalogs are compiled by Xcode's build system, not by plain
   `swift build`. Therefore unit tests never assert on resolved colours or catalog lookups, and
-  `scripts/check.sh` includes an `xcodebuild` build so catalogs are validated. T00 verifies this setup first.
+  `scripts/check.sh` includes an `xcodebuild` build so catalogs are validated.
+  **T00 outcome (contract change T00-5):** under `swift build` on Linux, `.process("Resources")`
+  emits a harmless `no rule to process file` warning per catalog and copies nothing — it does not
+  fail the build. Because that could not be verified under `xcodebuild` here, the **colour tokens
+  are code-defined** (`DesignSystem/Tokens/Colors.swift`: system semantic colours plus one
+  `Color.dynamic(light:dark:)` helper over `UIColor`/`NSColor`), so no behaviour depends on the
+  asset catalog resolving. `DesignSystem/Resources/Colors.xcassets` carries the same values for
+  Xcode tooling, and `App/Assets.xcassets` repeats the accent for `AccentColor`. The string
+  catalogs are empty placeholders: T00's user-facing strings are `String` constants in
+  `DesignSystem.Copy`, which T12 converts to `LocalizedStringResource` without changing call sites.
+  **The user must confirm on a Mac** that `scripts/check.sh` (the `xcodebuild` step) is green.
+### Platform guards
+
+`swift build` / `swift test` must pass on **Linux** (the build-out agents have no Xcode and no
+Apple SDKs), so the split below is binding for every target:
+
+- **Foundation-only targets** — `GTDModel`, `GTDMarkdown`, `GTDStats`, `GTDFixtures`,
+  `GTDAppCore`, and the pure parts of `GTDVault`, `GTDServices`, `GTDNotifications` — contain
+  **no** `import SwiftUI`/`UIKit`/`AppKit`/`UserNotifications`/`AppIntents` at all.
+- **UI and platform-only code** lives in files wrapped **entirely** in
+  `#if canImport(SwiftUI)` (or `#if canImport(UserNotifications)`, `#if canImport(AppIntents)`),
+  first line to last. Never a guard around part of a file.
+- **Every target keeps at least one Linux-compilable file** holding the logic worth testing:
+  `InboxSession` + `CardTargets`, `NextListModel`, `ProjectsListModel`, `WaitingListModel`,
+  `RoutineRun`, `SidebarItem`, `DeviceSettings`, `ReviewSession`, `CaptureRequest`, and in
+  `DesignSystem` the tokens' numbers (`Spacing`, `Radius`, `Elevation`, `MotionTiming`,
+  `DragThresholds`), `Symbols`, `Copy`/`DateText`, `ChipState`, `BadgeContent`,
+  `SignalPresentation`. Test targets follow the same rule.
+- `Day` and `DayTime` use integer civil-calendar arithmetic, not `Calendar`, so they behave
+  identically on Linux and on Apple platforms. `Calendar` only appears where a `Day` meets a
+  real `Date`. Date and age *wording* (`DateText`) is written by hand rather than with
+  `DateFormatter`, so output is locale- and platform-independent (the app is English-only).
+- Blind-written platform code is listed in each task's `## Result` as unverified, with what the
+  user should check on a Mac.
+
 - A suggestion (dashed chip) is UI state only. It is never part of a draft or command until the
   user confirms it — e.g. the +7 d follow-up is *suggested*, and `WaitingInfo` is only created on confirmation.
 - Each feature target exposes 1–3 public root views and nothing else. Public API is listed in its task doc.
@@ -336,6 +401,11 @@ How the style guide maps onto this repo:
 | Review stats | Computed on the fly from files (`created`, `completedDate`, log, routine log). Nothing persisted except the `KW` note. |
 | Ungrouped actions in grouped lists | Listed first, without a section header (no new vocabulary; style guide forbids "No project"). |
 | Time estimate storage | Minutes; chips write 10 / 30 / 60 / 90; any value > 60 shows as "60+". |
+| Vault access on device (T01) | **2026-09-19:** T01 was skipped by user decision — the app assumes a security-scoped bookmark to a user-picked folder inside Obsidian's iCloud container gives durable read/write access. If that turns out to be false, fall back as described in `agent_task/01-spike-vault-access.md`. |
+| Reducer `extraOps` vs. diff (T00) | **2026-09-19:** a path named in `extraOps` is owned by `extraOps`; the snapshot diff emits nothing for it (§4). |
+| Weekly review note (T00) | **2026-09-19:** the reducer stores `snapshot.lastReview`; `GTDServices` encodes the `KW` note. `GTDModel` never produces markdown (§4). |
+| Colour tokens (T00) | **2026-09-19:** code-defined, not asset-catalog-dependent, because the catalog build could not be verified without Xcode (§5). |
+| Liquid Glass (T00) | **2026-09-19:** `GlassActionBar`/`UndoToast` use `.ultraThinMaterial` for now. T12 adopts `.glassEffect()` in a `GlassEffectContainer` once it can be compiled on a Mac (STYLEGUIDE §2.5). |
 
 ## 7. Sync safety rules (N3) — apply to every task that writes
 

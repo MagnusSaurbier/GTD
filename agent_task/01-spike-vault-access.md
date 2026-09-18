@@ -67,4 +67,8 @@ the fallback (app-owned iCloud container as the vault location, opened in Obsidi
 
 ## Result
 
-_(fill in when done)_
+Skipped by user decision on 2026-09-19: assume local file access works; fallback per brief if it doesn't.
+
+Recorded in `docs/ARCHITECTURE.md` §6 ("Vault access on device (T01)"). T15 builds against a
+security-scoped bookmark to a user-picked folder without waiting for a device spike; if the
+assumption breaks in real use, the fallback evaluation above is still the plan.

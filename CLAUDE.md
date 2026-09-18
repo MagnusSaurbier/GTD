@@ -16,8 +16,41 @@ this file is stale: fix it (see "Keeping this file current").
 
 ## Commands
 
-_T00 fills this in with commands it has actually run (build, test, single test, app build, run
-in simulator, regenerate the Xcode project). Until then nothing is buildable._
+Run from the repo root. Everything below was run on Linux with Swift 6.4 unless marked otherwise.
+
+```bash
+cd Packages/GTDKit && swift build            # build every target
+cd Packages/GTDKit && swift test             # all tests
+cd Packages/GTDKit && swift test --filter GTDModelTests          # one test target
+cd Packages/GTDKit && swift test --filter "RulesTests/sidebarCounts"   # one test
+scripts/check.sh                             # the gate: build + test + scripts/check-docs.sh
+scripts/check.sh --app                       # additionally xcodegen + build the app
+```
+
+**Not yet run in the Linux container — verify on a Mac** (`scripts/check.sh` skips them and
+still exits 0 when the tool is missing):
+
+```bash
+brew install xcodegen
+cd Packages/GTDKit && xcodebuild build -scheme GTDKit -destination 'generic/platform=iOS Simulator'
+xcodegen generate                            # regenerates GTD.xcodeproj (git-ignored)
+xcodebuild build -project GTD.xcodeproj -scheme GTD -destination 'platform=macOS'
+```
+
+Regenerating the committed sample vault after changing `Packages/GTDKit/Sources/GTDFixtures/SampleSnapshot.swift`:
+
+```bash
+cd Packages/GTDKit && GTD_EXPORT_SAMPLE_VAULT="$PWD/Sources/GTDFixtures/Resources/SampleVault" \
+  swift test --filter exportSampleVault
+```
+
+### Platform guards (every target)
+
+`swift build` / `swift test` must pass on Linux, so SwiftUI, UIKit, AppKit, UserNotifications and
+App Intents code lives in files wrapped **entirely** in `#if canImport(SwiftUI)` (or
+`canImport(UserNotifications)` / `canImport(AppIntents)`). Every target keeps at least one
+Linux-compilable file — the view model, session or planner that holds the logic worth testing.
+Details and the per-target split: `docs/ARCHITECTURE.md` §5 "Platform guards".
 
 ## Durable rules (apply in every phase)
 

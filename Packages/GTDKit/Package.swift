@@ -5,10 +5,18 @@ import PackageDescription
 /// Applied to every target: Swift 6 language mode (strict concurrency).
 let swiftSettings: [SwiftSetting] = [.swiftLanguageMode(.v6)]
 
+/// Every source target carries a `README.md` (CLAUDE.md "Where things are"); it is documentation,
+/// not a resource, so SwiftPM is told to leave it alone.
+let excluded = ["README.md"]
+
 /// Every UI target owns its own `Resources/Localizable.xcstrings` (ARCHITECTURE §5), so parallel
 /// tasks never share a string catalog. `.process` is a no-op warning under `swift build` on Linux
 /// and compiles the catalogs under `xcodebuild`.
 let uiResources: [Resource] = [.process("Resources")]
+
+/// Feature targets depend on `GTDAppCore` + `DesignSystem` only — never on `GTDVault`/
+/// `GTDServices` (ARCHITECTURE §2).
+let featureDeps: [Target.Dependency] = ["GTDAppCore", "DesignSystem"]
 
 let package = Package(
     name: "GTDKit",
@@ -28,51 +36,55 @@ let package = Package(
     targets: [
         // MARK: - Domain
 
-        .target(name: "GTDModel", swiftSettings: swiftSettings),
+        .target(name: "GTDModel", exclude: excluded, swiftSettings: swiftSettings),
         .target(
             name: "GTDMarkdown",
             dependencies: ["GTDModel", .product(name: "Yams", package: "Yams")],
+            exclude: excluded,
             swiftSettings: swiftSettings),
-        .target(name: "GTDVault", dependencies: ["GTDModel", "GTDMarkdown"], swiftSettings: swiftSettings),
-        .target(name: "GTDServices", dependencies: ["GTDModel", "GTDMarkdown", "GTDVault"], swiftSettings: swiftSettings),
-        .target(name: "GTDAppCore", dependencies: ["GTDModel"], swiftSettings: swiftSettings),
+        .target(name: "GTDVault", dependencies: ["GTDModel", "GTDMarkdown"], exclude: excluded, swiftSettings: swiftSettings),
+        .target(name: "GTDServices", dependencies: ["GTDModel", "GTDMarkdown", "GTDVault"], exclude: excluded, swiftSettings: swiftSettings),
+        .target(name: "GTDAppCore", dependencies: ["GTDModel"], exclude: excluded, swiftSettings: swiftSettings),
         .target(
             name: "GTDFixtures",
             dependencies: ["GTDModel"],
+            exclude: excluded,
             // `.copy` (not `.process`): the sample vault must keep its folder tree byte-for-byte.
             resources: [.copy("Resources/SampleVault")],
             swiftSettings: swiftSettings),
-        .target(name: "GTDNotifications", dependencies: ["GTDModel"], swiftSettings: swiftSettings),
-        .target(name: "GTDStats", dependencies: ["GTDModel"], swiftSettings: swiftSettings),
+        .target(name: "GTDNotifications", dependencies: ["GTDModel"], exclude: excluded, swiftSettings: swiftSettings),
+        .target(name: "GTDStats", dependencies: ["GTDModel"], exclude: excluded, swiftSettings: swiftSettings),
 
         // MARK: - UI
 
         .target(
             name: "DesignSystem",
             dependencies: ["GTDModel", "GTDAppCore"],
+            exclude: excluded,
             resources: uiResources,
             swiftSettings: swiftSettings),
-        .target(name: "FeatureInbox", dependencies: ["GTDAppCore", "DesignSystem"], resources: uiResources, swiftSettings: swiftSettings),
-        .target(name: "FeatureNext", dependencies: ["GTDAppCore", "DesignSystem"], resources: uiResources, swiftSettings: swiftSettings),
-        .target(name: "FeatureProjects", dependencies: ["GTDAppCore", "DesignSystem"], resources: uiResources, swiftSettings: swiftSettings),
-        .target(name: "FeatureWaiting", dependencies: ["GTDAppCore", "DesignSystem"], resources: uiResources, swiftSettings: swiftSettings),
-        .target(name: "FeatureRoutines", dependencies: ["GTDAppCore", "DesignSystem"], resources: uiResources, swiftSettings: swiftSettings),
-        .target(name: "FeatureSettings", dependencies: ["GTDAppCore", "DesignSystem"], resources: uiResources, swiftSettings: swiftSettings),
+        .target(name: "FeatureInbox", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
+        .target(name: "FeatureNext", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
+        .target(name: "FeatureProjects", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
+        .target(name: "FeatureWaiting", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
+        .target(name: "FeatureRoutines", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
+        .target(name: "FeatureSettings", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
         .target(
             name: "FeatureReview",
-            dependencies: ["GTDAppCore", "DesignSystem", "GTDStats", "FeatureInbox", "FeatureProjects"],
+            dependencies: featureDeps + ["GTDStats", "FeatureInbox", "FeatureProjects"],
+            exclude: excluded,
             resources: uiResources,
             swiftSettings: swiftSettings),
         .target(
             name: "FeatureOverview",
-            dependencies: [
-                "GTDAppCore", "DesignSystem",
+            dependencies: featureDeps + [
                 "FeatureInbox", "FeatureNext", "FeatureProjects", "FeatureWaiting",
                 "FeatureRoutines", "FeatureSettings", "FeatureReview",
             ],
+            exclude: excluded,
             resources: uiResources,
             swiftSettings: swiftSettings),
-        .target(name: "GTDIntents", dependencies: ["GTDModel", "GTDVault"], resources: uiResources, swiftSettings: swiftSettings),
+        .target(name: "GTDIntents", dependencies: ["GTDModel", "GTDVault"], exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
 
         // MARK: - Tests
 
