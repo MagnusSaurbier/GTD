@@ -13,6 +13,8 @@ public struct Chip: View {
     private let leadingSymbol: String?
     private let action: () -> Void
 
+    @Environment(\.colorSchemeContrast) private var contrast
+
     public init(
         _ title: String,
         state: ChipState,
@@ -26,7 +28,9 @@ public struct Chip: View {
     }
 
     public var body: some View {
-        Button(action: action) {
+        Button {
+            action()
+        } label: {
             HStack(spacing: Spacing.xs) {
                 if let symbol = effectiveSymbol {
                     Image(systemName: symbol).symbolRenderingMode(.hierarchical)
@@ -44,6 +48,7 @@ public struct Chip: View {
         }
         .buttonStyle(.plain)
         .disabled(state == .disabled)
+        .sensoryFeedback(.selection, trigger: state)
         .accessibilityAddTraits(state == .confirmed ? [.isSelected] : [])
         .accessibilityValue(accessibilityValue)
     }
@@ -70,14 +75,17 @@ public struct Chip: View {
         if state == .confirmed { Color.ink } else { Color.clear }
     }
 
+    /// STYLEGUIDE §8: outline thickens to 1.5 pt under `accessibilityContrast == .increased`.
+    private var outlineWidth: CGFloat { contrast == .increased ? 1.5 : 1 }
+
     @ViewBuilder private var outline: some View {
         switch state {
         case .suggested:
             Radius.chipShape.strokeBorder(
                 Color.textSecondary,
-                style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                style: StrokeStyle(lineWidth: outlineWidth, dash: [4, 3]))
         case .unset, .disabled:
-            Radius.chipShape.strokeBorder(Color.hairline, lineWidth: 1)
+            Radius.chipShape.strokeBorder(Color.hairline, lineWidth: outlineWidth)
         case .confirmed:
             EmptyView()
         }
@@ -102,58 +110,25 @@ public struct FlowLayout: Layout {
         self.spacing = spacing
     }
 
+    // The row-wrapping maths itself lives in `FlowLayoutEngine` (Foundation-only, unit-tested on
+    // Linux); this type is the thin SwiftUI `Layout` witness over it.
+
     public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
-        let rows = layout(subviews: subviews, maxWidth: maxWidth)
-        let height = rows.reduce(0) { $0 + $1.height } + spacing * CGFloat(max(rows.count - 1, 0))
-        let width = rows.map(\.width).max() ?? 0
-        return CGSize(width: min(width, maxWidth == .infinity ? width : maxWidth), height: height)
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        return FlowLayoutEngine.layout(sizes: sizes, maxWidth: maxWidth, spacing: spacing).size
     }
 
     public func placeSubviews(
         in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
     ) {
-        let rows = layout(subviews: subviews, maxWidth: bounds.width)
-        var y = bounds.minY
-        for row in rows {
-            var x = bounds.minX
-            for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
-                subviews[index].place(
-                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
-                    proposal: ProposedViewSize(size))
-                x += size.width + spacing
-            }
-            y += row.height + spacing
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let result = FlowLayoutEngine.layout(sizes: sizes, maxWidth: bounds.width, spacing: spacing)
+        for placement in result.placements {
+            subviews[placement.index].place(
+                at: CGPoint(x: bounds.minX + placement.position.x, y: bounds.minY + placement.position.y),
+                proposal: ProposedViewSize(sizes[placement.index]))
         }
-    }
-
-    private struct Row {
-        var indices: [Int] = []
-        var width: CGFloat = 0
-        var height: CGFloat = 0
-    }
-
-    private func layout(subviews: Subviews, maxWidth: CGFloat) -> [Row] {
-        var rows: [Row] = []
-        var current = Row()
-        for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
-            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
-            if !current.indices.isEmpty, needed > maxWidth {
-                rows.append(current)
-                current = Row()
-                current.indices = [index]
-                current.width = size.width
-                current.height = size.height
-            } else {
-                current.indices.append(index)
-                current.width = needed
-                current.height = max(current.height, size.height)
-            }
-        }
-        if !current.indices.isEmpty { rows.append(current) }
-        return rows
     }
 }
 
