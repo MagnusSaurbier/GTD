@@ -3,9 +3,8 @@ import Foundation
 /// The single place where GTD semantics live: cap enforcement, waiting validation, completion,
 /// promotion, demotion, archive eligibility. UI and backends never re-implement any of it.
 ///
-/// **Ownership:** T00 wrote this naïvely so that every `GTDCommand` already does something
-/// sensible and the feature targets are usable against `InMemoryBackend`. **T11 hardens and fully
-/// tests it.** Every knowingly-incomplete spot is marked `// T11:`.
+/// `reduce` is a pure function of `(snapshot, command, env)`: no clock, no file system, no
+/// randomness. Same input ⇒ equal `Reduction`.
 ///
 /// ### How `extraOps` relates to the snapshot diff
 /// `GTDServices` turns `Reduction` into file operations: it diffs old vs. new snapshot and
@@ -13,6 +12,21 @@ import Foundation
 /// One rule makes the two agree: **a path mentioned in `extraOps` is owned by `extraOps`** — the
 /// diff must not also emit an operation for it. That is why every command that makes a note
 /// leave its collection (inbox filing, archiving, renaming, converting) emits the move itself.
+/// `.delete` means "move to `GTD/Trash/`" — the app never hard-deletes (ARCHITECTURE §3).
+///
+/// ### The rules this file enforces
+/// | Rule | Where |
+/// | --- | --- |
+/// | I4/A3 Next cap (`in-progress` counts) | `checkCap` |
+/// | I5 defer to review needs a reason | `deferInboxToReview` |
+/// | A1 one file per action, unique title | `makeAction`, `updateAction` |
+/// | A4 contexts are a closed list | `normalizeContexts` |
+/// | A5 done/trash set a closing date, archive after 30 d | `normalize`, `archiveCompleted` |
+/// | W1 waiting needs who + follow-up, leaving clears both | `normalize` |
+/// | D1 defer hides — so it cannot sit in Next | `normalize` |
+/// | P3 only active projects put actions into Next; leaving `active` demotes | `normalize`, `updateProject` |
+/// | P4/P5 completion logs, ticks the step and asks "what's next?" | `settle` |
+/// | R5 one routine-log entry per step per day per device | `logRoutineStep` |
 public enum Reducer {
 
     public static func reduce(
@@ -31,11 +45,7 @@ public enum Reducer {
             return try deferInboxToReview(s, id: id, reason: reason)
 
         case let .createAction(draft):
-            var next = s
-            let action = try makeAction(from: draft, in: s, env: env)
-            next.actions.append(action)
-            try checkCap(old: s, new: next)
-            return Reduction(snapshot: next)
+            return try createAction(s, draft: draft, env: env)
 
         case let .updateAction(action):
             return try updateAction(s, action: action, env: env)
@@ -47,14 +57,14 @@ public enum Reducer {
             return try complete(s, id: id, env: env)
 
         case let .toggleCheckbox(id, index):
-            return try toggleCheckbox(s, id: id, index: index)
+            return try toggleCheckbox(s, id: id, index: index, env: env)
 
         case let .convertActionToProject(id, draft):
             return try convertActionToProject(s, id: id, draft: draft, env: env)
 
         case let .createArea(title):
             var next = s
-            _ = try addArea(title: title, to: &next)
+            _ = try addArea(title: title, to: &next, reusingExisting: false)
             return Reduction(snapshot: next)
 
         case let .createProject(draft):
@@ -63,19 +73,13 @@ public enum Reducer {
             return Reduction(snapshot: next)
 
         case let .updateProject(project):
-            return try updateProject(s, project: project)
+            return try updateProject(s, project: project, env: env)
 
         case let .promoteStep(projectID, stepIndex, draft):
             return try promoteStep(s, projectID: projectID, stepIndex: stepIndex, draft: draft, env: env)
 
         case let .saveWeeklyReview(review):
-            var next = s
-            var saved = review
-            saved.savedAt = env.now
-            next.lastReview = saved
-            // The note itself is written by GTDServices from the changed `lastReview`
-            // (`NoteCodec.encode(_: WeeklyReview)`) — GTDModel never produces markdown.
-            return Reduction(snapshot: next)
+            return try saveWeeklyReview(s, review: review, env: env)
 
         case let .logRoutineStep(routineID, stepID, result):
             return try logRoutineStep(s, routineID: routineID, stepID: stepID, result: result, env: env)
@@ -89,10 +93,7 @@ public enum Reducer {
             return Reduction(snapshot: next)
 
         case let .updateConfig(config):
-            guard config.nextCap > 0 else { throw .invalid("Next cap must be at least 1") }
-            var next = s
-            next.config = config
-            return Reduction(snapshot: next)
+            return try updateConfig(s, config: config)
 
         case .archiveCompleted:
             return archiveCompleted(s, env: env)
@@ -110,17 +111,22 @@ public enum Reducer {
         return Reduction(snapshot: next)
     }
 
+    /// I5 — the escape hatch. The app asks *why* the item does not fit; the reason travels into
+    /// the weekly review so the gap can be fixed. Such items leave the processing queue.
     private static func deferInboxToReview(
         _ s: VaultSnapshot, id: NoteID, reason: String
     ) throws(GTDError) -> Reduction {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw .invalid("Defer to review needs a reason") }
+        guard !trimmed.isEmpty else { throw .invalid(Message.reviewReasonRequired) }
         guard let index = s.inbox.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
         var next = s
         next.inbox[index].reviewReason = trimmed
         return Reduction(snapshot: next)
     }
 
+    /// I4 — the five destinations of a card. The capture file always leaves `Inbox/`:
+    /// the knowledge decision **moves** it (keeping its `created` frontmatter and its text),
+    /// every other decision trashes it after its content has become one or more new notes.
     private static func fileInbox(
         _ s: VaultSnapshot, id: NoteID, decision: InboxDecision, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
@@ -128,6 +134,7 @@ public enum Reducer {
         var next = s
         let layout = s.config.layout
         var extraOps: [VaultFileOp] = []
+        var prompts: [AppPrompt] = []
 
         switch decision {
         case let .action(draft):
@@ -136,9 +143,11 @@ public enum Reducer {
             extraOps.append(.delete(path: item.id.path))
 
         case let .knowledge(folder, title):
-            let target = layout.knowledgePath(folder: folder, title: title)
+            let noteTitle = try requireTitle(title)
+            let target = layout.knowledgePath(folder: folder, title: noteTitle)
             guard !pathExists(target, in: next) else { throw .titleCollision(title) }
-            // The capture *becomes* the knowledge note: no content is rewritten, nothing is lost.
+            guard target != item.id else { throw .invalid(Message.knowledgeTargetIsSource) }
+            // The capture *becomes* the knowledge note: nothing is rewritten, nothing is lost (I4).
             extraOps.append(.move(from: item.id.path, to: target.path))
 
         case let .newProject(draft, firstActions):
@@ -149,10 +158,12 @@ public enum Reducer {
                 let action = try makeAction(from: linked, in: next, env: env, created: item.created)
                 next.actions.append(action)
             }
+            if firstActions.isEmpty { prompts.append(.whatsNext(project: project.id)) }  // P4/P5
             extraOps.append(.delete(path: item.id.path))
 
         case let .existingProject(projectID, actions):
             guard next.project(projectID) != nil else { throw .notFound(projectID) }
+            guard !actions.isEmpty else { throw .invalid(Message.projectNeedsAction) }
             for actionDraft in actions {
                 var linked = actionDraft
                 linked.project = projectID
@@ -167,86 +178,121 @@ public enum Reducer {
 
         next.inbox.removeAll { $0.id == id }
         try checkCap(old: s, new: next)
-        return Reduction(snapshot: next, extraOps: extraOps)
+        return Reduction(snapshot: next, prompts: prompts, extraOps: extraOps)
     }
 
     // MARK: - Actions
 
+    private static func createAction(
+        _ s: VaultSnapshot, draft: ActionDraft, env: ReducerEnv
+    ) throws(GTDError) -> Reduction {
+        var next = s
+        let action = try makeAction(from: draft, in: s, env: env)
+        next.actions.append(action)
+        try checkCap(old: s, new: next)
+        return Reduction(snapshot: next)
+    }
+
+    /// Editing an action in place. A title change is a file move (A1), and any project step that
+    /// pointed at the old file follows it.
     private static func updateAction(
         _ s: VaultSnapshot, action: Action, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
         guard let index = s.actions.firstIndex(where: { $0.id == action.id }) else {
             throw .notFound(action.id)
         }
+        let previous = s.actions[index]
+
         var updated = action
-        try validate(&updated, waiting: action.waiting, in: s, env: env)
+        updated.created = previous.created          // `created` is written once, by capture (A1)
+        try normalize(&updated, previous: previous, waiting: action.waiting, in: s, env: env)
 
         var next = s
         var extraOps: [VaultFileOp] = []
 
-        // A title change is a file move: the filename is the title (A1).
         let wantedID = s.config.layout.actionPath(title: updated.title)
-        if wantedID != updated.id {
+        if wantedID != previous.id {
             guard !pathExists(wantedID, in: s) else { throw .titleCollision(updated.title) }
             let moved = rekey(updated, to: wantedID)
             next.actions[index] = moved
-            extraOps.append(.move(from: updated.id.path, to: wantedID.path))
-            // T11/T16: wikilinks pointing at the old path are rewritten by GTDServices.
+            extraOps.append(.move(from: previous.id.path, to: wantedID.path))
+            retarget(from: previous.id, to: wantedID, in: &next)
         } else {
             next.actions[index] = updated
         }
 
         try checkCap(old: s, new: next)
-        return Reduction(snapshot: next, extraOps: extraOps)
+        let prompts = settle(&next, at: index, previousStatus: previous.status, env: env)
+        return Reduction(snapshot: next, prompts: prompts, extraOps: extraOps)
     }
 
+    /// The one command every list uses to move an action between commitment tiers (A3, W1).
     private static func setStatus(
         _ s: VaultSnapshot, id: NoteID, status: ActionStatus, waiting: WaitingInfo?, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
         guard let index = s.actions.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
-        var updated = s.actions[index]
+        let previous = s.actions[index]
+        guard !(previous.status == .done && status == .done) else { return Reduction(snapshot: s) }
+
+        var updated = previous
         updated.status = status
-        try validate(&updated, waiting: waiting, in: s, env: env)
+        try normalize(&updated, previous: previous, waiting: waiting, in: s, env: env)
 
         var next = s
         next.actions[index] = updated
         try checkCap(old: s, new: next)
-
-        if status == .done {
-            return try complete(next, id: id, env: env)
-        }
-        return Reduction(snapshot: next)
+        let prompts = settle(&next, at: index, previousStatus: previous.status, env: env)
+        return Reduction(snapshot: next, prompts: prompts)
     }
 
+    /// A5/P4/P5 — completing an action. Idempotent: completing a done action changes nothing,
+    /// so a double tap never writes a second log entry.
     private static func complete(
         _ s: VaultSnapshot, id: NoteID, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
         guard let index = s.actions.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
-        var next = s
-        next.actions[index].status = .done
-        next.actions[index].completedDate = env.now
-        next.actions[index].waitingFor = nil
-        next.actions[index].followUpDate = nil
+        let previous = s.actions[index]
+        guard previous.status != .done else { return Reduction(snapshot: s) }
 
-        var prompts: [AppPrompt] = []
-        if let projectID = next.actions[index].project,
-           let projectIndex = next.projects.firstIndex(where: { $0.id == projectID }) {
-            let title = next.actions[index].title
-            next.projects[projectIndex].log.append(LogEntry(day: env.today, text: title))
-            if let stepIndex = next.projects[projectIndex].steps.firstIndex(where: { $0.promotedTo == id }) {
-                next.projects[projectIndex].steps[stepIndex].done = true
-            }
-            prompts.append(.whatsNext(project: projectID))   // P5
-        }
+        var updated = previous
+        updated.status = .done
+        try normalize(&updated, previous: previous, waiting: nil, in: s, env: env)
+
+        var next = s
+        next.actions[index] = updated
+        let prompts = settle(&next, at: index, previousStatus: previous.status, env: env)
         return Reduction(snapshot: next, prompts: prompts)
     }
 
+    /// Everything that happens *after* an action's status has been written: the project log,
+    /// the promoted step, the "What's next?" prompt (P4, P5).
+    private static func settle(
+        _ next: inout VaultSnapshot, at index: Int, previousStatus: ActionStatus, env: ReducerEnv
+    ) -> [AppPrompt] {
+        let action = next.actions[index]
+        guard action.status == .done, previousStatus != .done else { return [] }
+        guard let projectID = action.project,
+              let projectIndex = next.projects.firstIndex(where: { $0.id == projectID })
+        else { return [] }
+
+        // P6 — the project note keeps a dated log of what got done.
+        next.projects[projectIndex].log.append(LogEntry(day: env.today, text: action.title))
+        // P4 — the step this action came from is now done.
+        if let stepIndex = next.projects[projectIndex].steps.firstIndex(where: { $0.promotedTo == action.id }) {
+            next.projects[projectIndex].steps[stepIndex].done = true
+        }
+        // P5 — only an active project can take a next step right now.
+        guard next.projects[projectIndex].status == .active else { return [] }
+        return [.whatsNext(project: projectID)]
+    }
+
+    /// Ticking one checkbox of the `# What?` body (A2). Rewrites exactly that line.
     private static func toggleCheckbox(
-        _ s: VaultSnapshot, id: NoteID, index: Int
+        _ s: VaultSnapshot, id: NoteID, index: Int, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
         guard let actionIndex = s.actions.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
-        let what = s.actions[actionIndex].what
-        var lines = what.components(separatedBy: "\n")
+        guard index >= 0 else { throw .invalid(Message.noCheckbox(index)) }
+        var lines = s.actions[actionIndex].what.components(separatedBy: "\n")
         var seen = -1
         var toggled = false
         for lineIndex in lines.indices {
@@ -257,9 +303,10 @@ public enum Reducer {
             toggled = true
             break
         }
-        guard toggled else { throw .invalid("No checkbox at index \(index)") }
+        guard toggled else { throw .invalid(Message.noCheckbox(index)) }
         var next = s
         next.actions[actionIndex].what = lines.joined(separator: "\n")
+        next.actions[actionIndex].modified = env.now
         return Reduction(snapshot: next)
     }
 
@@ -272,6 +319,9 @@ public enum Reducer {
 
     // MARK: - Projects
 
+    /// A2 — "Turn into project". The action's checkboxes become the project's steps and its
+    /// note is superseded (moved to `GTD/Trash/`); the prompt asks which step to promote first,
+    /// so the new project does not start out stalled (P4, P5).
     private static func convertActionToProject(
         _ s: VaultSnapshot, id: NoteID, draft: ProjectDraft, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
@@ -279,40 +329,50 @@ public enum Reducer {
         var next = s
         var effective = draft
         if effective.steps.isEmpty {
-            effective.steps = action.checkboxes.map(\.text)
+            effective.steps = action.checkboxes.map(\.text).filter { !$0.isEmpty }
         }
         if effective.why.isEmpty { effective.why = action.why }
-        _ = try addProject(effective, to: &next)
-        // The action is superseded by the project note; its file moves to the trash folder
-        // (the app never hard-deletes — ARCHITECTURE §3).
-        // T11: decide whether the first step should be auto-promoted back into this action instead.
+        let project = try addProject(effective, to: &next)
+
         next.actions.removeAll { $0.id == id }
+        retarget(from: id, to: nil, in: &next)
         return Reduction(
             snapshot: next,
+            prompts: [.whatsNext(project: project.id)],
             extraOps: [.move(from: id.path, to: s.config.layout.trashPath(for: id).path)])
     }
 
+    /// P3 — a project that is not `active` cannot hold actions in Next; changing its status
+    /// demotes them to Backlog. Renaming or re-filing a project is not supported in v1: the
+    /// folder name is the identity, so the title must keep matching the note's path.
     private static func updateProject(
-        _ s: VaultSnapshot, project: Project
+        _ s: VaultSnapshot, project: Project, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
         guard let index = s.projects.firstIndex(where: { $0.id == project.id }) else {
             throw .notFound(project.id)
         }
-        let wasActive = s.projects[index].status == .active
+        let previous = s.projects[index]
+        guard VaultLayout.sanitize(project.title) == previous.title else {
+            throw .invalid(Message.projectRenameUnsupported)
+        }
+        guard project.area == previous.area else { throw .invalid(Message.projectMoveUnsupported) }
+        if let areaID = project.area, s.area(areaID) == nil { throw .notFound(areaID) }
+
         var next = s
         next.projects[index] = project
 
-        // P3: only active projects put actions into Next.
-        if wasActive, project.status != .active {
+        if project.status != .active {
             for actionIndex in next.actions.indices
             where next.actions[actionIndex].project == project.id
                 && next.actions[actionIndex].status.countsTowardCap {
                 next.actions[actionIndex].status = .backlog
+                next.actions[actionIndex].modified = env.now
             }
         }
         return Reduction(snapshot: next)
     }
 
+    /// P4 — turning a checklist line of the project note into a real action note.
     private static func promoteStep(
         _ s: VaultSnapshot, projectID: NoteID, stepIndex: Int, draft: ActionDraft, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
@@ -320,11 +380,18 @@ public enum Reducer {
             throw .notFound(projectID)
         }
         guard s.projects[projectIndex].steps.indices.contains(stepIndex) else {
-            throw .invalid("No step at index \(stepIndex)")
+            throw .invalid(Message.noStep(stepIndex))
         }
+        let step = s.projects[projectIndex].steps[stepIndex]
+        guard step.promotedTo == nil else { throw .invalid(Message.stepAlreadyPromoted) }
+        guard !step.done else { throw .invalid(Message.stepAlreadyDone) }
+
         var next = s
         var linked = draft
         linked.project = projectID
+        if linked.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            linked.title = step.text      // the step's own wording is the honest default
+        }
         let action = try makeAction(from: linked, in: next, env: env)
         next.actions.append(action)
         next.projects[projectIndex].steps[stepIndex].promotedTo = action.id
@@ -332,49 +399,76 @@ public enum Reducer {
         return Reduction(snapshot: next)
     }
 
+    /// P1 — an area is a folder with its own note. `reusingExisting` is true only for the
+    /// "create the area while creating the project" path, where hitting an existing area is
+    /// the user naming one, not a collision.
     @discardableResult
-    private static func addArea(title: String, to s: inout VaultSnapshot) throws(GTDError) -> Area {
-        let id = s.config.layout.areaPath(title: title)
-        guard !pathExists(id, in: s) else { throw .titleCollision(title) }
-        let area = Area(id: id, title: VaultLayout.sanitize(title))
+    private static func addArea(
+        title: String, to s: inout VaultSnapshot, reusingExisting: Bool
+    ) throws(GTDError) -> Area {
+        let name = try requireTitle(title)
+        let id = s.config.layout.areaPath(title: name)
+        if let existing = s.area(id) {
+            guard reusingExisting else { throw .titleCollision(name) }
+            return existing
+        }
+        guard !pathExists(id, in: s) else { throw .titleCollision(name) }
+        let area = Area(id: id, title: name)
         s.areas.append(area)
         return area
     }
 
+    /// P1/P2 — a new project note, optionally creating its area in the same step.
     @discardableResult
     private static func addProject(_ draft: ProjectDraft, to s: inout VaultSnapshot) throws(GTDError) -> Project {
+        let title = try requireTitle(draft.title)
         var areaID = draft.area
         if let newAreaTitle = draft.newAreaTitle,
            !newAreaTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            areaID = try addArea(title: newAreaTitle, to: &s).id
+            areaID = try addArea(title: newAreaTitle, to: &s, reusingExisting: true).id
         }
         if let areaID, s.area(areaID) == nil { throw .notFound(areaID) }
 
-        let id = s.config.layout.projectPath(title: draft.title, inArea: areaID)
-        guard !pathExists(id, in: s) else { throw .titleCollision(draft.title) }
+        let id = s.config.layout.projectPath(title: title, inArea: areaID)
+        guard !pathExists(id, in: s) else { throw .titleCollision(title) }
         let project = Project(
             id: id,
-            title: VaultLayout.sanitize(draft.title),
+            title: title,
             area: areaID,
             status: .active,
             outcome: draft.outcome,
             why: draft.why,
-            steps: draft.steps.map { ProjectStep(text: $0) })
+            steps: draft.steps
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .map { ProjectStep(text: $0) })
         s.projects.append(project)
         return project
     }
 
+    /// Keeps `ProjectStep.promotedTo` pointing at the right note when an action is renamed
+    /// (`to:` the new id) or superseded (`to: nil`).
+    private static func retarget(from old: NoteID, to new: NoteID?, in s: inout VaultSnapshot) {
+        for projectIndex in s.projects.indices {
+            for stepIndex in s.projects[projectIndex].steps.indices
+            where s.projects[projectIndex].steps[stepIndex].promotedTo == old {
+                s.projects[projectIndex].steps[stepIndex].promotedTo = new
+            }
+        }
+    }
+
     // MARK: - Routines
 
+    /// R5 — one entry per step per day per device. Re-logging a step replaces the earlier entry,
+    /// so the day's file stays the single truth for this device (N3).
     private static func logRoutineStep(
         _ s: VaultSnapshot, routineID: NoteID, stepID: String, result: RoutineStepResult, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
         guard let routine = s.routine(routineID) else { throw .notFound(routineID) }
         guard routine.steps.contains(where: { $0.id == stepID }) else {
-            throw .invalid("Unknown routine step \(stepID)")
+            throw .invalid(Message.unknownStep(stepID))
         }
         var next = s
-        // Re-logging a step replaces the earlier entry for the same day, routine and device (R5).
         next.routineLog.removeAll {
             $0.day == env.today && $0.routine == routine.title
                 && $0.step == stepID && $0.device == env.deviceID
@@ -389,15 +483,50 @@ public enum Reducer {
         return Reduction(snapshot: next)
     }
 
+    // MARK: - Config and review
+
+    /// A4/A3 — the settings that live in `GTD/Config.md`.
+    private static func updateConfig(_ s: VaultSnapshot, config: GTDConfig) throws(GTDError) -> Reduction {
+        guard config.nextCap > 0 else { throw .invalid(Message.capTooSmall) }
+        var checked = config
+        checked.contexts = dedupe(config.contexts.map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty })
+        guard !checked.contexts.isEmpty else { throw .invalid(Message.contextsRequired) }
+        checked.onTheGoContexts = dedupe(config.onTheGoContexts)
+        let known = Set(checked.contexts)
+        if let stray = checked.onTheGoContexts.first(where: { !known.contains($0) }) {
+            throw .invalid(Message.unknownContext(stray))
+        }
+        var next = s
+        next.config = checked
+        return Reduction(snapshot: next)
+    }
+
+    /// §10.4 — the reducer only stores the review; `GTDServices` writes `KW <ww>.md` from the
+    /// changed `lastReview` (`GTDModel` never produces markdown — ARCHITECTURE §4, T00-4).
+    private static func saveWeeklyReview(
+        _ s: VaultSnapshot, review: WeeklyReview, env: ReducerEnv
+    ) throws(GTDError) -> Reduction {
+        guard (1...53).contains(review.week) else { throw .invalid(Message.badWeek(review.week)) }
+        guard review.year > 1970 else { throw .invalid(Message.badYear(review.year)) }
+        var next = s
+        var saved = review
+        saved.savedAt = env.now
+        next.lastReview = saved
+        return Reduction(snapshot: next)
+    }
+
     // MARK: - Archive
 
+    /// A5 — done and trashed notes older than 30 days move to `Archive/YYYY/MM/` and leave the
+    /// snapshot. Nothing is deleted, and nothing still open is ever touched.
     private static func archiveCompleted(_ s: VaultSnapshot, env: ReducerEnv) -> Reduction {
-        let candidates = Rules.archiveCandidates(s, today: env.today)
+        let candidates = Rules.archiveCandidates(s, today: env.today, calendar: env.calendar)
         guard !candidates.isEmpty else { return Reduction(snapshot: s) }
         var next = s
         var ops: [VaultFileOp] = []
         for action in candidates {
-            let day = action.completedDate.map { Day($0, calendar: env.calendar) } ?? env.today
+            let day = Rules.closedDay(action, calendar: env.calendar) ?? env.today
             let target = s.config.layout.archivePath(for: action.id, completedOn: day)
             ops.append(.move(from: action.id.path, to: target.path))
         }
@@ -408,66 +537,120 @@ public enum Reducer {
 
     // MARK: - Shared helpers
 
-    /// Builds the action a draft describes, validating waiting info and the project rule.
-    /// Does **not** check the cap — callers do that once on the finished snapshot.
+    /// Builds the action a draft describes. Does **not** check the cap — callers do that once
+    /// on the finished snapshot, so one command never counts a slot twice.
     private static func makeAction(
         from draft: ActionDraft,
         in s: VaultSnapshot,
         env: ReducerEnv,
         created: Date? = nil
     ) throws(GTDError) -> Action {
-        let id = s.config.layout.actionPath(title: draft.title)
-        guard !pathExists(id, in: s) else { throw .titleCollision(draft.title) }
+        let title = try requireTitle(draft.title)
+        let id = s.config.layout.actionPath(title: title)
+        guard !pathExists(id, in: s) else { throw .titleCollision(title) }
 
         var action = Action(
             id: id,
-            title: VaultLayout.sanitize(draft.title),
+            title: title,
             status: draft.status,
             contexts: draft.contexts,
-            timeEstimate: draft.timeEstimate.flatMap { $0 > 0 ? $0 : nil },
+            timeEstimate: draft.timeEstimate,
             project: draft.project,
             deferDate: draft.deferDate,
             due: draft.due,
             created: created ?? env.now,
-            modified: env.now,
             why: draft.why,
             what: draft.what)
-        try validate(&action, waiting: draft.waiting, in: s, env: env)
+        try normalize(&action, previous: nil, waiting: draft.waiting, in: s, env: env)
         return action
     }
 
-    /// W1 (waiting needs who + follow-up) and P3 (only active projects reach Next).
-    private static func validate(
-        _ action: inout Action, waiting: WaitingInfo?, in s: VaultSnapshot, env: ReducerEnv
+    /// Everything that must be true of an action after any command touched it.
+    ///
+    /// - W1 `waiting` needs who **and** follow-up; leaving `waiting` clears both.
+    /// - P3 only an active project may hold an action in Next.
+    /// - D1 × A3 a future defer date and a Next slot contradict each other.
+    /// - A4 contexts come from the configured closed list (values already in the file survive).
+    /// - A5 a closed action carries a closing date; re-opening one clears it.
+    /// - §1 `timeEstimate: 0` is never written.
+    private static func normalize(
+        _ action: inout Action,
+        previous: Action?,
+        waiting: WaitingInfo?,
+        in s: VaultSnapshot,
+        env: ReducerEnv
     ) throws(GTDError) {
+        action.title = try requireTitle(action.title)
+        action.contexts = try normalizeContexts(action.contexts, previous: previous?.contexts, in: s)
+
+        if let estimate = action.timeEstimate, estimate <= 0 { action.timeEstimate = nil }
+
         if action.status == .waiting {
             let info = waiting ?? action.waiting
             guard let info, !info.who.trimmingCharacters(in: .whitespaces).isEmpty else {
                 throw .waitingInfoRequired
             }
-            action.waitingFor = info.who
+            action.waitingFor = info.who.trimmingCharacters(in: .whitespaces)
             action.followUpDate = info.followUp
         } else {
-            // Leaving `waiting` clears both halves — an empty field must not lie.
             action.waitingFor = nil
             action.followUpDate = nil
         }
 
-        if action.status.countsTowardCap, let projectID = action.project {
+        if let projectID = action.project {
             guard let project = s.project(projectID) else { throw .notFound(projectID) }
-            guard project.status == .active else {
-                throw .invalid("Only active projects put actions into Next")
+            if action.status.countsTowardCap, project.status != .active {
+                throw .invalid(Message.projectNotActive)
             }
         }
 
-        if let estimate = action.timeEstimate, estimate <= 0 {
-            action.timeEstimate = nil   // `timeEstimate: 0` is forbidden (§1)
+        if action.status.countsTowardCap, let deferDate = action.deferDate, deferDate > env.today {
+            // Only refuse the *new* contradiction — a hand-edited vault stays repairable.
+            var wasAlreadyDeferredIntoNext = false
+            if let previous, previous.status.countsTowardCap, let old = previous.deferDate {
+                wasAlreadyDeferredIntoNext = old > env.today
+            }
+            guard wasAlreadyDeferredIntoNext else { throw .invalid(Message.deferredCannotBeNext) }
         }
+
+        if action.status.isClosed {
+            if action.completedDate == nil { action.completedDate = env.now }
+        } else {
+            action.completedDate = nil
+        }
+
         action.modified = env.now
     }
 
+    /// A4 — contexts are a closed list. Values that are already in the note survive (a migrated
+    /// vault is not the user's fault), but nothing unknown is ever added.
+    private static func normalizeContexts(
+        _ contexts: [String], previous: [String]?, in s: VaultSnapshot
+    ) throws(GTDError) -> [String] {
+        let cleaned = dedupe(contexts.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+        let known = Set(s.config.contexts).union(previous ?? [])
+        if let stray = cleaned.first(where: { !known.contains($0) }) {
+            throw .invalid(Message.unknownContext(stray))
+        }
+        return cleaned
+    }
+
+    /// A1 — the title is the file name, so it must survive sanitising as something non-empty.
+    private static func requireTitle(_ raw: String) throws(GTDError) -> String {
+        guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw .invalid(Message.titleRequired)
+        }
+        return VaultLayout.sanitize(raw)
+    }
+
+    private static func dedupe(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
+    }
+
     /// I4/A3 — the cap only blocks commands that *increase* Next occupancy, so a vault edited
-    /// by hand into 17/15 can still be repaired by the app.
+    /// by hand into 17/15 can still be repaired from the app. Never automatic: the UI must
+    /// offer "demote something" or "send to Backlog".
     private static func checkCap(old: VaultSnapshot, new: VaultSnapshot) throws(GTDError) {
         let cap = new.config.nextCap
         let after = Rules.countsTowardCap(new)
@@ -499,5 +682,29 @@ public enum Reducer {
             why: action.why,
             what: action.what,
             passthrough: action.passthrough)
+    }
+
+    /// The wording of `GTDError.invalid`. `GTDError` is `Equatable`, so these strings are part
+    /// of the contract tests compare against — they are not user-facing copy (that is
+    /// `DesignSystem.Copy`).
+    enum Message {
+        static let titleRequired = "A title is required"
+        static let reviewReasonRequired = "Defer to review needs a reason"
+        static let projectNotActive = "Only active projects put actions into Next"
+        static let deferredCannotBeNext = "A deferred action cannot sit in Next"
+        static let projectNeedsAction = "Filing to a project needs at least one action"
+        static let projectRenameUnsupported = "Renaming a project is not supported"
+        static let projectMoveUnsupported = "Moving a project to another area is not supported"
+        static let stepAlreadyPromoted = "This step is already promoted"
+        static let stepAlreadyDone = "This step is already done"
+        static let knowledgeTargetIsSource = "The knowledge note would overwrite the capture"
+        static let capTooSmall = "Next cap must be at least 1"
+        static let contextsRequired = "At least one context is required"
+        static func unknownContext(_ value: String) -> String { "Unknown context: \(value)" }
+        static func noCheckbox(_ index: Int) -> String { "No checkbox at index \(index)" }
+        static func noStep(_ index: Int) -> String { "No step at index \(index)" }
+        static func unknownStep(_ id: String) -> String { "Unknown routine step \(id)" }
+        static func badWeek(_ week: Int) -> String { "Week \(week) is not a calendar week" }
+        static func badYear(_ year: Int) -> String { "Year \(year) is not a plausible year" }
     }
 }

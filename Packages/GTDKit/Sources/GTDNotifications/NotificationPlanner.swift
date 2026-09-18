@@ -66,6 +66,19 @@ public struct DeviceNotificationSettings: Sendable, Equatable, Codable {
 
 /// **Owned by T13.** Pure: snapshot in, notifications out. Respects the iOS limit of 64 pending
 /// requests (routines first, then soonest first; same-morning items collapse into a summary).
+///
+/// Kinds planned, one call covers all of them (D1, D2, R3, W2):
+/// - `deferReturn` — morning of `Action.deferDate`, once.
+/// - `dueApproaching` — morning of `due - 1 day` **and** morning of `due` (two notifications).
+/// - `followUp` — morning of `Action.followUpDate`, for `status == .waiting` only.
+/// - `routineStart` — a daily-repeating trigger at `Routine.time`.
+///
+/// "Morning" is `settings.morningTime`; a fire date at or before `now` is dropped ("past dates
+/// ignored") so a device that has not synced in a while does not resurface stale reminders.
+/// `done`/`trash` actions are never planned. When two or more non-routine notifications would
+/// fire at the exact same instant (several items due the same morning), they collapse into one
+/// `.summary` notification instead of paging the user repeatedly — unless `.summary` itself is
+/// disabled in settings, in which case they are left separate.
 public enum NotificationPlanner {
     /// iOS keeps at most 64 pending requests per app.
     public static let maxPending = 64
@@ -76,7 +89,137 @@ public enum NotificationPlanner {
         calendar: Calendar = .current,
         settings: DeviceNotificationSettings = .default
     ) -> [PlannedNotification] {
-        []   // T13
+        var routineNotifications: [PlannedNotification] = []
+        if settings.enabledKinds.contains(.routineStart) {
+            for routine in snapshot.routines {
+                if let notification = routineNotification(routine, now: now, calendar: calendar) {
+                    routineNotifications.append(notification)
+                }
+            }
+        }
+
+        var candidates: [PlannedNotification] = []
+        for action in snapshot.actions {
+            guard action.status != .done, action.status != .trash else { continue }
+
+            if settings.enabledKinds.contains(.deferReturn), let deferDate = action.deferDate,
+               let notification = itemNotification(
+                   action, day: deferDate, kind: .deferReturn,
+                   title: "Back today", body: "\(action.title) is back.",
+                   settings: settings, now: now, calendar: calendar) {
+                candidates.append(notification)
+            }
+
+            if settings.enabledKinds.contains(.dueApproaching), let due = action.due {
+                if let notification = itemNotification(
+                    action, day: due.adding(days: -1), kind: .dueApproaching,
+                    title: "Due tomorrow", body: "\(action.title) is due tomorrow.",
+                    settings: settings, now: now, calendar: calendar) {
+                    candidates.append(notification)
+                }
+                if let notification = itemNotification(
+                    action, day: due, kind: .dueApproaching,
+                    title: "Due today", body: "\(action.title) is due today.",
+                    settings: settings, now: now, calendar: calendar) {
+                    candidates.append(notification)
+                }
+            }
+
+            if settings.enabledKinds.contains(.followUp), action.status == .waiting,
+               let followUp = action.followUpDate {
+                let who = action.waitingFor.map { " with \($0)" } ?? ""
+                if let notification = itemNotification(
+                    action, day: followUp, kind: .followUp,
+                    title: "Follow up", body: "Follow up\(who) about \(action.title).",
+                    settings: settings, now: now, calendar: calendar) {
+                    candidates.append(notification)
+                }
+            }
+        }
+
+        let collapsed = settings.enabledKinds.contains(.summary)
+            ? collapseSameMorning(candidates, calendar: calendar)
+            : candidates
+
+        let orderedRoutines = routineNotifications.sorted(by: chronological)
+        let orderedRest = collapsed.sorted(by: chronological)
+        // Cap ordering: routines first (there are only ever a handful of them and missing a
+        // routine start is worse than missing a due-date ping), then soonest first.
+        return Array((orderedRoutines + orderedRest).prefix(maxPending))
+    }
+
+    // MARK: - Building blocks
+
+    /// Deterministic total order: soonest first, ties (only possible between different kinds
+    /// that happen to land on the exact same instant, which collapsing already prevents for
+    /// same-morning items) broken by id so the result never depends on iteration order.
+    private static func chronological(_ a: PlannedNotification, _ b: PlannedNotification) -> Bool {
+        a.fireDate == b.fireDate ? a.id < b.id : a.fireDate < b.fireDate
+    }
+
+    private static func routineNotification(
+        _ routine: Routine, now: Date, calendar: Calendar
+    ) -> PlannedNotification? {
+        guard let time = routine.time else { return nil }
+        guard let fireDate = calendar.date(
+            bySettingHour: time.hour, minute: time.minute, second: 0, of: now)
+        else { return nil }
+        return PlannedNotification(
+            id: "\(NotificationKind.routineStart.rawValue):\(routine.id.path)",
+            kind: .routineStart,
+            title: routine.title,
+            body: "Time for \(routine.title).",
+            fireDate: fireDate,
+            repeatsDaily: true,
+            deepLink: NotificationRoute.routine(routine.id).url)
+    }
+
+    /// One item-bound (non-repeating) notification, or `nil` if it would fire in the past.
+    private static func itemNotification(
+        _ action: Action, day: Day, kind: NotificationKind,
+        title: String, body: String,
+        settings: DeviceNotificationSettings, now: Date, calendar: Calendar
+    ) -> PlannedNotification? {
+        guard let fireDate = day.date(at: settings.morningTime, in: calendar), fireDate > now
+        else { return nil }
+        return PlannedNotification(
+            id: "\(kind.rawValue):\(action.id.path):\(day.iso)",
+            kind: kind,
+            title: title,
+            body: body,
+            fireDate: fireDate,
+            repeatsDaily: false,
+            deepLink: NotificationRoute.action(action.id).url)
+    }
+
+    /// Merges non-routine notifications that share an exact fire date into one `.summary`.
+    private static func collapseSameMorning(
+        _ notifications: [PlannedNotification], calendar: Calendar
+    ) -> [PlannedNotification] {
+        let grouped = Dictionary(grouping: notifications, by: \.fireDate)
+        return grouped.map { fireDate, group in
+            guard group.count > 1 else { return group[0] }
+            let day = Day(fireDate, calendar: calendar)
+            let kinds = Set(group.map(\.kind))
+            let body: String
+            if kinds == [.deferReturn] {
+                body = "\(group.count) items came back today."
+            } else if kinds == [.dueApproaching] {
+                body = "\(group.count) items due soon."
+            } else if kinds == [.followUp] {
+                body = "\(group.count) follow-ups due today."
+            } else {
+                body = "\(group.count) items need your attention today."
+            }
+            return PlannedNotification(
+                id: "\(NotificationKind.summary.rawValue):\(day.iso)",
+                kind: .summary,
+                title: "\(group.count) items",
+                body: body,
+                fireDate: fireDate,
+                repeatsDaily: false,
+                deepLink: "")
+        }
     }
 }
 
@@ -124,6 +267,13 @@ public struct NotificationScheduler: Sendable {
 
     public init(center: any NotificationCenterPort) {
         self.center = center
+    }
+
+    /// Asks the user for permission. Call once, e.g. the first time the user enables a
+    /// notification kind in Settings; `sync(planned:)` does not request it implicitly, since a
+    /// pre-authorization plan/diff must stay possible without prompting.
+    public func requestAuthorization() async throws -> Bool {
+        try await center.requestAuthorization()
     }
 
     public func sync(planned: [PlannedNotification]) async throws {

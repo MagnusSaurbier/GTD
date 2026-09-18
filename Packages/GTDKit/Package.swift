@@ -16,7 +16,7 @@ let uiResources: [Resource] = [.process("Resources")]
 
 /// Feature targets depend on `GTDAppCore` + `DesignSystem` only — never on `GTDVault`/
 /// `GTDServices` (ARCHITECTURE §2).
-let featureDeps: [Target.Dependency] = ["GTDAppCore", "DesignSystem"]
+let featureDeps: [Target.Dependency] = ["GTDAppCore", "DesignSystem", "GTDFixtures"]  // GTDFixtures: `#Preview`s in every feature (ARCHITECTURE §5)
 
 let package = Package(
     name: "GTDKit",
