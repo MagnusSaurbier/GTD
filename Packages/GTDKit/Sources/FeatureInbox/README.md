@@ -1,25 +1,43 @@
 # FeatureInbox
 
-Inbox processing: one card at a time, LIFO, forced order (I1–I7).
-
-**Owned by T20.** T00 created a compiling shell: the public root views with the exact signatures
-from the task brief, plus the Linux-compilable model listed below. The visuals and behaviour are
-T20's work; `docs/STYLEGUIDE.md` is binding and its §9 checklist is part of the gate.
+Inbox processing: one card at a time, LIFO, forced order, exit only by quitting (I1–I7).
+Owned by **T20**. `docs/STYLEGUIDE.md` §3.5/§3.6 is the binding spec for the card and its gestures.
 
 ## Public API
 
-`InboxProcessingView(onFinished:)`, `InboxStartButton(action:)`.
-Linux-compilable: `InboxSession` (queue, counter, filing, undo) and `CardTargets.swift`
-(`CardTarget`, `SwipeDirection`, `DragResolver` — the single definition of the swipe/key map,
-ARCHITECTURE §6).
+- `InboxProcessingView(onFinished:)` — the whole session. `FeatureReview` embeds it (§10.1).
+- `InboxStartButton(action:)` — home-screen entry point with the live queue count.
+
+Linux-compilable (this is where all the logic lives, and all of it is unit-tested):
+
+- `InboxSession` — `@MainActor @Observable`. Queue, `draft`, `sheet`, counter, validation,
+  cap choice, every sub-flow, undo. Views own no decisions; they call `choose(_:)`,
+  `confirm*(...)`, `demoteAndRetry(_:)`, `sendToBacklogInstead()`, `undo()`.
+- `CardTargets.swift` — `CardTarget` (the 8 targets with key, swipe, symbol, title),
+  `SwipeDirection`, `DragResolver` (axis lock, thresholds, commitment), `KeyMap` (Mac keys).
+  The **single** definition of the swipe/key map (ARCHITECTURE §6).
+- `InboxPickers.swift` — `KnowledgeTree`, `ProjectPicker`, `InboxDefaultsStore`
+  (device-local last-used folder + one-time hint; `EphemeralInboxDefaults` for tests).
+- `InboxCopy.swift` — inbox-only strings (the shared ones stay in `DesignSystem.Copy`) and
+  `ChecklistText` (checklist toggling, `- ` auto-format, title derivation).
+
+## Invariants
+
+- Nothing is pre-filled and no suggestion is ever persisted: the last-used knowledge folder and
+  the +7 d follow-up are **suggested** chips until the user taps them (§1, STYLEGUIDE §3.1).
+- Next/Backlog require a non-empty `What?`; the card shakes and focuses the field — never an alert.
+- The cap is a **forced choice**: demote a Next item or send this card to Backlog. Never automatic.
+- Undo returns the card to the head of the queue **with its draft restored**.
+- A card being edited is never displaced by a mid-session capture; the capture is queued next.
+- Items deferred to the weekly review leave the queue and never come back to it (I5).
 
 ## Platform guards (ARCHITECTURE §5)
 
-Views live in files wrapped entirely in `#if canImport(SwiftUI)`. The logic worth testing lives
-in the Linux-compilable file(s) named above, so `swift test` covers it without Xcode. Every
-SwiftUI file in this target was written without a compiler and is **unverified** — say so in your
-Result until it has been built on a Mac.
+`InboxProcessingView.swift`, `InboxCardView.swift`, `InboxSheets.swift` and `InboxPreviews.swift`
+are wrapped entirely in `#if canImport(SwiftUI)` and were written **without a compiler** — verify
+them on a Mac (`scripts/check.sh`). Previews build their own sample data (`InboxPreviewData`)
+because this target must not depend on `GTDFixtures`.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests`
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (49 tests).
