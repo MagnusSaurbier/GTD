@@ -3,7 +3,9 @@ import Foundation
 import GTDModel
 import GTDFixtures
 
-/// T00-level coverage: every `GTDCommand` does something sensible. T11 owns the full table.
+/// Every `GTDCommand` does something sensible against the realistic sample vault.
+/// The rule-by-rule tables live in `ReducerInboxTests`, `ReducerActionTests`,
+/// `ReducerProjectTests`, `ReducerSystemTests` and `RulesTests`.
 struct ReducerSmokeTests {
     private let env = Fixtures.reducerEnv()
     private var snapshot: VaultSnapshot { Fixtures.sampleSnapshot }
