@@ -1,26 +1,54 @@
 # FeatureSettings
 
-Onboarding, synced settings, device-local settings and the vault-issues list.
+Onboarding, synced settings (contexts, on-the-go subset, Next cap, routine times), device-local
+settings (notification toggles, morning time, vault display name) and the vault-issues list.
 
-**Owned by T26.** T00 created a compiling shell: the public root views with the exact signatures
-from the task brief, plus the Linux-compilable model listed below. The visuals and behaviour are
-T26's work; `docs/STYLEGUIDE.md` is binding and its §9 checklist is part of the gate.
+**Owned by T26.** `docs/STYLEGUIDE.md` is binding; its §9 checklist was run before reporting done.
 
 ## Public API
 
 `OnboardingView(onVaultPicked:)`, `SettingsView(deviceSettings:onChangeVault:)`, `VaultIssuesView()`.
-Linux-compilable: `DeviceSettings` (Codable device-local state).
+
+Linux-compilable (unit-tested, no SwiftUI):
+- `DeviceSettings` — device-local state, `Codable`.
+- `SettingsStore` protocol + `InMemorySettingsStore` / `UserDefaultsSettingsStore` +
+  `DeviceSettingsStore` (load/save `DeviceSettings` through an injected store).
+- `ContextsEditing` — pure add/rename/remove/reorder/on-the-go-toggle over `GTDConfig`, plus
+  `affectedActionCount(for:in:)` for the removal-confirmation count (A4).
+- `NextCapPolicy` — the Next-cap stepper's "raised past 15" warning threshold.
+- `NotificationKindOption` — mirrors `GTDNotifications.NotificationKind`'s raw values/labels so
+  the notification toggles can be built without importing `GTDNotifications` (features depend on
+  `GTDAppCore` + `DesignSystem` only). **Keep in sync if T13 renames a kind.**
+- `SettingsSession` (`@MainActor @Observable`, wraps `AppModel`) — sends every synced edit as
+  `GTDCommand.updateConfig`/`.setRoutineTime`. Same shape as `RoutineRun`/`WaitingListModel`.
+- `DayTime.asDate` / `DayTime.init(_:calendar:)` — bridges to `Date` for `DatePicker`.
 
 This target must **not** import `GTDVault`: folder picking returns a plain `URL` that the shell
-turns into a bookmark.
+(T15/T40) turns into a `VaultBookmark`.
+
+## Design notes
+
+- Removing/renaming a context only edits `GTDConfig`; it never rewrites existing action
+  frontmatter. `affectedActionCount` is shown so the user knows what stays behind (no lying
+  defaults — nothing is silently fixed up).
+- `VaultIssuesView`'s "Reveal"/"Open in Obsidian" actions only have the vault-relative
+  `VaultIssue.path` (no root URL, by contract) — best-effort, documented as a known limitation.
 
 ## Platform guards (ARCHITECTURE §5)
 
-Views live in files wrapped entirely in `#if canImport(SwiftUI)`. The logic worth testing lives
-in the Linux-compilable file(s) named above, so `swift test` covers it without Xcode. Every
-SwiftUI file in this target was written without a compiler and is **unverified** — say so in your
-Result until it has been built on a Mac.
+`SettingsViews.swift` is wrapped entirely in `#if canImport(SwiftUI)` and was written without a
+compiler — **unverified on Apple platforms**, list below. Every other file in this target compiles
+and is tested on Linux.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureSettingsTests`
+`cd Packages/GTDKit && swift test --filter FeatureSettingsTests` — 30 tests (persistence
+round-trip, context editing incl. the affected-action count, `SettingsSession` against
+`InMemoryBackend`+`GTDFixtures`, the `DayTime`/`Date` bridge, notification-kind mirror).
+
+## Unverified on Apple platforms
+
+`Sources/FeatureSettings/SettingsViews.swift` — `OnboardingView`, `SettingsView`,
+`VaultIssuesView`, `RoutineTimeRow`, and their `#Preview`s. Build with Xcode 26 to confirm; likely
+risk spots: `.confirmationDialog(presenting:)` + `Binding<String?>`, `NSWorkspace.selectFile`,
+and the `#Previewable @State` preview macro usage (same pattern as T00's original stub).

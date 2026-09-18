@@ -14,19 +14,26 @@ public struct DeviceSettings: Codable, Equatable, Sendable {
     /// Filters the Next view remembers per device (E1).
     public var nextContextFilter: [String]
     public var nextTimeFilter: Int?
+    /// A friendly label for the picked vault folder (e.g. its last path component), set by the
+    /// app shell once the security-scoped bookmark resolves. `FeatureSettings` shows this in
+    /// place of the real path — it never resolves `VaultBookmark` itself (must not import
+    /// `GTDVault`).
+    public var vaultDisplayName: String?
 
     public init(
         notificationKinds: [String: Bool] = [:],
         morningTime: DayTime = DayTime(hour: 8, minute: 0),
         lastKnowledgeFolder: String? = nil,
         nextContextFilter: [String] = [],
-        nextTimeFilter: Int? = nil
+        nextTimeFilter: Int? = nil,
+        vaultDisplayName: String? = nil
     ) {
         self.notificationKinds = notificationKinds
         self.morningTime = morningTime
         self.lastKnowledgeFolder = lastKnowledgeFolder
         self.nextContextFilter = nextContextFilter
         self.nextTimeFilter = nextTimeFilter
+        self.vaultDisplayName = vaultDisplayName
     }
 
     public static let `default` = DeviceSettings()
