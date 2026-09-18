@@ -1,23 +1,38 @@
 # FeatureRoutines
 
-Routines: one step per screen, done/skip, resume from today's log (R1–R6).
-
-**Owned by T24.** T00 created a compiling shell: the public root views with the exact signatures
-from the task brief, plus the Linux-compilable model listed below. The visuals and behaviour are
-T24's work; `docs/STYLEGUIDE.md` is binding and its §9 checklist is part of the gate.
+Routines: one step per screen, done/skip, resume from today's log (R1–R6). **Built by T24.**
 
 ## Public API
 
-`RoutinesHomeView()`, `RoutineRunnerView(routine:onFinished:)`.
-Linux-compilable: `RoutineRun` (resume index, progress text, logging, going back).
+- `RoutinesHomeView()` — one row per routine (icon, time, today's state); tapping one presents
+  `RoutineRunnerView` (`fullScreenCover` on iOS, `sheet` on Mac).
+- `RoutineRunnerView(routine:onFinished:)` — one step per screen: `ItemCard` with the step title,
+  sub-steps as a local tappable checklist (never logged; a journaling step with none shows "On
+  the reMarkable" instead), `GlassActionBar` `Skip`/`Done`. Horizontal swipe back (Mac `S`/`⏎`)
+  is the only gesture — no swipe filing. Finishing shows the STYLEGUIDE §5 reward screen.
+- `RoutineRun` (`@MainActor @Observable`, Linux-compilable, unit-tested): resumes at the first
+  step with no log entry for today, logs via `GTDCommand.logRoutineStep` and advances, `back()`
+  rewinds so re-logging replaces the earlier entry (reducer dedupes by day/routine/step/device),
+  tracks every day it has written to so a run left open across midnight still counts correctly
+  (each entry keeps its own real day — R5 is untouched).
+- `RoutineProgress.today(routine:log:today:)` → `.notStarted` / `.inProgress(completed:total:)` /
+  `.finished` + `.homeText`, built on the same `RoutineRun.resumeIndex` a run itself uses.
+- `RoutineStep.isJournaling`: best-effort keyword match (dream/achievement/gratitude/
+  will-do-better/journal); there is no model flag (ARCHITECTURE §3 dropped `journalSteps`), and
+  R4 (no text input) holds regardless of the match — it only picks the meta line shown.
 
 ## Platform guards (ARCHITECTURE §5)
 
-Views live in files wrapped entirely in `#if canImport(SwiftUI)`. The logic worth testing lives
-in the Linux-compilable file(s) named above, so `swift test` covers it without Xcode. Every
-SwiftUI file in this target was written without a compiler and is **unverified** — say so in your
-Result until it has been built on a Mac.
+`RoutineViews.swift` is wrapped entirely in `#if canImport(SwiftUI)`, so on Linux it is not
+compiled at all — `swift build`/`swift test` never type-check it; it is **unverified**, build it
+on a Mac (`scripts/check.sh --app`) before trusting it. `RoutineRun.swift` has no SwiftUI import
+and is fully covered by `swift test`.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureRoutinesTests`
+`cd Packages/GTDKit && swift test --filter FeatureRoutinesTests` — 15 tests: resume logic
+(fresh/partial/complete/template-changed, both a removed and an inserted step), `RoutineProgress`
+mapping, the journaling heuristic, and `RoutineRun` against `AppModel` + `InMemoryBackend`:
+resume-from-scratch, re-log after going back, finish + done/skipped counts, resume mid-session, a
+failed log leaving the step in place (a custom always-failing `GTDBackend` — there is no command
+to edit a routine's steps to trigger this live), and a day rollover mid-run.
