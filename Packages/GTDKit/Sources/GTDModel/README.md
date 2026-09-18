@@ -1,41 +1,52 @@
 # GTDModel
 
 Pure domain layer: the value types of the vault, every mutation as a `GTDCommand`, the reducer
-that applies them, and the derived queries the UI reads. **No Foundation-beyond-basics, no
-SwiftUI, no file system.** Compiles and tests on Linux.
+that applies them, and the derived queries the UI reads. **No SwiftUI, no file system.**
+Compiles and tests on Linux.
 
 ## Public API
 
-- `Core/` — `NoteID` (vault-relative path, `title`/`folder`), `Day` + `DayTime` (integer civil
-  calendar, `iso`, `adding(days:)`, `isoWeek`, `Day.today()`), `VaultLayout` (folder defaults and
-  every path builder: `actionPath`, `projectPath`, `archivePath`, `routineLogPath`, `reviewPath`, …).
+- `Core/` — `NoteID`, `Day` + `DayTime` (integer civil calendar), `VaultLayout` (folder defaults
+  and every path builder).
 - `Entities/` — `InboxItem`, `Action`, `Area`, `Project`, `ProjectStep`, `LogEntry`, `Routine`,
   `RoutineStep`, `RoutineLogEntry`, `GTDConfig`, `VaultIssue`, `WeeklyReview`, `VaultSnapshot`,
-  `NotePassthrough`, `Checkbox`, and the enums `ActionStatus`, `ProjectStatus`, `TimeBucket`,
-  `RoutineStepResult`.
+  `NotePassthrough`, `Checkbox`, `ActionStatus`, `ProjectStatus`, `TimeBucket`, `RoutineStepResult`.
 - `Commands/` — `ActionDraft`, `ProjectDraft`, `WaitingInfo`, `InboxDecision`, `GTDCommand`,
   `GTDError`, `AppPrompt`, `VaultFileOp`.
 - `Reducer/` — `ReducerEnv`, `Reduction`, `Reducer.reduce(_:_:env:) throws(GTDError)`.
-- `Rules/` — `Rules` (queries), `Signal`/`SignalKind`/`SignalStep`, `StalenessPolicy`.
+- `Rules/` — `Rules` (queries incl. `isUndoable`, `openActions`, `closedDay`, `waitingSince`),
+  `Signal`/`SignalKind`/`SignalStep`, `StalenessPolicy`.
 
 ## Invariants
 
-- **No lying defaults:** an undecided field is `nil`/empty. `timeEstimate` is never `0`.
-- `NotePassthrough` is opaque: only `GTDMarkdown` writes or reads its slots.
-- The reducer is the only place with GTD semantics. `extraOps` owns any path it names — the
-  `GTDServices` diff must not touch that path (ARCHITECTURE §4).
-- Waiting needs who **and** follow-up date; leaving `waiting` clears both.
-- Only active projects put actions into Next; the cap only blocks commands that *increase* Next.
-- `Day` never uses `Calendar` for arithmetic, so there are no time-zone or locale surprises.
+- **No lying defaults:** undecided is `nil`/empty; `timeEstimate` is never `0`.
+- `NotePassthrough` is opaque — only `GTDMarkdown` reads its slots.
+- The reducer is the only place with GTD semantics; its doc comment maps each rule to the code
+  that enforces it. `extraOps` owns any path it names (ARCHITECTURE §4).
+- Waiting needs who **and** follow-up; leaving `waiting` clears both. Closed actions always carry
+  a closing date; re-opening clears it. Contexts come from `GTDConfig` (values already in a note
+  survive an edit).
+- Only active projects put actions into Next; leaving `active` demotes them to Backlog.
+- A future defer date and a Next slot contradict each other — refused, never auto-resolved. Only
+  *new* contradictions are refused, so a hand-edited vault stays repairable.
+- The cap blocks only commands that *increase* Next occupancy.
+- Every `Rules` list has a **total** order (`NoteID` last), so equal snapshots render identically.
+- `Day` never uses `Calendar` for arithmetic; queries converting a `Date` take a `calendar`
+  parameter and the reducer passes `env.calendar`.
 
-## Ownership
+## Gotchas
 
-T00 wrote the types and a **naïve** reducer + rules so the UI targets had something usable.
-**T11 owns `Reducer/` and `Rules/`** and hardens them; everything else here is frozen (contract
-change procedure in `agent_task/README.md`). Known gaps carry a `// T11:` comment.
+- `countsTowardCap` counts `next` + `in-progress` regardless of defer; with the rule above it
+  equals `nextList(…).count` in any vault the app wrote. `nextList` is never truncated to the
+  cap — an over-cap vault must stay repairable.
+- `Rules.isUndoable` is the single definition of N6; `InMemoryBackend` still carries T00's copy,
+  and T16 should switch both to this one.
+- Renaming an action moves the file and rewrites `ProjectStep.promotedTo`. Renaming or re-filing
+  a **project** is refused (`.invalid`) — the folder name is its identity.
+- `GTD/Trash/<file>` keeps the source file name; T16 must uniquify on collision.
 
-## Testing
+## Ownership and testing
 
-`cd Packages/GTDKit && swift test --filter GTDModelTests`.
-`GTDModelTests` covers `Day`, the rules against `GTDFixtures.sampleSnapshot`, and one smoke test
-per `GTDCommand`.
+**T11 owns `Reducer/` and `Rules/`**; the rest is frozen (see `agent_task/README.md`).
+`swift test --filter GTDModelTests` — `TestVault` builds tiny snapshots for the rule tables,
+`GTDFixtures.sampleSnapshot` is used where a rule needs a whole system.

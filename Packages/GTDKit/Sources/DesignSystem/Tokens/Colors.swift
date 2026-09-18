@@ -36,8 +36,13 @@ public extension Color {
     // MARK: Brand and signal
 
     /// The single fixed accent (slate blue). Primary button, selection, links, focus, progress.
+    /// STYLEGUIDE §8: thicker outlines aside, this is the one token that also has dedicated
+    /// **High Contrast** values (`#2F5A87` / `#9CC6EE`), resolved with the other three the same
+    /// way light/dark are — see `dynamicContrast`.
     static var gtdAccent: Color {
-        dynamic(light: (0.247, 0.431, 0.620), dark: (0.498, 0.690, 0.871))
+        dynamicContrast(
+            light: (0.247, 0.431, 0.620), dark: (0.498, 0.690, 0.871),
+            lightHighContrast: (0.184, 0.353, 0.529), darkHighContrast: (0.612, 0.776, 0.933))
     }
 
     /// Selected-row background where system selection is not used; drag-target tint for Next.
@@ -110,6 +115,42 @@ public extension Color {
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
                 ? NSColor(srgbRed: dark.0, green: dark.1, blue: dark.2, alpha: 1)
                 : NSColor(srgbRed: light.0, green: light.1, blue: light.2, alpha: 1)
+        })
+        #else
+        return Color(red: light.0, green: light.1, blue: light.2)
+        #endif
+    }
+
+    /// Like `dynamic(light:dark:)`, with extra values for `accessibilityContrast == .increased`
+    /// (STYLEGUIDE §8). On iOS this resolves per-trait, exactly like light/dark, so it updates
+    /// live when Increase Contrast toggles. On macOS, `NSColor`'s dynamic provider only varies
+    /// with `NSAppearance` (light/dark) — there is no per-appearance contrast trait — so this
+    /// reads `NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast` at resolve time
+    /// instead; AppKit re-invokes the provider often enough (any redraw, any appearance change)
+    /// that this tracks the setting in practice, but it is **unverified** without a Mac.
+    static func dynamicContrast(
+        light: (Double, Double, Double),
+        dark: (Double, Double, Double),
+        lightHighContrast: (Double, Double, Double),
+        darkHighContrast: (Double, Double, Double)
+    ) -> Color {
+        #if canImport(UIKit)
+        return Color(uiColor: UIColor { traits in
+            let increased = traits.accessibilityContrast == .high
+            let isDark = traits.userInterfaceStyle == .dark
+            let rgb = isDark
+                ? (increased ? darkHighContrast : dark)
+                : (increased ? lightHighContrast : light)
+            return UIColor(red: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1)
+        })
+        #elseif canImport(AppKit)
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            let increased = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let rgb = isDark
+                ? (increased ? darkHighContrast : dark)
+                : (increased ? lightHighContrast : light)
+            return NSColor(srgbRed: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1)
         })
         #else
         return Color(red: light.0, green: light.1, blue: light.2)
