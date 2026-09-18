@@ -1,14 +1,56 @@
 # GTDMarkdown
 
-Markdown ⇄ model: YAML frontmatter and `# Heading` body sections, via Yams. The only target that parses or produces note text.
+Markdown ⇄ model: YAML frontmatter and `# Heading` body sections, via Yams. The only target that
+parses or produces note text. Formats: `docs/ARCHITECTURE.md` §3, REQUIREMENTS §5.
 
-**Owned by T10** — T00 created only the public signatures listed in `docs/ARCHITECTURE.md` §4
-so that dependants compile. The bodies throw `notImplemented` or return empty values.
+## How it stays lossless (N2)
 
-## Platform guards (ARCHITECTURE §5)
+`encode(decode(text)) == text`, byte for byte — including unknown keys and their order, unknown
+body sections, comments, CRLF, a missing final newline, a BOM and `---` inside the body.
 
-Foundation-only; no SwiftUI, no file system. Everything here must compile on Linux — the round-trip tests (N2) are the most valuable tests in the repo and have to run in CI without Xcode.
+Reading goes through Yams (quoting, flow/block styles, escapes). **Writing never re-serialises.**
+`decode` stashes the whole original file in `NotePassthrough`; `encode` decodes that original again
+into a *reference* entity and patches only the **lines whose decoded value actually changed**.
+So a field nobody touched cannot be reformatted, and changing one field changes one line.
+
+An entity with an empty passthrough (one the app just created) is rendered from `NoteTemplates`
+and then patched the same way.
+
+## Public API
+
+- `NoteCodec.decode*` / `encode(_:)` per entity + `encodeRoutineLog`, `noteKind(text:)`,
+  `routineLogName`, `unknownContexts(in:known:)`, `Keys`, `Headings`.
+  `decode*`/`encode` take an optional `timeZone:` (default `.current`) for timestamps.
+- `FrontmatterDocument` — split, read (`scalar`/`list`/`int`/`day`/`timestamp`/`mappings`),
+  patch (`setValue`/`setLines`/`removeValue`/`setBody`).
+- `BodySections`, `CheckboxList`/`CheckboxItem`, `Wikilink`, `RawText`/`RawLine`, `YAMLScalar`.
+- `NoteCodecError.unreadable(path:reason:)` → `.vaultIssue` for `GTDVault` to surface.
+
+## Invariants
+
+- `timeEstimate: 0` decodes as *undecided* and is never written (§1 "no lying defaults"); an
+  existing `0` in a file is left alone rather than rewritten.
+- `CheckboxList.parseLine` accepts exactly what `GTDModel.Checkbox.scan` accepts (`-`/`*`, a
+  space, `[ ]`/`[x]`/`[X]`) — the reducer indexes checkboxes with the model's scanner.
+- Refused rather than guessed (each throws `.unreadable` with path + reason): unknown or missing
+  `status`, invalid YAML, duplicate frontmatter keys, an unknown routine-step `result`, a routine
+  log file whose name is not `<yyyy-MM-dd>--<device>.md`, an inbox item without `created`.
+  Unknown *contexts* are kept as written — nothing is lost, so they are reported, not refused.
+- `Action.modified`, `Project.referenceFiles` and note titles come from the file system, not the
+  file text; the codec never writes them.
+
+## Gotchas
+
+- Swift treats `"\r\n"` as one `Character`. Split lines with `RawText.split` (unicode scalars),
+  never with a `Character` scan.
+- `encodeRoutineLog` regenerates the file (entries sorted by `at`) — it is the one encoder that
+  does not patch, because `[RoutineLogEntry]` has no passthrough. It writes `at` in the given
+  time zone, so pass the same one when comparing output.
+- A key hidden inside a multi-line quoted scalar confuses the line scanner. Reading is still
+  correct, and nothing breaks because only the schema's own keys are ever patched.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDMarkdownTests`
+`cd Packages/GTDKit && swift test --filter GTDMarkdownTests` (108 tests, Linux-clean).
+`RoundTripTests` covers every `GTDFixtures.SampleVault` file plus ~40 hand-written nasty cases;
+`FidelityTests` covers the other direction (what is written reads back unchanged).
