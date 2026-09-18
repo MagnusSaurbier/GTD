@@ -158,7 +158,14 @@ public final class NextListModel {
         try await model.send(.setStatus(action.id, .waiting, waiting: info))
     }
 
+    /// The reducer refuses a future `deferDate` on a `next`/`in-progress` action outright (D1 ×
+    /// A3: a deferred action cannot sit in Next) and never demotes it for you. Deferring a row
+    /// out of this list therefore explicitly demotes to Backlog first, as its own command, then
+    /// sets the date — two real, visible state changes, never a silent one.
     public func setDefer(_ action: Action, to day: Day?) async throws {
+        if day != nil, action.status.countsTowardCap {
+            try await model.send(.setStatus(action.id, .backlog, waiting: nil))
+        }
         guard var updated = model.snapshot.action(action.id) else { return }
         updated.deferDate = day
         try await model.send(.updateAction(updated))

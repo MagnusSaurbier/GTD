@@ -105,10 +105,12 @@ struct NextListModelTests {
         #expect(!list.items.isEmpty)
         #expect(list.items.allSatisfy { !Set($0.contexts).isDisjoint(with: allowed) })
 
-        // Selecting a context outside the allowed set is meaningless to the query, since the
-        // hard filter still applies underneath whatever the chips offer.
+        // A context outside the on-the-go set can never be selected through this model's own
+        // chips (`availableContexts` only ever offers the allowed ones); if one reached
+        // `Rules.onTheGoNextList` regardless it now yields nothing rather than silently
+        // falling back to "no filter" (Rules hardening) — the hard restriction never lifts.
         list.setContexts(["mac"])
-        #expect(list.items.allSatisfy { !Set($0.contexts).isDisjoint(with: allowed) })
+        #expect(list.items.isEmpty)
     }
 
     // MARK: - Cap (STYLEGUIDE §2.2)
@@ -277,8 +279,24 @@ struct NextListModelTests {
 
         try await list.setDefer(action, to: Fixtures.day(5))
 
-        #expect(model.snapshot.action(action.id)?.deferDate == Fixtures.day(5))
+        let updated = try #require(model.snapshot.action(action.id))
+        #expect(updated.deferDate == Fixtures.day(5))
+        // The reducer refuses a future `deferDate` on a `next`/`in-progress` action outright and
+        // never demotes it — `setDefer` does that itself, as its own explicit command, first.
+        #expect(updated.status == .backlog)
         #expect(!list.items.contains { $0.id == action.id }, "deferred actions are hidden until the date (D1)")
+    }
+
+    @Test func setDeferWithoutADateNeedsNoDemotion() async throws {
+        let model = makeModel()
+        let list = NextListModel(model: model, mode: .full, store: InMemoryNextFilterStore())
+        let action = try #require(model.snapshot.actions.first { $0.status == .next })
+
+        try await list.setDefer(action, to: nil)
+
+        let updated = try #require(model.snapshot.action(action.id))
+        #expect(updated.deferDate == nil)
+        #expect(updated.status == .next, "clearing a defer date never has to touch the status")
     }
 
     // MARK: - Persistence (E1: "filters persist per device")

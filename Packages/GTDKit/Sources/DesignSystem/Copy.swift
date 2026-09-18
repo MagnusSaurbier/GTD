@@ -41,6 +41,9 @@ public enum Copy {
     public static let resolved = "Resolved"
     /// Toolbar / `⌘N` quick capture (I7, T21).
     public static let quickCapture = "Quick capture"
+    /// Generic fallback when a row action is refused and the reducer's own reason isn't
+    /// meant for display (T21) — `GTDError.invalid`'s own text is shown instead when there is one.
+    public static let actionFailed = "Couldn't complete that"
     public static let undo = "Undo"
     public static let clearFilters = "Clear filters"
 

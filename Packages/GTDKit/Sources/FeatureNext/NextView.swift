@@ -49,6 +49,10 @@ private struct NextListContent: View {
     @State private var toastTask: Task<Void, Never>?
     @State private var waitingSheetAction: Action?
     @State private var deferSheetAction: Action?
+    /// A row command the reducer refused. Never swallowed with `try?` — every row action goes
+    /// through `run(_:)`, which lands the failure here so it reaches the person instead of
+    /// disappearing silently.
+    @State private var errorMessage: String?
 
     init(
         model: AppModel,
@@ -82,13 +86,38 @@ private struct NextListContent: View {
         }
         .sheet(item: $waitingSheetAction) { action in
             WaitingInfoSheet(initial: action.waiting, today: list.today) { info in
-                Task { try? await list.setWaiting(action, info) }
+                run { try await list.setWaiting(action, info) }
             }
         }
         .sheet(item: $deferSheetAction) { action in
             DeferSheet(action: action, today: list.today) { newValue in
-                Task { try? await list.setDefer(action, to: newValue) }
+                run { try await list.setDefer(action, to: newValue) }
             }
+        }
+        .alert(
+            errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
+        ) {
+            Button(Copy.done) { errorMessage = nil }
+        }
+    }
+
+    /// Runs a row command; a thrown `GTDError` is never swallowed (§1 "no lying UI" — a refused
+    /// command has to be visible, not just quietly undone in the UI's own head).
+    private func run(_ operation: @escaping () async throws -> Void) {
+        Task {
+            do {
+                try await operation()
+            } catch {
+                errorMessage = message(for: error)
+            }
+        }
+    }
+
+    private func message(for error: Error) -> String {
+        switch error {
+        case let GTDError.invalid(reason): reason
+        case GTDError.nextCapReached: Copy.capSheetTitle
+        default: Copy.actionFailed
         }
     }
 
@@ -183,7 +212,7 @@ private struct NextListContent: View {
                 action: action,
                 projectTitle: list.projectTitle(for: action),
                 badges: list.badges(for: action),
-                onComplete: { Task { try? await list.complete(action) } })
+                onComplete: { run { try await list.complete(action) } })
                 .contentShape(Rectangle())
                 .onTapGesture { onOpen(action.id) }
             if list.showsChecklist(action) {
@@ -192,22 +221,22 @@ private struct NextListContent: View {
         }
         #if os(iOS)
         .swipeActions(edge: .trailing) {
-            Button(Copy.done) { Task { try? await list.complete(action) } }
+            Button(Copy.done) { run { try await list.complete(action) } }
                 .tint(Color.signalDone)
         }
         .swipeActions(edge: .leading) {
             Button("\(Copy.demote) to \(Copy.backlog)") {
-                Task { try? await list.demoteToBacklog(action) }
+                run { try await list.demoteToBacklog(action) }
             }
             .tint(Color.fillQuiet)
         }
         #endif
         .contextMenu {
             if action.status != .inProgress {
-                Button(Copy.start) { Task { try? await list.start(action) } }
+                Button(Copy.start) { run { try await list.start(action) } }
             }
             Button("\(Copy.demote) to \(Copy.backlog)") {
-                Task { try? await list.demoteToBacklog(action) }
+                run { try await list.demoteToBacklog(action) }
             }
             Button(Copy.waiting) { waitingSheetAction = action }
             Button(Copy.deferLabel) { deferSheetAction = action }
@@ -219,22 +248,22 @@ private struct NextListContent: View {
             action: action,
             projectTitle: list.projectTitle(for: action),
             badges: list.badges(for: action),
-            onComplete: { Task { try? await list.resolveChase(action) } })
+            onComplete: { run { try await list.resolveChase(action) } })
             .contentShape(Rectangle())
             .onTapGesture { onOpen(action.id) }
             #if os(iOS)
             .swipeActions(edge: .trailing) {
-                Button(Copy.resolved) { Task { try? await list.resolveChase(action) } }
+                Button(Copy.resolved) { run { try await list.resolveChase(action) } }
                     .tint(Color.signalDone)
             }
             .swipeActions(edge: .leading) {
-                Button(Copy.bumpFollowUp(days: 7)) { Task { try? await list.bumpFollowUp(action) } }
+                Button(Copy.bumpFollowUp(days: 7)) { run { try await list.bumpFollowUp(action) } }
                     .tint(Color.fillQuiet)
             }
             #endif
             .contextMenu {
-                Button(Copy.bumpFollowUp(days: 7)) { Task { try? await list.bumpFollowUp(action) } }
-                Button(Copy.resolved) { Task { try? await list.resolveChase(action) } }
+                Button(Copy.bumpFollowUp(days: 7)) { run { try await list.bumpFollowUp(action) } }
+                Button(Copy.resolved) { run { try await list.resolveChase(action) } }
             }
     }
 
@@ -244,7 +273,7 @@ private struct NextListContent: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             ForEach(Array(action.checkboxes.enumerated()), id: \.offset) { index, checkbox in
                 Button {
-                    Task { try? await list.toggleCheckbox(action, index: index) }
+                    run { try await list.toggleCheckbox(action, index: index) }
                 } label: {
                     HStack(spacing: Spacing.s) {
                         Image(systemName: checkbox.done ? Symbols.checkboxOn : Symbols.checkboxOff)
@@ -261,7 +290,7 @@ private struct NextListContent: View {
             }
             if list.allChecked(action) {
                 Button {
-                    Task { try? await list.complete(action) }
+                    run { try await list.complete(action) }
                 } label: {
                     Label(Copy.done, systemImage: Symbols.done)
                 }
