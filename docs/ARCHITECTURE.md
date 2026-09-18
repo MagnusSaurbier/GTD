@@ -254,7 +254,10 @@ Derived queries (pure, in `GTDModel/Rules`, owned by T11), e.g.:
 `Rules.nextList(snapshot, contexts:timeAvailable:today:)`, `onTheGoNextList`, `chaseItems`,
 `visibleActions` (defer), `deferredList`, `waitingList`, `stalledProjects`, `projectRows`,
 `countsTowardCap`, `capSignal`, `sidebarCounts`, `signals(for:today:)`, `dueBadge(for:today:)`,
-`returnedFromDeferBadge`, `suggestsProject`, `archiveCandidates`, `timeline(from:to:)`.
+`returnedFromDeferBadge`, `suggestsProject`, `archiveCandidates`, `timeline(from:to:)`,
+and `isUndoable(_ command:)` — the single definition of N6 that both backends use (T11-5).
+Queries that turn a `Date` into a `Day` take a `calendar` parameter (default `.current`); the
+reducer passes `env.calendar`, so no result depends on the machine's time zone.
 The semantic value types they return live in `GTDModel/Rules`:
 
 ```swift
@@ -407,6 +410,11 @@ Apple SDKs), so the split below is binding for every target:
 | Weekly review note (T00) | **2026-09-19:** the reducer stores `snapshot.lastReview`; `GTDServices` encodes the `KW` note. `GTDModel` never produces markdown (§4). |
 | Colour tokens (T00) | **2026-09-19:** code-defined, not asset-catalog-dependent, because the catalog build could not be verified without Xcode (§5). |
 | Liquid Glass (T00) | **2026-09-19:** `GlassActionBar`/`UndoToast` use `.ultraThinMaterial` for now. T12 adopts `.glassEffect()` in a `GlassEffectContainer` once it can be compiled on a Mac (STYLEGUIDE §2.5). |
+| Defer × Next (T11) | **2026-09-19:** a future `defer` date and a Next slot contradict each other. The reducer refuses the combination (`.invalid`) instead of demoting silently; the UI makes the user choose. Only *new* contradictions are refused, so a hand-edited vault stays repairable. |
+| "Open action" for stalled (T11) | **2026-09-19:** a project is stalled (P4) when it has no *visible, non-`maybe`* open action. `maybe` is not a commitment and a deferred action is not now. |
+| Project rename (T11) | **2026-09-19:** `updateProject` refuses a changed title or area (`.invalid`) — the folder is the project's identity and moving a folder tree is out of v1 scope. Status, outcome, why, steps and log are editable. |
+| Turn into project (T11) | **2026-09-19:** `convertActionToProject` moves the action note to `GTD/Trash/`, takes its checkboxes as steps and emits `.whatsNext`, so the new project is never born stalled. |
+| Next list order (T11) | **2026-09-19:** `in-progress` first, then nearest `due`, then oldest capture, then path. The list is never truncated to the cap — an over-cap vault must stay repairable. |
 
 ## 7. Sync safety rules (N3) — apply to every task that writes
 
