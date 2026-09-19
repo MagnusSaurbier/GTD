@@ -51,6 +51,11 @@ safety net) and `VaultPlatform+Apple`; `VaultPlatform+Portable` is their non-App
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDVaultTests` (109 tests, never the real vault).
+`cd Packages/GTDKit && swift test --filter GTDVaultTests` (112 tests, never the real vault).
+`TransactionFuzzTests` (T41) throws 600 random op sequences at `VaultTransaction`, half of them
+against an injected write or move failure, and asserts the three rules the vault depends on: a
+refused commit changes nothing outside `GTD/Trash/`, a successful one matches a plain simulation
+of its own ops and its inverse restores the vault byte for byte, and no byte that existed before
+is ever gone unless a `.put` overwrote the file it lived in. Failures print the seed.
 `SampleVaultScanTests` and `captureRoundTripsThroughTheCodec` are `.enabled(if:
 NoteCodecParser.codecIsImplemented)` and turn themselves on when T10 lands.

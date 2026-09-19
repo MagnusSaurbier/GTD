@@ -184,10 +184,18 @@ final class AppComposition {
         let today = model.today()
         guard lastArchiveDay != today else { return }
         lastArchiveDay = today
-        try? await model.send(.archiveCompleted)
+        // Not `try?`: an archive that fails means files did not move, and a failed rollback
+        // (T15) must reach the person rather than be retried in silence (T41).
+        await model.perform(.archiveCompleted)
     }
 
-    /// Closes the vault cleanly on termination: stop watching, stop security-scoped access.
+    /// Closes the vault cleanly: stop watching, stop security-scoped access.
+    ///
+    /// **Nothing calls this yet, on purpose.** `scenePhase == .background` is not termination —
+    /// on the Mac it fires when the window is merely hidden, and on iOS the background refresh
+    /// task still needs the vault — and SwiftUI offers no reliable "about to quit" hook on both
+    /// platforms. Process exit releases the security scope anyway; this exists for a shell that
+    /// grows a real termination hook (T41: reviewed, left unwired deliberately).
     func shutdown() async {
         await teardown()
     }

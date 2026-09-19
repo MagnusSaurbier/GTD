@@ -35,8 +35,19 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 
 `InboxProcessingView.swift`, `InboxCardView.swift`, `InboxSheets.swift` and `InboxPreviews.swift`
 are wrapped entirely in `#if canImport(SwiftUI)` and were written **without a compiler** — verify
-them on a Mac (`scripts/check.sh`). Previews build their own sample data (`InboxPreviewData`)
-because this target must not depend on `GTDFixtures`.
+them on a Mac (`scripts/check.sh`). Previews build their own sample data (`InboxPreviewData`).
+
+`InboxProcessingView` carries its own `.toolbar` (card counter, `⌘Z` undo, `Done`) but **does
+not** wrap itself in a `NavigationStack`: the review wizard embeds it inline, where a second
+navigation bar would be wrong. Every other presenter must supply one, or the session has no
+visible way out — `PhoneShell` and `FeatureOverview` do (T41 fixed both; only the previews had
+one before).
+
+Inbox zero is `DesignSystem.RewardMoment.inboxZero`, not a local drawing of it (STYLEGUIDE §5
+allows exactly two reward moments, so there is exactly one implementation). The card drag
+geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) rather than
+`DesignSystem`'s `CardFilingController`/`.cardSwipeFiling` — see
+`agent_task/ORCHESTRATOR-NOTES.md`.
 
 ## Testing
 

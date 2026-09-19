@@ -41,6 +41,11 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 - `OverviewNavigation.isCaptureRequested` is a request to the app shell: capture writes through
   `GTDVault`, which feature targets must not import.
 - `ObsidianLink` needs `\.vaultRootPath` (set by the app shell) for an absolute path.
+- Both sheets this view presents bring their own navigation container: `InboxProcessingView`
+  needs one for its toolbar, and `VaultIssuesView` needs a `Done` button or the Mac sheet cannot
+  be closed at all (T41).
+- List-row commands go through `AppModel.perform(_:)`, so a refusal reaches the shell's alert
+  instead of vanishing.
 
 ## Testing
 

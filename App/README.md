@@ -54,3 +54,11 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
   the feature views own them and none of them exposes a focus target to the shell yet.
 - Quick capture is disabled under `-useFixtures` (there is no file system to write to).
 - The weekly review is the `Review` sidebar section (STYLEGUIDE §4.1), not a separate window.
+- `AppComposition.shutdown()` is deliberately unwired: `scenePhase == .background` is not
+  termination (on the Mac it fires when the window is hidden, on iOS the background refresh task
+  still needs the vault), and process exit releases the security scope anyway.
+- `GTDApp.body` uses **one** `#if os(macOS)/#else` around whole scenes. Do not go back to
+  per-modifier `#if`s: a postfix `#if` chain followed by an `#if` that opens a statement is the
+  shape a blind-written scene builder most easily gets wrong (T41).
+- A presented view that carries its own `.toolbar` needs a `NavigationStack` here —
+  `InboxProcessingView` does not wrap itself, because the review wizard embeds it inline.

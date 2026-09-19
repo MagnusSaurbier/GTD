@@ -61,11 +61,16 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
 
 T00 froze the API; **T12 (this task) refines the visuals behind it (additions only)**.
 - `DesignSystem` does not depend on `GTDFixtures` (ARCHITECTURE §2: `GTDModel` + `GTDAppCore`
-  only), so `DesignGallery` builds its sample data inline rather than importing fixtures. Several
-  `Feature*` view files already `import GTDFixtures` for their `#Preview`s without that target
-  dependency being declared in `Package.swift` — invisible on Linux because those files are
-  wrapped in `#if canImport(SwiftUI)`, but it will fail under `xcodebuild`. Not this task's file to
-  fix (Package.swift is frozen); flagged for whoever verifies on a Mac.
+  only), so `DesignGallery` builds its sample data inline rather than importing fixtures. The
+  `Feature*` targets do `import GTDFixtures` in their `#Preview`s, and `featureDeps` in
+  `Package.swift` lists it for them.
+- `RewardMoment` is the **only** implementation of the two reward moments of STYLEGUIDE §5 —
+  inbox zero and routine/review complete. A feature that needs one composes it (T41 replaced
+  `FeatureInbox`'s second copy); nothing invents a third. Its hero symbol still uses
+  `.font(.system(size: 56))`, which §2.3 forbids — see `TEST-INSTRUCTIONS.md` "Unresolved".
+- `Symbols.checkboxOn/Off` and `Symbols.moveUp/moveDown`, and `Typo.rowIcon/controlGlyph`, exist
+  so feature code contains no literal symbol name or font (STYLEGUIDE §9). None of them is a §7
+  concept icon or a §2.2 signal; they are stock control affordances named in one place.
 - Everything in `Components/`, `Interaction/`, `DesignGallery.swift` and `Tokens/Colors.swift`,
   `Tokens/Typography.swift` was written without a SwiftUI compiler and is **unverified** — see the
   task's Result for the full file list and what to check first on a Mac.

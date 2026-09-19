@@ -34,7 +34,9 @@ and then patched the same way.
   space, `[ ]`/`[x]`/`[X]`) — the reducer indexes checkboxes with the model's scanner.
 - Refused rather than guessed (each throws `.unreadable` with path + reason): unknown or missing
   `status`, invalid YAML, duplicate frontmatter keys, an unknown routine-step `result`, a routine
-  log file whose name is not `<yyyy-MM-dd>--<device>.md`, an inbox item without `created`.
+  log file whose name is not `<yyyy-MM-dd>--<device>.md`, an inbox item without `created`, and
+  (T41) a routine log whose `entries:` is something other than a list or empty — reading that as
+  "no entries" would let the next logged step regenerate the file over the day's history.
   Unknown *contexts* are kept as written — nothing is lost, so they are reported, not refused.
 - `Action.modified`, `Project.referenceFiles` and note titles come from the file system, not the
   file text; the codec never writes them.
@@ -53,4 +55,13 @@ and then patched the same way.
 
 `cd Packages/GTDKit && swift test --filter GTDMarkdownTests` (108 tests, Linux-clean).
 `RoundTripTests` covers every `GTDFixtures.SampleVault` file plus ~40 hand-written nasty cases;
-`FidelityTests` covers the other direction (what is written reads back unchanged).
+`FidelityTests` covers the other direction (what is written reads back unchanged);
+`FuzzRoundTripTests` (T41) generates ~1 800 notes from a seeded PRNG — shuffled key order, block
+vs flow lists, nested mappings, block scalars, comments, unknown keys, unknown and oddly-spelled
+headings, CRLF, BOM, no final newline — and asserts both halves of N2 on each, then damages every
+sample-vault file twelve ways and requires each result to round-trip or be refused. A failing
+`#expect` prints the seed; `Fuzz(seed:)` reproduces that one note.
+
+Two rewrites of a damaged file are deliberate and pinned by those tests: a note that lost its
+`kind:` gets it back (otherwise it cannot be classified at all), and a file whose frontmatter
+lost its closing `---` gets a fresh frontmatter block **above** its unchanged text.

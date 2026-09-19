@@ -50,6 +50,53 @@ swift test --filter GTDModelTests
 swift test --filter GTDModelTests.ReducerTests/testNextCapReached   # adjust name
 ```
 
+### Where to look first (T41 blind review)
+
+T41 read every `#if canImport(SwiftUI)` file and all of `App/` without a compiler and fixed what
+was clearly wrong. These are the places most likely to break when the real compiler sees them,
+**in the order worth trying**. Each one is a whole class of failures: if #1 or #4 breaks, a lot
+of files break at once, so fix those before reading any other error.
+
+1. **`DesignSystem/Components/Containers.swift`** — `.glassEffect()` and `GlassEffectContainer { }`
+   are the only two APIs in the repo nobody could check the shape of. They sit behind
+   `if #available(iOS 26, macOS 26, *)` with a `.ultraThinMaterial` fallback (ARCHITECTURE §6).
+   If the call shape is wrong, fix it; if the API is not there at all, delete the `#available`
+   branch and keep the fallback, and say so in the log.
+2. **`DesignSystem/Tokens/Colors.swift`** — `UIColor(dynamicProvider:)` / `NSColor(name:_:)`
+   closures under Swift 6, and the four `NSAppearance.Name` spellings
+   (`accessibilityHighContrastAqua` / `…DarkAqua`) that `dynamicContrast` matches on.
+3. **`App/GTDApp.swift`** — `.backgroundTask(.appRefresh(_:))` on a `WindowGroup`, the `Settings`
+   scene, and the one `#if os(macOS)/#else` that wraps whole scenes (T41 rewrote it; it used to
+   be three `#if`s inside a postfix modifier chain).
+4. **Global-actor inference in `ViewModifier`s that hold `@Observable` models** —
+   `DesignSystem/Interaction/CardSwipeFiling.swift`, `App/RootView.swift`'s `GlobalFlows` and
+   `Lifecycle`. They rely on a `ViewModifier` conformance making the whole struct `@MainActor`.
+   If that inference does not hold, every one of them errors the same way and the fix is one
+   `@MainActor` per struct.
+5. **`App/NotificationService.swift`** — `UNUserNotificationCenterDelegate` under strict
+   concurrency (`@unchecked Sendable` + a `@MainActor` method hop).
+6. **`FeatureInbox/InboxProcessingView.swift`** — `.onKeyPress(characters:phases:)` and
+   `KeyPress.modifiers` on macOS, `.sensoryFeedback(.impact(weight:))`, and the two consecutive
+   postfix `#if` blocks at the end of `content`'s modifier chain.
+7. **`FeatureOverview/OverviewView.swift`** — `NavigationSplitView` three-column init,
+   `List(selection:)` + `.tag` in a sectioned sidebar, `.listStyle(.sidebar)`, and
+   `@State private var ownedNavigation = OverviewNavigation()` (a `@MainActor` type built in a
+   property initialiser).
+8. **`FeatureProjects/ProjectViews.swift`** — `OptionArrowShortcut`'s focus-gated
+   `.keyboardShortcut`, `List { Section { … } }` mixing header rows with `.onMove` rows.
+9. **String/asset catalogs** — the 11 `no rule to process file … xcstrings/assetcatalog`
+   warnings are expected under `swift build`; under `xcodebuild` they must compile instead. No
+   test asserts on a resolved colour, so a catalog problem must never fail a test.
+
+Four behaviours T41 changed blind and could not run — check them in the app, not just the build:
+
+- Inbox processing shows its **card counter, `⌘Z` undo and `Done`** (its toolbar only renders
+  because the two presentation sites now wrap it in a `NavigationStack`).
+- Inbox zero shows **`RewardMoment`** — bouncing tray with a green check badge, one haptic.
+- Waiting → **"Move to Next" while Next is at the cap** shows the error alert instead of doing
+  nothing. Same for un-deferring an item that cannot go to Next.
+- Mac: **Settings → vault issues sheet closes** with its `Done` button.
+
 ## Gate 2 — the app builds and launches
 
 ```sh
@@ -136,4 +183,43 @@ text in a fenced block and the file/line. Do not refactor, restyle or "improve" 
 
 ### Unresolved
 
-(none yet)
+Open questions T41 could not settle without a Mac. Nothing here blocks the build; each is a
+judgement call someone with the real toolchain (or the user) should make.
+
+**Style guide**
+
+1. `DesignSystem/Components/RewardMoment.swift` uses `.font(.system(size: 56))` for the hero
+   symbol. STYLEGUIDE §2.3 says "system text styles only, never `.system(size:)`". Changing it
+   blind would change how the only two reward moments in the app look, so it was left alone.
+   Decide on a Mac: keep it (and add the exception to §2.3) or move to `.largeTitle` +
+   `.imageScale(.large)`.
+2. `.sensoryFeedback(.impact(weight:))` is used on both platforms (`CardSwipeFiling`,
+   `InboxProcessingView`). If `SensoryFeedback.impact` turns out to be iOS-only, guard those two
+   call sites — do not drop the feedback on iOS.
+3. `Symbols.checkboxOn/Off` and `Symbols.moveUp/moveDown` are stock SF Symbols with no entry in
+   STYLEGUIDE §7's icon map. The map is a vault note, so no agent could edit it; either add the
+   four rows there or accept them as stock control affordances.
+
+**Known functional gaps (deliberate, not bugs)**
+
+4. `⌘F` filters only `FeatureOverview`'s own lists. It travels through an **internal**
+   `\.overviewQuery` environment value, so `NextView` / `WaitingView` / `ProjectsListView`
+   cannot read it. Wiring them means promoting that environment key into `DesignSystem` — a
+   shared-file change across four blind files, which T41 judged too risky to do unverified.
+5. `⌘⏎`, `⌘⇧N/B/M` and `⌘⇧W` (STYLEGUIDE §4.5) are not in the menu bar: they act on the focused
+   row and no feature view exposes a focus target to the shell (T40's decision #2, still open).
+6. `FeatureInbox`'s `InboxSessionView` still implements its own drag geometry and fly-out rather
+   than `DesignSystem`'s `CardFilingController` + `.cardSwipeFiling`. The GTD semantics
+   (`CardTarget`, `KeyMap`, `DragResolver`) are unit-tested here and must stay; only the
+   presentation would move. Rewriting a gesture in a file nobody can compile was not worth it —
+   do it once the file has built once. The inbox-zero half of that duplication *is* done.
+7. `AppComposition.shutdown()` is never called; see its doc comment. Process exit releases the
+   security scope, and `scenePhase == .background` is not termination.
+8. `FeatureSettings.RoutineTimeRow` seeds `@State` from the routine in `init`, so a routine time
+   changed on another device while Settings is open does not move the picker. Harmless; listed
+   so it is not mistaken for a sync bug.
+9. `VaultIssuesView`'s "Open in Obsidian" builds `obsidian://open?path=<vault-relative path>`.
+   That probably needs the vault name or root; the target cannot resolve one by contract.
+10. `FeatureProjects`' views materialise their model in `.task` on first appearance. A tap
+    between the first render and that task would mutate a throwaway instance (T22's note).
+    Watch for it; it should be unreachable in practice.

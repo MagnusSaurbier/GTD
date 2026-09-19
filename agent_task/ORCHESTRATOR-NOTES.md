@@ -2,21 +2,82 @@
 
 <!-- REMOVE THIS FILE in T42 (docs handover) after folding anything durable into module READMEs / ARCHITECTURE §6. -->
 
-# Orchestrator notes for T41 (QA) — accumulated from Wave 1/2 reports
-- T20 inbox: InboxSessionView implements drag geometry + inbox-zero moment locally; adopt DesignSystem's CardDragGeometry/CardFilingController/CardSwipeFiling and RewardMoment (T12) instead. Local InboxPreviewData duplicates GTDFixtures (now a declared dep).
-- T11: InMemoryBackend has a private copy of the undoable rule; delete it and call Rules.isUndoable.
-- T11: extraOps .delete/trash and archive moves keep source file names — T16 must uniquify on collision (check T16 did).
-- T11: future defer date on next/in-progress is refused (.invalid) — verify T21/T23 UIs surface AppModel.lastError.
-- T14: captured/processed stat is an approximation (no filed-at timestamp) — documented; T27 should present it honestly.
-- T13: T40 must re-run plan+sync on every snapshot change; notification actions (Start routine/Done) skipped as optional.
-- T15: rollbackFailed must be shown to the user, never retried. No delete API on VaultFileSystem by design.
-- T12: .glassEffect gated with #available + material fallback (deviation from ARCHITECTURE §1 "no fallbacks"); decide on Mac.
-- T26: DeviceSettings gained vaultDisplayName; folder picker returns URL only (FeatureSettings must not import GTDVault) — T40 wires VaultBookmark.
-- Blind-compiled files (highest risk): DesignSystem Components/Interaction/Colors/Typography; every Feature*Views.swift; GTDVault/Platform/*; GTDNotifications/SystemNotificationCenter.swift; App/GTDApp.swift.
-- T25 → T40: share one OverviewNavigation between OverviewView and OverviewCommands; observe isCaptureRequested (⌘N) and route to capture; set \.vaultRootPath env; ⌘F query only reaches Overview lists (NextView/WaitingView/ProjectsListView ignore \.overviewQuery) — T41 could wire them.
-- T24 → T40: host RoutinesHomeView directly; fresh run after midnight may re-ask a step done yesterday (vault one-log-per-day limitation, documented).
-- T25: Why?/What? fields use plain TextField(axis:.vertical) since DesignSystem has no MarkdownTextEditor.
-- T30 → T40: call `PendingRoute().consume()` on launch/foreground and route like onOpenURL/NotificationRoute; add a `gtd://inbox` route (not a NotificationRoute case today). RoutineDeepLink assumes VaultLayout.default. CaptureError.bookmarkStale unreachable because VaultBookmark.startAccess() folds stale into noVaultSelected (GTDVault fix, T41). No AppEntity for routines, no ControlWidget (needs widget extension).
-- T21: NextListModel.setDefer demotes to Backlog first then sets the date; DesignSystem Copy/Symbols gained entries (checkboxOn/Off is a STYLEGUIDE §7 gap).
-- T27: deferred-items step rebuilds the inbox decision via DeferredSweep (InboxSession queue not injectable); StalledSweep.addNextAction marks handled without a command — re-check against T22's WhatsNextSheet; systemFixNotes round-trip via encode(WeeklyReview) must be verified once T16 lands.
-- T16: FeatureOverviewTests.ActionEditModelTests was FLAKY (~3/8 runs) — **fixed in T40** (contract change T40-2: AppModel serialises commands and gained send(deriving:); the autosave was racing another in-flight command, not refresh()). Nothing left for T41 here. Archiving leaves ProjectStep.promotedTo pointing at the old Actions/ path — reducer should retarget (T41). VaultBackend undo is 20 levels, InMemoryBackend one.
+Collected from the Wave 1/2 reports for T40 (app integration) and T41 (QA). **T41 has been
+through the whole list**: items it closed are struck out with the commit that did it; everything
+still open is below, with what is actually left to do.
+
+## Closed by T40
+
+- ~~`FeatureOverviewTests.ActionEditModelTests` is flaky (~3/8 runs)~~ — fixed in T40
+  (contract change T40-2: `AppModel` serialises commands and gained `send(deriving:)`; the
+  autosave was racing another in-flight command, not `refresh()`).
+- ~~Seven feature targets `import GTDFixtures` in preview code but `featureDeps` does not list
+  it~~ — `Package.swift`'s `featureDeps` now includes `GTDFixtures`.
+- ~~T13: T40 must re-run plan+sync on every snapshot change~~ — `NotificationService` re-plans on
+  every snapshot change (2 s debounce), on foreground and in the background task.
+- ~~T30: call `PendingRoute().consume()` on launch/foreground; add a `gtd://inbox` route~~ — done
+  in `AppRouter`/`RootView`.
+- ~~T24: host `RoutinesHomeView` directly~~ — the iPhone Routines tab does.
+- ~~T25: share one `OverviewNavigation` between `OverviewView` and `OverviewCommands`; observe
+  `isCaptureRequested` (⌘N); set `\.vaultRootPath`~~ — done in `MacShell`/`RootView`.
+- ~~T15/T16: `rollbackFailed` must be shown to the user, never retried~~ — `RootView`'s single
+  alert is fed by `AppModel.lastError` *and* shell failures.
+
+## Closed by T41
+
+- ~~T11/T16: `InMemoryBackend` has a private copy of the undoable rule and of the label table~~ —
+  `dd7778f`: `UndoLabel` moved to `GTDAppCore`, both backends call `Rules.isUndoable`.
+- ~~T16: archiving leaves `ProjectStep.promotedTo` pointing at the old `Actions/` path~~ —
+  `dd7778f`: `Reducer.archiveCompleted` retargets it.
+- ~~T30 gotcha #1: `CaptureError.bookmarkStale` is unreachable~~ — `dd7778f`: `InboxWriter` and
+  `AppComposition` resolve the bookmark before starting scoped access, so "never picked",
+  "saved but unresolvable" and "access refused" are three different errors.
+- ~~T27: `StalledSweep.addNextAction` marks the project handled without a command~~ — `dd7778f`:
+  `ReviewSession.markStalledHandled` verifies the project is no longer stalled instead of
+  trusting the sheet.
+- ~~T27: `systemFixNotes` round-trip through `encode(WeeklyReview)` must be verified once T16
+  lands~~ — covered by `GTDServicesTests/EndToEndJourneyTests` (the `KW` note is decoded back
+  off disk, then re-scanned cold).
+- ~~T11: a future defer date on next/in-progress is refused (`.invalid`) — verify T21/T23 surface
+  `AppModel.lastError`~~ — T21 did; **T23 did not** and has been fixed (`b1ec1bc`): `FeatureWaiting`
+  swallowed every `GTDError` with `try?` at 10 call sites. `AppModel` gained `perform(_:)` /
+  `report(_:)` (contract change **T41-1**) so a refusal reaches the shell's alert.
+- ~~T20/T12: the inbox reimplements the inbox-zero reward moment~~ — `95c7793`: `InboxZeroView`
+  composes `DesignSystem.RewardMoment.inboxZero`.
+
+## Still open
+
+- **T20/T12 duplication, the other half.** `InboxSessionView` implements the card drag geometry
+  and fly-out itself instead of `DesignSystem`'s `CardFilingController` + `.cardSwipeFiling`.
+  T41 left it: the two files involved have never been compiled, and `CardTarget`/`KeyMap`/
+  `DragResolver` (the GTD semantics, unit-tested) must stay in `FeatureInbox` either way. Do it
+  once `scripts/check.sh --app` has been green once. `InboxPreviewData` still duplicates a
+  little of `GTDFixtures`; harmless now that `GTDFixtures` is a declared dependency.
+- **⌘F reaches only `FeatureOverview`'s lists** (T25 note #2). `\.overviewQuery` is internal to
+  that target; `NextView`/`WaitingView`/`ProjectsListView` cannot read it. Wiring them means
+  promoting the environment key into `DesignSystem` — four blind files, so T41 declined.
+- **`⌘⏎`, `⌘⇧N/B/M`, `⌘⇧W` are not in the menu bar** (STYLEGUIDE §4.5, T40 decision #2). They act
+  on the focused row and no feature view exposes a focus target to the shell.
+- **Notification actions ("Start routine", "Done") and the `ControlWidget`** were skipped (T13,
+  T30). The widget needs a widget-extension target `project.yml` does not declare.
+- **No `AppEntity` for routines** (T30): `StartRoutineIntent.routine` is a plain `String` matched
+  against the title. Fine for two routines; a Shortcuts picker would need the loaded vault.
+- **T14's captured/processed stat is an approximation** (no filed-at timestamp in the vault) and
+  is documented as such on `WeeklyStats.compute`. T27 presents it honestly; if it reads wrong in
+  practice the fix is a persisted filed-at log, which is a vault-format change.
+- **T24: a routine run left open across midnight** may re-ask a step logged the previous day —
+  a one-log-file-per-day vault-format limitation, documented in the module README.
+- **`AppComposition.shutdown()` is never called.** Deliberate; see its doc comment.
+- **Everything blind.** `TEST-INSTRUCTIONS.md` → "Where to look first (T41 blind review)" is the
+  prioritised list for whoever has a Mac, and its "Unresolved" section holds the judgement calls
+  T41 could not make without one (notably `.glassEffect()`'s real shape and `RewardMoment`'s
+  `.system(size: 56)` vs STYLEGUIDE §2.3).
+
+## Not done in T41
+
+`docs/TRACEABILITY.md` (the brief's deliverable 1) was **not** written: the orchestrator scoped
+T41 to cross-module correctness, data-safety fuzzing, the blind SwiftUI/STYLEGUIDE review and the
+named duplication cleanup. Deliverables 3 (sync torture), 5 (performance), 6 (accessibility) and
+7 (first-real-use checklist) likewise remain; 3 and 5 are partly covered by
+`GTDVaultTests`/`GTDServicesTests` and 6/7 need a device. They are the natural content of a
+follow-up task doc.

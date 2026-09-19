@@ -20,6 +20,13 @@ Waiting-for, deferred items and the Mac calendar strip (W2, D1, D3). **Owned by 
   are never tinted). `badges(for:)`, `recentWho` (deduped, capped at 5, for
   `WaitingInfoSheet(suggestedWho:)`).
 
+## Invariants
+
+- Every row command goes through `AppModel.perform(_:)`, never `try? await model.send(…)`.
+  "Move to Next" can be refused by the Next cap and un-deferring by the defer × Next rule
+  (ARCHITECTURE §6); before T41 both silently did nothing. The refusal now lands in
+  `AppModel.lastError` and the app shell shows it.
+
 ## Platform guards (ARCHITECTURE §5)
 
 Views live in `WaitingViews.swift`, wrapped entirely in `#if canImport(SwiftUI)` — **unverified
