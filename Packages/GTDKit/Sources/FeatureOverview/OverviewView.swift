@@ -42,11 +42,24 @@ public struct OverviewView: View {
             detail
         }
         .overlay(alignment: .bottom) { UndoOverlay() }
+        // The `NavigationStack` renders `InboxProcessingView`'s toolbar — counter, `⌘Z` and
+        // `Done`. Without it the sheet has no way out (T41); the previews had one, the app did not.
         .sheet(isPresented: processingBinding) {
-            InboxProcessingView(onFinished: { nav.isProcessingInbox = false })
+            NavigationStack {
+                InboxProcessingView(onFinished: { nav.isProcessingInbox = false })
+            }
         }
+        // A Mac sheet with no control that closes it is a trap: `VaultIssuesView` brings only a
+        // `.navigationTitle`, so the way out is added here, as the iPhone shell already did (T41).
         .sheet(isPresented: issuesBinding) {
-            VaultIssuesView()
+            NavigationStack {
+                VaultIssuesView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(Copy.done) { nav.isIssuesPresented = false }
+                        }
+                    }
+            }
         }
         .onChange(of: model.snapshot) { _, snapshot in
             nav.prune(against: snapshot)

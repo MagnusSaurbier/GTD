@@ -33,8 +33,12 @@ struct PhoneShell: View {
                 .tag(AppTab.routines)
         }
         // I1 — processing is a forced, full-screen session; the only way out is quitting it.
+        // The `NavigationStack` is what renders `InboxProcessingView`'s own toolbar (the card
+        // counter, `⌘Z` undo and `Done`); without it the session has no way out (T41).
         .fullScreenCover(isPresented: $router.isProcessingInbox) {
-            InboxProcessingView(onFinished: { router.isProcessingInbox = false })
+            NavigationStack {
+                InboxProcessingView(onFinished: { router.isProcessingInbox = false })
+            }
         }
         .sheet(isPresented: $router.isSettingsPresented) {
             PhoneSettingsSheet(composition: composition, router: router)
