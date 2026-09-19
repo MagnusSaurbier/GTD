@@ -155,9 +155,14 @@ the four behaviours changed blind that must be checked in the running app — an
 
 - **Deliverable 1, `docs/TRACEABILITY.md`.** Not started. It is the largest remaining piece of
   T41 and the natural input to T42.
-- **Deliverable 2's grep audit** was done informally (no `FileManager` outside `GTDVault`, no
-  hard delete anywhere — `VaultFileSystem` has no delete at all) but is not written up as a
-  document; the invariants are now *tested* instead (`TransactionFuzzTests`).
+- **Deliverable 2's grep audit** was done but is not written up as a document; the invariants
+  are now *tested* instead (`TransactionFuzzTests`). What the grep found: the only code outside
+  `GTDVault` that uses `FileManager` is `GTDServices/UndoJournal.swift`,
+  `GTDServices/Housekeeping.swift` and `FeatureReview/ReviewStateStore.swift` — all three write
+  **device-local state into Application Support**, never the vault, which is exactly what
+  ARCHITECTURE §3 prescribes — plus `GTDFixtures/SampleVault.swift`, which copies the bundled
+  fixture. Nothing hard-deletes: `VaultFileSystem` has no delete member at all, and no test or
+  source anywhere names `iCloud~md~obsidian`.
 - **Deliverable 3** is covered for two-device routine logs, external edits, conflict copies and
   evicted files; "rename while open in detail view" is covered only by `AppRouter.prune`'s unit
   test.
