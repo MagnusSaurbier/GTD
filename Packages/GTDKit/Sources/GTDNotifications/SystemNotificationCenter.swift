@@ -1,6 +1,8 @@
 #if canImport(UserNotifications)
 import Foundation
-import UserNotifications
+// `UNUserNotificationCenter` is not annotated `Sendable` in the SDK, but Apple documents it as
+// safe to use from any thread; `@preconcurrency` is what lets this `Sendable` struct hold it.
+@preconcurrency import UserNotifications
 
 /// The real `UNUserNotificationCenter` behind `NotificationCenterPort`. Entirely guarded by
 /// `#if canImport(UserNotifications)` per ARCHITECTURE §5 — it only compiles on Apple platforms

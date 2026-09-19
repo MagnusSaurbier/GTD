@@ -60,7 +60,8 @@ is_allowed() {
 }
 
 # Every file name in the repo, so a doc may name a file without spelling out its folder.
-BASENAMES="$(find . -path ./.git -prune -o -path ./.build -prune -o -type f -printf '%f\n' 2>/dev/null | sort -u)"
+# (`-print` + sed rather than GNU find's `-printf '%f\n'`, which BSD find on macOS does not have.)
+BASENAMES="$(find . -path ./.git -prune -o -path ./.build -prune -o -type f -print 2>/dev/null | sed 's|.*/||' | sort -u)"
 
 resolves() {
     local candidate="$1" dir="$2" base prefix

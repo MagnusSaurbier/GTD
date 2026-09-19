@@ -15,7 +15,10 @@ public struct CoordinatedFileSystem: VaultFileSystem {
     public let root: URL
     private let plain: PlainFileSystem
     /// Identifies this reader/writer to the coordinator so our own writes do not notify us back.
-    private let purposeID: NSObject?
+    ///
+    /// `nonisolated(unsafe)`: `NSObject` is not `Sendable`, but this is an immutable reference
+    /// that is only ever an identity token — nothing reads or mutates the object through it.
+    nonisolated(unsafe) private let purposeID: NSObject?
 
     public init(root: URL, purposeID: NSObject? = nil) {
         self.root = root.standardizedFileURL
