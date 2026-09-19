@@ -6,6 +6,8 @@ store is the markdown notes in my Obsidian vault (synced via iCloud).
 - `docs/REQUIREMENTS.md` — what the app does (v1; snapshot of the note in the vault, which stays the source of truth)
 - `docs/ARCHITECTURE.md` — how it is built: modules, vault layout, frozen contracts, decisions
 - `docs/STYLEGUIDE.md` — binding UI rules: tokens, components, gestures, keys, copy, icons
+- `docs/TRACEABILITY.md` — every requirement → the code and tests that implement it, with a status
+- `docs/MANUAL_TEST.md` — the checks that need a Mac or an iPhone, ending in the first-real-use checklist
 - `agent_task/` — the work split into task briefs for parallel subagents; start at `agent_task/README.md`
 
 ## Status
@@ -15,6 +17,9 @@ shell wires them together: the vault backend behind onboarding, the iPhone tabs 
 window, deep links, notifications and background refresh (`App/README.md`). Everything that needs
 an Apple SDK was written without a compiler — `TEST-INSTRUCTIONS.md` and `docs/MANUAL_TEST.md`
 are the checks that close that gap on a Mac.
+
+`docs/TRACEABILITY.md` says where every requirement stands, including the six that are only
+partly met; each of those has a follow-up brief (`agent_task/50-*.md` … `55-*.md`).
 
 The build-out ends with `agent_task/42-docs-handover.md`, which rewrites `CLAUDE.md`, this file and
 the architecture doc to describe the code as built. Agent instructions live in `CLAUDE.md`;
@@ -34,6 +39,11 @@ Nothing else is needed: the only third-party dependency is Yams, pinned in
 ```bash
 scripts/check.sh          # swift build + swift test + scripts/check-docs.sh (+ iOS simulator build)
 scripts/check.sh --app    # additionally: xcodegen generate, then build the macOS app
+```
+
+```bash
+scripts/benchmark.sh      # the performance numbers: scan, one command, queries, codec
+scripts/benchmark.sh 3000 # …against a bigger generated vault
 ```
 
 `scripts/check.sh` is the gate for every change. On a machine without Xcode (the Linux
@@ -66,7 +76,7 @@ AppTests/             unit tests for the shell's own logic
 AppUITests/           launch-and-navigate smoke tests (always -useFixtures)
 Packages/GTDKit/      all code, split into small targets — see docs/ARCHITECTURE.md §2
 Shortcuts/            capture Shortcut recipes
-scripts/              check.sh (the gate) and check-docs.sh
-docs/                 requirements, style guide, architecture, manual test script
+scripts/              check.sh (the gate), check-docs.sh, benchmark.sh
+docs/                 requirements, style guide, architecture, traceability, manual test script
 agent_task/           build-out briefs, one per task
 ```

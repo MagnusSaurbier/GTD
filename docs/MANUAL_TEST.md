@@ -4,10 +4,14 @@ For the person with the devices. Everything below was written without a compiler
 simulator, so treat a failure as expected work, not as a surprise. Tick the boxes as you go and
 note what broke — `TEST-INSTRUCTIONS.md` has the table to write it into.
 
-> **Never point the app at the real vault under
-> `~/Library/Mobile Documents/iCloud~md~obsidian/`.** Every step below uses a **copy**. Make one
-> first: duplicate your vault folder (or copy
+> **§0–§8 never touch the real vault under
+> `~/Library/Mobile Documents/iCloud~md~obsidian/`.** They all use a **copy**. Make one first:
+> duplicate your vault folder (or copy
 > `Packages/GTDKit/Sources/GTDFixtures/Resources/SampleVault`) to `~/Desktop/GTD Test Vault`.
+>
+> **§9 is the one deliberate exception**: it is the checklist for the day you point the app at
+> the real thing, and it is for you, not for an agent. CLAUDE.md rule 1 — no agent reads or
+> writes the real vault — is unchanged by it.
 
 ## 0. Build
 
@@ -80,7 +84,121 @@ Run **without** `-useFixtures`.
 - [ ] `Start Routine` and `Process inbox` intents open the app **on that screen** (they leave a
       `PendingRoute` the shell consumes on foreground).
 
-## 6. Screenshots for the record
+## 6. Accessibility (STYLEGUIDE §8)
+
+T41 read every custom control and fixed the clear omissions (`agent_task/41-qa-hardening.md`).
+These are the ones only a device can settle. Do them with `-useFixtures`, so nothing can be
+written while you sweep.
+
+**VoiceOver (iPhone: Settings → Accessibility → VoiceOver; Mac: `⌘F5`)**
+
+- [ ] **Inbox card:** the rotor's *Actions* lists all eight card targets (the seven of I4 plus
+      `Defer to review`) and `Undo`, and each one files the card. For a VoiceOver user this is the
+      only route — the swipe is not.
+- [ ] **Action row:** reads as `<title>, <project>, <contexts>, <time>` — one phrase, no "middle
+      dot" — then its badges in full words (`16 days old`, `due Thursday`), then `Done` for the
+      completion circle.
+- [ ] **Chips** read their label and announce `unset` / `suggested` / `confirmed`; a confirmed chip
+      is announced as selected.
+- [ ] **Routine heatmap** (Mac, weekly review → systems check): each row reads
+      `<step>, <n> percent complete` and then spells the week out —
+      `done Mon, Tue; skipped Wed; nothing logged Thu, Fri, Sat, Sun`. Check "nothing logged" is
+      never read as "skipped": they mean different things.
+- [ ] **Every swipe action has a non-swipe twin.** On each list (Next, chase, Waiting, Deferred),
+      open the context menu and confirm it offers everything the swipe does.
+- [ ] **Routine runner:** `Done` and `Skip` are available as VoiceOver actions on the step card.
+
+**Dynamic Type (iPhone: Settings → Accessibility → Display & Text Size → Larger Text, to the
+largest accessibility size; Mac: System Settings → Appearance → text size)**
+
+- [ ] Nothing is clipped or overlapping on: inbox card, Next list, routine step, weekly-review
+      rail and heatmap, settings.
+- [ ] Badges grow with the text instead of truncating (`16 days old` must stay readable).
+- [ ] The review wizard's left rail grows; its stage sub-steps stay readable.
+- [ ] `RewardMoment`'s hero symbol is **known** not to scale — it uses `.font(.system(size: 56))`,
+      which STYLEGUIDE §2.3 forbids. Decide it here: keep it (and add the exception to §2.3) or
+      move to `.largeTitle` (`TEST-INSTRUCTIONS.md` → Unresolved #1).
+
+**Reduce Motion / Reduce Transparency / Increase Contrast**
+
+- [ ] Reduce Motion: the inbox card cross-fades instead of flying out, does not rotate and does
+      not shake on a validation refusal — the refusal still reaches you (focus + haptic).
+- [ ] Reduce Transparency: the glass action bar and the undo toast become a solid card with a
+      hairline, never a blurred one.
+- [ ] Increase Contrast: chip outlines thicken; text stays legible in both colour schemes.
+
+**Keyboard only (Mac — unplug the mouse)**
+
+- [ ] Everything in STYLEGUIDE §4.5 that exists works: `⌘N`, `⌘1…⌘7`, `⌘F`, `⌘Z`, `⌘I`, `⌘,`, and
+      the inbox card's arrow keys / `P K W R` / `Esc`.
+- [ ] Known gaps, do **not** file these as bugs: `⌘⏎`, `⌘⇧N/B/M`, `⌘⇧W` are not in the menu bar
+      (`agent_task/50-mac-keyboard-map.md`) and `⌘F` filters only the overview's own lists
+      (`agent_task/51-search-across-lists.md`).
+- [ ] Full Keyboard Access on: chips and card targets can be reached and activated with `Space`.
+
+## 7. Performance on the real thing
+
+`scripts/benchmark.sh` measures what a Linux container can (scan, command, queries, codec) and
+the numbers are in `agent_task/41-qa-hardening.md`. These four need the device.
+
+- [ ] **Cold launch to a usable Next view** with your real vault copy (≈1 000 notes). Stopwatch
+      from click to the first list being scrollable. If it is over ~2 s, the first suspect is the
+      scan, not the UI — run `scripts/benchmark.sh 1000` on the Mac and compare.
+- [ ] **Typing in the detail editor** stays smooth while the vault is open and syncing. The
+      autosave debounce is 600 ms, so a stutter every ~0.6 s means the save path, not the field.
+- [ ] **Filing a card** feels immediate: the next card appears without waiting for the file write.
+- [ ] **A sync landing many files at once** (open the vault in Obsidian and let iCloud pull a
+      batch) produces one refresh, not one per file, and the window does not freeze.
+
+## 8. Screenshots for the record
 
 Capture at least: Mac overview, inbox card mid-processing, Next on iPhone, a routine step, the
 weekly-review wizard. Attach them to the verification log in `TEST-INSTRUCTIONS.md`.
+
+## 9. First real use — the one-way door
+
+Everything above runs on a **copy**. This is the sequence for the real vault, in order. Do not
+reorder it: steps 1–3 are reversible only because of step 1.
+
+1. **Back the vault up, outside iCloud.** Copy
+   `~/Library/Mobile Documents/iCloud~md~obsidian/<YourVault>` to an external disk or
+   `~/Backups/`, and check the copy opens in Obsidian. Not a snapshot, not "iCloud has it" — a
+   folder you can hold. Everything below assumes you can go back to it.
+2. **Quit Obsidian on every device**, and let iCloud finish syncing (the folder's status icons
+   settle). A migration racing a sync is the one situation the script cannot protect you from.
+3. **Migration dry run** — `Tools/migrate/README.md`, step 1:
+   ```sh
+   cd Tools/migrate
+   python3 -m pytest -q                              # the script's own tests, first
+   python3 migrate.py --vault /path/to/your/vault    # writes only migration-report.md
+   ```
+   - [ ] Read `migration-report.md` **end to end**, not just the counts.
+   - [ ] Work through every "needs a decision" item (unknown contexts, non-duplicate legacy
+         actions, dangling links, `projects.decisions.yaml` for M5). Re-run the dry run until the
+         list is empty or you have decided to accept what is left.
+   - [ ] Skim the "Changes (planned)" list for anything you did not expect — especially M3
+         removals and M5 project notes.
+4. **Apply** — `python3 migrate.py --vault /path/to/your/vault --apply`. It backs up
+   `Actions/`, `Actions_legacy/`, `Projects/` and `Inbox.md` first and refuses to run if that
+   backup fails.
+   - [ ] Open the vault in **Obsidian** and look at ten notes by hand. This is the last point at
+         which a mistake is cheap.
+   - [ ] Re-run `--apply`: it must report **zero changes** (it is idempotent).
+5. **Point the app at the vault.** Launch it *without* `-useFixtures`, pick the real vault folder
+   in onboarding, and check the counts it shows match what Obsidian shows.
+   - [ ] Quit and relaunch: it opens straight in, no second folder prompt.
+   - [ ] Settings → any vault issues listed are ones you recognise (conflict copies, files iCloud
+         has not pulled yet). The app never fixes them by itself.
+6. **The first weekly review is the real migration.** M1 put every ambiguous `to-do` into Backlog
+   with a `reviewReason`, and M2 imported waiting items with no who and no follow-up date —
+   deliberately, because neither is inventable. The review is where you settle them.
+   - [ ] Sweep: the review-deferred items appear **with their reason**; decide each one.
+   - [ ] Waiting: fill in who and a follow-up date for every imported item (W1).
+   - [ ] Deck: bring Next down to 15 or fewer. Expect this to take a while the first time.
+   - [ ] The review saves `GTD/Reviews/<year>/KW <week>.md`; open it in Obsidian.
+7. **Then leave it alone for a week** before changing anything. The staleness thresholds
+   (14 d / 30 d / inbox 7 d) are first guesses — STYLEGUIDE §10 says to tune them after two
+   reviews, with real data, not before.
+
+If something goes wrong at any point: quit the app, restore the backup from step 1 over the
+vault folder, and write down what happened in `TEST-INSTRUCTIONS.md`'s verification log.

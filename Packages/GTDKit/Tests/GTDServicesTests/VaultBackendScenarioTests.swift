@@ -238,6 +238,45 @@ struct VaultBackendScenarioTests {
         #expect(scanned.issues.isEmpty)
     }
 
+    /// A5 × T15 — an archive that could not move its files must be **retried**, not written off.
+    /// `HousekeepingState` records the day only when the command succeeded, so a vault that was
+    /// read-only, busy or half-synced at launch is archived at the next one (T41).
+    @Test func aFailedArchiveIsRetriedAtTheNextLaunchInsteadOfBeingSkipped() async throws {
+        let files = SampleVault.files
+        let stateDirectory = TestVault.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: stateDirectory) }
+
+        func backend(over fileSystem: InMemoryFileSystem) -> VaultBackend {
+            VaultBackend(
+                store: FileVaultStore(fileSystem: fileSystem, watcher: NullVaultWatcher(),
+                                      today: { Fixtures.today }),
+                deviceID: "mac-1",
+                journal: UndoJournal(directory: stateDirectory),
+                stateDirectory: stateDirectory,
+                env: { Fixtures.reducerEnv(deviceID: "mac-1") })
+        }
+
+        let archived = "Archive/2026/08/Collect DAAD transcripts.md"
+        let failing = InMemoryFileSystem(files: files)
+        failing.failMoves(to: [archived])
+        let first = backend(over: failing)
+        try await first.start()
+
+        #expect(await first.lastHousekeepingError != nil, "the failure is recorded, not hidden")
+        #expect(failing.snapshotOfFiles["Actions/Collect DAAD transcripts.md"] != nil,
+                "the transaction rolled back, so the note is still where it was")
+        #expect(failing.snapshotOfFiles[archived] == nil)
+
+        // A second launch over a healthy vault, with the same device-local state.
+        let healthy = InMemoryFileSystem(files: files)
+        let second = backend(over: healthy)
+        try await second.start()
+
+        #expect(await second.lastHousekeepingError == nil)
+        #expect(healthy.snapshotOfFiles[archived] != nil,
+                "the day was never recorded, so the archive ran again")
+    }
+
     /// The archive keeps a note's own file name (T11), so a second note with that name needs a
     /// free one — otherwise the whole transaction would fail on `VaultError.destinationExists`.
     @Test func anArchiveCollisionGetsAFreeNameInsteadOfFailing() async throws {

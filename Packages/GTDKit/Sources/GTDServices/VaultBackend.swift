@@ -222,14 +222,27 @@ public actor VaultBackend: GTDBackend {
     }
 
     /// A5 — archive done and trashed notes older than 30 days, at most once per day per device.
-    /// Never undoable (`Rules.isUndoable`), so a failure here is logged as an issue, not thrown:
-    /// housekeeping must not stop the user from working.
+    ///
+    /// The archive is not allowed to stop the user from working, so a failure is swallowed here
+    /// rather than thrown out of `start()`. What it must **not** do is count as having happened:
+    /// the day is recorded only on success, so a vault that was busy, read-only or half-synced is
+    /// retried at the next launch instead of being skipped until tomorrow. The app shell runs the
+    /// same command once a day through `AppModel.perform`, which is where a failure reaches the
+    /// person (T15: a `rollbackFailed` is never silent).
     private func runHousekeeping() async {
         let today = makeEnv().today
         guard await housekeeping.shouldArchive(on: today) else { return }
-        _ = try? await perform(.archiveCompleted)
-        await housekeeping.didArchive(on: today)
+        do {
+            _ = try await perform(.archiveCompleted)
+            await housekeeping.didArchive(on: today)
+        } catch {
+            lastHousekeepingError = error
+        }
     }
+
+    /// Why the last automatic archive did not run, for the settings screen and for tests.
+    /// `nil` once one succeeds.
+    public private(set) var lastHousekeepingError: (any Error)?
 
     // MARK: - Collisions
 

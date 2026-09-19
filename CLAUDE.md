@@ -13,7 +13,10 @@ this file is stale: fix it (see "Keeping this file current").
 - `docs/ARCHITECTURE.md` — modules, dependency direction, vault layout, contracts, decisions.
 - `Packages/GTDKit/Sources/<Target>/README.md` — per-module notes (purpose, public API, invariants, gotchas). Read the one for the module you touch.
 - `App/README.md` — the app shell: composition root, routing, lifecycle, and what to verify on a Mac.
-- `docs/MANUAL_TEST.md` — the checks only a real Mac/iPhone with a vault copy can do.
+- `docs/MANUAL_TEST.md` — the checks only a real Mac/iPhone with a vault copy can do; §9 is the
+  first-real-use checklist for the user's own vault.
+- `docs/TRACEABILITY.md` — every requirement → its module, tests and status. Read the row for the
+  requirement you are about to touch; fix it if your change moves it.
 - `agent_task/` — *(build-out only)* task briefs; shared rules in `agent_task/README.md`.
 
 ## Commands
@@ -27,6 +30,7 @@ cd Packages/GTDKit && swift build
 cd Packages/GTDKit && swift test
 cd Packages/GTDKit && swift test --filter GTDModelTests               # one test target
 cd Packages/GTDKit && swift test --filter "RulesTests/sidebarCounts"  # one test
+scripts/benchmark.sh                         # performance numbers (1 000 notes); takes an argument
 ```
 
 **Not yet run here — verify on a Mac** (`scripts/check.sh` prints `SKIPPED` and still exits 0
