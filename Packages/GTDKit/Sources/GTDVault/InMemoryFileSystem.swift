@@ -93,6 +93,10 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
         return all.sorted()
     }
 
+    public func listEntries() throws -> VaultListing {
+        VaultListing(files: try listFiles(), folders: try listFolders())
+    }
+
     public func info(_ path: String) throws -> VaultFileInfo? {
         lock.lock(); defer { lock.unlock() }
         let key = VaultPath.normalize(path)

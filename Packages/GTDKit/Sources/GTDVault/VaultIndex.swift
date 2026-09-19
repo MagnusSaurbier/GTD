@@ -65,8 +65,10 @@ public struct VaultIndex: Sendable {
     /// Re-indexes against the current file listing, reusing unchanged decodes.
     @discardableResult
     public mutating func refresh(using fileSystem: any VaultFileSystem) throws -> RefreshReport {
-        let files = try fileSystem.listFiles()
-        let folderList = try fileSystem.listFolders()
+        // One walk for both listings (T41) — see `VaultListing`.
+        let listing = try fileSystem.listEntries()
+        let files = listing.files
+        let folderList = listing.folders
         var report = RefreshReport()
 
         if folderList != folders {

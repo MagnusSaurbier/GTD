@@ -25,10 +25,27 @@ public struct PlainFileSystem: VaultFileSystem {
     // MARK: Listing
 
     public func listFiles() throws -> [VaultFileInfo] {
+        Self.files(in: try walk())
+    }
+
+    public func listFolders() throws -> [String] {
+        try walk().filter(\.isDirectory).map(\.path).sorted()
+    }
+
+    /// One walk, both listings (T41): the index asks for files and folders together on every
+    /// refresh, and walking the tree twice for that is pure waste.
+    public func listEntries() throws -> VaultListing {
+        let entries = try walk()
+        return VaultListing(
+            files: Self.files(in: entries),
+            folders: entries.filter(\.isDirectory).map(\.path).sorted())
+    }
+
+    private static func files(in entries: [Entry]) -> [VaultFileInfo] {
         var files: [String: VaultFileInfo] = [:]
         var evicted: Set<String> = []
 
-        for entry in try walk() where !entry.isDirectory {
+        for entry in entries where !entry.isDirectory {
             // `.foo.md.icloud` is the placeholder iCloud leaves behind when it evicts `foo.md`.
             if let original = VaultPath.evictedOriginal(of: entry.path) {
                 evicted.insert(original)
@@ -48,10 +65,6 @@ public struct PlainFileSystem: VaultFileSystem {
                                isDownloaded: false)
         }
         return files.values.sorted { $0.path < $1.path }
-    }
-
-    public func listFolders() throws -> [String] {
-        try walk().filter(\.isDirectory).map(\.path).sorted()
     }
 
     struct Entry {

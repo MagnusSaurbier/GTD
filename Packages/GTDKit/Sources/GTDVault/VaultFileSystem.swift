@@ -26,6 +26,21 @@ public struct VaultFileInfo: Sendable, Equatable, Hashable {
     }
 }
 
+/// One directory walk's worth of listing: the files and the folders below the vault root.
+///
+/// The index needs both on every refresh, and asking for them separately means walking the whole
+/// tree twice — twice the `NSFileCoordinator` round trips on a real vault (T41 measured ~100 ms
+/// of the ~320 ms no-op refresh of a 1 000-note vault on the second walk alone).
+public struct VaultListing: Sendable, Equatable {
+    public var files: [VaultFileInfo]
+    public var folders: [String]
+
+    public init(files: [VaultFileInfo], folders: [String]) {
+        self.files = files
+        self.folders = folders
+    }
+}
+
 /// Everything `GTDVault` is allowed to do to the file system.
 ///
 /// **There is deliberately no delete.** The app never hard-deletes a vault file (ARCHITECTURE §3);
@@ -45,6 +60,10 @@ public protocol VaultFileSystem: Sendable {
     /// Every folder below the root, recursively, vault-relative, hidden folders excluded.
     func listFolders() throws -> [String]
 
+    /// Both listings from **one** walk of the tree. The default below is correct but walks
+    /// twice; every implementation in this module overrides it.
+    func listEntries() throws -> VaultListing
+
     func info(_ path: String) throws -> VaultFileInfo?
     func exists(_ path: String) -> Bool
 
@@ -62,6 +81,14 @@ public protocol VaultFileSystem: Sendable {
 
     /// Asks iCloud to materialise an evicted item. A no-op where there is no iCloud.
     func requestDownload(_ path: String) throws
+}
+
+extension VaultFileSystem {
+    /// A conforming type that only implements the two separate listings still works — it just
+    /// pays for two walks.
+    public func listEntries() throws -> VaultListing {
+        VaultListing(files: try listFiles(), folders: try listFolders())
+    }
 }
 
 // MARK: - Path helpers shared by the implementations

@@ -26,7 +26,24 @@ public struct CoordinatedFileSystem: VaultFileSystem {
     // MARK: Listing — coordinated on the root folder
 
     public func listFiles() throws -> [VaultFileInfo] {
-        var infos = try coordinateRead(root) { _ in try plain.listFiles() }
+        markEvicted(try coordinateRead(root) { _ in try plain.listFiles() })
+    }
+
+    public func listFolders() throws -> [String] {
+        try coordinateRead(root) { _ in try plain.listFolders() }
+    }
+
+    /// One coordinated read of the root for both listings (T41). The index asks for files and
+    /// folders on every refresh; two `coordinateRead`s of the whole vault per refresh is the
+    /// expensive half of a no-op refresh on a real iCloud folder.
+    public func listEntries() throws -> VaultListing {
+        var listing = try coordinateRead(root) { _ in try plain.listEntries() }
+        listing.files = markEvicted(listing.files)
+        return listing
+    }
+
+    private func markEvicted(_ infos: [VaultFileInfo]) -> [VaultFileInfo] {
+        var infos = infos
         for index in infos.indices where infos[index].isDownloaded {
             // The `.icloud` placeholder is not the only eviction signal: an item can be present
             // but not current. Trust the resource value when it says so.
@@ -35,10 +52,6 @@ public struct CoordinatedFileSystem: VaultFileSystem {
             }
         }
         return infos
-    }
-
-    public func listFolders() throws -> [String] {
-        try coordinateRead(root) { _ in try plain.listFolders() }
     }
 
     public func info(_ path: String) throws -> VaultFileInfo? {

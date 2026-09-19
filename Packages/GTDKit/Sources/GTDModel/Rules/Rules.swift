@@ -191,10 +191,36 @@ public enum Rules {
         return openActions(of: project.id, in: s, today: today).isEmpty
     }
 
+    /// Every visible action of the snapshot, bucketed by the project it belongs to.
+    ///
+    /// The list queries below used to ask `visibleActions` once **per project** — O(projects ×
+    /// actions), which on a 1 000-action vault cost tens of milliseconds on every snapshot, for
+    /// every view that shows the projects list or the stalled badge. One pass, one dictionary,
+    /// same answers (T41).
+    private static func visibleActionsByProject(
+        _ s: VaultSnapshot, today: Day
+    ) -> [NoteID: [Action]] {
+        var byProject: [NoteID: [Action]] = [:]
+        for action in s.actions where isVisible(action, today: today) {
+            guard let project = action.project else { continue }
+            byProject[project, default: []].append(action)
+        }
+        return byProject
+    }
+
+    /// P4 with the project's visible actions already in hand — the same rule `isStalled` and
+    /// `openActions` apply: `maybe` is not a commitment, and a deferred action is not now
+    /// (deferred actions are not in `visible` at all).
+    private static func isStalled(_ project: Project, visible: [Action]) -> Bool {
+        guard project.status == .active else { return false }
+        return !visible.contains { $0.status != .maybe }
+    }
+
     /// Active projects with zero open actions — badge plus weekly-review sweep (P4, §10.1).
     public static func stalledProjects(_ s: VaultSnapshot, today: Day) -> [Project] {
-        s.projects
-            .filter { isStalled($0, in: s, today: today) }
+        let byProject = visibleActionsByProject(s, today: today)
+        return s.projects
+            .filter { isStalled($0, visible: byProject[$0.id] ?? []) }
             .sorted { ($0.title, $0.id.path) < ($1.title, $1.id.path) }
     }
 
@@ -217,16 +243,17 @@ public enum Rules {
 
     /// Rows for the projects list (E4): active projects first, then on-hold, someday, done.
     public static func projectRows(_ s: VaultSnapshot, today: Day) -> [ProjectRow] {
-        let visible = visibleActions(s, today: today)
+        let byProject = visibleActionsByProject(s, today: today)
         return s.projects
             .map { project in
-                ProjectRow(
+                let visible = byProject[project.id] ?? []
+                return ProjectRow(
                     project: project,
                     activeActions: visible
-                        .filter { $0.project == project.id && $0.status.countsTowardCap }
+                        .filter { $0.status.countsTowardCap }
                         .sorted(by: nextIsOrdered),
                     remainingSteps: project.openSteps.count,
-                    isStalled: isStalled(project, in: s, today: today))
+                    isStalled: isStalled(project, visible: visible))
             }
             .sorted { lhs, rhs in
                 let l = statusRank(lhs.project.status)

@@ -41,7 +41,7 @@ public enum SnapshotDiff {
         let renamed = moveDestinations(in: extraOps)
         var puts: [VaultFileOp] = []
 
-        func diff<T>(
+        func diff<T: Equatable>(
             _ oldItems: [T],
             _ newItems: [T],
             id: (T) -> NoteID,
@@ -54,14 +54,20 @@ public enum SnapshotDiff {
             for item in newItems {
                 let path = id(item).path
                 newPaths.insert(path)
-                let text = encode(item)
                 // Unchanged, renamed, or brand new — in all three cases the question is the same:
                 // does the file that will carry this entity differ from what it says now?
                 let previous = oldByPath[path] ?? renamed[path].flatMap { oldByPath[$0] }
                 if let previous {
+                    // `encode` is a pure function of the entity, so equal entities encode
+                    // identically — and one command changes one of them. Without this line the
+                    // diff encodes **every** note in the vault twice per command (T41: 4.4 s for
+                    // one `setStatus` on a 1 000-note vault). A rename never takes this path:
+                    // `previous` then carries the old `NoteID`, so it is never equal to `item`.
+                    if previous == item { continue }
+                    let text = encode(item)
                     if encode(previous) != text { puts.append(.put(path: path, text: text)) }
                 } else {
-                    puts.append(.put(path: path, text: text))
+                    puts.append(.put(path: path, text: encode(item)))
                 }
             }
 
