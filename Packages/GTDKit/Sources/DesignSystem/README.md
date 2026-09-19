@@ -59,13 +59,14 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
 
 ## Ownership and gotchas
 
-T00 froze the API; **T12 (this task) refines the visuals behind it (additions only)**.
+Every token, component, symbol and user-facing string the app uses lives here; feature code
+holds none of them. Adding is normal, renaming is a cross-target change.
 - `DesignSystem` does not depend on `GTDFixtures` (ARCHITECTURE §2: `GTDModel` + `GTDAppCore`
   only), so `DesignGallery` builds its sample data inline rather than importing fixtures. The
   `Feature*` targets do `import GTDFixtures` in their `#Preview`s, and `featureDeps` in
   `Package.swift` lists it for them.
 - `RewardMoment` is the **only** implementation of the two reward moments of STYLEGUIDE §5 —
-  inbox zero and routine/review complete. A feature that needs one composes it (T41 replaced
+  inbox zero and routine/review complete. A feature that needs one composes it (`FeatureInbox` replaced
   `FeatureInbox`'s second copy); nothing invents a third. Its hero symbol still uses
   `.font(.system(size: 56))`, which §2.3 forbids — see `TEST-INSTRUCTIONS.md` "Unresolved".
 - `Symbols.checkboxOn/Off` and `Symbols.moveUp/moveDown`, and `Typo.rowIcon/controlGlyph`, exist

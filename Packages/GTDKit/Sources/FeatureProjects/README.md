@@ -3,8 +3,6 @@
 Areas and projects: list, detail with inline steps, promotion and the "What's next?" flow (P1–P6),
 plus turning a multi-checkbox action into a project (A2).
 
-**Owned by T22.**
-
 ## Public API
 
 `ProjectsListView(onOpenProject:onOpenAction:)`, `ProjectDetailView(project:onOpenAction:)`,
@@ -21,7 +19,7 @@ Linux-compilable models (no SwiftUI — this is where the logic worth testing li
   `Array.move(fromOffsets:toOffset:)` is a SwiftUI extension, not available on Linux).
 - `PromotionOutcome` (`.success` / `.capReached(cap:)`) — every promotion path returns this
   instead of throwing on `GTDError.nextCapReached`, so a view can offer "Send to Backlog instead"
-  (T22's simplified version of T20's "Next is full" sheet) without re-deriving the cap by hand.
+  (a simplified version of the inbox's "Next is full" sheet) without re-deriving the cap by hand.
 
 ## Platform guards (ARCHITECTURE §5)
 
@@ -31,14 +29,14 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 
 ## Known gaps / deviations
 
-- `updateProject` (T11 hardening) refuses a changed title or area — the UI never offers project
+- `updateProject` refuses a changed title or area — the UI never offers project
   rename or an area change after creation; only outcome/why/status/steps are editable in place.
 - The reorder chevrons (`chevron.up`/`chevron.down`) and the convert-sheet selection dot
   (`Symbols.done`/`circle`) are the closest stock symbols; STYLEGUIDE §7's icon map has no
   "move up/down" or "selected step" concept and this target cannot edit the style guide.
 - A handful of field placeholders ("Project title", "New step", "Action title", …) are literal
   strings — `Copy` has no entries for them, matching the precedent `WaitingInfoSheet` already set
-  with `"Who or what"` before T12 formalised it as `Copy.whoPlaceholder`.
+  with `"Who or what"` before it became `Copy.whoPlaceholder`.
 
 ## Testing
 

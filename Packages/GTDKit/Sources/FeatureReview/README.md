@@ -1,6 +1,6 @@
 # FeatureReview
 
-The guided, resumable weekly review (§10). **Owned by T27.** `docs/STYLEGUIDE.md` §3.10 is the
+The guided, resumable weekly review (§10). `docs/STYLEGUIDE.md` §3.10 is the
 binding spec for the wizard frame, deck cards, stat tiles and heatmap.
 
 ## Public API

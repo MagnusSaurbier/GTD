@@ -186,7 +186,8 @@ green.** They are the only thing standing between a bug and the user's notes.
 `NSFileCoordinator`, `PlainFileSystem` and `InMemoryFileSystem` for tests and Linux);
 `VaultIndex` + `VaultClassifier` + `VaultNoteParser` turn a folder tree into a `VaultSnapshot`;
 `VaultBookmark` persists the security-scoped bookmark; `InboxWriter` writes a capture **without
-loading the vault** (C1); `Platform/` holds the Apple-only implementations.
+loading the vault** (C1); `Platform/` holds the Apple-only implementations and the portable
+stand-in they fall back to off Apple platforms.
 
 - `commit(ops)` applies ops in order and is **all-or-nothing**: on failure it rolls back what it
   applied and rethrows; a failing rollback is `VaultError.rollbackFailed(reason:rollbackReason:)`
@@ -285,8 +286,10 @@ style guide wins; where they disagree on module structure, data or contracts, th
 
 ## 6. Decisions
 
-Every product or technical decision that the requirements left open, in one place. Changeable —
-but change the row, don't diverge from it silently.
+Every product or technical decision the requirements left open (REQUIREMENTS §13) or that the
+build made along the way, in one place. Changeable — but change the row, don't diverge from it
+silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
+`docs/KNOWN_ISSUES.md`.
 
 | Date | Decision |
 | --- | --- |
@@ -297,7 +300,7 @@ but change the row, don't diverge from it silently.
 | 2026-09-18 | **Review stats** are computed on the fly from files. Nothing is persisted except the `KW` note. |
 | 2026-09-18 | **Ungrouped actions** in grouped lists are listed first, without a section header (STYLEGUIDE forbids "No project"). |
 | 2026-09-18 | **Time estimate** is stored in minutes; chips write 10/30/60/90; any value > 60 shows as "60+". |
-| 2026-09-19 | **Vault access on device:** the device spike was skipped by user decision — the app assumes a security-scoped bookmark to a user-picked folder inside Obsidian's iCloud container gives durable read/write access. Still an assumption: `TEST-INSTRUCTIONS.md` Gate 3 settles it, and `docs/history/build-out/01-spike-vault-access.md` holds the fallback (app-owned iCloud container, vault relocated or symlinked). |
+| 2026-09-19 | **Vault access on device:** the device spike was skipped by user decision — the app assumes a security-scoped bookmark to a user-picked folder inside Obsidian's iCloud container gives durable read/write access. Still an assumption: `TEST-INSTRUCTIONS.md` Gate 3 settles it and names the fallback (an app-owned iCloud container, with the vault relocated or symlinked). |
 | 2026-09-19 | **`extraOps` owns any path it names**; the snapshot diff emits nothing for it (§4). |
 | 2026-09-19 | **Weekly review note:** the reducer stores `snapshot.lastReview`; `GTDServices` encodes the `KW` note. `GTDModel` never produces markdown. |
 | 2026-09-19 | **Colour tokens are code-defined**, not asset-catalog-dependent, because the catalog build could not be verified without Xcode (§5). |

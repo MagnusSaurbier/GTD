@@ -1,18 +1,18 @@
 # GTDVault
 
-The only module that touches the file system. Owned by T15.
+The only module that touches the file system.
 
 ## Public API
 
 - `VaultStore` (protocol) — `snapshots()`, `read(path:)`, `commit(_:)`, `activate()`
-  (T16-1: creates `VaultLayout.requiredFolders`, scans and starts watching; default no-op, so a
+  (creates `VaultLayout.requiredFolders`, scans and starts watching; default no-op, so a
   store that needs no preparation is unaffected).
 - `FileVaultStore` (actor) — scans, watches and commits. `init(root:layout:)` picks the platform
   pieces; the full `init(fileSystem:layout:parser:watcher:debounce:clock:today:)` is what tests use.
   Also `scan()`, `currentSnapshot`, `startWatching()`, `stopWatching()`, `close()`.
 - `VaultBookmark` + `BookmarkStore` / `PathBookmarkStore` — durable folder access.
 - `InboxWriter` — standalone capture (C1/C3); needs only the bookmark, no index, no codec.
-- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (T41: `listEntries()` returns a
+- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (`listEntries()` returns a
   `VaultListing` — files **and** folders from one walk; the index calls it on every refresh, and
   the two-walk default is only for a conformer that does not override it), `VaultIndex`, `VaultClassifier`,
   `VaultNoteParser` / `NoteCodecParser`, `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
@@ -25,7 +25,7 @@ The only module that touches the file system. Owned by T15.
 2. `commit` is all-or-nothing: a failure rolls back what was applied. If rollback itself fails,
    `VaultError.rollbackFailed` carries both reasons — the vault is mixed and the user must hear it.
 3. `commit` returns the inverse ops **already in undo order**: feeding them back into `commit`
-   restores the previous state (T16's undo journal relies on this).
+   restores the previous state (the undo journal relies on this).
 4. A `.move` never overwrites (`VaultError.destinationExists`); the caller picks another name.
    `GTDServices` does that for `Archive/` and `GTD/Trash/` and turns it into
    `GTDError.titleCollision` everywhere else.
@@ -58,10 +58,10 @@ safety net) and `VaultPlatform+Apple`; `VaultPlatform+Portable` is their non-App
 ## Testing
 
 `cd Packages/GTDKit && swift test --filter GTDVaultTests` (112 tests, never the real vault).
-`TransactionFuzzTests` (T41) throws 600 random op sequences at `VaultTransaction`, half of them
+`TransactionFuzzTests` throws 600 random op sequences at `VaultTransaction`, half of them
 against an injected write or move failure, and asserts the three rules the vault depends on: a
 refused commit changes nothing outside `GTD/Trash/`, a successful one matches a plain simulation
 of its own ops and its inverse restores the vault byte for byte, and no byte that existed before
 is ever gone unless a `.put` overwrote the file it lived in. Failures print the seed.
 `SampleVaultScanTests` and `captureRoundTripsThroughTheCodec` are `.enabled(if:
-NoteCodecParser.codecIsImplemented)` and turn themselves on when T10 lands.
+NoteCodecParser.codecIsImplemented)`, which the finished codec satisfies, so they run.

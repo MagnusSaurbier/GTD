@@ -22,9 +22,9 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 - **Autosave never clobbers.** `ActionEditModel` keeps the remote action plus the *dirty* fields
   overlaid, and writes only dirty fields onto the *current* snapshot action. A snapshot arriving
   mid-edit updates untouched fields and leaves the edit alone. The payload is built through
-  `AppModel.send(deriving:)`, i.e. only when the command's turn comes (T40-2) — building it
-  earlier raced any command still in flight and reverted that command's fields, which is what
-  made `ActionEditModelTests` fail about one run in three until T40.
+  `AppModel.send(deriving:)`, i.e. only when the command's turn comes — building it earlier
+  raced any command still in flight and reverted that command's fields, which is what made
+  `ActionEditModelTests` fail about one run in three.
 - **A rename changes the `NoteID`** (`Actions/<Title>.md`, A1). After a save that included the
   title, the model re-points itself and calls `onRename`, which the shell forwards to
   `OverviewNavigation.replace(_:with:)`.
@@ -43,7 +43,7 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 - `ObsidianLink` needs `\.vaultRootPath` (set by the app shell) for an absolute path.
 - Both sheets this view presents bring their own navigation container: `InboxProcessingView`
   needs one for its toolbar, and `VaultIssuesView` needs a `Done` button or the Mac sheet cannot
-  be closed at all (T41).
+  be closed at all.
 - List-row commands go through `AppModel.perform(_:)`, so a refusal reaches the shell's alert
   instead of vanishing.
 

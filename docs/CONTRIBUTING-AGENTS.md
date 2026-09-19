@@ -4,8 +4,11 @@ For agents and for future-you. `CLAUDE.md` holds the invariants; this file holds
 through the code for the four changes that come up most. Read the README of every module you
 touch first — they are short and they carry the traps.
 
-Two things are true of every change:
+Three things are true of every change:
 
+- **Check `docs/REQUIREMENTS.md` §12 first.** If what you are being asked for is on that list —
+  an energy field, LLM suggestions, Calendar sync, recurring actions, timers — it is out of scope
+  by decision, not by omission. Say so before you build it, and build it only if the user says to.
 - **`scripts/check.sh` exits 0 before you report done.** No disabled tests, no skipped
   assertions. Report a failure verbatim rather than working around it.
 - **A change that makes a document untrue includes the fix to that document** — `CLAUDE.md`,
@@ -19,16 +22,19 @@ just cannot change *quietly*, because other targets and this documentation depen
 
 The longest route in the codebase, and the one where a mistake reaches the user's notes. In order:
 
-1. **`GTDModel/Entities/Entities.swift`** — add the property to `Action`, and to `ActionDraft` if
-   the user can set it while filing. Undecided must be representable as empty (`nil`, `[]`, `""`);
-   a zero or a `false` that means "not decided" is the lying default STYLEGUIDE §1 forbids.
+1. **`GTDModel`** — add the property to `Action` (`Entities/Entities.swift`) and, if the user can
+   set it while filing, to `ActionDraft` (`Commands/Commands.swift`, where the drafts live).
+   Undecided must be representable as empty (`nil`, `[]`, `""`); a zero or a `false` that means
+   "not decided" is the lying default STYLEGUIDE §1 forbids.
 2. **`GTDMarkdown`** — add the key to `NoteCodec.Keys`, read it in `decodeAction`, write it in
    `encode(_ action:)`, and add it to `NoteTemplates.action` if a fresh note should carry it.
    Remember the patching model: you write a *value*, the encoder decides whether the line changed.
 3. **Round-trip tests first, then the rest.** `GTDMarkdownTests` is the guarantee behind N2:
    `RoundTripTests` (a file with the key, and one without), `FidelityTests` (awkward values:
    colons, quotes, `true`, `07:00`, umlauts), `PatchTests` (changing only this field changes only
-   this line), and `FuzzRoundTripTests` picks it up for free once the key is in `Keys`.
+   this line). `FuzzRoundTripTests` does **not** pick a new key up by itself: it builds its notes
+   from its own generator and walks its own mutation table, so add the key to both — that is what
+   gets it into the ~1 800 generated notes and the damaged-file sweep.
 4. **`GTDModel/Reducer` and `Rules`** — if the field has semantics (it changes what is visible,
    what counts toward the cap, what is stalled), they live here and nowhere else. Add the
    validation to the reducer and a query to `Rules`; test both in `GTDModelTests`.
@@ -37,6 +43,9 @@ The longest route in the codebase, and the one where a mistake reaches the user'
    forget; that test is the point.
 6. **UI** — a chip or row in `DesignSystem` if it is shown in more than one place, the wording in
    `DesignSystem.Copy`, then the feature views. Feature code holds no literal string or size.
+   To find every place a field would show up, use `docs/TRACEABILITY.md`: it names the module and
+   the view for each requirement, so "where are an action's chips drawn?" is one lookup (I3 for
+   the inbox card, E3 for the Mac editor) rather than a grep.
 7. **Migration** — `Tools/migrate/` only if existing notes need the key written or cleaned up.
    Anything the script cannot decide must be *reported*, never guessed. Say in
    `docs/MANUAL_TEST.md` §9 if the user has to re-run it.

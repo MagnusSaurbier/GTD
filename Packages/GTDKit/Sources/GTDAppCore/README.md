@@ -16,16 +16,16 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
 
 ## Invariants
 
-- **Commands run one at a time, in call order** (T40-2). `send(deriving:)` builds its command
+- **Commands run one at a time, in call order.** `send(deriving:)` builds its command
   only when its turn comes, from the snapshot as it is then — that is what a caller writing a
   whole entity back (`FeatureOverview.ActionEditModel`'s autosave) must use, or it reverts the
   fields of a command that was still in flight when it built its payload. `undo()` queues too.
 - `AppModel.send` refreshes `snapshot` and `undoLabel` **before returning**, both on success and
   on a thrown `GTDError`, so a caller can read them straight after `await`. That is why
-  `GTDBackend` has `currentSnapshot()` (contract change T00-2).
+  `GTDBackend` has `currentSnapshot()`.
 - `GTDError` is rethrown for the UI to handle (cap sheet, waiting sheet). `undo()` never throws;
   a refused undo lands in `lastError`.
-- **A refused command always reaches the person** (T41-1). A view either has a flow of its own
+- **A refused command always reaches the person.** A view either has a flow of its own
   for the error — and then uses `send` — or it uses `perform(_:)`/`report(_:)`, which put the
   error in `lastError` for the shell's one alert. `try? await model.send(…)` in a view is a bug:
   the person taps and nothing happens (STYLEGUIDE §1 "no lying UI"). A command that goes through
@@ -36,13 +36,15 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
 - `InMemoryBackend` does not make config edits, routine logs, review saves or archiving undoable
   (same rule as `GTDServices.UndoJournal`).
 
-## Ownership
+## Two backends, one behaviour
 
-T00. `GTDServices.VaultBackend` (T16) is the second implementation of `GTDBackend` and must keep
-the same observable behaviour — T16 has a parity test for it.
+`GTDServices.VaultBackend` is the second implementation of `GTDBackend`, and the two must stay
+observably identical: `GTDServicesTests/ParityTests` drives both through the same commands and
+compares the result, and the undo rule and its labels have one definition each
+(`Rules.isUndoable`, `UndoLabel`).
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — the T00 acceptance scenario
-(file an inbox item to Next, hit the cap, complete a project action (prompt), undo), the T40-2
-command-order tests, and `ErrorSurfacingTests` for `perform`/`report`.
+`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — the acceptance scenario (file an
+inbox item to Next, hit the cap, complete a project action (prompt), undo), the command-order
+tests, and `ErrorSurfacingTests` for `perform`/`report`.

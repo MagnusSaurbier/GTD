@@ -1,8 +1,8 @@
 # GTDFixtures
 
 Deterministic sample data: one snapshot in memory and the same vault as markdown files on disk.
-Depends on `GTDModel` only — **not** on `GTDMarkdown`, because the codec (T10) and the vault
-scanner (T15) are tested *against* these files. No SwiftUI; compiles on Linux.
+Depends on `GTDModel` only — **not** on `GTDMarkdown`, because the codec and the vault scanner
+are tested *against* these files. No SwiftUI; compiles on Linux.
 
 ## Public API
 
@@ -30,10 +30,10 @@ and a `Knowledge/` folder tree.
   passthrough, the way a config decoded from a vault does. Without it
   `GTDVaultTests.SampleVaultScanTests` could never find `scan(sample vault).config` equal to
   `sampleSnapshot.config` — every other entity is compared field by field there, because a
-  fixture built in code has no file text to carry (T16).
+  fixture built in code has no file text to carry.
 - `Resources/SampleVault/` is a **committed rendering of `sampleSnapshot`**, byte-for-byte.
   `SampleVaultTests.committedCopyMatchesTheRenderedSnapshot` fails when they drift.
-- The renderer in `SampleVault.swift` is fixtures-only. If T10 changes a note format, change it
+- The renderer in `SampleVault.swift` is fixtures-only. If the codec changes a note format, change it
   here too and re-export.
 
 ## Regenerating the committed vault
@@ -43,7 +43,8 @@ cd Packages/GTDKit && GTD_EXPORT_SAMPLE_VAULT="$PWD/Sources/GTDFixtures/Resource
   swift test --filter exportSampleVault
 ```
 
-## Ownership
+## Changing a fixture
 
-T00. Later tasks may add fixtures; changing an existing one breaks other targets' tests, so
-prefer adding.
+Adding one is cheap; changing an existing one breaks other targets' tests, because they assert
+against these exact counts and values. Prefer adding, and regenerate the committed sample vault
+afterwards (the command is in `CLAUDE.md`).

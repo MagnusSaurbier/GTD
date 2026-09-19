@@ -1,6 +1,6 @@
 # FeatureRoutines
 
-Routines: one step per screen, done/skip, resume from today's log (R1–R6). **Built by T24.**
+Routines: one step per screen, done/skip, resume from today's log (R1–R6).
 
 ## Public API
 

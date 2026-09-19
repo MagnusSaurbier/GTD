@@ -1,6 +1,6 @@
 # FeatureWaiting
 
-Waiting-for, deferred items and the Mac calendar strip (W2, D1, D3). **Owned by T23.**
+Waiting-for, deferred items and the Mac calendar strip (W2, D1, D3).
 
 ## Public API
 
@@ -24,7 +24,7 @@ Waiting-for, deferred items and the Mac calendar strip (W2, D1, D3). **Owned by 
 
 - Every row command goes through `AppModel.perform(_:)`, never `try? await model.send(…)`.
   "Move to Next" can be refused by the Next cap and un-deferring by the defer × Next rule
-  (ARCHITECTURE §6); before T41 both silently did nothing. The refusal now lands in
+  (ARCHITECTURE §6); both used to fail silently. The refusal now lands in
   `AppModel.lastError` and the app shell shows it.
 
 ## Platform guards (ARCHITECTURE §5)

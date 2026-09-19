@@ -1,7 +1,7 @@
 # FeatureInbox
 
 Inbox processing: one card at a time, LIFO, forced order, exit only by quitting (I1–I7).
-Owned by **T20**. `docs/STYLEGUIDE.md` §3.5/§3.6 is the binding spec for the card and its gestures.
+`docs/STYLEGUIDE.md` §3.5/§3.6 is the binding spec for the card and its gestures.
 
 ## Public API
 
@@ -40,7 +40,7 @@ them on a Mac (`scripts/check.sh`). Previews build their own sample data (`Inbox
 `InboxProcessingView` carries its own `.toolbar` (card counter, `⌘Z` undo, `Done`) but **does
 not** wrap itself in a `NavigationStack`: the review wizard embeds it inline, where a second
 navigation bar would be wrong. Every other presenter must supply one, or the session has no
-visible way out — `PhoneShell` and `FeatureOverview` do (T41 fixed both; only the previews had
+visible way out — `PhoneShell` and `FeatureOverview` do (only the previews had
 one before).
 
 Inbox zero is `DesignSystem.RewardMoment.inboxZero`, not a local drawing of it (STYLEGUIDE §5

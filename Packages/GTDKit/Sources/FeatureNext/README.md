@@ -3,8 +3,6 @@
 The default screen: filter chips over a plain list of Next actions, plus a chase section for
 overdue follow-ups (E1, E2, W2).
 
-**Owned by T21.**
-
 ## Public API
 
 - `NextView(mode:onOpen:onQuickCapture:)` — `onQuickCapture` is a new, optional (default `nil`)
@@ -31,12 +29,12 @@ overdue follow-ups (E1, E2, W2).
 - Row context menu (all rows) / iOS swipe (trailing `Done`, leading `Backlog`): done, start
   (→ in-progress), demote to Backlog, set waiting (`WaitingInfoSheet`), defer (`DateValueChip` in
   a small sheet). Every swipe action has a context-menu twin — the Mac has no swipes and
-  VoiceOver cannot reach one (STYLEGUIDE §8; T41 added the missing `Done`).
+  VoiceOver cannot reach one (STYLEGUIDE §8).
 - **Deferring a `next`/`in-progress` row demotes it to Backlog first, as its own
   explicit command** — the reducer refuses a future `deferDate` on a cap-counting action outright
-  and never demotes for you (T11 hardening); `NextListModel.setDefer` does the two-step itself.
+  and never demotes for you (ARCHITECTURE §6); `NextListModel.setDefer` does the two-step itself.
 - Every row command goes through a small `run(_:)` wrapper that turns a thrown `GTDError` into an
-  alert instead of a silent `try?` — required after the same T11 change (a refused command must
+  alert instead of a silent `try?` (a refused command must
   reach the person).
 - Cap indicator (STYLEGUIDE §2.2): plain count below the cap, `Badge` (`15/15`, overdue past it)
   at/above — never a meter.

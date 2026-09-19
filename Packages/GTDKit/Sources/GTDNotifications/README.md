@@ -20,9 +20,9 @@ Local notification planning and scheduling (D2, R3, W2, D1). Public types: `Noti
   the delta.
 - `SystemNotificationCenter` is the real `UNUserNotificationCenter` adapter.
 - `NotificationRoute` parses `gtd://routine/<id>`, `gtd://action/<path>`, `gtd://waiting` back
-  out of a `deepLink` (T40 uses this on tap).
+  out of a `deepLink` (the shell uses this on tap).
 
-**Known limitation:** a device only knows what has synced into its `VaultSnapshot`. T40 must
+**Known limitation:** a device only knows what has synced into its `VaultSnapshot`. The shell
 re-plan (`plan` + `sync`) on every snapshot change and on background refresh, not just once.
 
 ## Platform guards (ARCHITECTURE §5)
