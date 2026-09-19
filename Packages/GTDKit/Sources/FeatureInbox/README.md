@@ -47,7 +47,7 @@ Inbox zero is `DesignSystem.RewardMoment.inboxZero`, not a local drawing of it (
 allows exactly two reward moments, so there is exactly one implementation). The card drag
 geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) rather than
 `DesignSystem`'s `CardFilingController`/`.cardSwipeFiling` — see
-`agent_task/ORCHESTRATOR-NOTES.md`.
+`docs/history/build-out/ORCHESTRATOR-NOTES.md`.
 
 ## Testing
 

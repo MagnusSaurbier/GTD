@@ -1,7 +1,8 @@
 # App (the shell)
 
 The `GTD` target: `@main`, the composition root and the platform split (N5). No GTD semantics
-live here — the shell composes modules and routes between them. Owned by T40.
+live here — the shell composes modules and routes between them. It is outside the Swift package,
+so it never compiles on Linux and none of it has ever been built.
 
 ## Files
 
@@ -36,22 +37,20 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
 
 ## What to verify on a Mac (everything here is compiled blind)
 
-1. `scripts/check.sh --app` — macOS app builds; then build for an iPhone simulator.
-2. Run with `-useFixtures` on both platforms: three tabs on iPhone, sidebar/list/detail on Mac.
-3. Pick a **copy** of a vault (never the real one): onboarding → counts → relaunch reopens it
-   without asking (Gate 3 in `TEST-INSTRUCTIONS.md`).
-4. Menu bar: `⌘1…7`, `⌘N` (capture sheet), `⌘I` (processing), `⌘Z`. `⌘,` opens Settings.
-5. A notification tap opens the right screen; `xcrun simctl openurl booted gtd://inbox` too.
-6. **App Intents:** `GTDIntents` lives in the package, and App Intents metadata is extracted per
-   target. If the three shortcuts do not appear in the Shortcuts app, move `CaptureIntents.swift`
-   into this target (or add an App Intents extension) — nothing else depends on where it lives.
-7. Signing: `DEVELOPMENT_TEAM` in `project.yml` is empty. macOS and the simulator build
-   unsigned; for a device, set your team there or in Xcode → Signing & Capabilities.
+The order is `TEST-INSTRUCTIONS.md` Gates 1–3, then `docs/MANUAL_TEST.md`; neither is repeated
+here. Two things are this target's own, and are not in either:
+
+- **App Intents metadata** is extracted per target. `GTDIntents` lives in the package, so if the
+  three shortcuts do not appear in the Shortcuts app, move `CaptureIntents.swift` into this
+  target (or add an App Intents extension) — nothing else depends on where it lives.
+- **Signing:** `DEVELOPMENT_TEAM` in `project.yml` is empty. macOS and the simulator build
+  unsigned; for a device, set your team there or in Xcode → Signing & Capabilities.
 
 ## Known gaps
 
 - `⌘⏎`, `⌘⇧N/B/M`, `⌘⇧W` (STYLEGUIDE §4.5) act on the focused row and are not in the menu bar:
-  the feature views own them and none of them exposes a focus target to the shell yet.
+  the feature views own them and none of them exposes a focus target to the shell yet
+  (`docs/follow-ups/50-mac-keyboard-map.md`).
 - Quick capture is disabled under `-useFixtures` (there is no file system to write to).
 - The weekly review is the `Review` sidebar section (STYLEGUIDE §4.1), not a separate window.
 - `AppComposition.shutdown()` is deliberately unwired: `scenePhase == .background` is not
@@ -59,6 +58,6 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
   still needs the vault), and process exit releases the security scope anyway.
 - `GTDApp.body` uses **one** `#if os(macOS)/#else` around whole scenes. Do not go back to
   per-modifier `#if`s: a postfix `#if` chain followed by an `#if` that opens a statement is the
-  shape a blind-written scene builder most easily gets wrong (T41).
+  shape a blind-written scene builder most easily gets wrong.
 - A presented view that carries its own `.toolbar` needs a `NavigationStack` here —
   `InboxProcessingView` does not wrap itself, because the review wizard embeds it inline.

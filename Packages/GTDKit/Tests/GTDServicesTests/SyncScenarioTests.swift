@@ -189,7 +189,7 @@ import GTDVault
     /// path, and the vault ends up with two notes instead of one. Nothing is *lost* — both files
     /// are on disk with their content intact, and the user resolves it like any duplicate. The
     /// test pins the actual behaviour so it cannot get quietly worse, and
-    /// `agent_task/53-stale-write-guard.md` is the follow-up that would refuse the write.
+    /// `docs/follow-ups/53-stale-write-guard.md` is the follow-up that would refuse the write.
     @Test func aDeviceWritingFromABeforeTheRenameSnapshotDuplicatesRatherThanLoses() async throws {
         let root = try SampleVault.copyToTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

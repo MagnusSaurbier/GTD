@@ -23,7 +23,7 @@ import Testing
 /// timing an assertion would only produce a flaky test. Instead each test asserts the *shape* of
 /// the work — "the refresh read one file, not 1 000", "the command wrote one file, not 1 000",
 /// "doubling the projects does not square the work" — and prints the milliseconds for the record.
-/// The numbers of the run that shipped are in `agent_task/41-qa-hardening.md`'s Result;
+/// The numbers of the run that shipped are in `docs/history/build-out/41-qa-hardening.md`'s Result;
 /// `scripts/benchmark.sh` re-runs them.
 @Suite(.enabled(if: NoteCodecParser.codecIsImplemented), .serialized)
 struct PerformanceTests {

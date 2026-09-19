@@ -2,7 +2,9 @@
 
 For the person with the devices. Everything below was written without a compiler and without a
 simulator, so treat a failure as expected work, not as a surprise. Tick the boxes as you go and
-note what broke — `TEST-INSTRUCTIONS.md` has the table to write it into.
+note what broke — `TEST-INSTRUCTIONS.md` has the table to write it into, and its Gates 1–3 are
+what you do *before* this file: build the package, build and launch the app, check that the vault
+bookmark survives a relaunch.
 
 > **§0–§8 never touch the real vault under
 > `~/Library/Mobile Documents/iCloud~md~obsidian/`.** They all use a **copy**. Make one first:
@@ -62,7 +64,8 @@ Run **without** `-useFixtures`.
 - [ ] Change something on device A while device B is asleep; wake B: it picks the change up on
       foreground without a restart.
 - [ ] Undo on device B something device A changed since: the app must **refuse** the undo with a
-      message ("the file changed"), never silently overwrite (T16).
+      message ("the file changed"), never silently overwrite — every journal entry is checked
+      against the files before it is applied.
 
 ## 4. Notifications (D2, R3)
 
@@ -86,8 +89,9 @@ Run **without** `-useFixtures`.
 
 ## 6. Accessibility (STYLEGUIDE §8)
 
-T41 read every custom control and fixed the clear omissions (`agent_task/41-qa-hardening.md`).
-These are the ones only a device can settle. Do them with `-useFixtures`, so nothing can be
+The blind review read every custom control and fixed the clear omissions
+(`docs/history/build-out/41-qa-hardening.md` has the list). These are the ones only a device can
+settle. Do them with `-useFixtures`, so nothing can be
 written while you sweep.
 
 **VoiceOver (iPhone: Settings → Accessibility → VoiceOver; Mac: `⌘F5`)**
@@ -132,14 +136,15 @@ largest accessibility size; Mac: System Settings → Appearance → text size)**
 - [ ] Everything in STYLEGUIDE §4.5 that exists works: `⌘N`, `⌘1…⌘7`, `⌘F`, `⌘Z`, `⌘I`, `⌘,`, and
       the inbox card's arrow keys / `P K W R` / `Esc`.
 - [ ] Known gaps, do **not** file these as bugs: `⌘⏎`, `⌘⇧N/B/M`, `⌘⇧W` are not in the menu bar
-      (`agent_task/50-mac-keyboard-map.md`) and `⌘F` filters only the overview's own lists
-      (`agent_task/51-search-across-lists.md`).
+      (`docs/follow-ups/50-mac-keyboard-map.md`) and `⌘F` filters only the overview's own lists
+      (`docs/follow-ups/51-search-across-lists.md`).
 - [ ] Full Keyboard Access on: chips and card targets can be reached and activated with `Space`.
 
 ## 7. Performance on the real thing
 
-`scripts/benchmark.sh` measures what a Linux container can (scan, command, queries, codec) and
-the numbers are in `agent_task/41-qa-hardening.md`. These four need the device.
+`scripts/benchmark.sh` measures what a machine without a device can (scan, command, queries,
+codec); the numbers it printed on Linux are in `docs/history/build-out/41-qa-hardening.md`.
+These four need the device.
 
 - [ ] **Cold launch to a usable Next view** with your real vault copy (≈1 000 notes). Stopwatch
       from click to the first list being scrollable. If it is over ~2 s, the first suspect is the
@@ -169,7 +174,7 @@ reorder it: steps 1–3 are reversible only because of step 1.
 3. **Migration dry run** — `Tools/migrate/README.md`, step 1:
    ```sh
    cd Tools/migrate
-   python3 -m pytest -q                              # the script's own tests, first
+   pytest -q                                         # the script's own tests, first (40)
    python3 migrate.py --vault /path/to/your/vault    # writes only migration-report.md
    ```
    - [ ] Read `migration-report.md` **end to end**, not just the counts.

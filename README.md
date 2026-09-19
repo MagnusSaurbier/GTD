@@ -1,29 +1,37 @@
 # GTD
 
 A personal Getting-Things-Done app for macOS and iOS. Native SwiftUI, fully offline; the data
-store is the markdown notes in my Obsidian vault (synced via iCloud).
-
-- `docs/REQUIREMENTS.md` — what the app does (v1; snapshot of the note in the vault, which stays the source of truth)
-- `docs/ARCHITECTURE.md` — how it is built: modules, vault layout, frozen contracts, decisions
-- `docs/STYLEGUIDE.md` — binding UI rules: tokens, components, gestures, keys, copy, icons
-- `docs/TRACEABILITY.md` — every requirement → the code and tests that implement it, with a status
-- `docs/MANUAL_TEST.md` — the checks that need a Mac or an iPhone, ending in the first-real-use checklist
-- `agent_task/` — the work split into task briefs for parallel subagents; start at `agent_task/README.md`
+store is the markdown notes in my Obsidian vault (synced via iCloud). Nothing is hidden in a
+database — every action, project, routine and weekly review is a note I can still read and edit
+in Obsidian.
 
 ## Status
 
-Build-out. Every target of `Packages/GTDKit` is implemented and tested on Linux, and the app
-shell wires them together: the vault backend behind onboarding, the iPhone tabs and the Mac
-window, deep links, notifications and background refresh (`App/README.md`). Everything that needs
-an Apple SDK was written without a compiler — `TEST-INSTRUCTIONS.md` and `docs/MANUAL_TEST.md`
-are the checks that close that gap on a Mac.
+**Feature-complete on paper, unverified on a device.** Every module of `Packages/GTDKit` is
+implemented and tested — 851 tests — and the app shell wires them together: the vault backend
+behind onboarding, the iPhone tabs and the Mac window, deep links, notifications and background
+refresh. The whole app was written on Linux with no Xcode, so every SwiftUI file and all of
+`App/` have **never been compiled**. The tests cover the models, the codec, the vault, the
+reducer and the rules; they cover no view at all.
 
-`docs/TRACEABILITY.md` says where every requirement stands, including the six that are only
-partly met; each of those has a follow-up brief (`agent_task/50-*.md` … `55-*.md`).
+So the next step is not a feature. It is `TEST-INSTRUCTIONS.md`: the script for the first machine
+with Xcode — build the package, build and launch the app on fixtures, then check that a
+security-scoped bookmark into the Obsidian folder really survives a relaunch.
 
-The build-out ends with `agent_task/42-docs-handover.md`, which rewrites `CLAUDE.md`, this file and
-the architecture doc to describe the code as built. Agent instructions live in `CLAUDE.md`;
-its "Keeping this file current" section says when and how to update them.
+- `docs/TRACEABILITY.md` — where every requirement stands, per requirement, with its tests.
+- `docs/KNOWN_ISSUES.md` — what is missing, what is deliberate, what is only assumed.
+- `docs/follow-ups/` — six briefs for the gaps that are worth closing, none of them started.
+
+## What it does
+
+Capture in under three seconds from anywhere (Shortcut or App Intent, app need not be running) →
+process the inbox one card at a time, LIFO, no skipping → a hard cap of 15 Next actions → areas
+and projects as folders, with outcome, steps and a log → waiting-for with a follow-up date that
+chases you → defer and due dates with local notifications → morning and bedtime routines run
+step by step and logged per day per device → and a weekly review that sweeps the inbox, walks the
+deck down to 15, shows the week's real numbers and saves a `KW xx.md` note.
+
+`docs/REQUIREMENTS.md` is the full version; `docs/STYLEGUIDE.md` is how it should look and feel.
 
 ## Setup
 
@@ -31,28 +39,22 @@ its "Keeping this file current" section says when and how to update them.
 brew install xcodegen      # macOS only; generates the (git-ignored) Xcode project
 ```
 
-Nothing else is needed: the only third-party dependency is Yams, pinned in
-`Packages/GTDKit/Package.swift` and resolved by SwiftPM.
+Nothing else: the only third-party dependency is Yams, pinned in
+`Packages/GTDKit/Package.swift` and resolved by SwiftPM. The migration script's tests want
+`pytest`; `scripts/check.sh` skips them with a message when it is not installed.
 
 ## Build and test
 
 ```bash
-scripts/check.sh          # swift build + swift test + scripts/check-docs.sh (+ iOS simulator build)
+scripts/check.sh          # swift build + swift test + docs check + migration tests (+ iOS simulator build)
 scripts/check.sh --app    # additionally: xcodegen generate, then build the macOS app
+scripts/benchmark.sh      # scan, one command, queries, codec — against a generated vault
 ```
 
-```bash
-scripts/benchmark.sh      # the performance numbers: scan, one command, queries, codec
-scripts/benchmark.sh 3000 # …against a bigger generated vault
-```
-
-`scripts/check.sh` is the gate for every change. On a machine without Xcode (the Linux
-containers the build-out agents run in) the `xcodebuild` and `xcodegen` steps print
-`SKIPPED` and the script still exits 0 — so asset catalogs, string catalogs and the app target
-are only validated on a Mac.
-
-The Swift commands behind it, and how to run a single test, are listed in `CLAUDE.md` under
-"Commands".
+`scripts/check.sh` is the gate for every change. On a machine without Xcode the `xcodebuild` and
+`xcodegen` steps print `SKIPPED` and the script still exits 0 — so asset catalogs, string
+catalogs and the app target are only ever validated on a Mac. The Swift commands behind it, and
+how to run a single test, are in `CLAUDE.md` under "Commands".
 
 ## Run it
 
@@ -61,22 +63,29 @@ scripts/check.sh --app    # generates GTD.xcodeproj
 open GTD.xcodeproj        # run the GTD scheme on "My Mac" or an iPhone simulator; ⌘U for the tests
 ```
 
-On first launch the app asks for the Obsidian folder that holds the Actions notes and remembers
-it as a security-scoped bookmark. Add the launch argument `-useFixtures` (Product → Scheme → Edit
-Scheme → Arguments) to run on the sample snapshot instead, touching no files at all — that is what
-the UI tests use. Signing is yours: set `DEVELOPMENT_TEAM` in `project.yml` before building for a
-device; macOS and the simulator build unsigned. `docs/MANUAL_TEST.md` is the checklist for
-testing against a real (copied!) vault.
+On first launch the app asks for the Obsidian folder that holds the `Actions` notes and remembers
+it as a security-scoped bookmark. The launch argument `-useFixtures` (Product → Scheme → Edit
+Scheme → Arguments) runs it on the sample snapshot instead, touching no files at all — that is
+what the UI tests use, and what to use while the app is still unproven. Signing is yours: set
+`DEVELOPMENT_TEAM` in `project.yml` before building for a device; macOS and the simulator build
+unsigned.
 
-## Layout
+**Against real notes:** `docs/MANUAL_TEST.md` §0–§8 run on a *copy* of the vault; its §9 is the
+first-real-use checklist for the day the app is pointed at the actual one, migration included.
+
+## Where everything is
 
 ```
 App/                  the app shell (@main); the Xcode project is generated from project.yml
-AppTests/             unit tests for the shell's own logic
-AppUITests/           launch-and-navigate smoke tests (always -useFixtures)
-Packages/GTDKit/      all code, split into small targets — see docs/ARCHITECTURE.md §2
+AppTests/ AppUITests/ the shell's unit tests, and launch-and-navigate smoke tests (always -useFixtures)
+Packages/GTDKit/      all the code, in 18 small targets — see docs/ARCHITECTURE.md §2
+Tools/migrate/        the one-time Python migration from the old vault layout
 Shortcuts/            capture Shortcut recipes
 scripts/              check.sh (the gate), check-docs.sh, benchmark.sh
-docs/                 requirements, style guide, architecture, traceability, manual test script
-agent_task/           build-out briefs, one per task
+docs/                 requirements, style guide, architecture, traceability, known issues,
+                      manual test script, contributing guide, follow-ups/, history/
 ```
+
+Agent instructions live in `CLAUDE.md`; `docs/CONTRIBUTING-AGENTS.md` has the route through the
+code for a typical change, and `CLAUDE.md`'s "Keeping this file current" says which document to
+fix when your change makes one untrue.

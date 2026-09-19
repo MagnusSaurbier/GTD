@@ -52,7 +52,7 @@ safety net) and `VaultPlatform+Apple`; `VaultPlatform+Portable` is their non-App
   peeks at it for classification only; all real parsing is the codec's.
 - A refresh costs one directory walk plus one decode **per changed file** — never a re-parse of
   the vault. What it does still cost is re-assembling the whole snapshot (`VaultIndex.snapshot`)
-  and, after a commit, a full re-listing, which is what `agent_task/55-incremental-reindex.md`
+  and, after a commit, a full re-listing, which is what `docs/follow-ups/55-incremental-reindex.md`
   is about. Numbers: `scripts/benchmark.sh`.
 
 ## Testing

@@ -4,7 +4,7 @@ import GTDModel
 import GTDFixtures
 @testable import GTDAppCore
 
-/// The T00 acceptance scenario (agent_task/00-foundation.md): file an inbox item to Next,
+/// The T00 acceptance scenario (docs/history/build-out/00-foundation.md): file an inbox item to Next,
 /// hit the cap, complete a project action and see the prompt, undo.
 @MainActor
 struct AppModelAcceptanceTests {

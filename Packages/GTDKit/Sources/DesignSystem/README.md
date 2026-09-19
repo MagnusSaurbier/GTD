@@ -55,7 +55,7 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   hairline under Reduce Transparency) otherwise. ARCHITECTURE §1 sets the deployment target at
   iOS 26/macOS 26 with "no availability checks" as a general rule; this one check stays because
   this container cannot compile a single line of SwiftUI to confirm `.glassEffect()`'s exact
-  availability annotation or its default shape — see agent_task/12-design-system.md Result.
+  availability annotation or its default shape — see docs/history/build-out/12-design-system.md Result.
 
 ## Ownership and gotchas
 

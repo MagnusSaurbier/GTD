@@ -41,14 +41,15 @@ Compiles and tests on Linux.
 - `countsTowardCap` counts `next` + `in-progress` regardless of defer; with the rule above it
   equals `nextList(…).count` in any vault the app wrote. `nextList` is never truncated to the
   cap — an over-cap vault must stay repairable.
-- `Rules.isUndoable` is the single definition of N6; `InMemoryBackend` still carries T00's copy,
-  and T16 should switch both to this one.
+- `Rules.isUndoable` is the single definition of N6: both backends call it, and the labels live
+  in `GTDAppCore/UndoLabel`.
 - Renaming an action moves the file and rewrites `ProjectStep.promotedTo`. Renaming or re-filing
   a **project** is refused (`.invalid`) — the folder name is its identity.
-- `GTD/Trash/<file>` keeps the source file name; T16 must uniquify on collision.
+- `GTD/Trash/<file>` keeps the source file name; `GTDServices` uniquifies on collision.
 
 ## Ownership and testing
 
-**T11 owns `Reducer/` and `Rules/`**; the rest is frozen (see `agent_task/README.md`).
+Everything here is domain code: no `import SwiftUI`, no I/O, no markdown. A change to a rule or
+to the reducer is a change to what the app *means* — read `docs/CONTRIBUTING-AGENTS.md` first.
 `swift test --filter GTDModelTests` — `TestVault` builds tiny snapshots for the rule tables,
 `GTDFixtures.sampleSnapshot` is used where a rule needs a whole system.

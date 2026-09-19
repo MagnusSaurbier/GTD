@@ -1,5 +1,6 @@
 // swift-tools-version: 6.2
-// Owned by T00. Nobody else edits this file — see agent_task/README.md "Contract changes".
+// The 18 source targets and their dependency direction (docs/ARCHITECTURE.md §2).
+// Adding a target: docs/CONTRIBUTING-AGENTS.md "Add a target".
 import PackageDescription
 
 /// Applied to every target: Swift 6 language mode (strict concurrency).

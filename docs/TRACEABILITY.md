@@ -1,6 +1,6 @@
 # Traceability — every requirement to the code that implements it
 
-Written by T41. Covers `docs/REQUIREMENTS.md` v1 in full: every ID (N1–N6, C1–C4, I1–I7, A1–A5,
+Covers `docs/REQUIREMENTS.md` v1 in full: every ID (N1–N6, C1–C4, I1–I7, A1–A5,
 P1–P7, W1–W2, D1–D3, E1–E4, R1–R6, §10's four steps, M1–M6) and §12's out-of-scope list.
 
 Paths are relative to the repo root; `GTDKit/…` is short for
@@ -19,8 +19,8 @@ Paths are relative to the repo root; `GTDKit/…` is short for
 | **out of scope** | REQUIREMENTS §12 or an explicit "v1: no" in the requirement itself. Deliberately absent; the check is that nothing implements it by accident. |
 
 "done (blind)" is the honest status of most of the UI and is not a hedge: it is the direct
-consequence of the build-out running on Linux without an Apple SDK (`CLAUDE.md` → Commands).
-`agent_task/41-qa-hardening.md` lists what was read rather than run.
+consequence of the app being written on Linux without an Apple SDK (`CLAUDE.md`).
+`docs/history/build-out/41-qa-hardening.md` lists what was read rather than run.
 
 ## §2 Platform and data
 
@@ -28,7 +28,7 @@ consequence of the build-out running on Linux without an Apple SDK (`CLAUDE.md` 
 | --- | --- | --- | --- | --- |
 | N1 | macOS **and** iOS, fully offline | one multiplatform target (`project.yml`), `App/MacShell.swift` + `App/PhoneShell.swift`; no network code anywhere in the repo | — (no Apple SDK here) | **done (blind)** — Gate 2. Offline is structural: nothing in `Packages/` or `App/` opens a socket. |
 | N2 | Markdown + YAML frontmatter in the vault, readable in Obsidian | `GTDKit/GTDMarkdown/` — `NoteCodec` patches the original file line by line out of `NotePassthrough` instead of re-serialising | `GTDMarkdownTests/RoundTripTests`, `FidelityTests`, `PatchTests`, `FuzzRoundTripTests` (~1 800 generated notes + every sample file damaged 12 ways) | **done** |
-| N3 | Sync-safe: one writer per file, atomic writes, no shared append-only file | `GTDKit/GTDVault/` (`VaultTransaction`, `CoordinatedFileSystem`), routine log one file per day **per device** (`VaultLayout.routineLogPath`), undo refused on a changed file (`GTDServices/UndoJournal`) | `GTDVaultTests/TransactionFuzzTests` (600 op sequences), `GTDServicesTests/SyncScenarioTests` (6 scenarios: two devices, conflict copy, eviction, rename-while-open) | **partial** → `agent_task/53-stale-write-guard.md` |
+| N3 | Sync-safe: one writer per file, atomic writes, no shared append-only file | `GTDKit/GTDVault/` (`VaultTransaction`, `CoordinatedFileSystem`), routine log one file per day **per device** (`VaultLayout.routineLogPath`), undo refused on a changed file (`GTDServices/UndoJournal`) | `GTDVaultTests/TransactionFuzzTests` (600 op sequences), `GTDServicesTests/SyncScenarioTests` (6 scenarios: two devices, conflict copy, eviction, rename-while-open) | **partial** → `docs/follow-ups/53-stale-write-guard.md` |
 | N4 | Replaces TaskNotes; the note-per-action data is kept | the whole app; the vault layout of ARCHITECTURE §3 is the existing one | `GTDVaultTests/SampleVaultScanTests` (a real vault tree scans to the expected snapshot) | **done** — a product statement, satisfied by N2 + M1–M6 rather than by code of its own. |
 | N5 | Device split: iPhone capture/inbox/reduced Next/routines, Mac everything | `App/PhoneShell.swift` (three tabs), `App/MacShell.swift`, `Rules.onTheGoNextList` | `GTDModelTests/RulesTests`, `FeatureNextTests/NextListModelTests` (the on-the-go filter), `AppTests/AppShellTests` | **done (blind)** for the shells; the rule itself is **done**. |
 | N6 | Undo for the last filing/status change | `Rules.isUndoable` (one definition, both backends), `GTDAppCore/UndoLabel`, `GTDServices/UndoJournal` (20 entries, hash-checked), `GTDAppCore/InMemoryBackend` | `GTDServicesTests/UndoTests`, `ParityTests`, `GTDAppCoreTests/AppModelAcceptanceTests` | **done** |
@@ -85,7 +85,7 @@ consequence of the build-out running on Linux without an Apple SDK (`CLAUDE.md` 
 | W1 | `waiting` requires who **and** follow-up; +7 days is the default | `WaitingInfo`, `GTDError.waitingInfoRequired`, `DesignSystem/WaitingInfoSheet` (the +7 d is a **suggested**, dashed chip — never persisted until tapped) | `GTDModelTests/ReducerActionTests`, `FeatureOverviewTests/ActionEditModelTests`, `GTDServicesTests/EndToEndJourneyTests` | **done** |
 | W2 | Waiting view sorted by staleness; overdue follow-ups surface in Next as "chase" | `Rules.waitingList`/`chaseItems`/`waitingSince`, `FeatureWaiting/WaitingListModel`, `FeatureNext/NextView` chase section | `GTDModelTests/RulesTests`, `FeatureWaitingTests`, `FeatureNextTests/NextListModelTests` | **done** |
 | D1 | `defer` hides until the date, then a badge; `due` warns as it approaches | `Rules.isVisible`/`deferredList`/`signals`/`returnedFromDeferBadge`, `StalenessPolicy` | `GTDModelTests/RulesTests` (`SignalRuleTests`), `DesignSystemTests/SignalPresentationTests` | **done** |
-| D2 | Local notifications for defer returns, deadlines and follow-ups | `GTDKit/GTDNotifications/NotificationPlanner` (pure, fully tested) + `SystemNotificationCenter`, `App/NotificationService.swift`, `FeatureSettings` toggles | `GTDNotificationsTests/NotificationPlannerTests`, `NotificationSchedulerTests`, `NotificationRouteTests` | **partial** — no actions on the notification itself → `agent_task/52-notification-actions-and-widget.md`. Scheduling and routing are **done (blind)**. |
+| D2 | Local notifications for defer returns, deadlines and follow-ups | `GTDKit/GTDNotifications/NotificationPlanner` (pure, fully tested) + `SystemNotificationCenter`, `App/NotificationService.swift`, `FeatureSettings` toggles | `GTDNotificationsTests/NotificationPlannerTests`, `NotificationSchedulerTests`, `NotificationRouteTests` | **partial** — no actions on the notification itself → `docs/follow-ups/52-notification-actions-and-widget.md`. Scheduling and routing are **done (blind)**. |
 | — | Apple Calendar / Reminders sync | — | no `EventKit` anywhere | **out of scope** (§12) |
 | D3 | Mac calendar strip: defer, due, follow-up on one timeline | `Rules.timeline`, `FeatureWaiting/CalendarStrip` + `WaitingListModel.timeline(days:)` | `GTDModelTests/RulesTests`, `FeatureWaitingTests` | **done (blind)** for the strip; the query is **done**. |
 
@@ -93,9 +93,9 @@ consequence of the build-out running on Linux without an Apple SDK (`CLAUDE.md` 
 
 | ID | Requirement | Implemented in | Tested by | Status |
 | --- | --- | --- | --- | --- |
-| E1 | Next view with context and time chips; plain list; max 15 + chase | `Rules.nextList` (+ the total order of ARCHITECTURE §6), `FeatureNext/NextView` + `NextListModel` + `NextFilterStore` | `GTDModelTests/RulesTests`, `FeatureNextTests/NextListModelTests` | **partial** — `⌘F` does not reach this list → `agent_task/51-search-across-lists.md`. The view itself is **done (blind)**; the list is never truncated to the cap by decision (ARCHITECTURE §6 "Next list order"). |
+| E1 | Next view with context and time chips; plain list; max 15 + chase | `Rules.nextList` (+ the total order of ARCHITECTURE §6), `FeatureNext/NextView` + `NextListModel` + `NextFilterStore` | `GTDModelTests/RulesTests`, `FeatureNextTests/NextListModelTests` | **partial** — `⌘F` does not reach this list → `docs/follow-ups/51-search-across-lists.md`. The view itself is **done (blind)**; the list is never truncated to the cap by decision (ARCHITECTURE §6 "Next list order"). |
 | E2 | iPhone: Next hard-filtered to on-the-go contexts, tick off, no full overview | `Rules.onTheGoNextList`, `App/PhoneShell.swift` (three tabs only) | `GTDModelTests/RulesTests`, `FeatureNextTests/NextListModelTests` | **done** for the rule, **done (blind)** for the shell |
-| E3 | Mac: sidebar with live counts, list, preview/editor; grouped by area/project | `Rules.sidebarCounts`, `FeatureOverview/OverviewView` (three-column `NavigationSplitView`), `SidebarItem`, `ActionListModel` (grouping), `ActionDetailView` + `ActionEditModel` | `GTDModelTests/RulesTests`, `FeatureOverviewTests/SidebarRoutingTests`, `ActionListModelTests`, `ActionEditModelTests` | **partial** — five shortcuts of STYLEGUIDE §4.5 are not in the menu bar → `agent_task/50-mac-keyboard-map.md`; `⌘F` → T51. Everything else is **done (blind)**. |
+| E3 | Mac: sidebar with live counts, list, preview/editor; grouped by area/project | `Rules.sidebarCounts`, `FeatureOverview/OverviewView` (three-column `NavigationSplitView`), `SidebarItem`, `ActionListModel` (grouping), `ActionDetailView` + `ActionEditModel` | `GTDModelTests/RulesTests`, `FeatureOverviewTests/SidebarRoutingTests`, `ActionListModelTests`, `ActionEditModelTests` | **partial** — five shortcuts of STYLEGUIDE §4.5 are not in the menu bar → `docs/follow-ups/50-mac-keyboard-map.md`; `⌘F` → `docs/follow-ups/51-search-across-lists.md`. Everything else is **done (blind)**. |
 | E4 | Projects list: project, its active actions, remaining steps, stalled badge | `Rules.projectRows`, `DesignSystem.ProjectRow`, `FeatureProjects/ProjectsListModel` | `GTDModelTests/RulesTests`, `FeatureProjectsTests/ProjectsListModelTests` | **done** |
 
 ## §9 Routines
@@ -104,7 +104,7 @@ consequence of the build-out running on Linux without an Apple SDK (`CLAUDE.md` 
 | --- | --- | --- | --- | --- |
 | R1 | Routines defined as markdown templates in the vault (Morning, Bedtime) | `GTD/Routines/<Name>.md` (ARCHITECTURE §3), `NoteCodec.decodeRoutine`, `GTDFixtures` sample vault | `GTDMarkdownTests/DecodeTests`, `GTDVaultTests/SampleVaultScanTests` | **done** |
 | R2 | Step-by-step cards, big done/skip, sub-steps inline | `FeatureRoutines/RoutineViews` over `ItemCard` + `GlassActionBar`; `RoutineRun` drives it | `FeatureRoutinesTests/RoutineRunTests` | **done (blind)** for the cards; the run is **done**. |
-| R3 | Start via scheduled notification **and** home-screen button / Shortcut | `NotificationKind.routineStart` + `RoutineDeepLink` (`gtd://routine/<path>`), the iPhone Routines tab, `GTDIntents.StartRoutineIntent` | `GTDNotificationsTests/NotificationRouteTests`, `GTDIntentsTests/DeepLinkTests`, `PendingRouteTests` | **partial** — no Control Centre widget and no Shortcuts picker for routines → `agent_task/52-notification-actions-and-widget.md`. Notification, tab and intent are in place. |
+| R3 | Start via scheduled notification **and** home-screen button / Shortcut | `NotificationKind.routineStart` + `RoutineDeepLink` (`gtd://routine/<path>`), the iPhone Routines tab, `GTDIntents.StartRoutineIntent` | `GTDNotificationsTests/NotificationRouteTests`, `GTDIntentsTests/DeepLinkTests`, `PendingRouteTests` | **partial** — no Control Centre widget and no Shortcuts picker for routines → `docs/follow-ups/52-notification-actions-and-widget.md`. Notification, tab and intent are in place. |
 | R4 | Journaling steps have no text input (journaling is on the reMarkable) | `RoutineStep.isJournaling` only changes the meta line; **no** routine step anywhere takes text | `FeatureRoutinesTests/RoutineRunTests` | **done** |
 | R5 | Log done/skipped per step per day, sync-safe | `GTD/RoutineLog/<day>--<device>.md`, `Reducer.logRoutineStep`, `SnapshotDiff.appendRoutineLog` (a device only ever rewrites its own file) | `GTDModelTests/ReducerSystemTests`, `GTDServicesTests/SyncScenarioTests` (two devices, same day), `GTDMarkdownTests` | **done**, with one documented limitation: a run left open across midnight may re-ask a step logged before midnight (`GTDKit/FeatureRoutines/README.md`). Each entry still carries its own real day, so no log is ever wrong. |
 | R6 | Routines never appear in action lists | routines are a separate collection in `VaultSnapshot`; `GTD/` is not `Actions/` (`VaultClassifier`) | `GTDModelTests/ReducerSystemTests`, `GTDVaultTests/VaultPathTests` | **done** — structural: there is no path by which a routine could become an `Action`. |
@@ -115,7 +115,7 @@ consequence of the build-out running on Linux without an Apple SDK (`CLAUDE.md` 
 | --- | --- | --- | --- | --- |
 | 10.1 | Sweep: inbox to zero, review-deferred items with their reason, waiting chase/bump/resolve, stalled projects | `FeatureReview/ReviewSweep` + `ReviewSession` (§10.1.1–10.1.4), embedding `FeatureInbox`'s card and `FeatureProjects`' `WhatsNextSheet` | `FeatureReviewTests/ReviewSweepTests`, `ReviewSessionTests` | **done** |
 | 10.2 | Deck: Next → Backlog/Maybe → on-hold & someday projects; ends with Next ≤ 15 | `FeatureReview/ReviewDeck`, `ReviewSession` (the deck cannot be left over cap) | `FeatureReviewTests/ReviewDeckTests`, `ReviewSessionTests` | **done** |
-| 10.3 | Systems check: three prompts + live stats + per-step 7-day routine heatmap | `FeatureReview/ReviewSystemsViews` + `ReviewStats`, `GTDKit/GTDStats/` (`WeeklyStats`, routine audit), `DesignSystem.RoutineHeatmap` | `GTDStatsTests/WeeklyStatsTests`, `RoutineAuditTests`, `FeatureReviewTests/ReviewStatsTests`, `DesignSystemTests/AccessibilityTextTests` | **partial** — "captured vs processed" is an approximation the vault format cannot improve on → `agent_task/54-filed-at-record.md`. Everything else, including the heatmap and the trend, is exact. |
+| 10.3 | Systems check: three prompts + live stats + per-step 7-day routine heatmap | `FeatureReview/ReviewSystemsViews` + `ReviewStats`, `GTDKit/GTDStats/` (`WeeklyStats`, routine audit), `DesignSystem.RoutineHeatmap` | `GTDStatsTests/WeeklyStatsTests`, `RoutineAuditTests`, `FeatureReviewTests/ReviewStatsTests`, `DesignSystemTests/AccessibilityTextTests` | **partial** — "captured vs processed" is an approximation the vault format cannot improve on → `docs/follow-ups/54-filed-at-record.md`. Everything else, including the heatmap and the trend, is exact. |
 | 10.4 | Reflection: reMarkable reminder, the eight questions with last week's goal alongside, saved as `KW xx.md` | `FeatureReview/ReviewReflectionViews` + `ReviewSessionState` (the eight questions as cases), `NoteCodec.encode(WeeklyReview)`, `GTD/Reviews/<yyyy>/KW <ww>.md` | `FeatureReviewTests/ReviewNoteTests`, `GTDServicesTests/EndToEndJourneyTests` (the note is decoded back off disk and re-scanned cold) | **done** |
 | — | Resumable | `FeatureReview/ReviewStateStore` (Application Support, never the vault), `ReviewResumeBanner` | `FeatureReviewTests/ReviewStateStoreTests` | **done** |
 
@@ -133,9 +133,10 @@ ever deleted. Tests are `Tools/migrate/tests/` (40 tests: `python3 -m pytest -q`
 | M5 | Classify `Projects/` into areas vs projects, create project notes | **done** — proposes, never decides: the user writes `projects.decisions.yaml`. |
 | M6 | Four empty-body action notes go back to the inbox | **done** |
 
-**Not in the gate.** `scripts/check.sh` does not run the migration tests (`pytest` is not
-installed in the build-out container, and the script must stay green without it). Run them by
-hand before pointing the script at real data — `TEST-INSTRUCTIONS.md` → "Migration script".
+**In the gate, when `pytest` is installed.** `scripts/check.sh` runs `Tools/migrate/tests`
+(40 tests) if it finds a `pytest` on `PATH` or in `~/.local/bin`, and prints `SKIPPED` with the
+command to run by hand otherwise. Run them either way before pointing the script at real data —
+`docs/MANUAL_TEST.md` §9 step 3.
 
 ## §12 Out of scope for v1
 
@@ -160,16 +161,16 @@ Two related decisions worth knowing, because they look like scope creep and are 
 
 | Brief | Closes | Blocked on |
 | --- | --- | --- |
-| `agent_task/50-mac-keyboard-map.md` | E3 (STYLEGUIDE §4.5) | Gate 2 — focus cannot be written blind |
-| `agent_task/51-search-across-lists.md` | E1, E3 (`⌘F`) | Gate 2 |
-| `agent_task/52-notification-actions-and-widget.md` | D2, R3 | Gate 2 |
-| `agent_task/53-stale-write-guard.md` | N3 | nothing |
-| `agent_task/54-filed-at-record.md` | §10.3 | two real weekly reviews first |
-| `agent_task/55-incremental-reindex.md` | performance (non-functional) | nothing |
+| `docs/follow-ups/50-mac-keyboard-map.md` | E3 (STYLEGUIDE §4.5) | Gate 2 — focus cannot be written blind |
+| `docs/follow-ups/51-search-across-lists.md` | E1, E3 (`⌘F`) | Gate 2 |
+| `docs/follow-ups/52-notification-actions-and-widget.md` | D2, R3 | Gate 2 |
+| `docs/follow-ups/53-stale-write-guard.md` | N3 | nothing |
+| `docs/follow-ups/54-filed-at-record.md` | §10.3 | two real weekly reviews first |
+| `docs/follow-ups/55-incremental-reindex.md` | performance (non-functional) | nothing |
 
 ## What this file cannot tell you
 
 Every "done (blind)" row is a statement about code that compiles nowhere in this project. The
 matrix says the requirement is *implemented*; only a Mac says it *works*. The order to find out
 in is `TEST-INSTRUCTIONS.md` → "Where to look first", then Gates 1–3, then
-`docs/MANUAL_TEST.md` — whose §7 is the first-real-use checklist for the actual vault.
+`docs/MANUAL_TEST.md` — whose §9 is the first-real-use checklist for the actual vault.

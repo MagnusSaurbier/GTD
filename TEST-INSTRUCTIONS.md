@@ -1,17 +1,21 @@
 # TEST-INSTRUCTIONS — for a local agent (or human) with Xcode
 
-<!-- ORCHESTRATION FILE. Remove it (git rm TEST-INSTRUCTIONS.md) once the build-out is finished
-     (agent_task/42-docs-handover.md has a filled-in Result) and every section below has been
-     verified on a Mac. Until then, keep the "Verification log" at the bottom current. -->
+<!-- ONE-TIME FILE. Delete it (git rm TEST-INSTRUCTIONS.md) once all three gates below have run
+     on a Mac, the verification log is filled in and committed, and anything still unresolved has
+     been moved into docs/KNOWN_ISSUES.md. Until then, keep the log current — it is the only
+     record of what the real toolchain said. -->
 
 ## Why this file exists
 
-This app is being built by a swarm of agents in a **Linux container with Swift 6.4 and no Xcode**.
+This app was written by agents in a **Linux container with Swift 6.4 and no Xcode**.
 Everything Foundation-only was compiled and unit-tested there. Everything that needs an Apple SDK
 (SwiftUI, AppKit/UIKit, UserNotifications, AppIntents, `NSFileCoordinator`, security-scoped
 bookmarks, `#Preview`, the app target, the iOS-simulator build) was written **without ever being
 compiled**. Your job is to run the real toolchain, report what breaks, and fix the mechanical
 things (wrong API names, missing `import`, availability annotations) without changing behaviour.
+
+The three gates are the order to do it in. They are about *building and launching*; what to then
+check by hand is `docs/MANUAL_TEST.md`, and this file does not repeat it.
 
 Read `CLAUDE.md` first (durable rules, especially: never touch the real Obsidian vault). Then
 `docs/ARCHITECTURE.md` §5 "Platform guards" for the `#if canImport(SwiftUI)` convention every
@@ -40,7 +44,7 @@ platform-guarded code compiles for the first time, so expect errors. Triage:
 | Swift 6 strict-concurrency error in UI code (`@MainActor` isolation, non-Sendable capture) | Fix properly (`@MainActor`, `Sendable` value types). No `@unchecked Sendable`, no `nonisolated(unsafe)` unless you write a comment saying why. |
 | Missing iOS 26 / macOS 26 API the agent guessed at | Replace with the closest real API; note it in the log below. |
 | A test that fails only on macOS | Do **not** disable it. Find out whether the code or the test is wrong; if you cannot, report it verbatim in the log. |
-| Resource bundle errors (`Bundle.module`, asset catalog, `Localizable.xcstrings`) | See ARCHITECTURE §5 and `agent_task/00-foundation.md` "Contract changes"; the intended behaviour is: colours fall back to code-defined values, so a missing catalog must never crash. |
+| Resource bundle errors (`Bundle.module`, asset catalog, `Localizable.xcstrings`) | See ARCHITECTURE §5 and `docs/history/build-out/00-foundation.md` "Contract changes"; the intended behaviour is: colours fall back to code-defined values, so a missing catalog must never crash. |
 
 Single target / single test, for iterating:
 
@@ -50,7 +54,7 @@ swift test --filter GTDModelTests
 swift test --filter GTDModelTests.ReducerTests/testNextCapReached   # adjust name
 ```
 
-### Where to look first (T41 blind review)
+### Where to look first (from the blind review)
 
 T41 read every `#if canImport(SwiftUI)` file and all of `App/` without a compiler and fixed what
 was clearly wrong. These are the places most likely to break when the real compiler sees them,
@@ -111,69 +115,70 @@ scripts/check.sh --app       # xcodegen + xcodebuild of the macOS app
 open GTD.xcodeproj           # then run the GTD scheme on "My Mac" and on an iPhone simulator
 ```
 
-The shell is wired (T40): the app resolves a security-scoped bookmark, opens the vault through
+The shell is wired: the app resolves a security-scoped bookmark, opens the vault through
 `FileVaultStore` + `VaultBackend`, and shows `OnboardingView` when there is no vault yet. The
 launch argument **`-useFixtures`** replaces that whole chain with `InMemoryBackend` +
 `GTDFixtures.sampleSnapshot` — nothing is read or written on disk. Use it for this gate
 (Product → Scheme → Edit Scheme → Arguments → `-useFixtures`).
 
-Smoke test with `-useFixtures`:
+The gate is: it launches on both platforms without crashing — Mac sidebar · list · detail at a
+minimum window of 900×560, iPhone three tabs (Next · Inbox · Routines). Then **walk
+`docs/MANUAL_TEST.md` §1**, which is the fixtures checklist (what each list should contain, the
+cap's forced choice, undo, "What's next?", the menu-bar shortcuts). Do not re-derive it here.
 
-1. App launches on Mac and on an iPhone simulator without crashing. Mac: sidebar · list · detail,
-   minimum window 900×560. iPhone: three tabs — Next (on-the-go) · Inbox (count badge) · Routines.
-2. Inbox shows ≈6 items; Next shows actions at cap − 1; Projects lists 5 projects incl. one
-   stalled and one on hold; Waiting shows an overdue item; Routines shows Morning/Bedtime.
-3. File one inbox item to Next → it appears in Next. File another → the "Next is full" forced
-   choice appears (no silent drop). Undo (toast, and `⌘Z` on Mac) restores the previous state.
-4. Complete a project action → the "What's next?" sheet appears.
-5. Mac menu bar: `⌘1…⌘7` switch sections, `⌘N` opens the capture sheet, `⌘I` starts processing,
-   `⌘Z` undoes, `⌘,` opens Settings. iPhone: the gear on Next opens Settings.
-6. Deep links: `xcrun simctl openurl booted gtd://inbox` starts processing; `gtd://waiting` opens
-   the waiting list; `gtd://routine/GTD/Routines/Morning.md` opens that routine's runner.
-7. Dark mode + Dynamic Type (largest accessibility size) on iPhone: nothing clipped, nothing
-   overlapping. Check `docs/STYLEGUIDE.md` §9 for the screens that exist.
+Two things §1 cannot check from inside the app:
 
-The app's own test bundles (`AppTests`, `AppUITests`) build with the project and run with
-`⌘U`; the UI tests launch with `-useFixtures` themselves.
+- **Deep links:** `xcrun simctl openurl booted gtd://inbox` starts processing; `gtd://waiting`
+  opens the waiting list; `gtd://routine/GTD/Routines/Morning.md` opens that routine's runner.
+- **The app's own test bundles:** `AppTests` and `AppUITests` build with the project and run with
+  `⌘U`; the UI tests pass `-useFixtures` themselves.
 
-Then run `docs/MANUAL_TEST.md` — the real-vault (on a **copy**), two-device, notification,
-accessibility and performance checks that no simulator can cover. Its §9 is the first-real-use
-checklist: the sequence for the day the app is pointed at the actual vault, and the only part of
-this repo that is meant to touch it.
+After Gate 3, `docs/MANUAL_TEST.md` §2–§8 are the real-vault (on a **copy**), two-device,
+notification, accessibility and performance checks no simulator can cover, and its §9 is the
+first-real-use checklist — the only part of this repo meant to touch the actual vault.
 
-## Gate 3 — vault access on device (replaces the skipped spike T01)
+## Gate 3 — vault access on device
 
-T01 was skipped on the user's instruction ("assume the app can read local files"). Verify the
-assumption once the vault backend exists (T15/T16 landed):
+The device spike was skipped on the user's instruction ("assume the app can read local files"),
+so **the app's central assumption has never been tested**: that a security-scoped bookmark to a
+user-picked folder inside Obsidian's iCloud container gives durable read/write access
+(ARCHITECTURE §6). This gate is that test, and nothing else here matters if it fails.
 
 **Never point the app at the real vault under `~/Library/Mobile Documents/iCloud~md~obsidian/`
 while testing** — use a copy of it, or a copy of
 `Packages/GTDKit/Sources/GTDFixtures/Resources/SampleVault`.
 
 1. Onboarding (or Settings → "Change vault…") → pick the vault folder (a copy!).
-2. Quit and relaunch: the app must reopen the folder from its security-scoped bookmark without
-   asking again.
-3. Edit a note in Obsidian (or any editor) while the app is running: the change shows up in the
-   app within a few seconds.
-4. Edit in the app: the file on disk changes, and unknown frontmatter keys / body sections in
-   that file are untouched (compare with `diff`).
-5. On iOS: same four steps with the vault in the Obsidian iCloud folder via the Files picker.
-   If step 2 or 3 fails on iOS, that is the "no-go" case from `agent_task/01-spike-vault-access.md`;
-   record it and stop, the fallback (app-owned iCloud container) is a design change for the user.
+2. Quit and relaunch: the app must reopen the folder from its bookmark without asking again.
+3. On iOS: the same two steps, with the vault in the Obsidian iCloud folder via the Files picker.
+
+If step 2 fails on iOS, that is the "no-go" case from
+`docs/history/build-out/01-spike-vault-access.md`: record it and stop — the fallback (an
+app-owned iCloud container, the vault relocated or symlinked) is a design change for the user.
+
+`docs/MANUAL_TEST.md` §2 is the rest of it: that an outside edit reaches the app, that the app's
+own writes leave unknown frontmatter and body sections byte-identical, and that a rename moves
+the file and the links together.
 
 ## Migration script (independent of Swift)
 
+`scripts/check.sh` runs its 40 tests when a `pytest` is installed. Separately, before anyone
+points it at real data:
+
 ```sh
-cd Tools/migrate && python3 -m pytest -q          # expect all green
-python3 migrate.py /path/to/COPY/of/vault         # dry run; read migration-report.md
+cd Tools/migrate
+pytest -q                                          # expect 40 passed
+python3 migrate.py --vault /path/to/COPY/of/vault  # dry run; read migration-report.md
 ```
 
-Review `Tools/migrate/README.md`'s checklist before anyone runs `--apply` on real data.
+`--vault` is required and the dry run writes only `migration-report.md`. Review
+`Tools/migrate/README.md`'s checklist before anyone runs `--apply`, and note that the real run is
+the user's to do, step by step, in `docs/MANUAL_TEST.md` §9.
 
 ## How to report
 
-Fill in the log below and commit it with the fixes on the branch you were given (the swarm works
-on `claude/sharp-volta-p59pxh`; if you are on a different branch, say so in the log). For each fix:
+Fill in the log below and commit it together with the fixes, on the branch you are working on
+(say in the log which one that is). For each fix:
 one bullet, file path, one line what was wrong. For each thing you could not fix: the exact error
 text in a fenced block and the file/line. Do not refactor, restyle or "improve" code that compiles.
 
@@ -237,8 +242,8 @@ judgement call someone with the real toolchain (or the user) should make.
 
 11. Five of STYLEGUIDE §4.5's shortcuts are not in the menu bar and `⌘F` reaches only the
     overview's own lists. Both have briefs waiting on this gate:
-    `agent_task/50-mac-keyboard-map.md` and `agent_task/51-search-across-lists.md`.
+    `docs/follow-ups/50-mac-keyboard-map.md` and `docs/follow-ups/51-search-across-lists.md`.
 12. Notifications carry no actions, there is no routine widget, and Shortcuts shows a text field
-    instead of a routine picker: `agent_task/52-notification-actions-and-widget.md`.
+    instead of a routine picker: `docs/follow-ups/52-notification-actions-and-widget.md`.
 13. `docs/TRACEABILITY.md` is the full list of what is and is not implemented, per requirement.
     Check it before concluding something is missing — it may be deliberate.
