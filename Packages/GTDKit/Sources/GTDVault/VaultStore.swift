@@ -11,6 +11,19 @@ public protocol VaultStore: Sendable {
     /// Applies the operations in order and returns the inverse ops, for the undo journal.
     /// A `.delete` moves the file into `GTD/Trash/` — the app never hard-deletes (N3).
     func commit(_ ops: [VaultFileOp]) async throws -> [VaultFileOp]
+
+    /// Makes the store usable: creates the folders the layout requires, scans once and starts
+    /// watching for changes. Idempotent — callers may call it before every command.
+    ///
+    /// Added by T16 (contract change T16-1) so `GTDServices` can do its housekeeping — "the
+    /// folder skeleton exists" — without reaching past `VaultStore` to a file system, which
+    /// would break "only `GTDVault` touches the file system" (ARCHITECTURE §2).
+    /// A store that needs no preparation inherits the no-op default below.
+    func activate() async throws
+}
+
+extension VaultStore {
+    public func activate() async throws {}
 }
 
 public enum VaultError: Error, Equatable {
@@ -142,6 +155,16 @@ public actor FileVaultStore: VaultStore {
     }
 
     // MARK: Scanning
+
+    /// Creates the folder skeleton, scans and starts watching (T16-1). Idempotent: after the
+    /// first call it only refreshes the index.
+    public func activate() async throws {
+        for folder in layout.requiredFolders where !fileSystem.exists(folder) {
+            try fileSystem.createFolder(folder)
+        }
+        try scan()
+        startWatching()
+    }
 
     /// Indexes the whole vault and publishes the snapshot. Safe to call repeatedly — after the
     /// first call it is the incremental path.

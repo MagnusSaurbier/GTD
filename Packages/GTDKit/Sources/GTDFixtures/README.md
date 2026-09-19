@@ -26,6 +26,11 @@ and a `Knowledge/` folder tree.
 ## Invariants
 
 - Anchored on `Fixtures.today`, so ages, badges and heatmaps look the same on every machine.
+- `Fixtures.config` (the snapshot's `config`) carries the text of `GTD/Config.md` in its
+  passthrough, the way a config decoded from a vault does. Without it
+  `GTDVaultTests.SampleVaultScanTests` could never find `scan(sample vault).config` equal to
+  `sampleSnapshot.config` — every other entity is compared field by field there, because a
+  fixture built in code has no file text to carry (T16).
 - `Resources/SampleVault/` is a **committed rendering of `sampleSnapshot`**, byte-for-byte.
   `SampleVaultTests.committedCopyMatchesTheRenderedSnapshot` fails when they drift.
 - The renderer in `SampleVault.swift` is fixtures-only. If T10 changes a note format, change it
