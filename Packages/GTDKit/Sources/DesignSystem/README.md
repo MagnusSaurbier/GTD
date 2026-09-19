@@ -78,6 +78,14 @@ T00 froze the API; **T12 (this task) refines the visuals behind it (additions on
   `Resources/Localizable.xcstrings` — left as-is since it cannot be verified under `xcodebuild`
   here either; a Mac-side follow-up, not a blocker (call sites do not change either way).
 
+- **Accessibility wording is Linux-testable on purpose.** `HeatmapContent.swift` (the
+  `HeatmapCellState` cases and `HeatmapSpeech.week`) and `Copy.metaLine`/`Copy.spoken` sit outside
+  the SwiftUI guard, so what VoiceOver reads for a heatmap row and for a row's meta line is
+  covered by `AccessibilityTextTests` instead of being a claim in a doc comment. Anything that
+  carries meaning by colour or position belongs in that shape.
+- Sizes that sit under text are `@ScaledMetric`, not constants: the heatmap grid, `Badge`'s
+  capsule height. A fixed frame around text clips at the accessibility sizes (STYLEGUIDE §8).
+
 ## Testing
 
 `cd Packages/GTDKit && swift test --filter DesignSystemTests`.

@@ -12,7 +12,9 @@ The only module that touches the file system. Owned by T15.
   Also `scan()`, `currentSnapshot`, `startWatching()`, `stopWatching()`, `close()`.
 - `VaultBookmark` + `BookmarkStore` / `PathBookmarkStore` — durable folder access.
 - `InboxWriter` — standalone capture (C1/C3); needs only the bookmark, no index, no codec.
-- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem`, `VaultIndex`, `VaultClassifier`,
+- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (T41: `listEntries()` returns a
+  `VaultListing` — files **and** folders from one walk; the index calls it on every refresh, and
+  the two-walk default is only for a conformer that does not override it), `VaultIndex`, `VaultClassifier`,
   `VaultNoteParser` / `NoteCodecParser`, `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
   `DebounceState` / `ChangeDebouncer`, `VaultClock`, `VaultError`.
 
@@ -48,6 +50,10 @@ safety net) and `VaultPlatform+Apple`; `VaultPlatform+Portable` is their non-App
   edit within one second; the watcher's next poll picks it up.
 - `Projects/X/X.md` is an area or a project depending on its `kind:` key — `Frontmatter.scalar`
   peeks at it for classification only; all real parsing is the codec's.
+- A refresh costs one directory walk plus one decode **per changed file** — never a re-parse of
+  the vault. What it does still cost is re-assembling the whole snapshot (`VaultIndex.snapshot`)
+  and, after a commit, a full re-listing, which is what `agent_task/55-incremental-reindex.md`
+  is about. Numbers: `scripts/benchmark.sh`.
 
 ## Testing
 

@@ -28,9 +28,11 @@ overdue follow-ups (E1, E2, W2).
   it, independent of the backend's own single-level undo bookkeeping (`⌘Z` keeps working after
   the toast fades). Inline checkboxes for actions with ≥ 2 checkboxes; ticking every one *offers*
   to complete the action (a separate button) rather than doing it automatically.
-- Row context menu (all rows) / iOS swipe (trailing `Done`, leading `Backlog`): start
+- Row context menu (all rows) / iOS swipe (trailing `Done`, leading `Backlog`): done, start
   (→ in-progress), demote to Backlog, set waiting (`WaitingInfoSheet`), defer (`DateValueChip` in
-  a small sheet). **Deferring a `next`/`in-progress` row demotes it to Backlog first, as its own
+  a small sheet). Every swipe action has a context-menu twin — the Mac has no swipes and
+  VoiceOver cannot reach one (STYLEGUIDE §8; T41 added the missing `Done`).
+- **Deferring a `next`/`in-progress` row demotes it to Backlog first, as its own
   explicit command** — the reducer refuses a future `deferDate` on a cap-counting action outright
   and never demotes for you (T11 hardening); `NextListModel.setDefer` does the two-step itself.
 - Every row command goes through a small `run(_:)` wrapper that turns a thrown `GTDError` into an

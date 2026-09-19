@@ -45,6 +45,36 @@ still open is below, with what is actually left to do.
 - ~~T20/T12: the inbox reimplements the inbox-zero reward moment~~ — `95c7793`: `InboxZeroView`
   composes `DesignSystem.RewardMoment.inboxZero`.
 
+## Also closed by T41 (its second run)
+
+- ~~`docs/TRACEABILITY.md` was not written~~ — written, in full: every requirement ID of
+  REQUIREMENTS v1 plus §12, each with the module, the tests and a status. Six requirements come
+  out **partial**; each has a brief (`50`–`55`, below).
+- ~~Deliverable 3's "rename while open in detail view"~~ — two tests in
+  `GTDServicesTests/SyncScenarioTests`, on real files.
+- ~~Deliverable 5 (performance)~~ — `GTDServicesTests/PerformanceTests` + `scripts/benchmark.sh`,
+  and the three pathologies they found are fixed (see the brief's Result for the numbers).
+- ~~Deliverable 6 (accessibility)~~ — the clear omissions fixed in code, the rest in
+  `docs/MANUAL_TEST.md` §6.
+- ~~Deliverable 7 (first-real-use checklist)~~ — `docs/MANUAL_TEST.md` §9.
+
+## New briefs T41 opened (not part of the original board)
+
+Ordered by what unblocks them, not by number. `docs/TRACEABILITY.md` links each one to the
+requirement it closes.
+
+| Brief | Closes | Blocked on |
+| --- | --- | --- |
+| `50-mac-keyboard-map.md` | E3 — `⌘⏎`, `⌘⇧N/B/M`, `⌘⇧W` are not in the menu bar | Gate 2 |
+| `51-search-across-lists.md` | E1/E3 — `⌘F` reaches only `FeatureOverview`'s lists | Gate 2 |
+| `52-notification-actions-and-widget.md` | D2/R3 — notification actions, the routine widget, a Shortcuts picker | Gate 2 |
+| `53-stale-write-guard.md` | N3 — a write built on a pre-rename snapshot duplicates a note | nothing |
+| `54-filed-at-record.md` | §10.3 — "captured vs processed" is an approximation | two real weekly reviews |
+| `55-incremental-reindex.md` | performance — a commit re-lists and re-assembles the whole vault | nothing |
+
+Three of them (50, 51, 52) are the "still open" items below, now written up properly; the
+bullets are kept because they carry the detail of *why* T40/T41 left them.
+
 ## Still open
 
 - **T20/T12 duplication, the other half.** `InboxSessionView` implements the card drag geometry
@@ -75,9 +105,12 @@ still open is below, with what is actually left to do.
 
 ## Not done in T41
 
-`docs/TRACEABILITY.md` (the brief's deliverable 1) was **not** written: the orchestrator scoped
-T41 to cross-module correctness, data-safety fuzzing, the blind SwiftUI/STYLEGUIDE review and the
-named duplication cleanup. Deliverables 3 (sync torture), 5 (performance), 6 (accessibility) and
-7 (first-real-use checklist) likewise remain; 3 and 5 are partly covered by
-`GTDVaultTests`/`GTDServicesTests` and 6/7 need a device. They are the natural content of a
-follow-up task doc.
+Nothing from the brief. The two deliverables that cannot be *finished* here are finished as far
+as a Linux container can take them, and both say so in the brief's Result: the accessibility pass
+is a read-through plus fixes, and `docs/MANUAL_TEST.md` §6 holds what only a device settles; the
+performance work measures and fixes what is measurable in a debug build on this machine, and
+`agent_task/55-incremental-reindex.md` holds the cost it found but did not remove.
+
+For T42: `docs/TRACEABILITY.md` is the input for `docs/KNOWN_ISSUES.md` (its "Follow-ups" table
+and every **partial** row), and the six new briefs must not be archived with the rest of
+`agent_task/` — they are work that has not happened yet.

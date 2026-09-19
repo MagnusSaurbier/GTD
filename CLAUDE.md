@@ -13,10 +13,8 @@ this file is stale: fix it (see "Keeping this file current").
 - `docs/ARCHITECTURE.md` — modules, dependency direction, vault layout, contracts, decisions.
 - `Packages/GTDKit/Sources/<Target>/README.md` — per-module notes (purpose, public API, invariants, gotchas). Read the one for the module you touch.
 - `App/README.md` — the app shell: composition root, routing, lifecycle, and what to verify on a Mac.
-- `docs/MANUAL_TEST.md` — the checks only a real Mac/iPhone with a vault copy can do; §9 is the
-  first-real-use checklist for the user's own vault.
-- `docs/TRACEABILITY.md` — every requirement → its module, tests and status. Read the row for the
-  requirement you are about to touch; fix it if your change moves it.
+- `docs/MANUAL_TEST.md` — the checks only a real Mac/iPhone can do; §9 is the first-real-use checklist.
+- `docs/TRACEABILITY.md` — every requirement → its module, tests, status. Fix the row your change moves.
 - `agent_task/` — *(build-out only)* task briefs; shared rules in `agent_task/README.md`.
 
 ## Commands

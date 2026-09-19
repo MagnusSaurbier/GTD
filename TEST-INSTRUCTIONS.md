@@ -88,7 +88,7 @@ of files break at once, so fix those before reading any other error.
    warnings are expected under `swift build`; under `xcodebuild` they must compile instead. No
    test asserts on a resolved colour, so a catalog problem must never fail a test.
 
-Four behaviours T41 changed blind and could not run — check them in the app, not just the build:
+Behaviours T41 changed blind and could not run — check them in the app, not just the build:
 
 - Inbox processing shows its **card counter, `⌘Z` undo and `Done`** (its toolbar only renders
   because the two presentation sites now wrap it in a `NavigationStack`).
@@ -96,6 +96,13 @@ Four behaviours T41 changed blind and could not run — check them in the app, n
 - Waiting → **"Move to Next" while Next is at the cap** shows the error alert instead of doing
   nothing. Same for un-deferring an item that cannot go to Next.
 - Mac: **Settings → vault issues sheet closes** with its `Done` button.
+- The Next row's context menu has a **`Done`** item (T41's second run added it: it was the one
+  swipe action with no keyboard or VoiceOver route).
+- The **routine heatmap and the review rail** use `@ScaledMetric`, and `Badge` uses `minHeight`
+  instead of a fixed `height`. At the default text size they must look exactly as before; at the
+  accessibility sizes they must grow rather than clip. `@ScaledMetric` in these three files is
+  new and unverified.
+- **`docs/MANUAL_TEST.md` §6** is the full accessibility sweep those changes are meant to pass.
 
 ## Gate 2 — the app builds and launches
 
@@ -129,8 +136,10 @@ Smoke test with `-useFixtures`:
 The app's own test bundles (`AppTests`, `AppUITests`) build with the project and run with
 `⌘U`; the UI tests launch with `-useFixtures` themselves.
 
-Then run `docs/MANUAL_TEST.md` — the real-vault (on a **copy**), two-device and notification
-checks that no simulator can cover.
+Then run `docs/MANUAL_TEST.md` — the real-vault (on a **copy**), two-device, notification,
+accessibility and performance checks that no simulator can cover. Its §9 is the first-real-use
+checklist: the sequence for the day the app is pointed at the actual vault, and the only part of
+this repo that is meant to touch it.
 
 ## Gate 3 — vault access on device (replaces the skipped spike T01)
 
@@ -223,3 +232,13 @@ judgement call someone with the real toolchain (or the user) should make.
 10. `FeatureProjects`' views materialise their model in `.task` on first appearance. A tap
     between the first render and that task would mutate a throwaway instance (T22's note).
     Watch for it; it should be unreachable in practice.
+
+**Known gaps, already written up — do not file these as bugs**
+
+11. Five of STYLEGUIDE §4.5's shortcuts are not in the menu bar and `⌘F` reaches only the
+    overview's own lists. Both have briefs waiting on this gate:
+    `agent_task/50-mac-keyboard-map.md` and `agent_task/51-search-across-lists.md`.
+12. Notifications carry no actions, there is no routine widget, and Shortcuts shows a text field
+    instead of a routine picker: `agent_task/52-notification-actions-and-widget.md`.
+13. `docs/TRACEABILITY.md` is the full list of what is and is not implemented, per requirement.
+    Check it before concluding something is missing — it may be deliberate.

@@ -15,7 +15,9 @@ Compiles and tests on Linux.
   `GTDError`, `AppPrompt`, `VaultFileOp`.
 - `Reducer/` — `ReducerEnv`, `Reduction`, `Reducer.reduce(_:_:env:) throws(GTDError)`.
 - `Rules/` — `Rules` (queries incl. `isUndoable`, `openActions`, `closedDay`, `waitingSince`),
-  `Signal`/`SignalKind`/`SignalStep`, `StalenessPolicy`.
+  `Signal`/`SignalKind`/`SignalStep`, `StalenessPolicy`. The list queries are linear in the
+  snapshot: `projectRows`/`stalledProjects` bucket the visible actions by project once rather
+  than scanning them per project (T41 — it used to be O(projects × actions)).
 
 ## Invariants
 
