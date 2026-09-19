@@ -91,21 +91,46 @@ struct CaptureRequestTests {
         #expect(CaptureError.noVaultSelected.errorDescription?.isEmpty == false)
     }
 
-    /// `VaultBookmark.startAccess()` calls `try? resolve()`, so a stale/corrupt bookmark and a
-    /// never-picked one both come out of `InboxWriter.capture` as `VaultError.noVaultSelected` —
-    /// there is currently no path through `InboxWriter` that produces `.bookmarkStale` (T30
-    /// Result: gotcha for T40/T41). This pins that real, current behaviour rather than the
-    /// aspirational one; `CaptureError.noVaultSelected`'s message is worded to cover both causes.
-    @Test func aStaleBookmarkCurrentlySurfacesAsNoVaultSelectedToo() throws {
+    /// A *saved but unusable* bookmark is a different problem from "you never picked a vault",
+    /// and the two messages send the user to different places. `InboxWriter` used to ask
+    /// `startAccess()` first, which returns a bare `false` either way and made
+    /// `CaptureError.bookmarkStale` unreachable (T30 gotcha #1). T41 made it resolve first.
+    @Test func aStaleBookmarkSurfacesAsBookmarkStaleNotNoVaultSelected() throws {
         let file = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("gtd-intents-stale-bookmark-\(UUID().uuidString).data")
-        try Data().write(to: file)
+        try Data().write(to: file)   // present, but not resolvable to a folder
         defer { try? FileManager.default.removeItem(at: file) }
         let bookmark = VaultBookmark(store: PathBookmarkStore(), fileURL: file)
         let writer = InboxWriter(bookmark: bookmark)
 
-        #expect(throws: CaptureError.noVaultSelected) {
+        #expect(throws: CaptureError.bookmarkStale) {
             _ = try CaptureRequest(text: "buy milk").perform(writer: writer)
+        }
+    }
+
+    /// The third case: the folder resolves, but the sandbox refuses to open it. That is neither
+    /// "no vault" nor "stale" — it is carried through verbatim so the user sees the real reason.
+    @Test func aRefusedSecurityScopeIsReportedAsAWriteFailureNotAsAMissingVault() throws {
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("gtd-intents-refused-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("gtd-intents-refused-bookmark-\(UUID().uuidString).data")
+        try Data(folder.path.utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let bookmark = VaultBookmark(store: RefusingBookmarkStore(), fileURL: file)
+        let writer = InboxWriter(bookmark: bookmark)
+
+        do {
+            _ = try CaptureRequest(text: "buy milk").perform(writer: writer)
+            Issue.record("expected the refused scope to throw")
+        } catch {
+            guard case let .writeFailed(reason) = error else {
+                Issue.record("expected .writeFailed, got \(error)")
+                return
+            }
+            #expect(reason.contains("refused"))
         }
     }
 
@@ -123,4 +148,18 @@ struct CaptureRequestTests {
         #expect(CaptureStamp.string(for: Fixtures.date(Fixtures.today, 8, 12, 4), calendar: berlin)
                 == "2026-09-19 081204")
     }
+}
+
+/// A bookmark store whose folder resolves but whose scoped access is refused — the sandbox
+/// case `InboxWriter` must report as itself rather than as "no vault selected" (T41).
+private struct RefusingBookmarkStore: BookmarkStore {
+    func bookmarkData(for url: URL) throws -> Data { Data(url.path.utf8) }
+    func resolve(_ data: Data) throws -> (url: URL, isStale: Bool) {
+        guard let path = String(data: data, encoding: .utf8), !path.isEmpty else {
+            throw VaultError.bookmarkStale
+        }
+        return (URL(fileURLWithPath: path, isDirectory: true), false)
+    }
+    func startAccess(_ url: URL) -> Bool { false }
+    func stopAccess(_ url: URL) {}
 }

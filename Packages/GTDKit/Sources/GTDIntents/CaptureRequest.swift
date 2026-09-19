@@ -57,11 +57,10 @@ extension CaptureError: LocalizedError {
         case .emptyText:
             return "Nothing to capture — the text was empty."
         case .noVaultSelected:
-            // GTDVault.VaultBookmark.startAccess() currently collapses "never picked" and
-            // "picked but stale/corrupt" into the same failure (see InboxWriter.resolveFileSystem
-            // / VaultBookmark.startAccess), so this message deliberately covers both rather than
-            // claiming a precision `InboxWriter` cannot currently give (T30 Result: gotcha).
-            return "No vault is available yet — open GTD once to pick or re-confirm your vault folder."
+            // Since T41 `InboxWriter` resolves the bookmark before asking for access, so this
+            // really does mean "no vault has ever been picked" — `.bookmarkStale` covers the
+            // saved-but-unusable case separately.
+            return "No vault is available yet — open GTD once to pick your vault folder."
         case .bookmarkStale:
             return "The saved vault folder is no longer available. Open GTD to restore access."
         case .writeFailed(let reason):

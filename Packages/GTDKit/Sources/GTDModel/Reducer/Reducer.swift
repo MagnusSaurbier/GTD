@@ -520,6 +520,11 @@ public enum Reducer {
 
     /// A5 — done and trashed notes older than 30 days move to `Archive/YYYY/MM/` and leave the
     /// snapshot. Nothing is deleted, and nothing still open is ever touched.
+    ///
+    /// A promoted project step keeps pointing at the note it promoted, so the archive move
+    /// **retargets** `ProjectStep.promotedTo` the same way a rename does (T41). Without that the
+    /// `# Steps` line keeps a `→ [[Actions/…]]` wikilink to a file that is no longer there, which
+    /// is a dead link in Obsidian and a `notFound` for anything in the app that follows it.
     private static func archiveCompleted(_ s: VaultSnapshot, env: ReducerEnv) -> Reduction {
         let candidates = Rules.archiveCandidates(s, today: env.today, calendar: env.calendar)
         guard !candidates.isEmpty else { return Reduction(snapshot: s) }
@@ -529,6 +534,7 @@ public enum Reducer {
             let day = Rules.closedDay(action, calendar: env.calendar) ?? env.today
             let target = s.config.layout.archivePath(for: action.id, completedOn: day)
             ops.append(.move(from: action.id.path, to: target.path))
+            retarget(from: action.id, to: target, in: &next)
         }
         let archived = Set(candidates.map(\.id))
         next.actions.removeAll { archived.contains($0.id) }

@@ -29,8 +29,8 @@ public actor InMemoryBackend: GTDBackend {
         let previous = snapshot
         let reduction = try Reducer.reduce(snapshot, command, env: env())
         snapshot = reduction.snapshot
-        if Self.isUndoable(command) {
-            undoState = (previous, Self.label(for: command, in: previous))
+        if Rules.isUndoable(command) {
+            undoState = (previous, UndoLabel.of(command, in: previous))
         }
         hub.publish(snapshot)
         return reduction.prompts
@@ -44,54 +44,6 @@ public actor InMemoryBackend: GTDBackend {
     }
 
     public func undoLabel() async -> String? { undoState?.label }
-
-    // MARK: - Undo bookkeeping
-
-    /// N6 covers filing and status changes. Config edits and routine logs are not undoable
-    /// (same rule as `GTDServices.UndoJournal`, T16).
-    private static func isUndoable(_ command: GTDCommand) -> Bool {
-        switch command {
-        case .updateConfig, .logRoutineStep, .setRoutineTime, .saveWeeklyReview, .archiveCompleted:
-            false
-        default:
-            true
-        }
-    }
-
-    private static func label(for command: GTDCommand, in snapshot: VaultSnapshot) -> String {
-        switch command {
-        case let .fileInbox(_, decision):
-            switch decision {
-            case let .action(draft): "Filed to \(Self.statusName(draft.status))"
-            case .knowledge: "Filed to Knowledge"
-            case .newProject, .existingProject: "Filed to Project"
-            case .trash: "Moved to Trash"
-            }
-        case let .setStatus(_, status, _): "Moved to \(Self.statusName(status))"
-        case let .complete(id): "Completed \(snapshot.action(id)?.title ?? "action")"
-        case .createAction: "Created action"
-        case .createProject, .convertActionToProject: "Created project"
-        case .createArea: "Created area"
-        case .promoteStep: "Promoted step"
-        case .deferInboxToReview: "Deferred to review"
-        case .toggleCheckbox: "Toggled checkbox"
-        case .updateAction, .updateProject, .editInboxText: "Edited"
-        default: "Last change"
-        }
-    }
-
-    /// Fixed vocabulary of STYLEGUIDE §6.2 — the label goes straight into the undo toast.
-    private static func statusName(_ status: ActionStatus) -> String {
-        switch status {
-        case .next: "Next"
-        case .backlog: "Backlog"
-        case .maybe: "Maybe"
-        case .inProgress: "Next"
-        case .waiting: "Waiting"
-        case .done: "Done"
-        case .trash: "Trash"
-        }
-    }
 }
 
 /// Fans a snapshot out to every `snapshots()` consumer. Lives outside the actor because

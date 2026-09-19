@@ -63,10 +63,21 @@ public struct InboxWriter: Sendable {
         return id
     }
 
+    /// Resolve **first**, then bracket access.
+    ///
+    /// `startAccess()` returns a bare `false` for every failure, so asking it first folded
+    /// "no vault has ever been picked" and "the saved bookmark no longer resolves" into one
+    /// `noVaultSelected` — which is what made `GTDIntents.CaptureError.bookmarkStale`
+    /// unreachable (T30 gotcha #1, fixed in T41). `resolve()` already tells the two apart, and
+    /// a refusal *after* a successful resolve is a third thing again: the folder is known but
+    /// the sandbox would not open it.
     private func resolveFileSystem() throws -> any VaultFileSystem {
         if let fileSystem { return fileSystem }
-        guard bookmark.startAccess() else { throw VaultError.noVaultSelected }
         let root = try bookmark.resolve()
+        guard bookmark.startAccess() else {
+            throw VaultError.ioFailed(
+                path: root.path, reason: "the system refused access to the vault folder")
+        }
         return VaultPlatform.makeFileSystem(root: root)
     }
 

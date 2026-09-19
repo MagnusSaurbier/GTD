@@ -246,9 +246,19 @@ public final class ReviewSession {
         markStalledHandled(project)
     }
 
-    /// `WhatsNextSheet` promoted a step, so the project is no longer stalled — take it off the
-    /// list without issuing a second command.
+    /// Takes a project off the sweep list without issuing a second command — `WhatsNextSheet`
+    /// (`addNextAction`) already did the work with its own `promoteStep`.
+    ///
+    /// It **verifies** rather than trusts (T41). The sheet can be closed without promoting
+    /// anything — the cap can refuse the promotion, or the user can just press Done — and
+    /// marking the project handled anyway would drop a still-stalled project silently out of
+    /// §10.1.4, which is the one step whose whole job is to find them. A project that is still
+    /// stalled stays on the list.
     public func markStalledHandled(_ project: Project) {
+        if let current = model.snapshot.project(project.id),
+           Rules.isStalled(current, in: model.snapshot, today: today) {
+            return
+        }
         guard !state.handledStalled.contains(project.id.path) else { return }
         mutate { $0.handledStalled.append(project.id.path) }
     }

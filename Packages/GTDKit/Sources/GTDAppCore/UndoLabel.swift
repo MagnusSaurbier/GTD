@@ -4,16 +4,17 @@ import GTDModel
 /// What the undo toast says the last command was (STYLEGUIDE §3.8, §6.3).
 ///
 /// The wording is the style guide's fixed vocabulary — `Moved to Backlog`, `Filed to Next`,
-/// `Completed <title>` — and it is deliberately identical, word for word, to
-/// `InMemoryBackend`'s, so the toast reads the same whether a screen runs on fixtures or on the
-/// real vault. `ParityTests.undoLabelsAgree` pins the two together after every command.
+/// `Completed <title>`. It lives here, in `GTDAppCore`, so `InMemoryBackend` and
+/// `GTDServices.VaultBackend` read the *same* table rather than two copies of it: the toast is
+/// then identical by construction whether a screen runs on fixtures or on the real vault
+/// (T41; `ParityTests.undoLabelsAgree` still pins it after every command).
 ///
 /// T16 was briefed with `Filed 'Call bank' to Next`; STYLEGUIDE §3.8/§6.3 spell the toast
 /// `Moved to Backlog` without the note's title, and the style guide wins on wording
 /// (ARCHITECTURE §5). Only `complete` names its note, because both backends already did.
-enum UndoLabel {
+public enum UndoLabel {
 
-    static func of(_ command: GTDCommand, in snapshot: VaultSnapshot) -> String {
+    public static func of(_ command: GTDCommand, in snapshot: VaultSnapshot) -> String {
         switch command {
         case let .fileInbox(_, decision):
             switch decision {

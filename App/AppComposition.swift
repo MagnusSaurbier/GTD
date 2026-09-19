@@ -130,9 +130,15 @@ final class AppComposition {
 
     private func openVault() async throws {
         await teardown()
-        guard bookmark.startAccess() else { throw VaultError.noVaultSelected }
-        isAccessing = true
+        // Resolve first: `resolve()` tells "never picked" (`noVaultSelected`) apart from "saved
+        // but no longer resolvable" (`bookmarkStale`), and onboarding shows that reason. Asking
+        // `startAccess()` first would collapse both into the same message (T41).
         let root = try bookmark.resolve()
+        guard bookmark.startAccess() else {
+            throw VaultError.ioFailed(
+                path: root.path, reason: "the system refused access to the vault folder")
+        }
+        isAccessing = true
         let store = FileVaultStore(root: root)
         let backend = VaultBackend(store: store, deviceID: DeviceIdentity.current)
         // Creates the folder skeleton, scans, starts watching, runs the daily archive (T16).

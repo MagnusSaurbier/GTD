@@ -198,8 +198,9 @@ struct ReviewSweepTests {
     }
 
     /// `addNextAction` is a sheet (`WhatsNextSheet`), not a command: it must not rewrite the
-    /// project status behind the user's back.
-    @Test func addNextActionIssuesNoCommand() async throws {
+    /// project status behind the user's back — **and** it must not take the project off the
+    /// sweep list until the sheet has actually given it an action (T41; T27 flagged this).
+    @Test func addNextActionIssuesNoCommandAndLeavesAStillStalledProjectOnTheList() async throws {
         let session = ReviewTest.session()
         let project = try #require(session.stalledProjects.first)
         #expect(StalledSweep.command(.addNextAction, project: project) == nil)
@@ -208,15 +209,35 @@ struct ReviewSweepTests {
         await session.apply(.addNextAction, to: project)
         #expect(session.snapshot == before)
         #expect(session.state.changes.projectsTouched == 0)
-        #expect(session.stalledProjects.isEmpty)   // handled, just not by a status change
+        #expect(session.stalledProjects.contains { $0.id == project.id })
+        #expect(session.state.handledStalled.isEmpty)
+    }
+
+    /// The sheet was closed without promoting anything — the project is still stalled, so the
+    /// review must still ask about it. This is the hole T41 closed.
+    @Test func closingWhatsNextWithoutPromotingDoesNotMarkTheProjectHandled() async throws {
+        let session = ReviewTest.session()
+        let project = try #require(session.stalledProjects.first)
+        session.markStalledHandled(project)
+        #expect(session.state.handledStalled.isEmpty)
+        #expect(session.stalledProjects.contains { $0.id == project.id })
     }
 
     @Test func aProjectThatGainedAnActionIsMarkedHandledWithoutACommand() async throws {
-        let session = ReviewTest.session()
+        let model = ReviewTest.model()
+        let session = ReviewTest.session(model: model)
         let project = try #require(session.stalledProjects.first)
+        let stepIndex = try #require(project.steps.firstIndex { !$0.done && $0.promotedTo == nil })
+
+        // What `WhatsNextSheet` does: one `promoteStep`, issued by the sheet, not by the sweep.
+        try await model.send(.promoteStep(
+            project: project.id, stepIndex: stepIndex,
+            ActionDraft(title: "Ask the department for the form", status: .next)))
+
         session.markStalledHandled(project)
         session.markStalledHandled(project)                 // idempotent
         #expect(session.state.handledStalled == [project.id.path])
         #expect(session.state.changes.projectsTouched == 0)
+        #expect(session.stalledProjects.isEmpty)
     }
 }
