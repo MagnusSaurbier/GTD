@@ -25,6 +25,11 @@ public enum Typo {
     public static let counter: Font = Font.footnote.monospacedDigit()
     /// Review stat tiles.
     public static let stat: Font = Font.title.weight(.semibold).monospacedDigit()
+    /// The leading icon of a list row (routines home).
+    public static let rowIcon: Font = .title2
+    /// A small stock control glyph — list reorder chevrons and the like. Not a §2.2 signal and
+    /// not a §7 concept icon; it exists so feature code never writes a bare `.caption` (T41).
+    public static let controlGlyph: Font = .caption
 }
 
 /// STYLEGUIDE §5 — the only curves in the app.

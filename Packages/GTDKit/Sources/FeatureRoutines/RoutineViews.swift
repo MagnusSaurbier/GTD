@@ -44,7 +44,7 @@ public struct RoutinesHomeView: View {
         HStack(spacing: Spacing.m) {
             Image(systemName: Symbols.routine(title: routine.title))
                 .symbolRenderingMode(.hierarchical)
-                .font(.title2)
+                .font(Typo.rowIcon)
                 .foregroundStyle(Color.ink)
                 .frame(width: Spacing.xxl)
             VStack(alignment: .leading, spacing: Spacing.xs) {

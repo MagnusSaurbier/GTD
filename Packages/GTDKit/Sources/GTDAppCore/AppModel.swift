@@ -101,6 +101,33 @@ public final class AppModel {
         }
     }
 
+    /// Runs a command whose refusal the caller has nothing better to do with than **show**.
+    ///
+    /// Anything thrown lands in `lastError`, which the app shell surfaces in its one alert
+    /// (T40) — the honest replacement for `try? await send(…)` at a call site that has no
+    /// flow of its own for the error. A command the person asked for that silently does
+    /// nothing is a lying UI (STYLEGUIDE §1), so a view either handles the error itself
+    /// (the cap sheet, the waiting sheet) or sends it through here. Returns `false` when the
+    /// command was refused (T41).
+    @discardableResult
+    public func perform(_ command: GTDCommand) async -> Bool {
+        await report { try await self.send(command) }
+    }
+
+    /// `perform` for work that is a few commands, or a feature model's own method: the same
+    /// "a refusal must reach the person" rule, one level up.
+    @discardableResult
+    public func report(_ work: () async throws -> Void) async -> Bool {
+        do {
+            try await work()
+            lastError = nil
+            return true
+        } catch {
+            lastError = error
+            return false
+        }
+    }
+
     /// N6. Never throws — a refused undo (T16: the file changed remotely) lands in `lastError`.
     /// Queued behind any command still in flight, like `send`.
     public func undo() async {

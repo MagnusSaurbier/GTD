@@ -123,11 +123,12 @@ public extension Color {
 
     /// Like `dynamic(light:dark:)`, with extra values for `accessibilityContrast == .increased`
     /// (STYLEGUIDE §8). On iOS this resolves per-trait, exactly like light/dark, so it updates
-    /// live when Increase Contrast toggles. On macOS, `NSColor`'s dynamic provider only varies
-    /// with `NSAppearance` (light/dark) — there is no per-appearance contrast trait — so this
-    /// reads `NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast` at resolve time
-    /// instead; AppKit re-invokes the provider often enough (any redraw, any appearance change)
-    /// that this tracks the setting in practice, but it is **unverified** without a Mac.
+    /// live when Increase Contrast toggles. On macOS the same information is in the
+    /// `NSAppearance` the provider is handed — Increase Contrast switches the app to the
+    /// `accessibilityHighContrast…` appearances — so matching against all four names keeps this
+    /// a pure function of its argument (T41: the earlier version read
+    /// `NSWorkspace.shared` from inside the provider, which is a main-actor hop out of a
+    /// nonisolated closure under Swift 6, and only tracked the setting by luck of redraw).
     static func dynamicContrast(
         light: (Double, Double, Double),
         dark: (Double, Double, Double),
@@ -145,8 +146,13 @@ public extension Color {
         })
         #elseif canImport(AppKit)
         return Color(nsColor: NSColor(name: nil) { appearance in
-            let increased = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let match = appearance.bestMatch(from: [
+                .aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua,
+            ])
+            // `NSAppearance.Name` is a RawRepresentable struct, not an enum: compare, do not switch.
+            let isDark = match == .darkAqua || match == .accessibilityHighContrastDarkAqua
+            let increased = match == .accessibilityHighContrastAqua
+                || match == .accessibilityHighContrastDarkAqua
             let rgb = isDark
                 ? (increased ? darkHighContrast : dark)
                 : (increased ? lightHighContrast : light)

@@ -35,7 +35,7 @@ public struct WaitingView: View {
                 suggestedWho: list.recentWho,
                 today: list.today
             ) { info in
-                Task { try? await model.send(.setStatus(action.id, .waiting, waiting: info)) }
+                Task { await model.perform(.setStatus(action.id, .waiting, waiting: info)) }
             }
         }
     }
@@ -82,14 +82,14 @@ private struct WaitingRow: View {
         .onTapGesture { onOpen(action.id) }
         .swipeActions(edge: .trailing) {
             Button {
-                Task { try? await model.send(.complete(action.id)) }
+                Task { await model.perform(.complete(action.id)) }
             } label: {
                 Label(Copy.done, systemImage: Symbols.done)
             }
         }
         .swipeActions(edge: .leading) {
             Button {
-                Task { try? await model.send(.setStatus(action.id, .backlog, waiting: nil)) }
+                Task { await model.perform(.setStatus(action.id, .backlog, waiting: nil)) }
             } label: {
                 Label(Copy.backlog, systemImage: Symbols.backlog)
             }
@@ -101,17 +101,17 @@ private struct WaitingRow: View {
                 Label("Bump follow-up", systemImage: Symbols.chase)
             }
             Button {
-                Task { try? await model.send(.setStatus(action.id, .next, waiting: nil)) }
+                Task { await model.perform(.setStatus(action.id, .next, waiting: nil)) }
             } label: {
                 Label(Copy.next, systemImage: Symbols.next)
             }
             Button {
-                Task { try? await model.send(.setStatus(action.id, .backlog, waiting: nil)) }
+                Task { await model.perform(.setStatus(action.id, .backlog, waiting: nil)) }
             } label: {
                 Label(Copy.backlog, systemImage: Symbols.backlog)
             }
             Button {
-                Task { try? await model.send(.complete(action.id)) }
+                Task { await model.perform(.complete(action.id)) }
             } label: {
                 Label(Copy.done, systemImage: Symbols.done)
             }
@@ -151,7 +151,7 @@ private struct WaitingRow: View {
             set: { newValue in
                 offeringBump = false
                 guard let newValue, let info = list.bumped(action, to: newValue) else { return }
-                Task { try? await model.send(.setStatus(action.id, .waiting, waiting: info)) }
+                Task { await model.perform(.setStatus(action.id, .waiting, waiting: info)) }
             })
     }
 
@@ -223,14 +223,14 @@ private struct DeferredRow: View {
         .onTapGesture { onOpen(action.id) }
         .swipeActions(edge: .trailing) {
             Button {
-                Task { try? await model.send(.updateAction(list.unDeferred(action))) }
+                Task { await model.perform(.updateAction(list.unDeferred(action))) }
             } label: {
                 Label("Un-defer now", systemImage: Symbols.deferred)
             }
         }
         .contextMenu {
             Button {
-                Task { try? await model.send(.updateAction(list.unDeferred(action))) }
+                Task { await model.perform(.updateAction(list.unDeferred(action))) }
             } label: {
                 Label("Un-defer now", systemImage: Symbols.deferred)
             }
@@ -250,7 +250,7 @@ private struct DeferredRow: View {
         Binding(
             get: { action.deferDate },
             set: { newValue in
-                Task { try? await model.send(.updateAction(list.redeferred(action, to: newValue))) }
+                Task { await model.perform(.updateAction(list.redeferred(action, to: newValue))) }
             })
     }
 }

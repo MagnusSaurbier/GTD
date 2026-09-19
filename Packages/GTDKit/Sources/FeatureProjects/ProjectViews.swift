@@ -389,21 +389,21 @@ private struct StepRow: View {
             }
 
             // Reorder: drag via `.onMove` (List's native handle) on every platform, plus `⌥↑↓`
-            // on Mac once this row's text field is focused (P6). No dedicated symbol for
-            // "move up/down" exists in STYLEGUIDE §7's icon map, so these use the closest stock
-            // system chevrons rather than inventing a new concept icon.
+            // on Mac once this row's text field is focused (P6). STYLEGUIDE §7's icon map has no
+            // "move up/down" concept, so `Symbols.moveUp`/`moveDown` are the closest stock
+            // chevrons, named in DesignSystem rather than written into feature code (§9).
             VStack(spacing: 0) {
-                Button(action: onMoveUp) { Image(systemName: "chevron.up") }
+                Button(action: onMoveUp) { Image(systemName: Symbols.moveUp) }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Move step up")
                     .modifier(OptionArrowShortcut(isActive: isFocused, key: .upArrow))
-                Button(action: onMoveDown) { Image(systemName: "chevron.down") }
+                Button(action: onMoveDown) { Image(systemName: Symbols.moveDown) }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Move step down")
                     .modifier(OptionArrowShortcut(isActive: isFocused, key: .downArrow))
             }
             .foregroundStyle(Color.textTertiary)
-            .font(.caption)
+            .font(Typo.controlGlyph)
         }
     }
 }

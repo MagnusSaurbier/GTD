@@ -25,27 +25,30 @@ struct GTDApp: App {
     }
 
     var body: some Scene {
+        // One `#if` around whole scenes, not several around modifier-chain fragments: a postfix
+        // `#if` chain followed by another `#if` that opens a *statement* is the kind of thing a
+        // blind-written file gets wrong, and nothing here needs it (T41).
+        #if os(macOS)
         WindowGroup {
             RootView(composition: composition, router: router, notifications: notifications)
         }
-        #if os(macOS)
         .defaultSize(width: 1100, height: 700)
         .commands {
             // STYLEGUIDE §4.5 — the window's keyboard map, mirrored in the menu bar.
             OverviewCommands(navigation: router.overview, model: composition.model)
         }
-        #endif
-        #if os(iOS)
-        // D2 — while the app is away, re-read the vault and re-plan the notifications.
-        .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) {
-            await BackgroundRefresh.run()
-        }
-        #endif
 
-        #if os(macOS)
         Settings {
             MacSettingsScene(composition: composition)
                 .environment(composition.model)
+        }
+        #else
+        WindowGroup {
+            RootView(composition: composition, router: router, notifications: notifications)
+        }
+        // D2 — while the app is away, re-read the vault and re-plan the notifications.
+        .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) {
+            await BackgroundRefresh.run()
         }
         #endif
     }

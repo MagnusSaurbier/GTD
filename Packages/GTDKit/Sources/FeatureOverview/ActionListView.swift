@@ -153,7 +153,7 @@ public struct ActionListView: View {
     }
 
     private func send(_ command: GTDCommand) {
-        Task { try? await model.send(command) }
+        Task { await model.perform(command) }
     }
 }
 

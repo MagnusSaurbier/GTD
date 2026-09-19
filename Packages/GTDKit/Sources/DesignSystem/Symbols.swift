@@ -36,6 +36,11 @@ public enum Symbols {
     public static let checkboxOn = "checkmark.square"
     public static let checkboxOff = "square"
 
+    /// Reordering a list row (P6 step order). Like `checkbox*` above, STYLEGUIDE §7 has no
+    /// entry for it; these are the stock chevrons, not an invented concept icon (T41).
+    public static let moveUp = "chevron.up"
+    public static let moveDown = "chevron.down"
+
     public static let routineGeneric = "repeat"
     public static let routineMorning = "sunrise"
     public static let routineBedtime = "moon.stars"
