@@ -259,9 +259,24 @@ struct DecodeTests {
     }
 
     @Test func anEmptyRoutineLogIsNotAnError() throws {
-        let entries = try NoteCodec.decodeRoutineLog(
-            id: NoteID(path: "GTD/RoutineLog/2026-09-10--iPhone.md"), text: "---\n---\n")
-        #expect(entries.isEmpty)
+        for text in ["---\n---\n", NoteCodec.encodeRoutineLog([])] {
+            let entries = try NoteCodec.decodeRoutineLog(
+                id: NoteID(path: "GTD/RoutineLog/2026-09-10--iPhone.md"), text: text)
+            #expect(entries.isEmpty, "\(text) is a legitimately empty log")
+        }
+    }
+
+    /// T41: a damaged `entries:` used to decode as "no entries", and `encodeRoutineLog`
+    /// regenerates the file — so the next step logged that day would have overwritten the
+    /// user's history with an empty log. It must be refused, and become a `VaultIssue`.
+    @Test func aDamagedEntriesKeyIsRefusedRatherThanReadAsAnEmptyLog() {
+        for value in ["nonsense", "\"[]\"", "\n  routine: M\n  step: s"] {
+            #expect(throws: NoteCodecError.self, "entries: \(value)") {
+                _ = try NoteCodec.decodeRoutineLog(
+                    id: NoteID(path: "GTD/RoutineLog/2026-09-10--iPhone.md"),
+                    text: "---\nentries: \(value)\n---\n")
+            }
+        }
     }
 
     // MARK: - Config, area, review

@@ -346,7 +346,20 @@ public enum NoteCodec {
                 path: id.path, reason: "File name is not `<yyyy-MM-dd>--<device>.md`")
         }
         let doc = try FrontmatterDocument(text: text, path: id.path)
-        guard let rows = doc.mappings("entries") else { return [] }
+        guard let rows = doc.mappings("entries") else {
+            // `entries:` with nothing under it is a legitimately empty log (that is exactly what
+            // `encodeRoutineLog([])` writes). `entries:` holding anything *else* is damage, and
+            // returning [] for it would be dangerous: this is the one encoder that regenerates
+            // the file, so the next logged step of the day would overwrite the user's history
+            // with an empty log. Refuse instead — `GTDVault` turns it into a `VaultIssue` and
+            // nothing is written over (T41).
+            if doc.hasKey("entries"),
+               doc.scalar("entries") != nil || doc.mappingNode("entries") != nil {
+                throw NoteCodecError.unreadable(
+                    path: id.path, reason: "`entries` is not a list of routine steps")
+            }
+            return []
+        }
 
         return try rows.map { row in
             guard let routine = row["routine"]?.scalar?.string,

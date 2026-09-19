@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import GTDModel
+import GTDFixtures
 @testable import GTDMarkdown
 
 /// N2 under randomised input (T41).
@@ -125,6 +126,62 @@ struct FuzzRoundTripTests {
         }
     }
 
+    /// Deliverable 2 of the T41 brief: the codec against **damaged** files.
+    ///
+    /// Every file of the sample vault is mutated in a dozen ways a bad sync, a half-finished
+    /// hand edit or a crash could produce (truncation, a dropped line, a duplicated line, junk
+    /// inserted, a swapped pair of lines). Two outcomes are acceptable and no third one is:
+    /// the file decodes — and then still round-trips byte for byte, so the app will not rewrite
+    /// the damage into something else — or it is refused as `NoteCodecError.unreadable`, which
+    /// `GTDVault` shows as a `VaultIssue`. A crash, a hang or a silent content change is a bug.
+    @Test func mutatedSampleVaultFilesEitherRoundTripOrAreRefused() throws {
+        var decoded = 0, refused = 0
+        for (path, original) in SampleVault.files.sorted(by: { $0.key < $1.key }) {
+            let id = NoteID(path: path)
+            for seed in UInt64(1)...12 {
+                var fuzz = Fuzz(seed: seed &* 31 &+ UInt64(path.count))
+                let damaged = fuzz.damage(original)
+                let encoded: String
+                do {
+                    encoded = try RoundTrip.encodeDecoded(path: path, text: damaged)
+                    decoded += 1
+                } catch is NoteCodecError {
+                    refused += 1
+                    continue
+                } catch {
+                    Issue.record("\(path) seed \(seed) — threw \(error), not NoteCodecError")
+                    continue
+                }
+                let where_ = "\(path) seed \(seed)"
+
+                switch RoundTrip.kind(of: id, text: damaged) {
+                case .routineLog:
+                    // The one encoder that regenerates instead of patching (module README), so
+                    // byte equality is not its contract — not losing an entry is.
+                    let before = try NoteCodec.decodeRoutineLog(id: id, text: damaged, timeZone: vaultTimeZone)
+                    let after = try NoteCodec.decodeRoutineLog(id: id, text: encoded, timeZone: vaultTimeZone)
+                    #expect(after == before, "\(where_) — a routine log lost entries on rewrite")
+
+                default:
+                    // A note whose `kind:` line was the casualty gets it back: without it the
+                    // file cannot be classified at all, so this one insertion is deliberate
+                    // self-healing. Nothing else may move.
+                    let hadKind = (try? FrontmatterDocument(text: damaged, path: path))?.hasKey("kind") ?? true
+                    let healed = hadKind ? encoded : withoutFirstKindLine(encoded)
+                    // A file whose frontmatter lost its closing `---` is all body, so the
+                    // encoder gives it a fresh frontmatter block on top. Nothing is deleted —
+                    // the damaged text is still there, in full, underneath.
+                    let lossless = healed == damaged || encoded.hasSuffix(damaged)
+                    let why = "\(where_) — a damaged file was rewritten: "
+                        + firstDifference(damaged, healed)
+                    #expect(lossless, "\(why)")
+                }
+            }
+        }
+        #expect(decoded > 100, "the damage was so heavy nothing decoded (\(decoded))")
+        #expect(refused > 5, "no damaged file was refused (\(refused)) — the generator is too gentle")
+    }
+
     // MARK: - A single-field mutation, described so the test can name it
 
     struct Mutation: Sendable {
@@ -172,6 +229,14 @@ struct FuzzRoundTripTests {
                      reads: { $0.what }),
         ]
     }
+}
+
+/// Drops the first `kind: …` frontmatter line, so the self-healing insertion can be discounted.
+private func withoutFirstKindLine(_ text: String) -> String {
+    var lines = RawText.split(text)
+    guard let index = lines.firstIndex(where: { $0.content.hasPrefix("kind:") }) else { return text }
+    lines.remove(at: index)
+    return lines.map { $0.content + $0.terminator }.joined()
 }
 
 // MARK: - The generator
@@ -316,6 +381,33 @@ struct Fuzz {
         if bool(85) { text += terminator }              // 15 % of notes have no final newline
         if bool(8) { text = "\u{FEFF}" + text }          // and a few carry a BOM
         return text
+    }
+
+    // MARK: Damage
+
+    /// One random edit of the kind a bad sync or a half-finished hand edit leaves behind.
+    mutating func damage(_ text: String) -> String {
+        var lines = RawText.split(text).map { $0.content + $0.terminator }
+        guard lines.count > 2 else { return text }
+        switch int(6) {
+        case 0:                                     // truncated mid-file
+            lines = Array(lines.prefix(1 + int(lines.count)))
+        case 1:                                     // a line vanished
+            lines.remove(at: int(lines.count))
+        case 2:                                     // a line arrived twice
+            let index = int(lines.count)
+            lines.insert(lines[index], at: index)
+        case 3:                                     // junk inserted
+            lines.insert(pick(["status: nonsense", "\t", "---", "# ", "key: [unclosed",
+                               "  indented orphan", "\u{0}"]), at: int(lines.count))
+        case 4:                                     // two lines swapped
+            let a = int(lines.count), b = int(lines.count)
+            lines.swapAt(a, b)
+        default:                                    // one character mangled
+            let index = int(lines.count)
+            if !lines[index].isEmpty { lines[index] = String(lines[index].dropFirst()) }
+        }
+        return lines.joined()
     }
 
     // MARK: Notes
