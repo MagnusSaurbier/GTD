@@ -109,6 +109,13 @@ struct InboxSessionView: View {
         } else {
             VStack(spacing: Spacing.l) {
                 Spacer(minLength: 0)
+                #if os(macOS)
+                // A macOS sheet has no title bar, so the `.principal` toolbar item below never
+                // renders there (seen on the first real run); the counter sits above the card.
+                Text(session.counter)
+                    .font(Typo.counter)
+                    .foregroundStyle(Color.textSecondary)
+                #endif
                 card
                 #if os(macOS)
                 Text(CardTarget.keyLegend)

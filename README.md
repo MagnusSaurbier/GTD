@@ -10,8 +10,9 @@ in Obsidian.
 **Feature-complete on paper, unverified on a device.** Every module of `Packages/GTDKit` is
 implemented and tested — 851 tests — and the app shell wires them together: the vault backend
 behind onboarding, the iPhone tabs and the Mac window, deep links, notifications and background
-refresh. The whole app was written on Linux with no Xcode, so every SwiftUI file and all of
-`App/` have **never been compiled**. The tests cover the models, the codec, the vault, the
+refresh. The whole app was written on Linux with no Xcode; every SwiftUI file and all of
+`App/` compiled and launched on fixtures for the first time on 2026-09-19, and **no real vault has
+been opened yet**. The tests cover the models, the codec, the vault, the
 reducer and the rules; they cover no view at all.
 
 So the next step is not a feature. It is `TEST-INSTRUCTIONS.md`: the script for the first machine

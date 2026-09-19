@@ -184,18 +184,45 @@ text in a fenced block and the file/line. Do not refactor, restyle or "improve" 
 
 ## Verification log
 
+Branch: `claude/sharp-volta-p59pxh`. Machine: macOS 26 (arm64), Xcode 27.0 (27A266a), Swift 6.4,
+xcodegen 2.46.0. Run by an agent; the person was away for part of it (see Gate 2 and 3).
+
 | Date | Gate | Result | Notes |
 | --- | --- | --- | --- |
-| | 1 | | |
-| | 2 | | |
-| | 3 | | |
-| | migrate | | |
+| 2026-09-19 | 1 | **pass** | `scripts/check.sh`: `swift build` clean (0 warnings — the 11 `no rule to process` warnings do not appear on a Mac), 851 package tests pass, iOS-simulator `xcodebuild` of the package succeeds, docs check ok. Two compile errors and one script portability bug fixed first (below). None of the nine "where to look first" places broke: `.glassEffect()` / `GlassEffectContainer` exist with the shape used, the colour providers, `GTDApp` scenes, `ViewModifier` actor inference, the notification delegate, `onKeyPress`, `NavigationSplitView` and the catalogs all compiled as written. |
+| 2026-09-19 | 2 | **partial pass** | `scripts/check.sh --app` succeeds; macOS and iOS-simulator apps build with no errors or warnings. `GTDTests` 11/11 on macOS and on iPhone 18 Pro (iOS 27.0); `GTDUITests` 4/4 on the simulator (not run on macOS — the screen was locked). **Mac, `-useFixtures`:** launches, sidebar · list · detail, sidebar order and live counts as in MANUAL_TEST §1, `Go` menu navigates, Inbox lists 5 captures (the sixth is parked for the review) with `Process inbox (5)`, `⌘I` opens processing, validation focuses "What?", `Undo`/`Done` render, `Done` closes. **iPhone:** launches, three tabs, inbox badge 5, gear and `+` on Next. **Not checked** (person away, screen locked mid-run): filing cards, undo toast, "What's next?", `⌘1…⌘7`/`⌘N`/`⌘,`, Settings, the cap's forced choice, a routine run, dark mode / Dynamic Type, `RewardMoment`, the Waiting error alert, the Next row's `Done` menu item, the Mac issues sheet, `@ScaledMetric` growth. Deep links: `AppRouteTests`/`AppRouterTests` pass and `simctl openurl gtd://inbox` reaches the app's "Open in GTD?" prompt, which nobody was there to confirm. |
+| 2026-09-19 | 3 | **not run** | Needs a person: a folder picker on the Mac, and a physical iPhone signed into iCloud for step 3. Note for whoever runs it: build signed (at least `CODE_SIGN_IDENTITY=-`) — `scripts/check.sh --app` passes `CODE_SIGNING_ALLOWED=NO`, which drops the sandbox entitlements, so that build proves nothing about security-scoped bookmarks. |
+| 2026-09-19 | migrate | **pass** | `pytest -q` in `Tools/migrate`: 40 passed (pytest from a throwaway venv). The dry run against a vault copy was not done — it is the user's step. |
 
 ### Fixes applied
 
-(none yet)
+Compile / toolchain (no behaviour change):
+
+- `Packages/GTDKit/Sources/GTDNotifications/SystemNotificationCenter.swift` — `UNUserNotificationCenter` is not `Sendable`, so the `Sendable` struct could not store it; now `@preconcurrency import UserNotifications`, with the reason.
+- `Packages/GTDKit/Sources/GTDVault/Platform/CoordinatedFileSystem.swift` — `purposeID: NSObject?` in a `Sendable` struct; now `nonisolated(unsafe)` with a comment (immutable identity token, never read).
+- `scripts/check-docs.sh` — used GNU `find -printf`; BSD `find` has none, so every basename lookup failed on a Mac (7 false "MISSING"). Now `-print | sed`.
+- `project.yml` — XcodeGen wrote `TEST_HOST = …/GTD.app/GTD` for the multiplatform unit-test target, which does not exist on macOS ("Could not find test host"). Now `$(BUNDLE_EXECUTABLE_FOLDER_PATH)`, right on both platforms.
+
+Found by running (presentation only):
+
+- `Packages/GTDKit/Sources/FeatureInbox/InboxProcessingView.swift` — on macOS the card counter never rendered: it is a `.principal` toolbar item and a Mac sheet has no title bar (`Undo` and `Done` do render). On macOS the same `session.counter` text now sits above the card; iOS is untouched. Seen working ("5 of 5 left").
+
+Docs the run made untrue, corrected: `CLAUDE.md`, `README.md`, `docs/ARCHITECTURE.md`, `docs/KNOWN_ISSUES.md` §1 ("never been compiled", and the 11 warnings being Linux-only).
 
 ### Unresolved
+
+**From the 2026-09-19 run**
+
+0. Mac inbox processing: once a card text field has focus, `Esc` did not blur it, so the arrow
+   keys kept moving the caret instead of filing (`InboxProcessingView.quit()` expects "Esc first
+   blurs the field"). A focused `TextField` probably consumes Esc before the container's
+   `.onKeyPress(.escape)`. Adding `.onExitCommand` on the container did not help and was reverted.
+   **Low confidence:** the keys were sent by an automation tool and it is not proven that its Esc
+   reached the app — press Esc by hand before changing anything. Clicking the sheet's empty area
+   does not blur the field either.
+0a. The unsigned test-host run on macOS logs `connection to service named
+   com.apple.linkd.autoShortcut` errors (App Intents registration). Expected without signing;
+   check that the three shortcuts appear once the app is signed (App/README.md "App Intents").
 
 Open questions T41 could not settle without a Mac. Nothing here blocks the build; each is a
 judgement call someone with the real toolchain (or the user) should make.

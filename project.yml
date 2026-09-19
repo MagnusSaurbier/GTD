@@ -93,6 +93,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.magnussaurbier.gtd.tests
         GENERATE_INFOPLIST_FILE: true
+        # XcodeGen writes the iOS bundle layout (`GTD.app/GTD`) for a multiplatform target; on
+        # macOS the executable is under Contents/MacOS, which this variable resolves per platform.
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/GTD.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GTD
 
   GTDUITests:
     # Launch-and-navigate smoke tests; they always run on `-useFixtures`, never on a real vault.

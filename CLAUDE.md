@@ -1,9 +1,10 @@
 # Instructions for agents working in this repo
 
 A personal GTD app for macOS and iOS whose data store is the markdown notes in the user's
-Obsidian vault. **It has never been compiled against an Apple SDK**: every `#if canImport(SwiftUI)`
-file and all of `App/` were written blind, on Linux. `TEST-INSTRUCTIONS.md` is what the first
-machine with Xcode does, in order; keep that file until its log is filled in.
+Obsidian vault. Every `#if canImport(SwiftUI)` file and all of `App/` were **written blind, on
+Linux**; they first compiled and launched on fixtures on 2026-09-19 (Xcode 27), but vault access on
+a device is still untested. `TEST-INSTRUCTIONS.md` has the three gates and their log; keep that
+file until Gate 3 is in it.
 
 ## Where things are
 
@@ -19,7 +20,7 @@ machine with Xcode does, in order; keep that file until its log is filled in.
 
 ## Commands
 
-From the repo root. Verified on Linux with Swift 6.4:
+From the repo root. Verified on Linux with Swift 6.4, and on macOS with Xcode 27:
 
 ```bash
 scripts/check.sh                             # the gate: build + test + docs check + migration tests
@@ -40,8 +41,8 @@ Every step needing Xcode (`xcodegen`, both `xcodebuild`s) prints `SKIPPED` here 
 **Platform guards (every package target).** SwiftUI, UIKit, AppKit, UserNotifications and App
 Intents code lives in files wrapped **entirely** in `#if canImport(SwiftUI)` (or
 `canImport(UserNotifications)` / `canImport(AppIntents)`), and every target keeps at least one
-Linux-compilable file holding the logic worth testing (`docs/ARCHITECTURE.md` §5). Expect 11
-harmless `no rule to process file … xcstrings/assetcatalog` warnings.
+Linux-compilable file holding the logic worth testing (`docs/ARCHITECTURE.md` §5). On Linux,
+expect 11 harmless `no rule to process file … xcstrings/assetcatalog` warnings (none on a Mac).
 
 ## Durable rules
 

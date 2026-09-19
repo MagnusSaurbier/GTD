@@ -4,16 +4,17 @@ What is wrong, missing or merely assumed, collected from every build-out task's 
 `docs/TRACEABILITY.md`. Check this file before filing a bug: most of what looks broken below is
 either deliberate or already written up.
 
-## 1. Nothing has been compiled against an Apple SDK
+## 1. Compiled once, barely run, and never on a real vault
 
 The app was built in a Linux container with Swift but no Xcode. Every file behind
 `#if canImport(SwiftUI)` / `UserNotifications` / `AppIntents`, all of `App/`, `AppTests/` and
-`AppUITests/`, and the whole iOS-simulator and macOS app build, have **never been compiled**.
-851 tests pass on Linux; they cover the models, the codec, the vault, the reducer and the rules —
-not a single view.
+`AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the macOS app and the
+iOS-simulator app built, all 851 package tests and the app's own test bundles passed, and the app
+launched on fixtures on both platforms. **No view has been walked through by hand beyond that, and
+no real vault has been opened.**
 
-This is not a list of suspected bugs, it is the absence of a compiler. `TEST-INSTRUCTIONS.md` is
-the script for the first machine that has one: Gate 1 (package builds and tests), Gate 2 (the app
+This is not a list of suspected bugs, it is the absence of hands-on testing. `TEST-INSTRUCTIONS.md`
+is the script and the log for it: Gate 1 (package builds and tests), Gate 2 (the app
 builds, launches and smoke-tests on fixtures), Gate 3 (vault access on a real device), and a
 prioritised list of the nine places most likely to break. While that file exists, its
 **"Unresolved"** section is the live list of judgement calls that need a Mac or the user; whoever

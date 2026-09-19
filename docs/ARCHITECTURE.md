@@ -8,10 +8,11 @@ and reads* (binding for all UI — §5); this file says *how it is built*. Requi
 rules that no single signature can show. Where it disagrees with the code, the code is right and
 this file is a bug — fix it (`CLAUDE.md` → "Keeping this file current").
 
-**Nothing here was built with an Apple SDK.** The whole app was written in a Linux container
+**Nothing here was written with an Apple SDK.** The whole app was written in a Linux container
 with Swift but no Xcode, so every file behind `#if canImport(SwiftUI)` / `UserNotifications` /
-`AppIntents`, and all of `App/`, has never been compiled. `TEST-INSTRUCTIONS.md` is the first
-Mac session's script and `docs/TRACEABILITY.md` marks such code **done (blind)**.
+`AppIntents`, and all of `App/`, was written blind. It builds and launches on fixtures (Xcode 27,
+2026-09-19); `TEST-INSTRUCTIONS.md` is the first Mac session's script and log, and
+`docs/TRACEABILITY.md` marks such code **done (blind)**.
 
 ## 1. Stack
 
@@ -281,7 +282,7 @@ style guide wins; where they disagree on module structure, data or contracts, th
 - Date and age *wording* (`DateText`) is written by hand rather than with `DateFormatter`, so
   output is locale- and platform-independent (the app is English-only).
 - `App/` is outside the package and never compiles on Linux at all.
-- `swift build` prints 11 harmless `no rule to process file … xcstrings/assetcatalog` warnings.
+- On Linux, `swift build` prints 11 harmless `no rule to process file … xcstrings/assetcatalog` warnings.
   They are expected; do not "fix" them by deleting the `Resources` folders.
 
 ## 6. Decisions
