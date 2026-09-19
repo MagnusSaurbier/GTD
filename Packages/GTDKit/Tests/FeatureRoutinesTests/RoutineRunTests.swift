@@ -170,6 +170,21 @@ struct RoutineRunTests {
         #expect(run.index == 1)
     }
 
+    /// P16 — the runner's `Back` button is offered only when there is a step to go back to.
+    @Test func backIsOfferedOnlyAfterTheFirstStep() async throws {
+        let routine = makeThreeStepRoutine()
+        let model = makeModel(routine: routine)
+        let run = try #require(RoutineRun(model: model, routine: routine.id))
+
+        #expect(!run.canGoBack)
+        _ = await run.log(.done)
+        #expect(run.canGoBack)
+        run.back()
+        #expect(!run.canGoBack)
+        run.back()                       // never below the first step
+        #expect(run.index == 0)
+    }
+
     @Test func finishesAfterTheLastStepAndSummarisesDoneAndSkipped() async throws {
         let routine = makeThreeStepRoutine()
         let model = makeModel(routine: routine)
@@ -214,6 +229,33 @@ struct RoutineRunTests {
         #expect(run.currentStep?.id == "a")
     }
 
+    @Test func theStepAdvancesOnTheTapBeforeTheWriteLands() async throws {
+        let routine = makeThreeStepRoutine()
+        var snapshot = Fixtures.sampleSnapshot
+        snapshot.routines = [routine]
+        snapshot.routineLog = []
+        let backend = GatedBackend(InMemoryBackend(
+            snapshot: snapshot, deviceID: "test",
+            env: { ReducerEnv(now: Date(), today: Fixtures.today, deviceID: "test") }))
+        let model = AppModel(backend: backend, snapshot: snapshot, today: { Fixtures.today })
+        let run = try #require(RoutineRun(model: model, routine: routine.id))
+
+        let tap = Task { await run.log(.done) }
+        await backend.waitUntilPerformStarts()
+
+        // The write is still held at the gate — the card has already moved on, and the summary
+        // would already count the tap.
+        #expect(model.snapshot.routineLog.isEmpty)
+        #expect(run.index == 1)
+        #expect(run.doneCount == 1)
+
+        await backend.open()
+        #expect(await tap.value)
+        #expect(run.index == 1)
+        #expect(run.doneCount == 1)
+        #expect(model.snapshot.routineLog.map(\.step) == ["a"])
+    }
+
     @Test func dayRolloverWhileARunIsOpenKeepsAdvancingAndStillCountsEveryStep() async throws {
         let routine = makeThreeStepRoutine()
         let box = DayBox(Fixtures.today)
@@ -252,6 +294,41 @@ private final class DayBox: @unchecked Sendable {
     init(_ day: Day) { self.day = day }
 }
 
+/// Holds every `perform` at a gate until `open()`, standing in for the real vault's slow write
+/// (file coordination, iCloud) so a test can look at the run *while* the write is in flight.
+private actor GatedBackend: GTDBackend {
+    private let inner: InMemoryBackend
+    private var isOpen = false
+    private var started = false
+    private var gateWaiters: [CheckedContinuation<Void, Never>] = []
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+
+    init(_ inner: InMemoryBackend) { self.inner = inner }
+
+    func open() {
+        isOpen = true
+        gateWaiters.forEach { $0.resume() }
+        gateWaiters = []
+    }
+
+    func waitUntilPerformStarts() async {
+        if started { return }
+        await withCheckedContinuation { startWaiters.append($0) }
+    }
+
+    nonisolated func snapshots() -> AsyncStream<SnapshotUpdate> { inner.snapshots() }
+    func currentUpdate() async -> SnapshotUpdate { await inner.currentUpdate() }
+    func perform(_ command: GTDCommand) async throws -> [AppPrompt] {
+        started = true
+        startWaiters.forEach { $0.resume() }
+        startWaiters = []
+        if !isOpen { await withCheckedContinuation { gateWaiters.append($0) } }
+        return try await inner.perform(command)
+    }
+    func undo() async throws { try await inner.undo() }
+    func undoLabel() async -> String? { await inner.undoLabel() }
+}
+
 /// A backend whose every command fails — there is no command to edit a routine's steps
 /// (ARCHITECTURE §4 is frozen), so this is how `RoutineRun.log`'s failure path is exercised
 /// instead of a live template edit. A plain class (not an actor): every stored property is an
@@ -262,14 +339,14 @@ private final class AlwaysFailingBackend: GTDBackend, @unchecked Sendable {
 
     init(snapshot: VaultSnapshot) { self.snapshot = snapshot }
 
-    func snapshots() -> AsyncStream<VaultSnapshot> {
+    func snapshots() -> AsyncStream<SnapshotUpdate> {
         AsyncStream { continuation in
-            continuation.yield(snapshot)
+            continuation.yield(SnapshotUpdate(snapshot: snapshot))
             continuation.finish()
         }
     }
 
-    func currentSnapshot() async -> VaultSnapshot { snapshot }
+    func currentUpdate() async -> SnapshotUpdate { SnapshotUpdate(snapshot: snapshot) }
     func perform(_ command: GTDCommand) async throws -> [AppPrompt] {
         throw GTDError.invalid("simulated failure")
     }

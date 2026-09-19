@@ -23,10 +23,10 @@ public struct RoutinesHomeView: View {
             }
             .buttonStyle(.plain)
         }
-        .navigationTitle(Copy.routine)
+        .navigationTitle(Copy.routines)
         #if os(iOS)
         .fullScreenCover(item: $presented) { item in
-            // `RoutineRunnerView` wraps its own `NavigationStack` for the toolbar's `Done`.
+            // `RoutineRunnerView` wraps its own `NavigationStack` for the toolbar's `Close`.
             RoutineRunnerView(routine: item.id) { presented = nil }
         }
         #else
@@ -115,8 +115,10 @@ public struct RoutineRunnerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.surfaceGrouped)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(Copy.done, action: onFinished)
+                // `Close`, not a second `Done`: the bottom `Done` completes the step, this one
+                // leaves the run (progress is already logged, the run resumes later).
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(Copy.close, action: onFinished)
                 }
             }
         }
@@ -134,8 +136,10 @@ public struct RoutineRunnerView: View {
                     .font(Typo.counter)
                     .foregroundStyle(Color.textSecondary)
                 Text(step.title)
-                    .font(Typo.cardText)
+                    .font(Typo.screenTitle)
                     .foregroundStyle(Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
                 if step.substeps.isEmpty {
                     if step.isJournaling {
                         Label(Copy.onTheRemarkable, systemImage: Symbols.journaling)
@@ -159,22 +163,47 @@ public struct RoutineRunnerView: View {
             }
             .gesture(backGesture(run))
             Spacer(minLength: 0)
-            GlassActionBar {
-                Button(Copy.skip) { Task { await run.log(.skipped) } }
-                    .buttonStyle(.bordered)
-                    .keyboardShortcut("s", modifiers: [])
-                    .frame(maxWidth: .infinity, minHeight: Self.actionButtonHeight)
-                Button(Copy.done) { Task { await run.log(.done) } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.gtdAccent)
-                    .keyboardShortcut(.return, modifiers: [])
-                    .frame(maxWidth: .infinity, minHeight: Self.actionButtonHeight)
+            if run.canGoBack {
+                Button {
+                    run.back()
+                } label: {
+                    Label(Copy.back, systemImage: Symbols.back)
+                        .font(Typo.body)
+                        .frame(minHeight: Spacing.minHitTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Spacing.screenMargin)
             }
+            // R2 "big done/skip buttons": the frame sits on the *label*, so the bordered shape
+            // itself fills half the bar — on the button it only padded a small pill.
+            GlassActionBar {
+                Button {
+                    Task { await run.log(.skipped) }
+                } label: {
+                    Text(Copy.skip).frame(maxWidth: .infinity, minHeight: Self.actionButtonHeight)
+                }
+                .buttonStyle(.bordered)
+                .keyboardShortcut("s", modifiers: [])
+                Button {
+                    Task { await run.log(.done) }
+                } label: {
+                    Text(Copy.done).frame(maxWidth: .infinity, minHeight: Self.actionButtonHeight)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.gtdAccent)
+                .keyboardShortcut(.return, modifiers: [])
+            }
+            .font(Typo.sectionHeader)
+            .buttonBorderShape(.capsule)
         }
         .animation(Motion.standard(reduceMotion: reduceMotion), value: run.index)
         .onChange(of: run.index) { checkedSubsteps = [] }
         .accessibilityAction(named: Text(Copy.skip)) { Task { await run.log(.skipped) } }
         .accessibilityAction(named: Text(Copy.done)) { Task { await run.log(.done) } }
+        .accessibilityAction(named: Text(Copy.back)) { run.back() }
     }
 
     /// Horizontal swipe back = previous step only (no swipe filing on routine cards, R2).
@@ -205,6 +234,9 @@ public struct RoutineRunnerView: View {
             Button(Copy.done, action: onFinished)
                 .buttonStyle(.borderedProminent)
                 .tint(Color.gtdAccent)
+            if run.canGoBack {
+                Button(Copy.back) { run.back() }
+            }
         }
     }
 

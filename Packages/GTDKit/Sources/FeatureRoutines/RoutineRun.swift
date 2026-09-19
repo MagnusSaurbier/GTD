@@ -17,6 +17,8 @@ public final class RoutineRun {
     /// file per day is untouched — this only widens what *this* session reads back for its own
     /// summary, so a run that starts at 23:58 still reports every step it logged).
     private var sessionDays: Set<Day>
+    /// Results tapped but not yet written (see `log`), so the summary counts them at once.
+    private var pending: [String: RoutineStepResult] = [:]
 
     public init?(model: AppModel, routine id: NoteID) {
         guard let routine = model.snapshot.routine(id) else { return nil }
@@ -42,24 +44,33 @@ public final class RoutineRun {
     public var doneCount: Int { results().values.count { $0 == .done } }
     public var skippedCount: Int { results().values.count { $0 == .skipped } }
 
-    /// Logs the current step and advances (R5). Going back and re-logging replaces the earlier
-    /// entry — the reducer dedupes by day, routine, step and device. A failed write (e.g. the
-    /// step no longer exists because the template changed under this run) leaves the step in
-    /// place instead of silently skipping it. Returns whether the log was recorded.
+    /// Logs the current step and advances (R5) — **advancing first**: the card moves on the tap,
+    /// the vault write (file coordination, iCloud; about a second on a phone) lands behind it.
+    /// Going back and re-logging replaces the earlier entry — the reducer dedupes by day,
+    /// routine, step and device. A failed write (e.g. the step no longer exists because the
+    /// template changed under this run) returns the run to that step and reaches the shell's
+    /// alert through `AppModel.perform`, instead of silently skipping it. Returns whether the
+    /// log was recorded.
     @discardableResult
     public func log(_ result: RoutineStepResult) async -> Bool {
         guard let step = currentStep else { return false }
-        do {
-            try await model.send(.logRoutineStep(routine: routine.id, stepID: step.id, result))
-            sessionDays.insert(model.today())
-            index += 1
-            return true
-        } catch {
-            return false
-        }
+        let stepIndex = index
+        sessionDays.insert(model.today())
+        pending[step.id] = result
+        index += 1
+        let logged = await model.perform(.logRoutineStep(routine: routine.id, stepID: step.id, result))
+        // A re-log of the same step that started after this one owns the entry now.
+        if pending[step.id] == result { pending[step.id] = nil }
+        if !logged { index = min(index, stepIndex) }
+        return logged
     }
 
-    /// Horizontal swipe back = previous step (no swipe filing on routine cards, R2).
+    /// Whether there is a step to go back to — drives the runner's `Back` button. Also true on
+    /// the summary, so a mis-tapped last step can still be corrected.
+    public var canGoBack: Bool { index > 0 && !routine.steps.isEmpty }
+
+    /// `Back` button / horizontal swipe back = previous step (no swipe filing on routine cards,
+    /// R2). Logging that step again replaces its earlier entry, which is how a mis-tap is undone.
     public func back() { index = max(index - 1, 0) }
 
     /// This session's logged results for this routine, keyed by step id, across every day the
@@ -70,7 +81,7 @@ public final class RoutineRun {
         where sessionDays.contains(entry.day) && entry.routine == routine.title {
             out[entry.step] = entry.result
         }
-        return out
+        return out.merging(pending) { _, tapped in tapped }
     }
 
     /// The first template step with no log entry for `today`; the step count once every step is
