@@ -51,7 +51,7 @@ scripts/check-docs.sh           doc/path consistency check, called by check.sh  
 Dependency direction (no cycles, features never import each other except where listed):
 
 ```
-GTDModel ← GTDMarkdown ← GTDVault ← GTDServices
+GTDModel ← GTDMarkdown ← GTDVault ← GTDServices → GTDAppCore   (T16-2: VaultBackend conforms to GTDBackend)
 GTDModel ← GTDAppCore ← DesignSystem ← Feature*
 GTDModel ← GTDNotifications, GTDStats
 FeatureReview → FeatureInbox (embeds the processing card), FeatureProjects (WhatsNextSheet), GTDStats
@@ -326,6 +326,7 @@ public protocol VaultStore: Sendable {
   func snapshots() -> AsyncStream<VaultSnapshot>
   func read(path: String) async throws -> String?
   func commit(_ ops: [VaultFileOp]) async throws -> [VaultFileOp]   // returns the inverse ops (for undo)
+  func activate() async throws          // T16-1: folder skeleton + first scan + watch; default no-op
 }
 public final class VaultBookmark { /* pick, persist, resolve security-scoped bookmark */ }
 public struct InboxWriter { public func capture(text: String, at: Date) throws -> NoteID }  // usable without loading the vault (C1, T30)
@@ -333,6 +334,16 @@ public struct InboxWriter { public func capture(text: String, at: Date) throws -
 
 `GTDServices.VaultBackend` = `Reducer.reduce` → diff old/new snapshot → encode changed
 entities → `VaultStore.commit(ops + extraOps)` → push inverse onto the undo journal.
+
+**Backend semantics (T16, 2026-09-19).** One command is one `commit`, so a rename and the project
+steps that link to the renamed note cannot come apart. A note is written only when
+`NoteCodec.encode` of it changed, so untouched files keep their modification date. Undo journal
+entries carry a content hash per file they would touch and are refused as `ServiceError.undoStale`
+when any of them changed since (N3); the journal keeps 20 entries, is persisted in Application
+Support and is deeper than the single level `InMemoryBackend` offers. A successful command
+publishes the reduced snapshot immediately and the store's scanned snapshot replaces it when it
+arrives. Collisions in `Archive/` and `GTD/Trash/` get a free name (those folders are app-owned);
+anywhere else a taken destination is `GTDError.titleCollision`.
 
 **Commit semantics (T15-1, 2026-09-19).** `commit` applies the ops in order and is all-or-nothing:
 on failure it rolls back what it already applied and rethrows; a failing rollback throws
@@ -429,6 +440,8 @@ Apple SDKs), so the split below is binding for every target:
 | "Open action" for stalled (T11) | **2026-09-19:** a project is stalled (P4) when it has no *visible, non-`maybe`* open action. `maybe` is not a commitment and a deferred action is not now. |
 | Project rename (T11) | **2026-09-19:** `updateProject` refuses a changed title or area (`.invalid`) — the folder is the project's identity and moving a folder tree is out of v1 scope. Status, outcome, why, steps and log are editable. |
 | Turn into project (T11) | **2026-09-19:** `convertActionToProject` moves the action note to `GTD/Trash/`, takes its checkboxes as steps and emits `.whatsNext`, so the new project is never born stalled. |
+| Undo depth (T16) | **2026-09-19:** `VaultBackend` keeps 20 journal entries, so ⌘Z walks back through a session; `InMemoryBackend` still restores one snapshot. Both satisfy N6, and every entry is checked against the files before it is applied. T41 may deepen `InMemoryBackend` to match. |
+| Undo toast wording (T16) | **2026-09-19:** the labels are STYLEGUIDE §3.8/§6.3's (`Moved to Backlog`, `Filed to Next`), word for word identical in both backends, rather than T16's briefed `Filed 'Call bank' to Next`. |
 | Next list order (T11) | **2026-09-19:** `in-progress` first, then nearest `due`, then oldest capture, then path. The list is never truncated to the cap — an over-cap vault must stay repairable. |
 
 ## 7. Sync safety rules (N3) — apply to every task that writes

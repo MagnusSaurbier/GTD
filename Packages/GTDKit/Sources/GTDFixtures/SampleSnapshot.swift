@@ -375,6 +375,22 @@ public enum Fixtures {
 
     // MARK: - The snapshot
 
+    /// The config **as it comes back from a vault**: `GTDConfig.default` plus the text of
+    /// `GTD/Config.md` in its passthrough.
+    ///
+    /// Every entity `GTDMarkdown` decodes carries its own file text in the passthrough slot
+    /// `"source"` (`NoteCodec.sourceSlot`) — that is what makes the round-trip rule (N2) hold.
+    /// A fixture built in code carries nothing, so `scan(sample vault) != sampleSnapshot` for any
+    /// entity compared as a whole value. `config` is the one the scan test compares that way
+    /// (`GTDVaultTests.SampleVaultScanTests.scanOfTheSampleVaultEqualsTheSampleSnapshot`), so it
+    /// carries its source here. The text is the very one `SampleVault` renders into the committed
+    /// vault, so nothing can drift; `GTDFixtures` still does not depend on `GTDMarkdown`.
+    public static let config: GTDConfig = {
+        var config = GTDConfig.default
+        config.passthrough["source"] = SampleVault.renderConfig(.default)
+        return config
+    }()
+
     /// The whole sample vault. `SampleVault` renders exactly this to markdown files.
     public static let sampleSnapshot = VaultSnapshot(
         inbox: inbox,
@@ -384,7 +400,7 @@ public enum Fixtures {
         routines: routines,
         routineLog: routineLog,
         knowledgeFolders: knowledgeFolders,
-        config: .default,
+        config: config,
         lastReview: lastReview,
         issues: [])
 

@@ -43,7 +43,9 @@ let package = Package(
             exclude: excluded,
             swiftSettings: swiftSettings),
         .target(name: "GTDVault", dependencies: ["GTDModel", "GTDMarkdown"], exclude: excluded, swiftSettings: swiftSettings),
-        .target(name: "GTDServices", dependencies: ["GTDModel", "GTDMarkdown", "GTDVault"], exclude: excluded, swiftSettings: swiftSettings),
+        // T16-2: `VaultBackend` conforms to `GTDAppCore.GTDBackend`. GTDServices → GTDAppCore is the
+        // allowed direction (ARCHITECTURE §2); the forbidden one is Feature → GTDServices.
+        .target(name: "GTDServices", dependencies: ["GTDModel", "GTDMarkdown", "GTDVault", "GTDAppCore"], exclude: excluded, swiftSettings: swiftSettings),
         .target(name: "GTDAppCore", dependencies: ["GTDModel"], exclude: excluded, swiftSettings: swiftSettings),
         .target(
             name: "GTDFixtures",
@@ -91,7 +93,7 @@ let package = Package(
         .testTarget(name: "GTDModelTests", dependencies: ["GTDModel", "GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "GTDMarkdownTests", dependencies: ["GTDMarkdown", "GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "GTDVaultTests", dependencies: ["GTDVault", "GTDFixtures"], swiftSettings: swiftSettings),
-        .testTarget(name: "GTDServicesTests", dependencies: ["GTDServices", "GTDFixtures"], swiftSettings: swiftSettings),
+        .testTarget(name: "GTDServicesTests", dependencies: ["GTDServices", "GTDVault", "GTDMarkdown", "GTDAppCore", "GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "GTDAppCoreTests", dependencies: ["GTDAppCore", "GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "GTDFixturesTests", dependencies: ["GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem", "GTDFixtures"], swiftSettings: swiftSettings),
