@@ -49,11 +49,79 @@ struct SidebarRoutingTests {
         #expect(SidebarItem.projects.listedStatus == nil)
     }
 
-    /// D3 — the calendar strip is docked under the lists, not under the guided flows.
-    @Test func calendarStripIsHiddenForTheGuidedFlows() {
-        #expect(SidebarItem.review.showsCalendarStrip == false)
-        #expect(SidebarItem.routines.showsCalendarStrip == false)
-        #expect(SidebarItem.next.showsCalendarStrip)
+    /// D3 / M4 — the calendar strip is docked only under the lists whose items carry dates.
+    @Test func calendarStripIsDockedOnlyUnderTheDatedLists() {
+        let docked = SidebarItem.allCases.filter(\.showsCalendarStrip)
+        #expect(Set(docked) == [.next, .waiting, .deferred])
+    }
+
+    /// M3 — the guided flows span content + detail; every other section keeps the list/detail pair.
+    @Test func onlyTheGuidedFlowsSpanTheDetailColumn() {
+        #expect(SidebarItem.allCases.filter(\.spansDetailColumn) == SidebarItem.flows)
+    }
+
+    /// M8 — the empty detail column names what the section's list holds, and the sections
+    /// without a detail column have no such copy at all.
+    @Test func emptyDetailCopyFitsTheSection() {
+        #expect(SidebarItem.next.emptyDetailBody == OverviewMacCopy.pickAnAction)
+        #expect(SidebarItem.projects.emptyDetailBody == OverviewMacCopy.pickAProject)
+        #expect(SidebarItem.projects.emptyDetailBody != SidebarItem.next.emptyDetailBody)
+        #expect(SidebarItem.inbox.emptyDetailBody != SidebarItem.next.emptyDetailBody)
+        for item in SidebarItem.allCases {
+            #expect((item.emptyDetailBody == nil) == item.spansDetailColumn)
+        }
+    }
+
+    /// M1 — the window can never be narrower than its three columns at their minimum.
+    @Test func windowFitsTheThreeColumnsAtTheirMinimum() {
+        let columns = OverviewLayout.sidebarMinWidth
+            + OverviewLayout.listMinWidth + OverviewLayout.detailMinWidth
+        #expect(OverviewLayout.windowMinWidth >= columns)
+        #expect(OverviewLayout.listIdealWidth >= OverviewLayout.listMinWidth)
+        #expect(OverviewLayout.detailIdealWidth >= OverviewLayout.detailMinWidth)
+        #expect(OverviewLayout.sidebarIdealWidth >= OverviewLayout.sidebarMinWidth)
+    }
+
+    /// M4 — strip day labels are one short word: "tomorrow" wrapped letter by letter.
+    @Test func stripDayLabelsAreShortAndSingleWord() {
+        let today = Fixtures.today
+        #expect(OverviewMacCopy.stripDayLabel(today, today: today) == "today")
+        #expect(OverviewMacCopy.stripDayLabel(today.adding(days: 1), today: today) == "Tmrw")
+        for offset in 0..<14 {
+            let label = OverviewMacCopy.stripDayLabel(today.adding(days: offset), today: today)
+            #expect(label.count <= 6, "\(label)")
+        }
+    }
+
+    /// M2 — the list column highlights the action the detail column shows, nothing else.
+    @Test func openActionFollowsTheDetailColumn() {
+        let nav = OverviewNavigation()
+        #expect(nav.openAction == nil)
+        let id = Fixtures.sampleSnapshot.actions[0].id
+        nav.open(action: id)
+        #expect(nav.openAction == id)
+        nav.open(project: Fixtures.sampleSnapshot.projects[0].id)
+        #expect(nav.openAction == nil)
+    }
+
+    /// M2 — same for the Projects list: it highlights the project the detail column shows, and
+    /// an action in that column (opened from a project row) highlights no project.
+    @Test func openProjectFollowsTheDetailColumn() {
+        let nav = OverviewNavigation()
+        #expect(nav.openProject == nil)
+        let project = Fixtures.sampleSnapshot.projects[0].id
+        nav.open(project: project)
+        #expect(nav.openProject == project)
+        #expect(nav.openAction == nil)
+        nav.open(action: Fixtures.sampleSnapshot.actions[0].id)
+        #expect(nav.openProject == nil)
+    }
+
+    /// The Deferred section is named "Deferred" in the sidebar; `FeatureWaiting.DeferredView`
+    /// titles its screen with the same word rather than with `Copy.deferLabel` ("Defer"), the
+    /// date chip's field label (walkthrough 2026-09-19).
+    @Test func deferredSectionIsCalledDeferred() {
+        #expect(SidebarItem.deferred.title == "Deferred")
     }
 
     // MARK: - Navigation
@@ -103,16 +171,31 @@ struct SidebarRoutingTests {
         #expect(nav.detail == .project(new))
     }
 
-    @Test func pruningDropsANoteThatLeftTheVault() {
+    @Test func applyingAnUpdateDropsANoteThatLeftTheVault() {
         let nav = OverviewNavigation()
         let snapshot = Fixtures.sampleSnapshot
         let existing = snapshot.actions[0].id
         nav.open(action: existing)
-        nav.prune(against: snapshot)
+        nav.apply(snapshot: snapshot)
         #expect(nav.detail == .action(existing))
 
         nav.open(action: NoteID(path: "Actions/Never existed.md"))
-        nav.prune(against: snapshot)
+        nav.apply(snapshot: snapshot)
         #expect(nav.detail == nil)
+    }
+
+    /// The reason `apply` takes the renames: a renamed note's old id is as absent from the
+    /// snapshot as a deleted one's, so pruning alone would clear the detail column of the very
+    /// action whose title was just edited.
+    @Test func applyingAnUpdateKeepsTheDetailOfARenamedNote() throws {
+        let nav = OverviewNavigation()
+        let snapshot = Fixtures.sampleSnapshot
+        let old = NoteID(path: "Actions/Gone by any other name.md")
+        let new = snapshot.actions[0].id
+        nav.open(action: old)
+
+        nav.apply(snapshot: snapshot, renames: RenameMap(from: old, to: new))
+
+        #expect(nav.detail == .action(new))
     }
 }

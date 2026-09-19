@@ -28,7 +28,8 @@ final class ShellSmokeUITests: XCTestCase {
     }
 
     #if os(iOS)
-    /// N5 / STYLEGUIDE §4.2 — exactly three tabs, Next first.
+    /// N5 / STYLEGUIDE §4.2 — exactly three tabs, in the order Inbox · Next · Routines, and the
+    /// app still opens on Next (E1).
     func testTheThreeTabsAreThere() {
         let app = launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
@@ -36,6 +37,9 @@ final class ShellSmokeUITests: XCTestCase {
         XCTAssertTrue(tabs["Next"].waitForExistence(timeout: 10))
         XCTAssertTrue(tabs["Inbox"].exists)
         XCTAssertTrue(tabs["Routines"].exists)
+        XCTAssertLessThan(tabs["Inbox"].frame.minX, tabs["Next"].frame.minX)
+        XCTAssertLessThan(tabs["Next"].frame.minX, tabs["Routines"].frame.minX)
+        XCTAssertTrue(tabs["Next"].isSelected)
     }
 
     /// I1 — the inbox tab's only way into the queue is the primary button.
@@ -46,6 +50,68 @@ final class ShellSmokeUITests: XCTestCase {
         let process = app.buttons.matching(
             NSPredicate(format: "label BEGINSWITH %@", "Process inbox")).firstMatch
         XCTAssertTrue(process.waitForExistence(timeout: 10))
+    }
+
+    /// P2 / P5 / P8 — the action detail: every text entry gives the keyboard back, the title is
+    /// not repeated in the bar, and the action can be ticked off from here.
+    func testActionDetailKeyboardCanBeDismissed() {
+        let app = launch()
+        XCTAssertTrue(app.tabBars.buttons["Next"].waitForExistence(timeout: 20))
+        let row = app.staticTexts["Reference letter from Prof. Weber"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+
+        // Title · Why? · What? — the last one sits lowest, where the keyboard used to cover it.
+        let what = app.textFields.element(boundBy: 2)
+        XCTAssertTrue(what.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.navigationBars.staticTexts["Reference letter from Prof. Weber"].exists,
+                       "P5: the title is repeated in the navigation bar")
+        XCTAssertTrue(app.buttons["Done"].exists, "P8: no way to complete from the detail")
+
+        what.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(what.isHittable, "P2: the focused field is under the keyboard")
+        XCTAssertLessThanOrEqual(
+            what.frame.maxY, app.keyboards.firstMatch.frame.minY + 1,
+            "P2: the focused field is under the keyboard")
+        let hide = app.toolbars.buttons["Done"].firstMatch
+        XCTAssertTrue(hide.waitForExistence(timeout: 5), "P2: no Done above the keyboard")
+        hide.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+    }
+
+    /// A1 — a rename moves the note; the pushed detail follows it instead of popping.
+    func testRenamingKeepsTheDetailOpen() {
+        let app = launch()
+        let row = app.staticTexts["Reference letter from Prof. Weber"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20))
+        row.tap()
+        let title = app.textFields.element(boundBy: 0)
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        title.tap()
+        title.typeText(" again")
+        sleep(3)                                  // past the autosave debounce
+        XCTAssertTrue(app.buttons["Open in Obsidian"].exists, "the detail was popped by the rename")
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "the rename took the keyboard away")
+        title.typeText("\n")                      // Return submits, it never breaks the line
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        sleep(2)                                  // the rename lands now; the detail follows it
+        XCTAssertTrue(app.buttons["Open in Obsidian"].exists, "the detail was popped by the rename")
+    }
+
+    /// P17 — capture from the inbox tab, in a short sheet whose buttons stay reachable.
+    func testQuickCaptureFromTheInboxTab() {
+        let app = launch()
+        XCTAssertTrue(app.tabBars.buttons["Inbox"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Inbox"].tap()
+        let add = app.buttons["Quick capture"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        add.tap()
+        let capture = app.buttons["Capture"]
+        XCTAssertTrue(capture.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertLessThanOrEqual(capture.frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
+        XCTAssertTrue(app.buttons["Cancel"].isHittable)
     }
 
     func testRoutinesTabListsTheSampleRoutines() {

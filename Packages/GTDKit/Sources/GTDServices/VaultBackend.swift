@@ -38,7 +38,11 @@ public actor VaultBackend: GTDBackend {
     private let housekeeping: HousekeepingState
     private let hub = BackendSnapshotHub()
 
-    private var latest: VaultSnapshot = .empty
+    /// The last published state: the snapshot plus the renames of the command that produced
+    /// it (`SnapshotUpdate`). The stream and `currentUpdate()` hand out the same value, so
+    /// whichever of the two reaches the UI first carries the rename with it.
+    private var latestUpdate: SnapshotUpdate = .empty
+    private var latest: VaultSnapshot { latestUpdate.snapshot }
     /// The last snapshot taken *from the store*. Comparing against it answers the only question
     /// that matters after a commit: has the store re-read the vault yet?
     private var lastFromStore: VaultSnapshot?
@@ -73,10 +77,10 @@ public actor VaultBackend: GTDBackend {
 
     // MARK: - GTDBackend
 
-    nonisolated public func snapshots() -> AsyncStream<VaultSnapshot> { hub.stream() }
+    nonisolated public func snapshots() -> AsyncStream<SnapshotUpdate> { hub.stream() }
 
-    public func currentSnapshot() -> VaultSnapshot {
-        latest
+    public func currentUpdate() -> SnapshotUpdate {
+        latestUpdate
     }
 
     public func perform(_ command: GTDCommand) async throws -> [AppPrompt] {
@@ -96,7 +100,7 @@ public actor VaultBackend: GTDBackend {
         guard !ops.isEmpty else {
             // Nothing to write (e.g. a status set to the value it already had). The reduced
             // snapshot is still published so the UI and `InMemoryBackend` behave alike.
-            publish(reduction.snapshot)
+            publish(reduction.snapshot, renames: reduction.renames)
             return reduction.prompts
         }
 
@@ -117,9 +121,9 @@ public actor VaultBackend: GTDBackend {
         let scanned = await storeSnapshot()
         if let scanned, !scanned.isEmptyVault, scanned != lastFromStore {
             lastFromStore = scanned
-            publish(scanned)
+            publish(scanned, renames: reduction.renames)
         } else {
-            publish(reduction.snapshot)
+            publish(reduction.snapshot, renames: reduction.renames)
         }
         return reduction.prompts
     }
@@ -215,10 +219,10 @@ public actor VaultBackend: GTDBackend {
         publish(snapshot)
     }
 
-    private func publish(_ snapshot: VaultSnapshot) {
+    private func publish(_ snapshot: VaultSnapshot, renames: RenameMap = .empty) {
         generation += 1
-        latest = snapshot
-        hub.publish(snapshot)
+        latestUpdate = SnapshotUpdate(snapshot: snapshot, renames: renames)
+        hub.publish(latestUpdate)
     }
 
     /// A5 — archive done and trashed notes older than 30 days, at most once per day per device.
@@ -333,10 +337,10 @@ public actor VaultBackend: GTDBackend {
 /// domain; every access is under the lock, which makes `@unchecked Sendable` sound.
 final class BackendSnapshotHub: @unchecked Sendable {
     private let lock = NSLock()
-    private var latest: VaultSnapshot = .empty
-    private var continuations: [UUID: AsyncStream<VaultSnapshot>.Continuation] = [:]
+    private var latest: SnapshotUpdate = .empty
+    private var continuations: [UUID: AsyncStream<SnapshotUpdate>.Continuation] = [:]
 
-    func stream() -> AsyncStream<VaultSnapshot> {
+    func stream() -> AsyncStream<SnapshotUpdate> {
         AsyncStream { continuation in
             let id = UUID()
             lock.lock()
@@ -353,12 +357,12 @@ final class BackendSnapshotHub: @unchecked Sendable {
         }
     }
 
-    func publish(_ snapshot: VaultSnapshot) {
+    func publish(_ update: SnapshotUpdate) {
         lock.lock()
-        latest = snapshot
+        latest = update
         let targets = Array(continuations.values)
         lock.unlock()
-        for continuation in targets { continuation.yield(snapshot) }
+        for continuation in targets { continuation.yield(update) }
     }
 
     func finish() {

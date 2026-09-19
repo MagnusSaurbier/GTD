@@ -60,7 +60,18 @@ struct CardTargetsTests {
     }
 
     @Test func macLegendReadsAsTheStyleGuideSpellsIt() {
-        #expect(CardTarget.keyLegend == "← Backlog  ↑ Maybe  → Next  ↓ Trash  P  K  W  R")
+        #expect(CardTarget.keyLegend
+            == "← Backlog  ↑ Maybe  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review")
+    }
+
+    /// Every target is reachable without a swipe: four labelled buttons, four menu entries.
+    @Test func theActionBarCoversEveryTargetExactlyOnce() {
+        #expect(CardTarget.buttonTargets == [.project, .knowledge, .waiting, .deferToReview])
+        #expect(CardTarget.buttonTargets.allSatisfy { !$0.isDirect })
+        #expect(CardTarget.menuTargets == [.backlog, .maybe, .next, .trash])
+        #expect(Set(CardTarget.buttonTargets + CardTarget.menuTargets) == Set(CardTarget.allCases))
+        #expect(CardTarget.deferToReview.shortTitle == "Review")
+        #expect(CardTarget.waiting.shortTitle == CardTarget.waiting.title)
     }
 
     @Test func letterKeysOpenTheSubFlows() {

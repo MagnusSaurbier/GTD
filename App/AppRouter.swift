@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import GTDModel
+import GTDAppCore
 import GTDIntents
 import FeatureOverview
 
@@ -89,12 +90,23 @@ final class AppRouter {
         apply(url: url, snapshot: snapshot)
     }
 
-    /// Drops navigation state that points at notes the vault no longer has.
-    func prune(against snapshot: VaultSnapshot) {
-        nextPath.removeAll { snapshot.action($0) == nil }
-        if let target = routineRun, !snapshot.routines.contains(where: { $0.id == target.note }) {
-            routineRun = nil
-        }
-        overview.prune(against: snapshot)
+    /// Consumes one snapshot update: **first** follow the notes it renamed, **then** drop what
+    /// still points at notes the vault no longer has.
+    ///
+    /// The order is the whole point. A note's id is its file name (A1), so a rename makes the
+    /// old id vanish from the snapshot exactly as a deletion does; pruning against the snapshot
+    /// alone popped the detail of the very action whose title was being edited. The renames
+    /// travel *with* the snapshot that produced them (`GTDAppCore.SnapshotUpdate` →
+    /// `AppModel.renames`), so there is no window in which this runs with one and not the
+    /// other. The two rules themselves live in `GTDAppCore.NavigationRemap`, where they are
+    /// unit-tested on Linux.
+    func apply(snapshot: VaultSnapshot, renames: RenameMap = .empty) {
+        nextPath = NavigationRemap.path(nextPath, renames: renames, in: snapshot)
+        routineRun = NavigationRemap
+            .selection(routineRun?.note, renames: renames) { id in
+                snapshot.routines.contains { $0.id == id }
+            }
+            .map { NoteTarget($0) }
+        overview.apply(snapshot: snapshot, renames: renames)
     }
 }

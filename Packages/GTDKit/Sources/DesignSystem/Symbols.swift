@@ -14,6 +14,9 @@ public enum Symbols {
     public static let knowledge = "books.vertical"
     public static let trash = "trash"
     public static let capture = "plus.circle"
+    /// The leading glyph of an unset "add a value" chip (`Defer`, `Due`, `Project`). The chip's
+    /// title never repeats it as a literal "+".
+    public static let addValue = "plus"
     public static let settings = "gearshape"
 
     public static let done = "checkmark.circle"
@@ -40,6 +43,10 @@ public enum Symbols {
     /// entry for it; these are the stock chevrons, not an invented concept icon (T41).
     public static let moveUp = "chevron.up"
     public static let moveDown = "chevron.down"
+    /// Settings → Contexts swipe action.
+    public static let rename = "pencil"
+    /// Routine runner: one step back.
+    public static let back = "chevron.backward"
 
     public static let routineGeneric = "repeat"
     public static let routineMorning = "sunrise"

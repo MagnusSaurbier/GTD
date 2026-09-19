@@ -9,14 +9,25 @@ import GTDFixtures
 
 /// Projects list, grouped by area, with status filters and area/project creation.
 /// **Owned by T22.**
+///
+/// On the Mac the list is a stock selectable `List` (M2, same as `FeatureOverview.ActionListView`):
+/// a click or the arrow keys select a row, selecting opens the project in the detail column
+/// (`onOpenProject`), and `selection` — the project that column shows — is what the list
+/// highlights. The list keeps no selection of its own. iOS keeps tap-to-open.
 public struct ProjectsListView: View {
+    private let selection: NoteID?
     private let onOpenProject: (NoteID) -> Void
     private let onOpenAction: (NoteID) -> Void
     @Environment(AppModel.self) private var model
     @State private var listModel: ProjectsListModel?
     @State private var isPresentingNewProject = false
 
-    public init(onOpenProject: @escaping (NoteID) -> Void, onOpenAction: @escaping (NoteID) -> Void) {
+    public init(
+        selection: NoteID? = nil,
+        onOpenProject: @escaping (NoteID) -> Void,
+        onOpenAction: @escaping (NoteID) -> Void
+    ) {
+        self.selection = selection
         self.onOpenProject = onOpenProject
         self.onOpenAction = onOpenAction
     }
@@ -25,15 +36,18 @@ public struct ProjectsListView: View {
         let list = listModel ?? ProjectsListModel(model: model)
         Group {
             if list.sections.isEmpty {
-                ContentUnavailableView(Copy.project, systemImage: Symbols.projects)
+                ContentUnavailableView(Copy.projects, systemImage: Symbols.projects)
             } else {
-                List {
+                selectableList {
                     ForEach(Array(list.sections.enumerated()), id: \.offset) { _, section in
                         Section {
                             ForEach(section.rows, id: \.project.id) { row in
                                 ProjectRow(row: row, today: list.today, onOpenAction: onOpenAction)
                                     .contentShape(Rectangle())
+                                    .tag(row.project.id)
+                                    #if !os(macOS)
                                     .onTapGesture { onOpenProject(row.project.id) }
+                                    #endif
                             }
                         } header: {
                             if let area = section.area { Text(area.title) }
@@ -43,7 +57,7 @@ public struct ProjectsListView: View {
             }
         }
         .safeAreaInset(edge: .top) { StatusFilterBar(listModel: list) }
-        .navigationTitle(Copy.project)
+        .navigationTitle(Copy.projects)
         .toolbar {
             ToolbarItem {
                 Button {
@@ -57,6 +71,20 @@ public struct ProjectsListView: View {
             NewProjectSheet(listModel: list)
         }
         .task { if listModel == nil { listModel = list } }
+    }
+
+    /// macOS: `List(selection:)` — highlight, arrow keys and accessibility selection for free.
+    /// iOS has no persistent row selection outside edit mode, so rows stay tap-to-open there.
+    @ViewBuilder
+    private func selectableList<Rows: View>(@ViewBuilder rows: () -> Rows) -> some View {
+        #if os(macOS)
+        List(selection: Binding<NoteID?>(
+            get: { selection },
+            set: { if let id = $0 { onOpenProject(id) } }),
+            content: rows)
+        #else
+        List(content: rows)
+        #endif
     }
 }
 
@@ -685,30 +713,53 @@ public struct ConvertToProjectSheet: View {
 
 // MARK: - Project picker (reused by inbox card and action detail)
 
-/// Reusable project picker (used by the inbox card and the action detail view).
+/// Reusable project picker (action detail, deferred sweep): a **chip** showing the current
+/// project (confirmed) or an unset `Project` chip with the `plus` symbol; tapping it opens the
+/// list — popover on Mac, medium sheet on iOS, the same presentation as `DateValueChip`.
+///
+/// It used to be a bare `List`, which collapses to zero height inside a `ScrollView` — the action
+/// detail showed the "Project" label with nothing under it (walkthrough 2026-09-19, P6). What the
+/// chip and the list show is decided in `ProjectPickerContent`.
 public struct ProjectPicker: View {
     @Binding private var selection: NoteID?
     @Environment(AppModel.self) private var model
+    @State private var isPresented = false
 
     public init(selection: Binding<NoteID?>) {
         self._selection = selection
     }
 
     public var body: some View {
-        List(model.snapshot.projects.filter { $0.status == .active }, id: \.id) { project in
+        let chip = ProjectPickerContent.chip(selection: selection, in: model.snapshot)
+        Chip(chip.title, state: chip.state, symbol: chip.state == .unset ? Symbols.addValue : nil) {
+            isPresented = true
+        }
+        .accessibilityLabel(Copy.spoken(chip.state == .unset ? [chip.title] : [Copy.project, chip.title]))
+        .popover(isPresented: $isPresented) { list }
+    }
+
+    private var list: some View {
+        List(ProjectPickerContent.options(selection: selection, in: model.snapshot), id: \.id) { project in
             Button {
-                selection = selection == project.id ? nil : project.id
+                selection = ProjectPickerContent.toggled(project.id, from: selection)
+                isPresented = false
             } label: {
                 HStack {
-                    Text(project.title).font(Typo.body)
+                    Text(project.title).font(Typo.body).foregroundStyle(Color.ink)
                     Spacer()
                     if selection == project.id {
                         Image(systemName: Symbols.done).foregroundStyle(Color.gtdAccent)
                     }
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityAddTraits(selection == project.id ? [.isSelected] : [])
         }
+        .frame(minWidth: 280, minHeight: 320)
+        #if os(iOS)
+        .presentationDetents([.medium, .large])
+        #endif
     }
 }
 

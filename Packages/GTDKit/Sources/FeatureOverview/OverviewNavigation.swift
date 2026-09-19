@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import GTDModel
+import GTDAppCore
 
 /// What the right-hand column shows (E3).
 public enum OverviewDetail: Hashable, Sendable {
@@ -69,6 +70,18 @@ public final class OverviewNavigation {
         return true
     }
 
+    /// The action in the detail column — what the list column highlights as selected.
+    public var openAction: NoteID? {
+        if case let .action(id) = detail { return id }
+        return nil
+    }
+
+    /// The project in the detail column — what the Projects list highlights as selected (M2).
+    public var openProject: NoteID? {
+        if case let .project(id) = detail { return id }
+        return nil
+    }
+
     public func open(action id: NoteID) { detail = .action(id) }
 
     public func open(project id: NoteID) { detail = .project(id) }
@@ -82,12 +95,24 @@ public final class OverviewNavigation {
         }
     }
 
-    /// Drops a detail selection whose note no longer exists in `snapshot`.
-    public func prune(against snapshot: VaultSnapshot) {
+    /// Consumes one snapshot update: a renamed note keeps the detail column under its new
+    /// `NoteID`, a note that really left the vault loses it.
+    ///
+    /// Remap **then** prune, in one call, because the snapshot alone cannot tell the two apart —
+    /// a renamed note's old id is as absent from it as a deleted one's
+    /// (`GTDAppCore.NavigationRemap`).
+    public func apply(snapshot: VaultSnapshot, renames: RenameMap = .empty) {
         switch detail {
-        case let .action(id) where snapshot.action(id) == nil: detail = nil
-        case let .project(id) where snapshot.project(id) == nil: detail = nil
-        default: break
+        case let .action(id):
+            detail = NavigationRemap
+                .selection(id, renames: renames) { snapshot.action($0) != nil }
+                .map(OverviewDetail.action)
+        case let .project(id):
+            detail = NavigationRemap
+                .selection(id, renames: renames) { snapshot.project($0) != nil }
+                .map(OverviewDetail.project)
+        case nil:
+            break
         }
     }
 

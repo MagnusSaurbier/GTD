@@ -28,9 +28,10 @@ public enum ActionField: String, Hashable, Sendable, CaseIterable {
 ///    change to a field the user is not editing survives the save, and the user's in-flight text
 ///    survives the refresh.
 /// 2. **A rename changes the `NoteID`** — the reducer moves `Actions/<Title>.md` (A1). After a
-///    save that included the title, the model re-points itself at the new id and calls
-///    `onRename`, so the detail column and the navigation follow instead of showing
-///    "action is gone".
+///    save that included the title, the model re-points itself at the new id (and calls
+///    `onRename`, an optional hook). The *navigation* follows on its own: the reducer publishes
+///    the rename with the snapshot and the shell remaps its ids before pruning
+///    (`GTDAppCore.NavigationRemap`), so nobody lands on "action is gone".
 ///
 /// No SwiftUI: the clock and the debounce are injected, so all of this is tested on Linux.
 @MainActor
@@ -49,6 +50,12 @@ public final class ActionEditModel {
     public private(set) var isSaving = false
     /// True when the action disappeared from the snapshot (completed, trashed, renamed away).
     public private(set) var isMissing = false
+
+    /// True while the title field has the keyboard. A title save is a file move (A1) and hands
+    /// the shell a new `NoteID`; doing that on every typing pause renames the note once per
+    /// pause and, on iPhone, rebuilds the pushed detail under the person's fingers. So the
+    /// title waits for blur, Return, `flush()` or closing; every other field autosaves as ever.
+    public private(set) var isTitleHeld = false
 
     /// Called after a rename landed, with the new `NoteID`.
     public var onRename: ((NoteID) -> Void)?
@@ -98,9 +105,32 @@ public final class ActionEditModel {
 
     public var hasUnsavedEdits: Bool { !dirty.isEmpty }
 
+    /// Done or trashed (A5: gone from every list) — the detail stops offering it for editing.
+    /// An undo brings it back through `refresh()`.
+    public var isClosed: Bool { draft?.status.isClosed ?? false }
+
     // MARK: - Editing
 
-    public func setTitle(_ value: String) { edit(.title) { $0.title = value } }
+    /// The title is one line (A1: it is the file name) even though the field wraps (P2). Returns
+    /// `true` when the input carried a Return — the view's cue to give up focus, because a
+    /// wrapping text field has no submit of its own.
+    @discardableResult
+    public func setTitle(_ value: String) -> Bool {
+        let input = ActionEditModel.titleInput(value)
+        if input.text != title { edit(.title) { $0.title = input.text } }
+        return input.submitted
+    }
+
+    /// Folds typed or pasted line breaks out of a title: a Return submits, pasted lines join
+    /// with one space. Text without a line break passes through untouched (no trimming while
+    /// the person is still typing).
+    static func titleInput(_ raw: String) -> (text: String, submitted: Bool) {
+        guard raw.contains(where: \.isNewline) else { return (raw, false) }
+        let lines = raw.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return (lines.joined(separator: " "), true)
+    }
     public func setWhy(_ value: String) { edit(.why) { $0.why = value } }
     public func setWhat(_ value: String) { edit(.what) { $0.what = value } }
 
@@ -136,6 +166,42 @@ public final class ActionEditModel {
 
     public func clearError() { lastError = nil }
 
+    /// The view reports whether the title field is focused (see `isTitleHeld`). Letting go
+    /// writes a pending title at once.
+    public func setTitleHeld(_ held: Bool) {
+        guard held != isTitleHeld else { return }
+        isTitleHeld = held
+        if !held, dirty.contains(.title) { schedule(immediate: true) }
+    }
+
+    // MARK: - Closing the action
+
+    /// Tick-off from the detail (N6 undo covers it). Pending edits are written first, so the
+    /// completed note carries them; a refused edit keeps the action open with its error shown.
+    @discardableResult
+    public func complete() async -> Bool {
+        await close { .complete($0) }
+    }
+
+    /// Moves the action to Trash — a status, never a file deletion (CLAUDE.md rule 2).
+    @discardableResult
+    public func trash() async -> Bool {
+        await close { .setStatus($0, .trash, waiting: nil) }
+    }
+
+    private func close(_ command: (NoteID) -> GTDCommand) async -> Bool {
+        await flush()
+        guard lastError == nil, dirty.isEmpty, model.snapshot.action(id) != nil else { return false }
+        do {
+            try await model.send(command(id))      // `id` read after the flush: a rename moved it
+            refresh()
+            return true
+        } catch {
+            lastError = error
+            return false
+        }
+    }
+
     // MARK: - Snapshot handling
 
     /// Adopts the current snapshot: every field the user has **not** touched takes the vault's
@@ -160,6 +226,7 @@ public final class ActionEditModel {
         pending?.cancel()
         pending = nil
         retryBlocked = false
+        isTitleHeld = false
         await save()
     }
 
@@ -218,14 +285,14 @@ public final class ActionEditModel {
             saveRequested = true                 // the in-flight save picks it up when it returns
             return
         }
-        guard !dirty.isEmpty, !retryBlocked else { return }
+        let saving = isTitleHeld ? dirty.subtracting([.title]) : dirty
+        guard !saving.isEmpty, !retryBlocked else { return }
         guard draft != nil else { return }
         guard model.snapshot.action(id) != nil else {
             isMissing = true
             return
         }
 
-        let saving = dirty
         let stamp = generation
 
         isSaving = true

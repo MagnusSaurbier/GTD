@@ -34,7 +34,7 @@ Run with the `-useFixtures` launch argument (Product → Scheme → Edit Scheme 
 - [ ] Tick off a Next item → undo toast → `Undo` (and `⌘Z`) puts it back.
 - [ ] Complete the last open action of a project → **What's next?** appears.
 - [ ] `⌘1…⌘7` move the sidebar, `⌘N` opens capture, `⌘I` opens processing, `⌘,` opens Settings.
-- [ ] **iPhone:** three tabs (Next · Inbox · Routines), inbox tab carries a count badge, the gear
+- [ ] **iPhone:** three tabs (Inbox · Next · Routines, opening on Next), inbox tab carries a count badge, the gear
       on Next opens Settings, and a routine runs to its end screen.
 - [ ] Dark mode and Dynamic Type at the largest accessibility size: nothing clipped or overlapping
       (STYLEGUIDE §9 checklist).

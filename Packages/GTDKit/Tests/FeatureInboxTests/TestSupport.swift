@@ -14,7 +14,8 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
     private var snapshot: VaultSnapshot
     private var undoState: VaultSnapshot?
     private var label: String?
-    private var continuations: [UUID: AsyncStream<VaultSnapshot>.Continuation] = [:]
+    private var renames: RenameMap = .empty
+    private var continuations: [UUID: AsyncStream<SnapshotUpdate>.Continuation] = [:]
     private let env: ReducerEnv
 
     init(snapshot: VaultSnapshot, env: ReducerEnv = Fixtures.reducerEnv(deviceID: "test")) {
@@ -24,14 +25,14 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
 
     // MARK: GTDBackend
 
-    func snapshots() -> AsyncStream<VaultSnapshot> {
+    func snapshots() -> AsyncStream<SnapshotUpdate> {
         AsyncStream { continuation in
             let current = subscribe(continuation)
-            continuation.yield(current)
+            continuation.yield(SnapshotUpdate(snapshot: current))
         }
     }
 
-    func currentSnapshot() async -> VaultSnapshot { read() }
+    func currentUpdate() async -> SnapshotUpdate { SnapshotUpdate(snapshot: read(), renames: readRenames()) }
 
     func perform(_ command: GTDCommand) async throws -> [AppPrompt] { try apply(command) }
 
@@ -46,7 +47,7 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
 
     // MARK: Synchronous internals (the only place the lock is taken)
 
-    private func subscribe(_ continuation: AsyncStream<VaultSnapshot>.Continuation) -> VaultSnapshot {
+    private func subscribe(_ continuation: AsyncStream<SnapshotUpdate>.Continuation) -> VaultSnapshot {
         let id = UUID()
         lock.lock()
         continuations[id] = continuation
@@ -65,6 +66,12 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return snapshot
+    }
+
+    private func readRenames() -> RenameMap {
+        lock.lock()
+        defer { lock.unlock() }
+        return renames
     }
 
     private func readLabel() -> String? {
@@ -86,7 +93,8 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
         snapshot = reduction.snapshot
         undoState = previous
         label = "Last change"
-        let published = snapshot
+        renames = reduction.renames
+        let published = SnapshotUpdate(snapshot: snapshot, renames: reduction.renames)
         let targets = Array(continuations.values)
         lock.unlock()
         for continuation in targets { continuation.yield(published) }
@@ -102,7 +110,8 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
         snapshot = undoState
         self.undoState = nil
         label = nil
-        let published = snapshot
+        renames = .empty
+        let published = SnapshotUpdate(snapshot: snapshot)
         let targets = Array(continuations.values)
         lock.unlock()
         for continuation in targets { continuation.yield(published) }
@@ -111,7 +120,8 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
     private func mutate(_ change: (inout VaultSnapshot) -> Void) {
         lock.lock()
         change(&snapshot)
-        let published = snapshot
+        renames = .empty
+        let published = SnapshotUpdate(snapshot: snapshot)
         let targets = Array(continuations.values)
         lock.unlock()
         for continuation in targets { continuation.yield(published) }
@@ -125,13 +135,14 @@ enum InboxTestSupport {
     @MainActor
     static func makeSession(
         snapshot: VaultSnapshot = Fixtures.sampleSnapshot,
-        lastKnowledgeFolder: String? = nil
+        lastKnowledgeFolder: String? = nil,
+        defaults: (any InboxDefaultsStore)? = nil
     ) -> (session: InboxSession, model: AppModel, backend: TestBackend) {
         let backend = TestBackend(snapshot: snapshot)
         let model = AppModel(backend: backend, snapshot: snapshot, today: { Fixtures.today })
         let session = InboxSession(
             model: model,
-            defaults: EphemeralInboxDefaults(lastKnowledgeFolder: lastKnowledgeFolder),
+            defaults: defaults ?? EphemeralInboxDefaults(lastKnowledgeFolder: lastKnowledgeFolder),
             now: { Fixtures.date(Fixtures.today, 10, 0) })
         return (session, model, backend)
     }

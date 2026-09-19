@@ -9,6 +9,11 @@ import GTDModel
 @Observable
 public final class AppModel {
     public private(set) var snapshot: VaultSnapshot
+    /// Notes whose `NoteID` changed since the shell last consumed this — see `consumeRenames()`.
+    ///
+    /// Written in the same main-actor step as `snapshot`, and always before it, so an observer
+    /// of `snapshot` reading this in the same change sees the renames that produced it.
+    public private(set) var renames: RenameMap = .empty
     public private(set) var undoLabel: String?
     /// Presented by the app shell (T40), never by a feature view.
     public var prompt: AppPrompt?
@@ -44,9 +49,9 @@ public final class AppModel {
         guard observation == nil else { return }
         let backend = self.backend
         observation = Task { [weak self] in
-            for await snapshot in backend.snapshots() {
+            for await update in backend.snapshots() {
                 guard let self else { return }
-                self.apply(snapshot)
+                self.apply(update)
             }
         }
     }
@@ -56,8 +61,23 @@ public final class AppModel {
         observation = nil
     }
 
-    private func apply(_ snapshot: VaultSnapshot) {
-        self.snapshot = snapshot
+    /// The one way a published state reaches the UI. Renames **accumulate** until the shell
+    /// takes them: two updates that arrive before it looks (or the same one arriving twice, once
+    /// through the stream and once through `currentUpdate()`) compose into one map rather than
+    /// the earlier one being lost.
+    private func apply(_ update: SnapshotUpdate) {
+        renames = renames.merging(update.renames)
+        snapshot = update.snapshot
+    }
+
+    /// Takes the renames published since the last call, leaving none behind.
+    ///
+    /// The app shell calls this when it reacts to a snapshot change, and is the only caller:
+    /// it remaps its navigation with them before pruning the notes that really are gone
+    /// (`NavigationRemap`).
+    public func consumeRenames() -> RenameMap {
+        defer { renames = .empty }
+        return renames
     }
 
     /// Runs a command. `GTDError` is rethrown so the UI can react (cap sheet, waiting sheet);
@@ -90,12 +110,12 @@ public final class AppModel {
     private func run(_ command: GTDCommand) async throws {
         do {
             let prompts = try await backend.perform(command)
-            snapshot = await backend.currentSnapshot()
+            apply(await backend.currentUpdate())
             undoLabel = await backend.undoLabel()
             if let first = prompts.first { prompt = first }
         } catch {
             // Keep the UI's view of the world truthful even when the command failed.
-            snapshot = await backend.currentSnapshot()
+            apply(await backend.currentUpdate())
             undoLabel = await backend.undoLabel()
             throw error
         }
@@ -147,7 +167,7 @@ public final class AppModel {
         } catch {
             lastError = error
         }
-        snapshot = await backend.currentSnapshot()
+        apply(await backend.currentUpdate())
         undoLabel = await backend.undoLabel()
     }
 

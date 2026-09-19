@@ -74,12 +74,33 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         }
     }
 
-    /// Sections that show the generic action list/detail pair; the others route to the feature
-    /// that owns them (T20–T24, T27).
+    /// D3 — the calendar strip is docked only under the lists whose items are *dated*: Next
+    /// (due), Waiting (follow-up) and Deferred (defer). Everywhere else it was dead space.
     public var showsCalendarStrip: Bool {
         switch self {
-        case .review, .routines: false
-        default: true
+        case .next, .waiting, .deferred: true
+        default: false
+        }
+    }
+
+    /// The guided flows have no list/detail pair: their view spans the content *and* the detail
+    /// column (sidebar + one wide column) instead of being squeezed into the list column.
+    public var spansDetailColumn: Bool {
+        switch self {
+        case .review, .routines: true
+        default: false
+        }
+    }
+
+    /// What the empty detail column says — it names what this section's list holds. `nil` for
+    /// sections that have no detail column, or nothing to open in it (the inbox is processed in
+    /// forced order, I1).
+    public var emptyDetailBody: String? {
+        switch self {
+        case .next, .backlog, .waiting, .maybe, .deferred: OverviewMacCopy.pickAnAction
+        case .projects: OverviewMacCopy.pickAProject
+        case .inbox: OverviewMacCopy.inboxIsProcessed
+        case .review, .routines: nil
         }
     }
 

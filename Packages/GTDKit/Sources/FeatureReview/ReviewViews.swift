@@ -119,10 +119,11 @@ struct ReviewWizardView: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.m) {
-            Text(Copy.weeklyReview).font(Typo.screenTitle).foregroundStyle(Color.ink)
+            // The window (or navigation bar) already carries the "Weekly review" title; the
+            // header names only what the title cannot: which week this review is for.
             Text(ReviewCopy.weekLabel(year: session.state.year, week: session.state.week))
-                .font(Typo.counter)
-                .foregroundStyle(Color.textSecondary)
+                .font(Typo.sectionHeader)
+                .foregroundStyle(Color.ink)
             Spacer(minLength: Spacing.s)
             Button(ReviewCopy.quit, action: onFinished)
                 .keyboardShortcut(.cancelAction)

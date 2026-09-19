@@ -5,6 +5,9 @@ import GTDModel
 /// Used by SwiftUI previews, feature tests and the app's `-useFixtures` mode.
 public actor InMemoryBackend: GTDBackend {
     private var snapshot: VaultSnapshot
+    /// What was published last — the snapshot plus the renames that produced it, so the stream
+    /// and `currentUpdate()` hand out the same value (`SnapshotUpdate`).
+    private var latest: SnapshotUpdate
     private var undoState: (snapshot: VaultSnapshot, label: String)?
     private let env: @Sendable () -> ReducerEnv
     private let hub: SnapshotHub
@@ -17,13 +20,14 @@ public actor InMemoryBackend: GTDBackend {
         env: (@Sendable () -> ReducerEnv)? = nil
     ) {
         self.snapshot = snapshot
+        self.latest = SnapshotUpdate(snapshot: snapshot)
         self.env = env ?? { ReducerEnv.live(deviceID: deviceID) }
-        self.hub = SnapshotHub(initial: snapshot)
+        self.hub = SnapshotHub(initial: SnapshotUpdate(snapshot: snapshot))
     }
 
-    nonisolated public func snapshots() -> AsyncStream<VaultSnapshot> { hub.stream() }
+    nonisolated public func snapshots() -> AsyncStream<SnapshotUpdate> { hub.stream() }
 
-    public func currentSnapshot() -> VaultSnapshot { snapshot }
+    public func currentUpdate() -> SnapshotUpdate { latest }
 
     public func perform(_ command: GTDCommand) async throws -> [AppPrompt] {
         let previous = snapshot
@@ -32,7 +36,7 @@ public actor InMemoryBackend: GTDBackend {
         if Rules.isUndoable(command) {
             undoState = (previous, UndoLabel.of(command, in: previous))
         }
-        hub.publish(snapshot)
+        publish(SnapshotUpdate(snapshot: snapshot, renames: reduction.renames))
         return reduction.prompts
     }
 
@@ -40,25 +44,30 @@ public actor InMemoryBackend: GTDBackend {
         guard let undoState else { throw GTDError.invalid("Nothing to undo") }
         snapshot = undoState.snapshot
         self.undoState = nil
-        hub.publish(snapshot)
+        publish(SnapshotUpdate(snapshot: snapshot))
     }
 
     public func undoLabel() async -> String? { undoState?.label }
+
+    private func publish(_ update: SnapshotUpdate) {
+        latest = update
+        hub.publish(update)
+    }
 }
 
-/// Fans a snapshot out to every `snapshots()` consumer. Lives outside the actor because
+/// Fans an update out to every `snapshots()` consumer. Lives outside the actor because
 /// `GTDBackend.snapshots()` is synchronous, so it must be callable from any isolation domain.
 /// `@unchecked Sendable` is sound here: every access is under `lock`.
 final class SnapshotHub: @unchecked Sendable {
     private let lock = NSLock()
-    private var latest: VaultSnapshot
-    private var continuations: [UUID: AsyncStream<VaultSnapshot>.Continuation] = [:]
+    private var latest: SnapshotUpdate
+    private var continuations: [UUID: AsyncStream<SnapshotUpdate>.Continuation] = [:]
 
-    init(initial: VaultSnapshot) {
+    init(initial: SnapshotUpdate) {
         latest = initial
     }
 
-    func stream() -> AsyncStream<VaultSnapshot> {
+    func stream() -> AsyncStream<SnapshotUpdate> {
         AsyncStream { continuation in
             let id = UUID()
             self.lock.lock()
@@ -75,11 +84,11 @@ final class SnapshotHub: @unchecked Sendable {
         }
     }
 
-    func publish(_ snapshot: VaultSnapshot) {
+    func publish(_ update: SnapshotUpdate) {
         lock.lock()
-        latest = snapshot
+        latest = update
         let targets = Array(continuations.values)
         lock.unlock()
-        for continuation in targets { continuation.yield(snapshot) }
+        for continuation in targets { continuation.yield(update) }
     }
 }

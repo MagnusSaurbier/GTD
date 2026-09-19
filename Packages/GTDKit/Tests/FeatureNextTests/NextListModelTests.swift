@@ -131,6 +131,41 @@ struct NextListModelTests {
         #expect(badge.step == .attention)
     }
 
+    @Test func rowMetaAndSpokenLabelCarryProjectContextsTimeAndBadges() throws {
+        let list = NextListModel(model: makeModel(), mode: .full, store: InMemoryNextFilterStore())
+        let action = try #require(list.items.first { $0.project != nil && !$0.contexts.isEmpty })
+        let parts = list.metaParts(for: action)
+        #expect(parts.first == list.projectTitle(for: action))
+        #expect(action.contexts.allSatisfy(parts.contains))
+
+        let spoken = list.spokenLabel(for: action)
+        #expect(spoken.hasPrefix(action.title))
+        #expect(!spoken.contains("·"), "separators are spoken as pauses, not as 'middle dot'")
+        for badge in list.badges(for: action) {
+            #expect(spoken.contains(badge.accessibilityLabel))
+        }
+    }
+
+    @Test func capHeaderIsLabelledAndShowsTheLimit() {
+        let list = NextListModel(model: makeModel(), mode: .full, store: InMemoryNextFilterStore())
+        let cap = Fixtures.sampleSnapshot.config.nextCap
+        #expect(list.capHeaderText == "Next · \(cap - 1)/\(cap)")
+        #expect(list.visibleCountText == nil, "every Next action is visible — nothing to explain")
+        #expect(list.capHeaderSpokenText.contains("\(cap - 1) of \(cap) in Next"))
+
+        list.setContexts(["errands"])
+        #expect(list.visibleCountText == "\(list.items.count) of \(cap - 1) shown")
+        #expect(list.capHeaderText == "Next · \(cap - 1)/\(cap)", "filters never change the cap count")
+    }
+
+    @Test func onTheGoHeaderSaysHowManyOfNextAreVisible() {
+        let list = NextListModel(model: makeModel(), mode: .onTheGo, store: InMemoryNextFilterStore())
+        let cap = Fixtures.sampleSnapshot.config.nextCap
+        #expect(list.items.count < list.capCount, "the sample vault has Next actions outside the on-the-go contexts")
+        #expect(list.visibleCountText == "\(list.items.count) of \(cap - 1) on the go")
+        #expect(list.capHeaderSpokenText.contains("on the go"))
+    }
+
     @Test func capCountIgnoresTheViewsOwnFilters() {
         let list = NextListModel(model: makeModel(), mode: .full, store: InMemoryNextFilterStore())
         let unfiltered = list.capCount

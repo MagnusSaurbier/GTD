@@ -11,6 +11,10 @@ settings (notification toggles, morning time, vault display name) and the vault-
 shell presents onboarding, so only the shell can take it down; it backs the last step's `Start`
 button), `SettingsView(deviceSettings:onChangeVault:)`, `VaultIssuesView()`.
 
+The Contexts section edits differently per platform: iOS uses stock list editing (`Edit` in the
+section header → drag handles + delete, swipe for Rename / Remove); macOS keeps the
+Up / Down / Rename / remove buttons in each row. Both go through the same `SettingsSession` calls.
+
 Linux-compilable (unit-tested, no SwiftUI):
 - `DeviceSettings` — device-local state, `Codable`.
 - `SettingsStore` protocol + `InMemorySettingsStore` / `UserDefaultsSettingsStore` +

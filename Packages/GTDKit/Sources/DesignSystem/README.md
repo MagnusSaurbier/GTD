@@ -69,7 +69,12 @@ holds none of them. Adding is normal, renaming is a cross-target change.
   inbox zero and routine/review complete. A feature that needs one composes it (`FeatureInbox` replaced
   `FeatureInbox`'s second copy); nothing invents a third. Its hero symbol still uses
   `.font(.system(size: 56))`, which §2.3 forbids — see `TEST-INSTRUCTIONS.md` "Unresolved".
-- `Symbols.checkboxOn/Off` and `Symbols.moveUp/moveDown`, and `Typo.rowIcon/controlGlyph`, exist
+- An unset "add a value" chip (`DateValueChip`, `ProjectPicker`) draws `Symbols.addValue` and takes
+  its title from `Copy.unsetChipTitle(_:)` — no literal "+", first letter capitalised. `Chip` /
+  `DateValueChip` take an optional `signal:` that tints a **confirmed** chip with the `Badge`
+  colour formula (Waiting's passed follow-up date). `Badge` is `.fixedSize()` — never squeezed.
+- `Symbols.checkboxOn/Off`, `Symbols.moveUp/moveDown`, `Symbols.back/rename/addValue`, and
+  `Typo.rowIcon/controlGlyph`, exist
   so feature code contains no literal symbol name or font (STYLEGUIDE §9). None of them is a §7
   concept icon or a §2.2 signal; they are stock control affordances named in one place.
 - Everything in `Components/`, `Interaction/`, `DesignGallery.swift` and `Tokens/Colors.swift`,

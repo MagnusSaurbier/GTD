@@ -59,6 +59,12 @@ same fact.
   `DesignSystem`'s `CardFilingController` + `.cardSwipeFiling`. The GTD semantics
   (`CardTarget`, `KeyMap`, `DragResolver`) are unit-tested and stay in `FeatureInbox` either way;
   only the presentation would move. Worth doing once those files have compiled at least once.
+- **Only a *command's* rename is followed by the navigation.** The reducer reports a rename in
+  `Reduction.renames`, it rides with the snapshot, and the shell remaps before it prunes, so
+  editing a title keeps the detail open (ARCHITECTURE §4). Undo replays inverse **file ops**
+  rather than a command, and a rename made on another device arrives as a rescan, so neither
+  carries a `RenameMap`: in those two cases the open detail still closes, with the note present
+  under its other name. Nothing is lost.
 - **`FeatureSettings.RoutineTimeRow` seeds its `@State` in `init`**, so a routine time changed on
   another device while Settings is open does not move the picker. Harmless; not a sync bug.
 - **`VaultIssuesView`'s "Open in Obsidian"** builds `obsidian://open?path=<vault-relative path>`.

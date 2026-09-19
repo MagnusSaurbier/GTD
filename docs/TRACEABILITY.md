@@ -87,7 +87,7 @@ consequence of the app being written on Linux without an Apple SDK (`CLAUDE.md`)
 | D1 | `defer` hides until the date, then a badge; `due` warns as it approaches | `Rules.isVisible`/`deferredList`/`signals`/`returnedFromDeferBadge`, `StalenessPolicy` | `GTDModelTests/RulesTests` (`SignalRuleTests`), `DesignSystemTests/SignalPresentationTests` | **done** |
 | D2 | Local notifications for defer returns, deadlines and follow-ups | `GTDKit/GTDNotifications/NotificationPlanner` (pure, fully tested) + `SystemNotificationCenter`, `App/NotificationService.swift`, `FeatureSettings` toggles | `GTDNotificationsTests/NotificationPlannerTests`, `NotificationSchedulerTests`, `NotificationRouteTests` | **partial** — no actions on the notification itself → `docs/follow-ups/52-notification-actions-and-widget.md`. Scheduling and routing are **done (blind)**. |
 | — | Apple Calendar / Reminders sync | — | no `EventKit` anywhere | **out of scope** (§12) |
-| D3 | Mac calendar strip: defer, due, follow-up on one timeline | `Rules.timeline`, `FeatureWaiting/CalendarStrip` + `WaitingListModel.timeline(days:)` | `GTDModelTests/RulesTests`, `FeatureWaitingTests` | **done (blind)** for the strip; the query is **done**. |
+| D3 | Mac calendar strip: defer, due, follow-up on one timeline | `Rules.timeline`, `FeatureOverview/OverviewCalendarStrip` (the docked Mac strip; `FeatureWaiting/CalendarStrip` is the older layout) + `WaitingListModel.timeline(days:)` | `GTDModelTests/RulesTests`, `FeatureWaitingTests` | **done (blind)** for the strip; the query is **done**. |
 
 ## §8 Engage views
 

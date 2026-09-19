@@ -49,10 +49,28 @@ private struct ActionDetailEditor: View {
     @State private var editor: ActionEditModel?
     @State private var isWaitingSheetPresented = false
     @State private var isConvertPresented = false
+    /// Which text entry has the keyboard (P2). `nil` = none, which is what Done, a scroll and a
+    /// tap outside a field all set.
+    @FocusState private var focus: TextEntry?
+    /// Bumped when Return submits the title: a wrapping field keeps the typed line break on
+    /// screen unless it is rebuilt from the (single-line) draft.
+    @State private var titleGeneration = 0
+    #if os(iOS)
+    @Environment(\.dismiss) private var dismiss
+    #endif
+
+    private enum TextEntry: Hashable {
+        case title, why, what
+    }
 
     var body: some View {
         Group {
-            if let editor, editor.draft != nil {
+            if let editor, editor.isClosed {
+                ContentUnavailableView(
+                    OverviewCopy.missingActionTitle,
+                    systemImage: Symbols.done,
+                    description: Text(OverviewCopy.closedActionBody))
+            } else if let editor, editor.draft != nil {
                 form(editor)
             } else if editor?.isMissing == true {
                 ContentUnavailableView(
@@ -84,14 +102,26 @@ private struct ActionDetailEditor: View {
 
     @ViewBuilder private func form(_ editor: ActionEditModel) -> some View {
         let today = model.today()
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.l) {
+                // Wraps instead of scrolling sideways (P2). Still one line in the vault: the
+                // model folds line breaks away and reports a Return as "submit".
                 TextField(
                     OverviewCopy.titlePlaceholder,
-                    text: Binding(get: { editor.title }, set: { editor.setTitle($0) }))
+                    text: Binding(
+                        get: { editor.title },
+                        set: { submitTitleIfAsked(editor.setTitle($0)) }),
+                    axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(Typo.screenTitle)
                     .foregroundStyle(Color.ink)
+                    .lineLimit(1...4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .submitLabel(.done)
+                    .focused($focus, equals: .title)
+                    .id(titleGeneration)
+                    .id(TextEntry.title)
 
                 if editor.lastError != nil {
                     errorBanner(editor)
@@ -143,10 +173,10 @@ private struct ActionDetailEditor: View {
                         get: { editor.project }, set: { editor.setProject($0) }))
                 }
 
-                section(Copy.why, placeholder: Copy.whyPlaceholder, text: Binding(
+                section(Copy.why, entry: .why, placeholder: Copy.whyPlaceholder, text: Binding(
                     get: { editor.why }, set: { editor.setWhy($0) }))
 
-                section(Copy.what, placeholder: Copy.whatPlaceholder, text: Binding(
+                section(Copy.what, entry: .what, placeholder: Copy.whatPlaceholder, text: Binding(
                     get: { editor.what }, set: { editor.setWhat($0) }))
 
                 if editor.suggestsProject {
@@ -162,6 +192,25 @@ private struct ActionDetailEditor: View {
 
                 Divider()
 
+                #if os(macOS)
+                // P8 — the iPhone has these in its bottom bar (thumb reach, STYLEGUIDE §1.7).
+                HStack(spacing: Spacing.l) {
+                    Button {
+                        close(editor, trash: false)
+                    } label: {
+                        Label(Copy.done, systemImage: Symbols.done)
+                    }
+                    Button {
+                        close(editor, trash: true)
+                    } label: {
+                        Label(Copy.trash, systemImage: Symbols.trash)
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(Typo.meta)
+                .foregroundStyle(Color.gtdAccent)
+                #endif
+
                 Button {
                     if let url = ObsidianLink.url(for: editor.id, vaultRoot: vaultRootPath) {
                         openURL(url)
@@ -175,7 +224,62 @@ private struct ActionDetailEditor: View {
             }
             .padding(Spacing.screenMargin)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // A tap that no chip, button or field took lands here: it puts the keyboard away.
+            .contentShape(Rectangle())
+            .onTapGesture { focus = nil }
         }
+        #if os(iOS)
+        .scrollDismissesKeyboard(.interactively)
+        // P7/O2 — the last row rests clear of the floating bottom-bar buttons (⋯, Done) at
+        // scroll rest. `Spacing.minHitTarget` (44 pt) is their real footprint; `Spacing.xl`
+        // clears their own padding plus the safe-area/home-indicator margin below them. The
+        // tab bar is already hidden behind this push (`PhoneShell`'s `.toolbar(.hidden,
+        // for: .tabBar)`), so it needs no extra allowance here.
+        .contentMargins(.bottom, Spacing.minHitTarget + Spacing.xl, for: .scrollContent)
+        #endif
+        .onChange(of: focus) { _, entry in
+            editor.setTitleHeld(entry == .title)
+            guard let entry else {
+                Task { await editor.flush() }        // field blur writes the edit now
+                return
+            }
+            // The keyboard is still on its way up; scroll once it has taken its space, or a
+            // wrapping field at the bottom of the form stays underneath it (P2).
+            Task {
+                try? await Task.sleep(for: .milliseconds(350))
+                guard focus == entry else { return }
+                withAnimation { proxy.scrollTo(entry, anchor: .center) }
+            }
+        }
+        }
+        #if os(iOS)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(Copy.done) { focus = nil }
+            }
+            // P8 — tick off or trash from the detail, in the lower half of the screen.
+            ToolbarItemGroup(placement: .bottomBar) {
+                Menu {
+                    Button(role: .destructive) {
+                        close(editor, trash: true)
+                    } label: {
+                        Label(Copy.trash, systemImage: Symbols.trash)
+                    }
+                } label: {
+                    Label(OverviewCopy.more, systemImage: OverviewSymbols.more)
+                }
+                Spacer()
+                Button {
+                    close(editor, trash: false)
+                } label: {
+                    Label(Copy.done, systemImage: Symbols.done)
+                        .labelStyle(.titleAndIcon)
+                }
+                .tint(Color.gtdAccent)
+            }
+        }
+        #endif
         .sheet(isPresented: $isWaitingSheetPresented) {
             WaitingInfoSheet(
                 initial: editor.waiting,
@@ -185,6 +289,25 @@ private struct ActionDetailEditor: View {
         }
         .sheet(isPresented: $isConvertPresented) {
             ConvertToProjectSheet(action: editor.id)
+        }
+    }
+
+    /// Return in the title: give the keyboard back and rebuild the field from the draft.
+    private func submitTitleIfAsked(_ submitted: Bool) {
+        guard submitted else { return }
+        focus = nil
+        titleGeneration += 1
+    }
+
+    /// Complete / trash (P8). The list's undo toast covers both; a refusal shows in the inline
+    /// banner, and the detail only leaves the screen once the command went through.
+    private func close(_ editor: ActionEditModel, trash: Bool) {
+        focus = nil
+        Task {
+            guard await (trash ? editor.trash() : editor.complete()) else { return }
+            #if os(iOS)
+            dismiss()
+            #endif
         }
     }
 
@@ -208,7 +331,7 @@ private struct ActionDetailEditor: View {
     }
 
     @ViewBuilder private func section(
-        _ label: String, placeholder: String, text: Binding<String>
+        _ label: String, entry: TextEntry, placeholder: String, text: Binding<String>
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Text(label).font(Typo.sectionHeader).foregroundStyle(Color.ink)
@@ -216,7 +339,10 @@ private struct ActionDetailEditor: View {
                 .textFieldStyle(.plain)
                 .font(Typo.body)
                 .lineLimit(3...)
+                .fixedSize(horizontal: false, vertical: true)
+                .focused($focus, equals: entry)
         }
+        .id(entry)
     }
 
     /// A refused command (STYLEGUIDE §4.3: no alerts for validation — inline, in place).

@@ -220,10 +220,18 @@ onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
 
 ### GTDAppCore — what the UI sees
 
-`GTDBackend` (the protocol every backend implements: `snapshots()`, `currentSnapshot()`,
-`perform(_:)`, `undo()`, `undoLabel()`), `AppModel` (`@MainActor @Observable`, handed to views
+`GTDBackend` (the protocol every backend implements: `snapshots()`, `currentUpdate()`,
+`perform(_:)`, `undo()`, `undoLabel()`), `SnapshotUpdate`, `NavigationRemap`, `AppModel` (`@MainActor @Observable`, handed to views
 through `@Environment(AppModel.self)`), `InMemoryBackend` (reducer only — previews and tests) and
 `UndoLabel` (one label table, shared by both backends).
+
+**Renames travel with the snapshot.** A backend publishes a `SnapshotUpdate` — the snapshot
+plus the `RenameMap` of the command that produced it — through both `snapshots()` and
+`currentUpdate()`, so neither path can deliver the snapshot of a rename without the rename.
+`AppModel` accumulates the renames until the shell takes them (`consumeRenames()`), and the
+shell remaps its navigation **before** pruning what is gone (`NavigationRemap`). Without that,
+a renamed note is indistinguishable from a deleted one — its old `NoteID` is simply absent —
+and editing a title popped the detail view.
 
 **Command order.** `AppModel` runs commands one at a time, in call order. `send(deriving:)` builds
 its command only once it is that command's turn: a caller that derives a whole entity from
@@ -303,6 +311,7 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-18 | **Time estimate** is stored in minutes; chips write 10/30/60/90; any value > 60 shows as "60+". |
 | 2026-09-19 | **Vault access on device:** the device spike was skipped by user decision — the app assumes a security-scoped bookmark to a user-picked folder inside Obsidian's iCloud container gives durable read/write access. Still an assumption: `TEST-INSTRUCTIONS.md` Gate 3 settles it and names the fallback (an app-owned iCloud container, with the vault relocated or symlinked). |
 | 2026-09-19 | **`extraOps` owns any path it names**; the snapshot diff emits nothing for it (§4). |
+| 2026-09-19 | **A rename is an event, not something to be inferred:** `Reduction.renames` (a `RenameMap`) rides with the snapshot as a `SnapshotUpdate`, and the shell remaps ids before pruning. It replaced `AppRouter.prune(against:)` plus the `PhoneShell`/`onRename` follow-up, which raced each other. |
 | 2026-09-19 | **Weekly review note:** the reducer stores `snapshot.lastReview`; `GTDServices` encodes the `KW` note. `GTDModel` never produces markdown. |
 | 2026-09-19 | **Colour tokens are code-defined**, not asset-catalog-dependent, because the catalog build could not be verified without Xcode (§5). |
 | 2026-09-19 | **Liquid Glass:** `GlassActionBar`/`UndoToast` use `.glassEffect()` behind `if #available(iOS 26, macOS 26, *)` with a `.ultraThinMaterial` fallback. Nobody has compiled the call — `TEST-INSTRUCTIONS.md` "Where to look first" #1. |

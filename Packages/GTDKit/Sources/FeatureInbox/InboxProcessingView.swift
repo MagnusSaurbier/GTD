@@ -10,10 +10,14 @@ import DesignSystem
 /// `FeatureReview` embeds this view for "inbox to zero" (§10.1).
 public struct InboxProcessingView: View {
     private let onFinished: () -> Void
+    private let showsChrome: Bool
     @Environment(AppModel.self) private var model
     @State private var session: InboxSession?
 
-    public init(onFinished: @escaping () -> Void) {
+    /// `showsChrome: false` is for a host that brings its own counter and exit (the weekly
+    /// review's sweep): the toolbar then keeps only Undo.
+    public init(showsChrome: Bool = true, onFinished: @escaping () -> Void) {
+        self.showsChrome = showsChrome
         self.onFinished = onFinished
     }
 
@@ -21,7 +25,7 @@ public struct InboxProcessingView: View {
         ZStack {
             Color.surfaceGrouped.ignoresSafeArea()
             if let session {
-                InboxSessionView(session: session, onFinished: onFinished)
+                InboxSessionView(session: session, showsChrome: showsChrome, onFinished: onFinished)
             }
         }
         .task {
@@ -57,6 +61,7 @@ public struct InboxStartButton: View {
 
 struct InboxSessionView: View {
     @Bindable var session: InboxSession
+    var showsChrome = true
     let onFinished: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -80,7 +85,10 @@ struct InboxSessionView: View {
                     .presentationDetents(sheet == .cap ? [.large] : [.medium, .large])
                 #endif
             }
-            .overlay(alignment: .bottom) { toastOverlay }
+            #if os(macOS)
+            // iPhone shows the toast in the bottom inset, above the action bar (`bottomInset`).
+            .overlay(alignment: .bottom) { toastOverlay.padding(.bottom, Spacing.xxl) }
+            #endif
             .overlay { hintOverlay }
             .onChange(of: session.processed) { old, new in
                 guard new > old, let label = session.undoToastLabel else { return }
@@ -107,42 +115,122 @@ struct InboxSessionView: View {
         if session.isFinished {
             InboxZeroView(session: session, onFinished: onFinished)
         } else {
-            VStack(spacing: Spacing.l) {
-                Spacer(minLength: 0)
-                #if os(macOS)
-                // A macOS sheet has no title bar, so the `.principal` toolbar item below never
-                // renders there (seen on the first real run); the counter sits above the card.
-                Text(session.counter)
-                    .font(Typo.counter)
-                    .foregroundStyle(Color.textSecondary)
-                #endif
-                card
-                #if os(macOS)
-                Text(CardTarget.keyLegend)
-                    .font(Typo.counter)
-                    .foregroundStyle(Color.textSecondary)
-                    .accessibilityLabel(InboxCopy.keyLegendLabel)
-                #endif
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Spacing.screenMargin)
             #if os(iOS)
-            .safeAreaInset(edge: .bottom) { actionBar }
-            #endif
-            #if os(macOS)
-            .focusable()
-            .focusEffectDisabled()
-            .onKeyPress(.leftArrow) { press(.backlog) }
-            .onKeyPress(.rightArrow) { press(.next) }
-            .onKeyPress(.upArrow) { press(.maybe) }
-            .onKeyPress(.downArrow) { press(.trash) }
-            .onKeyPress(.escape) { quit() }
-            .onKeyPress(characters: Self.keyCharacters, phases: .down) {
-                handle($0)
-            }
+            phoneContent
+            #else
+            macContent
             #endif
         }
     }
+
+    #if os(iOS)
+    /// The card sits in a `ScrollView`, so the software keyboard can shrink the viewport without
+    /// squeezing the card: the fields keep their height, the focused one is scrolled into view,
+    /// and dragging the content down takes the keyboard with it. With no field focused and a
+    /// card that fits, scrolling is off, so the vertical swipes (Maybe, Trash) stay the card's.
+    /// A card taller than the screen scrolls instead; `⋯` in the action bar still files it.
+    private var phoneContent: some View {
+        GeometryReader { viewport in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    card
+                        .padding(.horizontal, Spacing.screenMargin)
+                        .padding(.vertical, Spacing.l)
+                        // Centred while it fits, top-aligned and scrolling once it does not.
+                        .frame(maxWidth: .infinity, minHeight: viewport.size.height)
+                        .contentShape(Rectangle())
+                        // A tap next to a field puts the keyboard away.
+                        .onTapGesture { focus = nil }
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollClipDisabled()
+                .scrollDisabled(
+                    focus == nil && cardSize.height + 2 * Spacing.l <= viewport.size.height)
+                .onChange(of: focus) { _, field in
+                    reveal(field, with: proxy)
+                }
+                // The keyboard arrives after the focus change; reveal again once it took its
+                // space. Only when the viewport **shrinks**: while it grows the user is dragging
+                // the keyboard away, and a programmatic scroll would fight that drag.
+                .onChange(of: viewport.size.height) { old, new in
+                    guard new < old else { return }
+                    reveal(focus, with: proxy)
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) { bottomInset }
+    }
+
+    private func reveal(_ field: CardField?, with proxy: ScrollViewProxy) {
+        guard let field else { return }
+        withAnimation(reduceMotion ? Motion.reduced : Motion.standard) {
+            proxy.scrollTo(field, anchor: .center)
+        }
+    }
+
+    /// Toast above the action bar, in the same inset, so the two can never overlap. While a
+    /// field has the keyboard the inset rides on top of it and the bar gives way to the
+    /// keyboard's `Done`.
+    private var bottomInset: some View {
+        VStack(spacing: Spacing.s) {
+            toastOverlay
+            if focus == nil {
+                actionBar
+            } else {
+                keyboardBar
+            }
+        }
+        .animation(reduceMotion ? Motion.reduced : Motion.standard, value: toast)
+    }
+
+    /// `Why?` and `What?` are multi-line, so Return is a newline: this is the way out of the
+    /// keyboard. With the focus gone the swipes and the action bar work again. A view in the
+    /// bottom inset rather than `ToolbarItemGroup(placement: .keyboard)`, which did not render
+    /// in the full-screen cover `PhoneShell` presents the session in (iOS 26.5 simulator).
+    private var keyboardBar: some View {
+        HStack {
+            Spacer(minLength: 0)
+            Button(Copy.done) { focus = nil }
+                .buttonStyle(.glass)
+                .accessibilityIdentifier("inbox.keyboardDone")
+        }
+        .padding(.horizontal, Spacing.screenMargin)
+        .padding(.bottom, Spacing.s)
+    }
+    #endif
+
+    #if os(macOS)
+    private var macContent: some View {
+        VStack(spacing: Spacing.l) {
+            Spacer(minLength: 0)
+            // A macOS sheet has no title bar, so the `.principal` toolbar item below never
+            // renders there (seen on the first real run); the counter sits above the card.
+            Text(session.counter)
+                .font(Typo.counter)
+                .foregroundStyle(Color.textSecondary)
+            card
+            Text(CardTarget.keyLegend)
+                .font(Typo.counter)
+                .foregroundStyle(Color.textSecondary)
+                .multilineTextAlignment(.center)
+                .accessibilityLabel(InboxCopy.keyLegendLabel)
+                .accessibilityValue(CardTarget.keyLegend)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Spacing.screenMargin)
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(.leftArrow) { press(.backlog) }
+        .onKeyPress(.rightArrow) { press(.next) }
+        .onKeyPress(.upArrow) { press(.maybe) }
+        .onKeyPress(.downArrow) { press(.trash) }
+        .onKeyPress(.escape) { quit() }
+        .onKeyPress(characters: Self.keyCharacters, phases: .down) {
+            handle($0)
+        }
+    }
+    #endif
 
     // MARK: Card stack
 
@@ -230,20 +318,16 @@ struct InboxSessionView: View {
         }
     }
 
-    /// Floating glass capsule above the home indicator. Swipe targets are **not** duplicated
-    /// here; `⋯` carries Defer to review (STYLEGUIDE §3.6).
+    /// Floating glass capsule above the home indicator: the four targets that have no swipe as
+    /// labelled buttons, and `⋯` with the four swipe targets for whoever cannot or will not
+    /// swipe (one-handed use, Switch Control, a card taller than the screen).
     private var actionBar: some View {
         GlassActionBar {
             ForEach(CardTarget.buttonTargets) { target in
                 Button {
                     Task { await session.choose(target) }
                 } label: {
-                    VStack(spacing: Spacing.xs) {
-                        Image(systemName: target.symbol)
-                            .symbolRenderingMode(.hierarchical)
-                        Text(target.title).font(Typo.counter)
-                    }
-                    .frame(minWidth: Spacing.minHitTarget, minHeight: Spacing.minHitTarget)
+                    barLabel(target.shortTitle, symbol: target.symbol)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.ink)
@@ -251,19 +335,34 @@ struct InboxSessionView: View {
             }
             Menu {
                 ForEach(CardTarget.menuTargets) { target in
-                    Button {
-                        Task { await session.choose(target) }
+                    Button(role: target == .trash ? .destructive : nil) {
+                        fly(to: target)
                     } label: {
                         Label(target.title, systemImage: target.symbol)
                     }
                 }
             } label: {
-                Image(systemName: InboxSymbols.more)
-                    .frame(minWidth: Spacing.minHitTarget, minHeight: Spacing.minHitTarget)
+                barLabel(InboxCopy.fileMenuLabel, symbol: InboxSymbols.more)
             }
             .foregroundStyle(Color.ink)
+            .accessibilityLabel(InboxCopy.fileMenuLabel)
         }
         .padding(.bottom, Spacing.s)
+    }
+
+    /// Symbols differ in height; a fixed icon box keeps every caption on one baseline.
+    private func barLabel(_ title: String, symbol: String) -> some View {
+        VStack(spacing: Spacing.xs) {
+            Image(systemName: symbol)
+                .symbolRenderingMode(.hierarchical)
+                .frame(height: Spacing.xl)
+            Text(title)
+                .font(Typo.counter)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: Spacing.minHitTarget)
+        .contentShape(Rectangle())
     }
     #endif
 
@@ -325,10 +424,12 @@ struct InboxSessionView: View {
     // MARK: Chrome
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            Text(session.counter)
-                .font(Typo.counter)
-                .foregroundStyle(Color.textSecondary)
+        if showsChrome {
+            ToolbarItem(placement: .principal) {
+                Text(session.counter)
+                    .font(Typo.counter)
+                    .foregroundStyle(Color.textSecondary)
+            }
         }
         ToolbarItem(placement: .cancellationAction) {
             Button {
@@ -339,8 +440,10 @@ struct InboxSessionView: View {
             .keyboardShortcut("z", modifiers: .command)
             .disabled(!session.canUndo)
         }
-        ToolbarItem(placement: .confirmationAction) {
-            Button(Copy.done, action: onFinished)
+        if showsChrome {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(Copy.done, action: onFinished)
+            }
         }
     }
 
@@ -369,7 +472,6 @@ struct InboxSessionView: View {
                 self.toast = nil
                 Task { await session.undo() }
             }
-            .padding(.bottom, Spacing.xxl)
             .transition(.opacity)
         }
     }
@@ -377,7 +479,7 @@ struct InboxSessionView: View {
     /// One-time hint showing the four directions (STYLEGUIDE §3.6).
     @ViewBuilder private var hintOverlay: some View {
         #if os(iOS)
-        if session.shouldShowSwipeHint, !session.isFinished {
+        if session.isSwipeHintVisible, !session.isFinished {
             VStack(spacing: Spacing.m) {
                 Text(InboxCopy.hintTitle).font(Typo.sectionHeader)
                 Text(InboxCopy.hintBody)

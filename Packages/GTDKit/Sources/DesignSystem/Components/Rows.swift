@@ -34,6 +34,9 @@ public struct Badge: View {
         .frame(minHeight: height)
         .background(background)
         .clipShape(Radius.chipShape)
+        // Never squeezed: in a narrow column a badge used to wrap letter by letter into a
+        // vertical capsule. It keeps its ideal size and the row's title gives way instead.
+        .fixedSize()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(content.accessibilityLabel)
     }
@@ -210,10 +213,7 @@ public struct ProjectRow: View {
 
     /// `2 active · 5 steps left`.
     private var countsLine: String {
-        Copy.metaLine([
-            "\(row.activeActions.count) active",
-            "\(row.remainingSteps) steps left",
-        ])
+        Copy.projectCounts(active: row.activeActions.count, remainingSteps: row.remainingSteps)
     }
 }
 #endif

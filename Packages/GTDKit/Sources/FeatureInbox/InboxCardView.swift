@@ -14,7 +14,10 @@ enum CardField: Hashable {
 }
 
 /// The inbox card (STYLEGUIDE §3.5): meta line, raw captured text, `Why?`, `What?`, chips.
-/// The card does not scroll internally; beyond six lines the raw text collapses behind `Show all`.
+/// Beyond six lines the raw text collapses behind `Show all`. The card itself never scrolls; on
+/// iPhone `InboxSessionView` puts it in a `ScrollView` so the software keyboard cannot squeeze
+/// it — which is also why every text field is `fixedSize` vertically (it may never collapse)
+/// and carries its `CardField` as `id` (the scroll view brings the focused one into view).
 struct InboxCardView: View {
     @Bindable var session: InboxSession
     @FocusState.Binding var focus: CardField?
@@ -24,6 +27,9 @@ struct InboxCardView: View {
     let shake: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Bumped when Return submits the title (O1): a wrapping field keeps the typed line break
+    /// on screen unless it is rebuilt from the (single-line) draft.
+    @State private var titleGeneration = 0
 
     private var rotation: Double {
         guard !reduceMotion else { return 0 }
@@ -83,14 +89,18 @@ struct InboxCardView: View {
     @ViewBuilder private var rawText: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             TextField(
-                InboxCopy.rawTextPlaceholder,
+                "",
                 text: $session.draft.text,
+                prompt: Self.prompt(InboxCopy.rawTextPlaceholder),
                 axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typo.cardText)
                 .foregroundStyle(Color.ink)
                 .lineLimit(focus == .text ? nil : 6)
+                // Never compressed: without this the last line loses its descenders.
+                .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: .text)
+                .accessibilityLabel(InboxCopy.rawTextPlaceholder)
             if isRawTextLong, focus != .text {
                 Button(InboxCopy.showAll) { session.sheet = .fullText }
                     .font(Typo.meta)
@@ -98,6 +108,7 @@ struct InboxCardView: View {
                     .foregroundStyle(Color.gtdAccent)
             }
         }
+        .id(CardField.text)
     }
 
     private var isRawTextLong: Bool {
@@ -117,12 +128,33 @@ struct InboxCardView: View {
             Text(label)
                 .font(Typo.sectionHeader)
                 .foregroundStyle(Color.ink)
-            TextField(placeholder, text: text, axis: .vertical)
+            TextField("", text: text, prompt: Self.prompt(placeholder), axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
                 .focused($focus, equals: field)
+                .accessibilityLabel(label)
         }
+        .id(field)
+    }
+
+    /// A placeholder must never read as an entered value (no lying defaults): it is tertiary,
+    /// the value is `ink`. macOS otherwise draws the prompt of a plain field in the text colour.
+    private static func prompt(_ placeholder: String) -> Text {
+        Text(placeholder).foregroundStyle(Color.textTertiary)
+    }
+
+    /// Folds typed or pasted line breaks out of the title: a Return submits, pasted lines join
+    /// with one space. Text without a line break passes through untouched (no trimming while
+    /// the person is still typing) — mirrors `ActionEditModel.titleInput`.
+    private static func titleInput(_ raw: String) -> (text: String, submitted: Bool) {
+        guard raw.contains(where: \.isNewline) else { return (raw, false) }
+        let lines = raw.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return (lines.joined(separator: " "), true)
     }
 
     private var whatSection: some View {
@@ -143,11 +175,18 @@ struct InboxCardView: View {
                 .font(Typo.meta)
                 .foregroundStyle(Color.textSecondary)
             }
-            TextField(Copy.whatPlaceholder, text: $session.draft.what, axis: .vertical)
+            TextField(
+                "",
+                text: $session.draft.what,
+                prompt: Self.prompt(Copy.whatPlaceholder),
+                axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
                 .focused($focus, equals: .what)
+                .accessibilityLabel(Copy.what)
                 .onChange(of: session.draft.what) { _, newValue in
                     let formatted = ChecklistText.autoFormat(newValue)
                     if formatted != newValue { session.draft.what = formatted }
@@ -164,9 +203,16 @@ struct InboxCardView: View {
                 .foregroundStyle(Color.gtdAccent)
             }
         }
+        .id(CardField.what)
     }
 
     /// The action note's title, derived from the first line of `What?` and editable before filing.
+    ///
+    /// `axis: .vertical` keeps a long capture (a full sentence) fully visible instead of
+    /// truncating with an ellipsis (O1); Return still submits — it never inserts a line break —
+    /// by folding a typed/pasted newline out of the text and dropping focus, the same move
+    /// `ActionDetailView`'s title field makes. `titleGeneration` forces the field to rebuild
+    /// from the (newline-free) draft afterwards, or the typed line break stays on screen.
     @ViewBuilder private var titleRow: some View {
         if !session.draft.effectiveTitle.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -174,18 +220,31 @@ struct InboxCardView: View {
                     .font(Typo.meta)
                     .foregroundStyle(Color.textSecondary)
                 TextField(
-                    InboxCopy.titlePlaceholder,
+                    "",
                     text: Binding(
                         get: { session.draft.effectiveTitle },
-                        set: {
-                            session.draft.title = $0
+                        set: { newValue in
+                            let input = Self.titleInput(newValue)
+                            session.draft.title = input.text
                             session.draft.titleWasEdited = true
-                        }))
+                            if input.submitted {
+                                focus = nil
+                                titleGeneration += 1
+                            }
+                        }),
+                    prompt: Self.prompt(InboxCopy.titlePlaceholder),
+                    axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(Typo.body)
                     .foregroundStyle(Color.ink)
+                    .lineLimit(1...3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .focused($focus, equals: .title)
+                    .submitLabel(.done)
+                    .id(titleGeneration)
+                    .accessibilityLabel(InboxCopy.titleLabel)
             }
+            .id(CardField.title)
         }
     }
 
@@ -207,11 +266,11 @@ struct InboxCardView: View {
             }
             FlowLayout {
                 DateValueChip(
-                    label: InboxCopy.addDefer,
+                    label: Copy.deferLabel,
                     value: $session.draft.deferDate,
                     today: session.today)
                 DateValueChip(
-                    label: InboxCopy.addDue,
+                    label: Copy.due,
                     value: $session.draft.due,
                     today: session.today)
                 Chip(
@@ -225,8 +284,10 @@ struct InboxCardView: View {
         }
     }
 
+    /// Unset: the `plus` symbol is the "+", so the title is the bare label (no `+ + Project`) —
+    /// same wording and casing as `DateValueChip` next to it and as the action detail.
     private var projectChipTitle: String {
-        guard let id = session.draft.project else { return "+ \(InboxCopy.addProject)" }
+        guard let id = session.draft.project else { return Copy.project }
         return session.snapshot.project(id)?.title ?? id.title
     }
 

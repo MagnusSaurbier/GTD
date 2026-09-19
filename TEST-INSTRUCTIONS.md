@@ -122,8 +122,8 @@ launch argument **`-useFixtures`** replaces that whole chain with `InMemoryBacke
 (Product → Scheme → Edit Scheme → Arguments → `-useFixtures`).
 
 The gate is: it launches on both platforms without crashing — Mac sidebar · list · detail at a
-minimum window of 900×560, iPhone three tabs (Next · Inbox · Routines). Then **walk
-`docs/MANUAL_TEST.md` §1**, which is the fixtures checklist (what each list should contain, the
+minimum window of 900×560, iPhone three tabs (Inbox · Next · Routines, opening on Next). Then
+**walk `docs/MANUAL_TEST.md` §1**, which is the fixtures checklist (what each list should contain, the
 cap's forced choice, undo, "What's next?", the menu-bar shortcuts). Do not re-derive it here.
 
 Two things §1 cannot check from inside the app:

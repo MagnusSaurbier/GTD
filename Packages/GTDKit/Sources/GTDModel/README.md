@@ -7,7 +7,7 @@ Compiles and tests on Linux.
 ## Public API
 
 - `Core/` — `NoteID`, `Day` + `DayTime` (integer civil calendar), `VaultLayout` (folder defaults
-  and every path builder).
+  and every path builder), `RenameMap` (old id → new id, `resolve`/`merging`).
 - `Entities/` — `InboxItem`, `Action`, `Area`, `Project`, `ProjectStep`, `LogEntry`, `Routine`,
   `RoutineStep`, `RoutineLogEntry`, `GTDConfig`, `VaultIssue`, `WeeklyReview`, `VaultSnapshot`,
   `NotePassthrough`, `Checkbox`, `ActionStatus`, `ProjectStatus`, `TimeBucket`, `RoutineStepResult`.
@@ -25,6 +25,9 @@ Compiles and tests on Linux.
 - `NotePassthrough` is opaque — only `GTDMarkdown` reads its slots.
 - The reducer is the only place with GTD semantics; its doc comment maps each rule to the code
   that enforces it. `extraOps` owns any path it names (ARCHITECTURE §4).
+- **A rename is reported, not inferred.** Renaming an action moves its file (A1), so the old
+  `NoteID` leaves the snapshot exactly as a deletion would. `Reduction.renames` says which ids
+  moved where, so navigation can follow the note instead of concluding it is gone.
 - Waiting needs who **and** follow-up; leaving `waiting` clears both. Closed actions always carry
   a closing date; re-opening clears it. Contexts come from `GTDConfig` (values already in a note
   survive an edit).

@@ -209,6 +209,7 @@ public enum Reducer {
 
         var next = s
         var extraOps: [VaultFileOp] = []
+        var renames = RenameMap.empty
 
         let wantedID = s.config.layout.actionPath(title: updated.title)
         if wantedID != previous.id {
@@ -217,13 +218,17 @@ public enum Reducer {
             next.actions[index] = moved
             extraOps.append(.move(from: previous.id.path, to: wantedID.path))
             retarget(from: previous.id, to: wantedID, in: &next)
+            // The note is not gone, it is called something else now. Saying so is what keeps a
+            // pushed detail (iPhone) and the selected row (Mac) on the note being edited.
+            renames.record(previous.id, as: wantedID)
         } else {
             next.actions[index] = updated
         }
 
         try checkCap(old: s, new: next)
         let prompts = settle(&next, at: index, previousStatus: previous.status, env: env)
-        return Reduction(snapshot: next, prompts: prompts, extraOps: extraOps)
+        return Reduction(
+            snapshot: next, prompts: prompts, extraOps: extraOps, renames: renames)
     }
 
     /// The one command every list uses to move an action between commitment tiers (A3, W1).

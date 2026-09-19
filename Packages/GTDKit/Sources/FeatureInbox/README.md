@@ -5,7 +5,7 @@ Inbox processing: one card at a time, LIFO, forced order, exit only by quitting 
 
 ## Public API
 
-- `InboxProcessingView(onFinished:)` — the whole session. `FeatureReview` embeds it (§10.1).
+- `InboxProcessingView(showsChrome:onFinished:)` — the whole session. `FeatureReview` embeds it (§10.1) with `showsChrome: false`, which drops the counter and `Done` from the toolbar.
 - `InboxStartButton(action:)` — home-screen entry point with the live queue count.
 
 Linux-compilable (this is where all the logic lives, and all of it is unit-tested):
@@ -43,6 +43,25 @@ navigation bar would be wrong. Every other presenter must supply one, or the ses
 visible way out — `PhoneShell` and `FeatureOverview` do (only the previews had
 one before).
 
+**iPhone keyboard.** On iOS the card sits in a `ScrollView` (`InboxSessionView.phoneContent`):
+the keyboard shrinks the viewport, never the card. Every card `TextField` is `fixedSize`
+vertically and carries its `CardField` as `.id`, so the focused one is scrolled into view; the
+keyboard goes away by dragging the content (`.scrollDismissesKeyboard(.interactively)`), by the
+`Done` button that rides above the keyboard (`keyboardBar` in the bottom inset, `focus = nil` —
+`ToolbarItemGroup(placement: .keyboard)` did not render inside `PhoneShell`'s full-screen cover)
+or by a tap next to a field. Scrolling is **off** while no
+field is focused and the card fits, so the vertical swipes stay the card's; a card taller than
+the screen scrolls, and is then filed from the action bar. The bar holds the four non-swipe
+targets as labelled buttons plus `⋯` with the four swipe targets (`CardTarget.buttonTargets` /
+`menuTargets`); it hides while a field is focused, and the undo toast lives in the same bottom
+inset above it. The Mac layout (`macContent`: counter, card, key legend, key handling) has no
+scroll view. Placeholders go through `prompt:` in `textTertiary` — on macOS a plain field
+otherwise draws them like a value.
+
+The one-time swipe hint is the **stored** `InboxSession.isSwipeHintVisible` (the defaults flag
+behind it is not observable); `dismissSwipeHint()` and the first card filed by a swipe target
+clear it.
+
 Inbox zero is `DesignSystem.RewardMoment.inboxZero`, not a local drawing of it (STYLEGUIDE §5
 allows exactly two reward moments, so there is exactly one implementation). The card drag
 geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) rather than
@@ -51,4 +70,4 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (49 tests).
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (53 tests).

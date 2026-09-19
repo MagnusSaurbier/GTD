@@ -45,6 +45,15 @@ public final class WaitingListModel {
         return followUp <= today
     }
 
+    /// The signal step that tints the row's follow-up date chip: the `chase` signal's step once
+    /// the follow-up date has passed, `nil` (plain chip) before. Taken from `Rules.signals`, so
+    /// the chip and the `chase` badge next to it can never disagree (walkthrough M10).
+    public func followUpSignal(for action: Action) -> SignalStep? {
+        Rules.signals(for: action, today: today).first {
+            if case .chase = $0.kind { true } else { false }
+        }?.step
+    }
+
     public func badges(for action: Action) -> [BadgeContent] {
         SignalPresentation.badges(for: Rules.signals(for: action, today: today), today: today)
     }

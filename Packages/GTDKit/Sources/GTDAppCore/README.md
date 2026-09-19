@@ -5,9 +5,15 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
 
 ## Public API
 
-- `GTDBackend` — `snapshots() -> AsyncStream<VaultSnapshot>`, `currentSnapshot()`,
-  `perform(_:) -> [AppPrompt]`, `undo()`, `undoLabel()`.
-- `AppModel` — `@MainActor @Observable`. `snapshot`, `undoLabel`, `prompt`, `lastError`,
+- `GTDBackend` — `snapshots() -> AsyncStream<SnapshotUpdate>`, `currentUpdate()`,
+  `perform(_:) -> [AppPrompt]`, `undo()`, `undoLabel()`; `currentSnapshot()` is an extension
+  over `currentUpdate()`.
+- `SnapshotUpdate` — one published state: the `VaultSnapshot` and the `RenameMap` of the command
+  that produced it.
+- `NavigationRemap` — `path(_:renames:exists:)` / `selection(_:renames:exists:)`: follow a
+  rename, then drop what is gone. Both shells navigate by it.
+- `AppModel` — `@MainActor @Observable`. `snapshot`, `renames`/`consumeRenames()`, `undoLabel`,
+  `prompt`, `lastError`,
   `today: () -> Day`; `send(_:) async throws`, `send(deriving:) async throws`,
   `perform(_:) async -> Bool`, `report(_:) async -> Bool`, `undo() async`, `start()`/`stop()`.
   Views get it with `@Environment(AppModel.self)`.
@@ -23,6 +29,13 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
 - `AppModel.send` refreshes `snapshot` and `undoLabel` **before returning**, both on success and
   on a thrown `GTDError`, so a caller can read them straight after `await`. That is why
   `GTDBackend` has `currentSnapshot()`.
+- **A rename is published with the snapshot it produced, never separately.** A note's id is its
+  file name (A1), so a renamed note's old id is as absent from the new snapshot as a deleted
+  one's; nothing downstream could tell the two apart on its own. Both paths to the UI — the
+  stream and `currentUpdate()` — carry the same `SnapshotUpdate`, and `AppModel` accumulates the
+  renames until the shell calls `consumeRenames()`, so no update can be seen without them and
+  none is lost when two arrive between two looks. The shell then remaps before it prunes
+  (`NavigationRemap`); doing it the other way round pops the detail of the note being renamed.
 - `GTDError` is rethrown for the UI to handle (cap sheet, waiting sheet). `undo()` never throws;
   a refused undo lands in `lastError`.
 - **A refused command always reaches the person.** A view either has a flow of its own

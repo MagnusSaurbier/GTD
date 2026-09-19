@@ -91,11 +91,18 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
         self == .deferToReview ? Copy.deferToReview : Copy.movedTo(title)
     }
 
-    /// The four buttons of the iPhone action bar: swipe targets are **not** duplicated (§3.6).
-    public static let buttonTargets: [CardTarget] = [.project, .knowledge, .waiting]
+    /// The short label under an action-bar icon and in the Mac legend: `Defer to review` does not
+    /// fit a quarter of an iPhone bar, so that one target reads `Review` there.
+    public var shortTitle: String {
+        self == .deferToReview ? InboxCopy.reviewShort : title
+    }
 
-    /// What the `⋯` menu holds.
-    public static let menuTargets: [CardTarget] = [.deferToReview]
+    /// The four labelled buttons of the iPhone action bar — the targets that have no swipe.
+    public static let buttonTargets: [CardTarget] = [.project, .knowledge, .waiting, .deferToReview]
+
+    /// What the `⋯` menu holds: the four swipe targets, so a card can be filed without a swipe
+    /// (one-handed use, Switch Control). Same order as the legend.
+    public static let menuTargets: [CardTarget] = directionalTargets
 
     /// The four directional targets, in legend order.
     public static let directionalTargets: [CardTarget] = [.backlog, .maybe, .next, .trash]
@@ -104,11 +111,15 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     /// targets use a token colour as is (`accentWash`, `fillQuiet`).
     public static let trashTintOpacity: Double = 0.18
 
-    /// `← Backlog  ↑ Maybe  → Next  ↓ Trash  P  K  W  R` (STYLEGUIDE §3.6, Mac legend row).
+    /// `← Backlog  ↑ Maybe  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review`
+    /// (STYLEGUIDE §3.6, Mac legend row). Every key names its target — a bare letter explains
+    /// nothing.
     public static var keyLegend: String {
-        let directions = directionalTargets.map { "\($0.key) \($0.title)" }
-        let letters = (buttonTargets + menuTargets).map(\.key)
-        return (directions + letters).joined(separator: "  ")
+        let directions = directionalTargets.map { "\($0.key) \($0.title)" }.joined(separator: "  ")
+        let letters = allCases.filter { !$0.isDirect }
+            .map { "\($0.key) \($0.shortTitle)" }
+            .joined(separator: " · ")
+        return directions + "    " + letters
     }
 }
 

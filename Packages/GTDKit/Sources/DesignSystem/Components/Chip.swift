@@ -11,19 +11,27 @@ public struct Chip: View {
     private let title: String
     private let state: ChipState
     private let leadingSymbol: String?
+    private let signal: SignalStep?
     private let action: () -> Void
 
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.colorScheme) private var colorScheme
 
+    /// `signal` tints a **confirmed** chip with a §2.1 signal colour (same formula as `Badge`:
+    /// colour @ 18 % / 28 %, ink label, tinted symbol) — e.g. a follow-up date that has passed.
+    /// The shape still carries the state (filled = confirmed); the hue only adds the signal, and
+    /// `nil` / `.neutral` / any other state draws the plain chip.
     public init(
         _ title: String,
         state: ChipState,
         symbol: String? = nil,
+        signal: SignalStep? = nil,
         action: @escaping () -> Void = {}
     ) {
         self.title = title
         self.state = state
         self.leadingSymbol = symbol
+        self.signal = signal
         self.action = action
     }
 
@@ -33,7 +41,9 @@ public struct Chip: View {
         } label: {
             HStack(spacing: Spacing.xs) {
                 if let symbol = effectiveSymbol {
-                    Image(systemName: symbol).symbolRenderingMode(.hierarchical)
+                    Image(systemName: symbol)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(signalTint ?? foreground)
                 }
                 Text(title)
             }
@@ -63,16 +73,28 @@ public struct Chip: View {
     private var horizontalPadding: CGFloat { 12 }
     #endif
 
+    /// The signal colour, only for a confirmed chip carrying a non-neutral signal.
+    private var signalTint: Color? {
+        guard state == .confirmed, let signal, signal != .neutral else { return nil }
+        return .signal(Badge.style(signal))
+    }
+
     private var foreground: Color {
         switch state {
         case .unset, .suggested: .textSecondary
-        case .confirmed: .inkInverse
+        case .confirmed: signalTint == nil ? .inkInverse : .ink
         case .disabled: .textTertiary
         }
     }
 
     @ViewBuilder private var background: some View {
-        if state == .confirmed { Color.ink } else { Color.clear }
+        if let signalTint {
+            signalTint.opacity(colorScheme == .dark ? 0.28 : 0.18)
+        } else if state == .confirmed {
+            Color.ink
+        } else {
+            Color.clear
+        }
     }
 
     /// STYLEGUIDE §8: outline thickens to 1.5 pt under `accessibilityContrast == .increased`.
@@ -187,39 +209,53 @@ public struct TimeBucketChipGroup: View {
     }
 }
 
-/// A date chip: `+ defer` when unset, the formatted date when confirmed, dashed when suggested.
+/// A date chip: `plus` symbol + `Defer` when unset, the formatted date when confirmed, dashed when suggested.
 /// Tapping opens a **stock graphical `DatePicker`** — popover on Mac, medium sheet on iOS.
 public struct DateValueChip: View {
     private let label: String
     @Binding private var value: Day?
     private let suggestion: Day?
     private let today: Day
+    private let signal: SignalStep?
+    private let signalSymbol: String?
 
     @State private var isPresented = false
 
+    /// `signal` (+ optional `signalSymbol`) tints the confirmed date — see `Chip.init`. The caller
+    /// takes the step from `Rules.signals`; this component never decides that a date is late.
     public init(
         label: String,
         value: Binding<Day?>,
         suggestion: Day? = nil,
-        today: Day = Day.today()
+        today: Day = Day.today(),
+        signal: SignalStep? = nil,
+        signalSymbol: String? = nil
     ) {
         self.label = label
         self._value = value
         self.suggestion = suggestion
         self.today = today
+        self.signal = signal
+        self.signalSymbol = signalSymbol
     }
 
     public var body: some View {
-        Chip(title, state: state, symbol: value == nil && suggestion == nil ? "plus" : nil) {
+        Chip(title, state: state, symbol: symbol, signal: signal) {
             isPresented = true
         }
         .popover(isPresented: $isPresented) { picker }
     }
 
+    private var symbol: String? {
+        if value == nil && suggestion == nil { return Symbols.addValue }
+        return value != nil && signal != nil && signal != .neutral ? signalSymbol : nil
+    }
+
     private var title: String {
         if let value { return DateText.short(value, today: today) }
         if let suggestion { return DateText.short(suggestion, today: today) }
-        return "+ \(label)"
+        // The chip already draws the `plus` symbol — a literal "+" here doubled it (P4).
+        return Copy.unsetChipTitle(label)
     }
 
     private var state: ChipState {

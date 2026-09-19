@@ -16,6 +16,8 @@ public enum Copy {
     public static let maybe = "Maybe"
     public static let waiting = "Waiting"
     public static let project = "Project"
+    /// Title of the projects **list** screen (the singular names one project or the field).
+    public static let projects = "Projects"
     public static let area = "Area"
     public static let knowledge = "Knowledge"
     public static let trash = "Trash"
@@ -25,6 +27,12 @@ public enum Copy {
     public static let chase = "Chase"
     public static let stalled = "Stalled"
     public static let routine = "Routine"
+    /// Title of the routines **list** screen.
+    public static let routines = "Routines"
+    /// Leaves a run without completing it — never a second "Done" next to the step's own.
+    public static let close = "Close"
+    /// Routine runner: one step back, undoing a mis-tapped Done/Skip.
+    public static let back = "Back"
     public static let weeklyReview = "Weekly review"
     public static let why = "Why?"
     public static let what = "What?"
@@ -86,6 +94,28 @@ public enum Copy {
     /// `14 processed · 6 min` — the inbox-zero moment's stats line (STYLEGUIDE §5.1).
     public static func processedSummary(processed: Int, minutes: Int) -> String {
         "\(processed) processed · \(minutes) min"
+    }
+
+    /// `1 step left` / `5 steps left` — the projects-list counts line.
+    public static func stepsLeft(_ count: Int) -> String {
+        count == 1 ? "1 step left" : "\(count) steps left"
+    }
+
+    /// `2 active · 5 steps left` — the line under a project's name (STYLEGUIDE §3.4).
+    public static func projectCounts(active: Int, remainingSteps: Int) -> String {
+        metaLine(["\(active) active", stepsLeft(remainingSteps)])
+    }
+
+    /// The title of an **unset** "add a value" chip (`Defer`, `Due`, `Project`). The chip draws the
+    /// `plus` symbol itself, so the title never carries a literal "+"; a leading one a caller
+    /// passed is stripped, and the first letter is capitalised so every screen reads the same.
+    public static func unsetChipTitle(_ label: String) -> String {
+        var text = label.trimmingCharacters(in: .whitespaces)
+        while text.hasPrefix("+") {
+            text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+        }
+        guard let first = text.first else { return text }
+        return first.uppercased() + text.dropFirst()
     }
 
     public static let onTheRemarkable = "On the reMarkable"

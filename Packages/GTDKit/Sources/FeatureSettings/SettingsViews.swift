@@ -157,6 +157,9 @@ public struct SettingsView: View {
     @State private var renamingContext: String?
     @State private var renameText = ""
     @State private var pendingRemoval: String?
+    /// O3 — the "Add a context" field had no way to dismiss the keyboard; a `.keyboard` toolbar
+    /// Done button (the `ActionDetailView` pattern) plus interactive scroll dismissal fix that.
+    @FocusState private var isAddContextFocused: Bool
 
     public init(deviceSettings: Binding<DeviceSettings>, onChangeVault: @escaping () -> Void) {
         self._deviceSettings = deviceSettings
@@ -174,6 +177,15 @@ public struct SettingsView: View {
             vaultSection
             aboutSection
         }
+        #if os(iOS)
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(Copy.done) { isAddContextFocused = false }
+            }
+        }
+        #endif
         .confirmationDialog(
             "Remove context?",
             isPresented: Binding(
@@ -212,11 +224,44 @@ public struct SettingsView: View {
     @ViewBuilder
     private func contextsSection(_ session: SettingsSession) -> some View {
         Section {
+            #if os(iOS)
+            // iPhone (walkthrough 2026-09-19, P18): four text buttons per row were cramped and
+            // tiny. Stock list editing instead — `Edit` in the header shows the drag handles and
+            // delete controls, a swipe offers Rename / Remove.
+            ForEach(session.config.contexts, id: \.self) { context in
+                Text(context).font(Typo.body).foregroundStyle(Color.ink)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            requestRemoval(session, of: context)
+                        } label: {
+                            Label("Remove", systemImage: Symbols.trash)
+                        }
+                        Button {
+                            beginRenaming(context)
+                        } label: {
+                            Label("Rename", systemImage: Symbols.rename)
+                        }
+                        .tint(Color.gtdAccent)
+                    }
+            }
+            .onMove { offsets, destination in
+                Task { try? await session.reorderContexts(from: offsets, to: destination) }
+            }
+            .onDelete { offsets in
+                for context in offsets.map({ session.config.contexts[$0] }) {
+                    requestRemoval(session, of: context)
+                }
+            }
+            #else
             ForEach(Array(session.config.contexts.enumerated()), id: \.offset) { index, context in
                 contextRow(session, index: index, context: context, count: session.config.contexts.count)
             }
+            #endif
             HStack {
                 TextField("Add a context", text: $newContextName)
+                    .focused($isAddContextFocused)
+                    .submitLabel(.done)
+                    .onSubmit { isAddContextFocused = false }
                 Button("Add") {
                     let name = newContextName
                     newContextName = ""
@@ -225,12 +270,35 @@ public struct SettingsView: View {
                 .disabled(newContextName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         } header: {
+            #if os(iOS)
+            HStack {
+                Text("Contexts")
+                Spacer()
+                EditButton().font(Typo.meta).textCase(nil)
+            }
+            #else
             Text("Contexts")
+            #endif
         } footer: {
             Text("Removing a context in use asks first; it never rewrites existing actions.")
         }
     }
 
+    /// A4: removing a context that actions still use asks first; an unused one goes at once.
+    private func requestRemoval(_ session: SettingsSession, of context: String) {
+        if session.affectedActionCount(for: context) > 0 {
+            pendingRemoval = context
+        } else {
+            Task { try? await session.removeContext(context) }
+        }
+    }
+
+    private func beginRenaming(_ context: String) {
+        renameText = context
+        renamingContext = context
+    }
+
+    #if !os(iOS)
     private func contextRow(_ session: SettingsSession, index: Int, context: String, count: Int) -> some View {
         HStack(spacing: Spacing.s) {
             Text(context).font(Typo.body).foregroundStyle(Color.ink)
@@ -239,17 +307,9 @@ public struct SettingsView: View {
                 .disabled(index == 0)
             Button("Down") { moveContext(session, at: index, up: false) }
                 .disabled(index == count - 1)
-            Button("Rename") {
-                renameText = context
-                renamingContext = context
-            }
+            Button("Rename") { beginRenaming(context) }
             Button {
-                let affected = session.affectedActionCount(for: context)
-                if affected > 0 {
-                    pendingRemoval = context
-                } else {
-                    Task { try? await session.removeContext(context) }
-                }
+                requestRemoval(session, of: context)
             } label: {
                 Image(systemName: Symbols.trash)
             }
@@ -264,6 +324,7 @@ public struct SettingsView: View {
         let destination = up ? index - 1 : index + 2
         Task { try? await session.reorderContexts(from: IndexSet(integer: index), to: destination) }
     }
+    #endif
 
     // MARK: On-the-go subset (A4, N5)
 

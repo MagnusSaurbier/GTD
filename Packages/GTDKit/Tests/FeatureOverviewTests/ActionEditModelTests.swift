@@ -275,6 +275,116 @@ struct ActionEditModelTests {
         #expect(orphan.hasUnsavedEdits == false)
     }
 
+    // MARK: - P2: the wrapping title stays one line
+
+    @Test func aTitleWithoutLineBreaksPassesThroughUntouched() {
+        let input = ActionEditModel.titleInput("Call the  landlord ")
+        #expect(input.text == "Call the  landlord ")
+        #expect(input.submitted == false)
+    }
+
+    @Test func returnInTheTitleSubmitsInsteadOfBreakingTheLine() async {
+        let (model, editor) = make(fixture(title: "Old title"))
+        #expect(editor.setTitle("New title\n"))
+        #expect(editor.title == "New title")
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(editor.id)?.title == "New title")
+    }
+
+    @Test func pastedLinesJoinIntoOneTitle() {
+        let input = ActionEditModel.titleInput("Book flights\r\n  and hotel\n\n")
+        #expect(input.text == "Book flights and hotel")
+        #expect(input.submitted)
+    }
+
+    /// A bare Return changes nothing, so it must not mark the title dirty (no pointless rename).
+    @Test func aBareReturnDoesNotDirtyTheTitle() {
+        let (_, editor) = make(fixture(title: "Same"))
+        #expect(editor.setTitle("Same\n"))
+        #expect(editor.hasUnsavedEdits == false)
+    }
+
+    /// While the title field has the keyboard, a typing pause must not rename the note.
+    @Test func aHeldTitleWaitsForBlurWhileOtherFieldsSave() async {
+        let action = fixture(title: "Old title")
+        let (model, editor) = make(action)
+        editor.setTitleHeld(true)
+        editor.setTitle("New ti")
+        editor.setWhy("saved meanwhile")
+        await editor.waitForPendingSave()
+
+        #expect(model.snapshot.action(action.id)?.title == "Old title")
+        #expect(model.snapshot.action(action.id)?.why == "saved meanwhile")
+        #expect(editor.title == "New ti")
+        #expect(editor.hasUnsavedEdits)
+
+        editor.setTitle("New title")
+        editor.setTitleHeld(false)
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(editor.id)?.title == "New title")
+        #expect(editor.hasUnsavedEdits == false)
+    }
+
+    @Test func flushWritesAHeldTitle() async {
+        let (model, editor) = make(fixture(title: "Old title"))
+        editor.setTitleHeld(true)
+        editor.setTitle("New title")
+        await editor.flush()
+        #expect(model.snapshot.action(editor.id)?.title == "New title")
+        #expect(editor.isTitleHeld == false)
+    }
+
+    // MARK: - P8: complete and trash from the detail
+
+    @Test func completeWritesPendingEditsFirst() async {
+        let (model, editor) = make(fixture())
+        editor.setWhy("typed just before ticking off")
+        #expect(await editor.complete())
+        let saved = model.snapshot.action(editor.id)
+        #expect(saved?.status == .done)
+        #expect(saved?.why == "typed just before ticking off")
+        #expect(editor.isClosed)
+        #expect(editor.hasUnsavedEdits == false)
+    }
+
+    @Test func completeFollowsAPendingRename() async {
+        let (model, editor) = make(fixture(title: "Old title"))
+        editor.setTitle("New title")
+        #expect(await editor.complete())
+        let expected = model.snapshot.config.layout.actionPath(title: "New title")
+        #expect(editor.id == expected)
+        #expect(model.snapshot.action(expected)?.status == .done)
+    }
+
+    @Test func trashIsAStatusNotADeletion() async {
+        let (model, editor) = make(fixture())
+        #expect(await editor.trash())
+        #expect(model.snapshot.action(editor.id)?.status == .trash)
+        #expect(editor.isClosed)
+    }
+
+    @Test func undoReopensAClosedAction() async {
+        let (model, editor) = make(fixture())
+        #expect(await editor.complete())
+        await model.undo()
+        editor.refresh()
+        #expect(editor.isClosed == false)
+        #expect(editor.status == .backlog)
+    }
+
+    /// A refused edit must not be thrown away by ticking the action off.
+    @Test func aRefusedEditKeepsTheActionOpen() async {
+        var snapshot = Fixtures.sampleSnapshot
+        snapshot.actions.append(fixture(title: "Fills the cap", status: .next))
+        let (model, editor) = make(fixture(title: "One too many"), snapshot: snapshot)
+        editor.setStatus(.next)
+        await editor.waitForPendingSave()
+
+        #expect(await editor.complete() == false)
+        #expect(editor.lastError is GTDError)
+        #expect(model.snapshot.action(editor.id)?.status == .backlog)
+    }
+
     // MARK: - A2
 
     @Test func twoCheckboxesSuggestAProject() {

@@ -4,7 +4,15 @@ Waiting-for, deferred items and the Mac calendar strip (W2, D1, D3).
 
 ## Public API
 
-`WaitingView(onOpen:)`, `DeferredView(onOpen:)`, `CalendarStrip(days:onOpen:)`.
+`WaitingView(selection:onOpen:)`, `DeferredView(selection:onOpen:)`, `CalendarStrip(days:onOpen:)`.
+
+On macOS both lists are stock selectable `List`s (M2, the same shape as
+`FeatureOverview.ActionListView`): a click or the arrow keys select a row, selecting *is* opening
+(`onOpen`), and `selection` — the note the detail column shows — is what the list highlights. The
+lists keep no selection of their own. On iOS the rows stay tap-to-open. `WaitingCopy` (no SwiftUI)
+holds the one string these views need that `DesignSystem.Copy` does not carry in the right form:
+the deferred screen is titled **"Deferred"**, the section's name, not `Copy.deferLabel`
+("Defer"), which is the date chip's field label.
 
 `WaitingListModel(model:)` — Linux-compilable, `@MainActor @Observable`, no SwiftUI. Wraps
 `Rules.waitingList`/`deferredList`/`timeline` for the three views:
@@ -17,7 +25,8 @@ Waiting-for, deferred items and the Mac calendar strip (W2, D1, D3).
   now" / "change date" in `DeferredView`.
 - `timeline(days:)`, `overduePile`, `signalStep(for:policy:)` — calendar-strip columns and the
   marker tint (STYLEGUIDE §3.10: coloured only where §2.2 defines a signal; `deferred` markers
-  are never tinted). `badges(for:)`, `recentWho` (deduped, capped at 5, for
+  are never tinted). `followUpSignal(for:)` — the `chase` signal's step, which tints the row's
+  follow-up date chip once the date has passed. `badges(for:)`, `recentWho` (deduped, capped at 5, for
   `WaitingInfoSheet(suggestedWho:)`).
 
 ## Invariants

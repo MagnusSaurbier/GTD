@@ -12,7 +12,9 @@ import FeatureSettings
 import FeatureReview
 import GTDFixtures
 
-/// The Mac shell (E3, STYLEGUIDE §4.1): sidebar with live counts · list · note editor.
+/// The Mac shell (E3, STYLEGUIDE §4.1): sidebar with live counts · list · note editor. The
+/// guided flows (weekly review, routines) have no list/detail pair and get sidebar + one wide
+/// column instead (`SidebarItem.spansDetailColumn`).
 ///
 /// It owns no GTD semantics and no list rendering of its own beyond the generic
 /// `ActionListView`: every section routes to the feature that owns it.
@@ -34,12 +36,27 @@ public struct OverviewView: View {
     private var nav: OverviewNavigation { injectedNavigation ?? ownedNavigation }
 
     public var body: some View {
-        NavigationSplitView {
-            sidebar
-        } content: {
-            ContentColumn(navigation: nav)
-        } detail: {
-            detail
+        Group {
+            if nav.selection.spansDetailColumn {
+                NavigationSplitView {
+                    sidebar
+                } detail: {
+                    FlowColumn(navigation: nav)
+                }
+            } else {
+                NavigationSplitView {
+                    sidebar
+                } content: {
+                    ContentColumn(navigation: nav)
+                        .navigationSplitViewColumnWidth(
+                            min: OverviewLayout.listMinWidth, ideal: OverviewLayout.listIdealWidth)
+                } detail: {
+                    detail
+                        .navigationSplitViewColumnWidth(
+                            min: OverviewLayout.detailMinWidth,
+                            ideal: OverviewLayout.detailIdealWidth)
+                }
+            }
         }
         .overlay(alignment: .bottom) { UndoOverlay() }
         // The `NavigationStack` renders `InboxProcessingView`'s toolbar — counter, `⌘Z` and
@@ -62,7 +79,7 @@ public struct OverviewView: View {
             }
         }
         .onChange(of: model.snapshot) { _, snapshot in
-            nav.prune(against: snapshot)
+            nav.apply(snapshot: snapshot, renames: model.renames)
         }
     }
 
@@ -106,7 +123,10 @@ public struct OverviewView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 320)
+        .navigationSplitViewColumnWidth(
+            min: OverviewLayout.sidebarMinWidth,
+            ideal: OverviewLayout.sidebarIdealWidth,
+            max: OverviewLayout.sidebarMaxWidth)
     }
 
     // MARK: - Detail
@@ -121,7 +141,7 @@ public struct OverviewView: View {
             ContentUnavailableView(
                 OverviewCopy.noSelectionTitle,
                 systemImage: OverviewSymbols.placeholder,
-                description: Text(OverviewCopy.noSelectionBody))
+                description: Text(nav.selection.emptyDetailBody ?? ""))
         }
     }
 
@@ -176,7 +196,6 @@ private struct SidebarRow: View {
 /// strip (D3).
 private struct ContentColumn: View {
     let navigation: OverviewNavigation
-    @Environment(AppModel.self) private var model
     @FocusState private var filterFocused: Bool
 
     var body: some View {
@@ -193,7 +212,6 @@ private struct ContentColumn: View {
             }
         }
         .navigationTitle(navigation.selection.title)
-        .toolbar { toolbarContent }
         .background {
             Button(OverviewCopy.filter) { navigation.beginSearch() }
                 .keyboardShortcut("f", modifiers: .command)
@@ -212,23 +230,33 @@ private struct ContentColumn: View {
         case .inbox:
             InboxRawList(navigation: navigation)
         case .next:
-            NextView(mode: .full, onOpen: { navigation.open(action: $0) })
+            NextView(
+                mode: .full, selection: navigation.openAction,
+                onOpen: { navigation.open(action: $0) })
         case .backlog:
-            ActionListView(status: .backlog, onOpen: { navigation.open(action: $0) })
+            ActionListView(
+                status: .backlog, selection: navigation.openAction,
+                onOpen: { navigation.open(action: $0) })
         case .maybe:
-            ActionListView(status: .maybe, onOpen: { navigation.open(action: $0) })
+            ActionListView(
+                status: .maybe, selection: navigation.openAction,
+                onOpen: { navigation.open(action: $0) })
         case .waiting:
-            WaitingView(onOpen: { navigation.open(action: $0) })
+            WaitingView(
+                selection: navigation.openAction,
+                onOpen: { navigation.open(action: $0) })
         case .deferred:
-            DeferredView(onOpen: { navigation.open(action: $0) })
+            DeferredView(
+                selection: navigation.openAction,
+                onOpen: { navigation.open(action: $0) })
         case .projects:
             ProjectsListView(
+                selection: navigation.openProject,
                 onOpenProject: { navigation.open(project: $0) },
                 onOpenAction: { navigation.open(action: $0) })
-        case .routines:
-            RoutinesHomeView()
-        case .review:
-            WeeklyReviewView(onFinished: { navigation.select(.next) })
+        case .routines, .review:
+            // Never reached: these sections render in `FlowColumn`, across content + detail.
+            EmptyView()
         }
     }
 
@@ -278,22 +306,35 @@ private struct ContentColumn: View {
             .padding(.vertical, Spacing.s)
 
             if navigation.isCalendarExpanded {
-                CalendarStrip(onOpen: { navigation.open(action: $0) })
+                OverviewCalendarStrip(onOpen: { navigation.open(action: $0) })
                     .padding(.bottom, Spacing.s)
-            }
-        }
-    }
-
-    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
-        if Rules.inboxQueue(model.snapshot).count > 0 {
-            ToolbarItem(placement: .primaryAction) {
-                InboxStartButton(action: { navigation.isProcessingInbox = true })
             }
         }
     }
 
     private var queryBinding: Binding<String> {
         Binding(get: { navigation.query }, set: { navigation.query = $0 })
+    }
+}
+
+/// The guided flows (weekly review, routines): one wide column next to the sidebar. In the list
+/// column the review wizard was ~130 pt wide, next to a detail pane with nothing to show.
+private struct FlowColumn: View {
+    let navigation: OverviewNavigation
+
+    var body: some View {
+        Group {
+            switch navigation.selection {
+            case .routines:
+                RoutinesHomeView()
+            case .review:
+                WeeklyReviewView(onFinished: { navigation.select(.next) })
+            default:
+                EmptyView()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle(navigation.selection.title)
     }
 }
 
@@ -311,6 +352,17 @@ private struct InboxRawList: View {
                 ContentUnavailableView(Copy.emptyInboxTitle, systemImage: Symbols.inbox)
             } else {
                 List {
+                    // Labelled and prominent, where the captures are — as a toolbar item it was
+                    // an unlabelled icon identical to the sidebar's Inbox icon. `⌘I` stays in
+                    // the menu bar (`OverviewCommands`).
+                    InboxStartButton(action: { navigation.isProcessingInbox = true })
+                        .buttonStyle(.borderedProminent)
+                        .labelStyle(.titleAndIcon)
+                        .controlSize(.large)
+                        .tint(Color.gtdAccent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, Spacing.s)
+                        .listRowSeparator(.hidden)
                     ForEach(items) { item in
                         HStack(alignment: .top, spacing: Spacing.m) {
                             Text(item.text)

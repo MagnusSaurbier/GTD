@@ -8,12 +8,19 @@ import GTDFixtures
 /// Waiting-for list (W2): what · who · waiting since N days · follow-up, sorted by staleness.
 /// Row actions: chase done → bump the follow-up, resolved → back to Next/Backlog or done, edit
 /// who. **Owned by T23.**
+///
+/// On the Mac the list is a stock selectable `List` (M2, same as `ActionListView`): a click or
+/// the arrow keys select a row, selecting opens it in the detail column (`onOpen`), and
+/// `selection` — the note that column shows — is what the list highlights. The list keeps no
+/// selection of its own. iOS keeps tap-to-open.
 public struct WaitingView: View {
+    private let selection: NoteID?
     private let onOpen: (NoteID) -> Void
     @Environment(AppModel.self) private var model
     @State private var editingWho: Action?
 
-    public init(onOpen: @escaping (NoteID) -> Void) {
+    public init(selection: NoteID? = nil, onOpen: @escaping (NoteID) -> Void) {
+        self.selection = selection
         self.onOpen = onOpen
     }
 
@@ -23,8 +30,11 @@ public struct WaitingView: View {
             if list.waiting.isEmpty {
                 ContentUnavailableView(Copy.emptyWaitingTitle, systemImage: Symbols.waiting)
             } else {
-                List(list.waiting) { action in
-                    WaitingRow(action: action, list: list, onOpen: onOpen, onEditWho: { editingWho = $0 })
+                SelectableList(selection: selection, onOpen: onOpen) {
+                    ForEach(list.waiting) { action in
+                        WaitingRow(action: action, list: list, onOpen: onOpen, onEditWho: { editingWho = $0 })
+                            .tag(action.id)
+                    }
                 }
             }
         }
@@ -38,6 +48,26 @@ public struct WaitingView: View {
                 Task { await model.perform(.setStatus(action.id, .waiting, waiting: info)) }
             }
         }
+    }
+}
+
+/// macOS: `List(selection:)` — highlight, arrow keys and accessibility selection for free, with
+/// the detail column's note as the selected row. iOS has no persistent row selection outside
+/// edit mode, so rows stay tap-to-open there. Mirrors `FeatureOverview.ActionListView` (M2).
+private struct SelectableList<Rows: View>: View {
+    let selection: NoteID?
+    let onOpen: (NoteID) -> Void
+    @ViewBuilder let rows: () -> Rows
+
+    var body: some View {
+        #if os(macOS)
+        List(selection: Binding<NoteID?>(
+            get: { selection },
+            set: { if let id = $0 { onOpen(id) } }),
+            content: rows)
+        #else
+        List(content: rows)
+        #endif
     }
 }
 
@@ -74,12 +104,16 @@ private struct WaitingRow: View {
                     label: Copy.followUp,
                     value: followUpBinding,
                     suggestion: offeringBump ? list.suggestedBump : nil,
-                    today: list.today)
+                    today: list.today,
+                    signal: list.followUpSignal(for: action),
+                    signalSymbol: Symbols.chase)
             }
         }
         .padding(.vertical, Spacing.rowVertical)
         .contentShape(Rectangle())
+        #if !os(macOS)
         .onTapGesture { onOpen(action.id) }
+        #endif
         .swipeActions(edge: .trailing) {
             Button {
                 Task { await model.perform(.complete(action.id)) }
@@ -168,11 +202,17 @@ private struct WaitingRow: View {
 
 /// Deferred items grouped by return date (D1): this week, then later. Actions: un-defer now,
 /// change date. **Owned by T23.**
+///
+/// Selection behaves exactly as in `WaitingView` (M2). The screen is titled "Deferred", the name
+/// the sidebar and the empty detail column use — `Copy.deferLabel` ("Defer") is the date chip's
+/// field label, and naming the screen with it made the window title disagree with the sidebar.
 public struct DeferredView: View {
+    private let selection: NoteID?
     private let onOpen: (NoteID) -> Void
     @Environment(AppModel.self) private var model
 
-    public init(onOpen: @escaping (NoteID) -> Void) {
+    public init(selection: NoteID? = nil, onOpen: @escaping (NoteID) -> Void) {
+        self.selection = selection
         self.onOpen = onOpen
     }
 
@@ -180,23 +220,27 @@ public struct DeferredView: View {
         let list = WaitingListModel(model: model)
         Group {
             if list.deferredThisWeek.isEmpty && list.deferredLater.isEmpty {
-                ContentUnavailableView(Copy.deferLabel, systemImage: Symbols.deferred)
+                ContentUnavailableView(WaitingCopy.deferredTitle, systemImage: Symbols.deferred)
             } else {
-                List {
+                SelectableList(selection: selection, onOpen: onOpen) {
                     if !list.deferredThisWeek.isEmpty {
                         Section("This week") {
-                            ForEach(list.deferredThisWeek) { DeferredRow(action: $0, list: list, onOpen: onOpen) }
+                            ForEach(list.deferredThisWeek) {
+                                DeferredRow(action: $0, list: list, onOpen: onOpen).tag($0.id)
+                            }
                         }
                     }
                     if !list.deferredLater.isEmpty {
                         Section("Later") {
-                            ForEach(list.deferredLater) { DeferredRow(action: $0, list: list, onOpen: onOpen) }
+                            ForEach(list.deferredLater) {
+                                DeferredRow(action: $0, list: list, onOpen: onOpen).tag($0.id)
+                            }
                         }
                     }
                 }
             }
         }
-        .navigationTitle(Copy.deferLabel)
+        .navigationTitle(WaitingCopy.deferredTitle)
     }
 }
 
@@ -220,7 +264,9 @@ private struct DeferredRow: View {
         }
         .padding(.vertical, Spacing.rowVertical)
         .contentShape(Rectangle())
+        #if !os(macOS)
         .onTapGesture { onOpen(action.id) }
+        #endif
         .swipeActions(edge: .trailing) {
             Button {
                 Task { await model.perform(.updateAction(list.unDeferred(action))) }

@@ -25,10 +25,11 @@ public enum InboxCopy {
     public static let cancel = "Cancel"
     public static let keyLegendLabel = "Keys"
 
-    /// Value chips of STYLEGUIDE §3.5, unset state.
-    public static let addDefer = "defer"
-    public static let addDue = "due"
-    public static let addProject = "project"
+    /// `Defer to review` under an action-bar icon and in the Mac key legend, where the full
+    /// wording does not fit.
+    public static let reviewShort = "Review"
+    /// The iPhone action bar's `⋯` menu: the four swipe targets as buttons.
+    public static let fileMenuLabel = "File to"
 
     // MARK: Hint overlay (first session only)
 

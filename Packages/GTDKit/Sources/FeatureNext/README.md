@@ -5,10 +5,13 @@ overdue follow-ups (E1, E2, W2).
 
 ## Public API
 
-- `NextView(mode:onOpen:onQuickCapture:)` — `onQuickCapture` is a new, optional (default `nil`)
-  third parameter beyond the brief's original two: I7's "capture, then jump into processing of
-  that one card" needs the app shell, since `FeatureNext` must not import `FeatureInbox`. `nil`
-  just hides the quick-add button/`⌘N`, so existing two-argument call sites still compile.
+- `NextView(mode:selection:onOpen:onQuickCapture:)`.
+  - `selection: NoteID? = nil` — the action the host shows in its detail column; its row is
+    highlighted. A host that passes nothing still gets a highlight on the Mac: the list remembers
+    the row it opened last.
+  - `onQuickCapture` (default `nil`): I7's "capture, then jump into processing of that one card"
+    needs the app shell, since `FeatureNext` must not import `FeatureInbox`. `nil` hides the
+    quick-add button/`⌘N`.
 - `NextViewMode { full, onTheGo }`.
 - Linux-compilable: `NextListModel` (filtering, sections, cap, empty states, row commands),
   `NextFilterStore` (+ `UserDefaultsNextFilterStore`, `InMemoryNextFilterStore`).
@@ -36,8 +39,20 @@ overdue follow-ups (E1, E2, W2).
 - Every row command goes through a small `run(_:)` wrapper that turns a thrown `GTDError` into an
   alert instead of a silent `try?` (a refused command must
   reach the person).
-- Cap indicator (STYLEGUIDE §2.2): plain count below the cap, `Badge` (`15/15`, overdue past it)
-  at/above — never a meter.
+- Next section header (STYLEGUIDE §2.2): `Next · 14/15` as plain text below the cap, `Next` +
+  `Badge` (`15/15`, overdue past it) at/above — never a meter, never a bare number. When the list
+  shows fewer rows than that count the header's trailing text says why: `8 of 14 on the go`
+  (iPhone), `3 of 14 shown` (filtered). Wording lives in `NextListModel`.
+- Rows are `NextRow`, not `DesignSystem.ActionRow`: the title gets the full width (3 lines) and
+  the badges drop under the meta line whenever title + badges do not fit on one line
+  (`ViewThatFits`); the completion circle and the opening target are siblings, never nested.
+- Opening a row. Mac: a stock `List(selection:)` — click anywhere on the row or use the arrow
+  keys; selecting is opening, the system selection colour is the selected state. iPhone: the
+  row's text area is a plain `Button`. Both are exposed to accessibility as one button whose
+  label is `NextListModel.spokenLabel(for:)`; the circle is a separate `Done <title>` button.
+- Filter chips sit in the list's top safe-area bar, so the list is the screen's scroll view and
+  the large title collapses on the iPhone. iPhone: one horizontally scrolling line. Mac: two
+  wrapping rows (contexts, then time + `Clear filters`) — nothing is cut off at narrow widths.
 
 ## Contract-adjacent additions (recorded here, not a §4 contract change)
 
@@ -48,10 +63,19 @@ gap, not filled in the guide itself since it is a synced vault note).
 
 ## Platform guards (ARCHITECTURE §5)
 
-`NextView.swift` is wrapped entirely in `#if canImport(SwiftUI)` and was written and reviewed
-without a compiler — **unverified on Linux**, build it on a Mac (`scripts/check.sh --app`).
+`NextView.swift` and `NextRow.swift` are wrapped entirely in `#if canImport(SwiftUI)` — they do
+not compile on Linux; build them on a Mac (`scripts/check.sh --app`).
 `NextListModel.swift` and `NextFilterStore.swift` have no SwiftUI import and are fully covered by
-`swift test` (24 tests), including against `AppModel` + `InMemoryBackend` + `GTDFixtures`.
+`swift test` (27 tests), including against `AppModel` + `InMemoryBackend` + `GTDFixtures`.
+
+## Gotchas
+
+- **Row and header heights are rounded up to whole points** (`WholePointHeight` in
+  `NextView.swift`). Fractional heights (89.67 pt) make the iOS list leave a 1 px gap between two
+  cells now and then; the grouped background shows through as a stray full-width hairline.
+- **Do not give the top chip bar a material background.** With `.background(.bar)` on a
+  `safeAreaInset` iOS 26+ blurs the large title away; `safeAreaBar(edge: .top)` gets the system's
+  scroll-edge blur under the chips without that.
 
 ## Testing
 

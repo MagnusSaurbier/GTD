@@ -498,4 +498,43 @@ struct InboxSessionTests {
         #expect(session.draft.isPristine(for: next))
         #expect(session.draft.text == next.text)
     }
+
+    // MARK: - Swipe hint (STYLEGUIDE §3.6)
+
+    /// "Got it" has to change **observed** state, or the overlay stays up until the view is
+    /// rebuilt — and it has to reach the device-local flag, or it comes back next session.
+    @Test func gotItHidesTheSwipeHintAtOnceAndForGood() {
+        let defaults = EphemeralInboxDefaults(didShowSwipeHint: false)
+        let (session, _, _) = InboxTestSupport.makeSession(defaults: defaults)
+        #expect(session.isSwipeHintVisible)
+
+        session.dismissSwipeHint()
+
+        #expect(!session.isSwipeHintVisible)
+        #expect(defaults.flag(forKey: InboxDefaultsKey.didShowSwipeHint))
+        let (later, _, _) = InboxTestSupport.makeSession(defaults: defaults)
+        #expect(!later.isSwipeHintVisible)
+    }
+
+    @Test func theFirstFiledSwipeTargetDismissesTheHint() async {
+        let defaults = EphemeralInboxDefaults(didShowSwipeHint: false)
+        let (session, _, _) = InboxTestSupport.makeSession(defaults: defaults)
+
+        // A refused swipe (no What?) taught nothing; a sheet target is not a swipe.
+        await session.choose(.next)
+        await session.choose(.waiting)
+        session.cancelSheet()
+        #expect(session.isSwipeHintVisible)
+
+        await session.choose(.trash)
+
+        #expect(session.processed == 1)
+        #expect(!session.isSwipeHintVisible)
+        #expect(defaults.flag(forKey: InboxDefaultsKey.didShowSwipeHint))
+    }
+
+    @Test func aDeviceThatSawTheHintNeverShowsItAgain() {
+        let (session, _, _) = InboxTestSupport.makeSession()
+        #expect(!session.isSwipeHintVisible)
+    }
 }

@@ -5,8 +5,16 @@ plus turning a multi-checkbox action into a project (A2).
 
 ## Public API
 
-`ProjectsListView(onOpenProject:onOpenAction:)`, `ProjectDetailView(project:onOpenAction:)`,
+`ProjectsListView(selection:onOpenProject:onOpenAction:)`, `ProjectDetailView(project:onOpenAction:)`,
 `WhatsNextSheet(project:)`, `ConvertToProjectSheet(action:)`, `ProjectPicker(selection:)`.
+
+`ProjectsListView` is a stock selectable `List` on macOS (M2): a click or the arrow keys select a
+row and selecting opens that project in the detail column; `selection` is the project that column
+shows (`OverviewNavigation.openProject`). iOS keeps tap-to-open.
+
+`ProjectPicker` is a **chip** (current project = confirmed, none = unset `Project` with the plus
+symbol) that opens the project list in a popover / medium sheet — a bare `List` collapsed to zero
+height inside the action detail's `ScrollView`. `ProjectPickerContent` decides title, state and rows.
 
 Linux-compilable models (no SwiftUI — this is where the logic worth testing lives):
 - `ProjectsListModel` — grouping by area/status filters, open steps, demotion count, create area/project.
@@ -40,6 +48,6 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureProjectsTests` — 59 tests, all Linux-only
-(reorder maths, grouping/filtering, step CRUD, status-change demotion, and the cap-reached →
+`cd Packages/GTDKit && swift test --filter FeatureProjectsTests` — 64 tests, all Linux-only
+(the picker chip's content, reorder maths, grouping/filtering, step CRUD, status-change demotion, and the cap-reached →
 Backlog-fallback path on every promotion entry point).

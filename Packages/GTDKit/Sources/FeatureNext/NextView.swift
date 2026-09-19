@@ -9,6 +9,10 @@ import GTDFixtures
 /// **Owned by T21.**
 public struct NextView: View {
     private let mode: NextViewMode
+    /// The action the host currently shows in its detail column — its row is highlighted (M2).
+    /// `nil` (the default) when the host has no detail column (iPhone) or does not say; the list
+    /// then still highlights the row it opened last on the Mac.
+    private let selection: NoteID?
     private let onOpen: (NoteID) -> Void
     /// Quick add (Mac `⌘N`, iPhone toolbar button): capture to inbox and jump into processing
     /// of that one card (I7). `FeatureNext` never imports `FeatureInbox`, so the app shell
@@ -18,16 +22,19 @@ public struct NextView: View {
 
     public init(
         mode: NextViewMode,
+        selection: NoteID? = nil,
         onOpen: @escaping (NoteID) -> Void,
         onQuickCapture: (() -> Void)? = nil
     ) {
         self.mode = mode
+        self.selection = selection
         self.onOpen = onOpen
         self.onQuickCapture = onQuickCapture
     }
 
     public var body: some View {
-        NextListContent(model: model, mode: mode, onOpen: onOpen, onQuickCapture: onQuickCapture)
+        NextListContent(
+            model: model, mode: mode, selection: selection, onOpen: onOpen, onQuickCapture: onQuickCapture)
     }
 }
 
@@ -39,6 +46,8 @@ public struct NextView: View {
 /// command. Receiving `model` as an `init` parameter (not via `@Environment` on this view) is
 /// what lets `@State` seed `NextListModel` a single time.
 private struct NextListContent: View {
+    /// What the host says is open (`NextView.selection`).
+    let hostSelection: NoteID?
     let onOpen: (NoteID) -> Void
     let onQuickCapture: (() -> Void)?
     @State private var list: NextListModel
@@ -53,32 +62,47 @@ private struct NextListContent: View {
     /// through `run(_:)`, which lands the failure here so it reaches the person instead of
     /// disappearing silently.
     @State private var errorMessage: String?
+    /// The highlighted row. Follows `hostSelection` whenever the host changes it; a click or an
+    /// arrow key moves it directly, so a host that never passes `selection` still gets a
+    /// highlight.
+    @State private var selectedID: NoteID?
 
     init(
         model: AppModel,
         mode: NextViewMode,
+        selection: NoteID?,
         onOpen: @escaping (NoteID) -> Void,
         onQuickCapture: (() -> Void)?
     ) {
+        self.hostSelection = selection
         self.onOpen = onOpen
         self.onQuickCapture = onQuickCapture
+        _selectedID = State(initialValue: selection)
         _list = State(initialValue: NextListModel(model: model, mode: mode))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            filterBar
-            Divider()
-            Group {
-                if list.isEmpty {
-                    emptyStateView
-                } else {
-                    listView
-                }
+        // The list is the screen's top-level scroll view and the chips ride in its top safe-area
+        // inset — a `VStack { chips; List }` keeps the large title from ever collapsing (P20).
+        Group {
+            if list.isEmpty {
+                emptyStateView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                listView
             }
         }
+        #if os(iOS)
+        .safeAreaBar(edge: .top, spacing: 0) { filterBar }
+        #else
+        .safeAreaInset(edge: .top, spacing: 0) { filterBar }
+        #endif
         .navigationTitle(Copy.next)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.large)
+        #endif
         .toolbar { quickCaptureToolbar }
+        .onChange(of: hostSelection) { _, newValue in selectedID = newValue }
         .safeAreaInset(edge: .bottom) { toastView }
         .onChange(of: model.undoLabel) { _, newValue in
             guard let newValue else { return }
@@ -124,21 +148,52 @@ private struct NextListContent: View {
     // MARK: - Filter bar (E1)
 
     private var filterBar: some View {
+        VStack(spacing: 0) {
+            filterChips
+            Divider()
+        }
+    }
+
+    /// Mac: contexts and time on two rows that wrap (`FlowLayout`) — a one-line scroller cut the
+    /// time chips off at the default column width with no hint that there was more (M7).
+    /// iPhone: one horizontally scrolling line, to keep the pinned bar as short as possible.
+    @ViewBuilder private var filterChips: some View {
+        #if os(macOS)
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            contextChips
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.l) {
+                TimeBucketChipGroup(selection: timeBucketBinding)
+                clearFiltersButton
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Spacing.screenMargin)
+        .padding(.vertical, Spacing.s)
+        #else
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.l) {
-                ContextChipGroup(
-                    contexts: list.availableContexts,
-                    selection: Binding(get: { list.contexts }, set: { list.setContexts($0) }))
+                contextChips
                 TimeBucketChipGroup(selection: timeBucketBinding)
-                if list.isFiltered {
-                    Button(Copy.clearFilters) { list.clearFilters() }
-                        .font(Typo.chip)
-                        .foregroundStyle(Color.textSecondary)
-                        .buttonStyle(.plain)
-                }
+                clearFiltersButton
             }
             .padding(.horizontal, Spacing.screenMargin)
             .padding(.vertical, Spacing.s)
+        }
+        #endif
+    }
+
+    private var contextChips: some View {
+        ContextChipGroup(
+            contexts: list.availableContexts,
+            selection: Binding(get: { list.contexts }, set: { list.setContexts($0) }))
+    }
+
+    @ViewBuilder private var clearFiltersButton: some View {
+        if list.isFiltered {
+            Button(Copy.clearFilters) { list.clearFilters() }
+                .font(Typo.chip)
+                .foregroundStyle(Color.textSecondary)
+                .buttonStyle(.plain)
         }
     }
 
@@ -172,53 +227,80 @@ private struct NextListContent: View {
     // MARK: - List
 
     private var listView: some View {
-        List {
-            if !list.chase.isEmpty {
-                Section(Copy.chase) {
-                    ForEach(list.chase, id: \.id) { chaseRow($0) }
-                }
-            }
-            Section {
-                ForEach(list.items, id: \.id) { nextRow($0) }
-            } header: {
-                capHeader
-            }
-        }
-        .animation(Motion.standard(reduceMotion: reduceMotion), value: list.items.map(\.id))
-        .animation(Motion.standard(reduceMotion: reduceMotion), value: list.chase.map(\.id))
+        rows
+            .animation(Motion.standard(reduceMotion: reduceMotion), value: list.items.map(\.id))
+            .animation(Motion.standard(reduceMotion: reduceMotion), value: list.chase.map(\.id))
     }
 
-    /// STYLEGUIDE §2.2: a plain count below the cap, an attention badge `15/15` at the cap,
-    /// overdue styling above it. Never a meter.
-    private var capHeader: some View {
-        HStack {
-            Spacer()
-            if let badge = list.capBadge {
-                Badge(badge)
-            } else {
-                Text("\(list.capCount)")
-                    .font(Typo.counter)
-                    .foregroundStyle(Color.textSecondary)
-                    .accessibilityLabel("\(list.capCount) in Next")
+    /// Mac: a stock `List(selection:)` (STYLEGUIDE §3.3 — system selection colour). Click
+    /// anywhere on a row or move with the arrow keys → the row is selected, and selecting *is*
+    /// opening (M2). `ForEach(id: \.id)` tags every row with its `NoteID`.
+    /// iPhone: no persistent selection — rows are buttons that push the detail.
+    @ViewBuilder private var rows: some View {
+        #if os(macOS)
+        List(selection: Binding(
+            get: { selectedID },
+            set: { newValue in
+                selectedID = newValue
+                if let newValue { onOpen(newValue) }
+            })
+        ) { sections }
+        #else
+        List { sections }
+        #endif
+    }
+
+    @ViewBuilder private var sections: some View {
+        if !list.chase.isEmpty {
+            Section(Copy.chase) {
+                ForEach(list.chase, id: \.id) { chaseRow($0) }
             }
         }
+        Section {
+            ForEach(list.items, id: \.id) { nextRow($0) }
+        } header: {
+            capHeader
+        }
+    }
+
+    /// `Next · 14/15` — never a bare number (P13). STYLEGUIDE §2.2: plain text below the cap, an
+    /// attention badge `15/15` at the cap, overdue styling above it. Never a meter. When the
+    /// list shows fewer rows than that count, the trailing text says so (`8 of 14 on the go`).
+    private var capHeader: some View {
+        WholePointHeight { capHeaderContent }
+    }
+
+    private var capHeaderContent: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            if let badge = list.capBadge {
+                Text(Copy.next)
+                Badge(badge).fixedSize()
+            } else {
+                Text(list.capHeaderText)
+            }
+            Spacer(minLength: Spacing.s)
+            if let visible = list.visibleCountText {
+                Text(visible)
+            }
+        }
+        .font(Typo.counter)
+        .foregroundStyle(Color.textSecondary)
+        .textCase(nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(list.capHeaderSpokenText)
+        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Rows
 
     @ViewBuilder private func nextRow(_ action: Action) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            ActionRow(
-                action: action,
-                projectTitle: list.projectTitle(for: action),
-                badges: list.badges(for: action),
-                onComplete: { run { try await list.complete(action) } })
-                .contentShape(Rectangle())
-                .onTapGesture { onOpen(action.id) }
+            row(action) { run { try await list.complete(action) } }
             if list.showsChecklist(action) {
                 checklist(for: action)
             }
         }
+        .nextRowChrome()
         #if os(iOS)
         .swipeActions(edge: .trailing) {
             Button(Copy.done) { run { try await list.complete(action) } }
@@ -247,13 +329,8 @@ private struct NextListContent: View {
     }
 
     @ViewBuilder private func chaseRow(_ action: Action) -> some View {
-        ActionRow(
-            action: action,
-            projectTitle: list.projectTitle(for: action),
-            badges: list.badges(for: action),
-            onComplete: { run { try await list.resolveChase(action) } })
-            .contentShape(Rectangle())
-            .onTapGesture { onOpen(action.id) }
+        row(action) { run { try await list.resolveChase(action) } }
+            .nextRowChrome()
             #if os(iOS)
             .swipeActions(edge: .trailing) {
                 Button(Copy.resolved) { run { try await list.resolveChase(action) } }
@@ -268,6 +345,19 @@ private struct NextListContent: View {
                 Button(Copy.bumpFollowUp(days: 7)) { run { try await list.bumpFollowUp(action) } }
                 Button(Copy.resolved) { run { try await list.resolveChase(action) } }
             }
+    }
+
+    private func row(_ action: Action, onComplete: @escaping () -> Void) -> NextRow {
+        NextRow(
+            action: action,
+            metaParts: list.metaParts(for: action),
+            badges: list.badges(for: action),
+            spokenLabel: list.spokenLabel(for: action),
+            onOpen: {
+                selectedID = action.id
+                onOpen(action.id)
+            },
+            onComplete: onComplete)
     }
 
     /// A2 — inline checkboxes once an action has more than one; ticking the last one offers
@@ -303,7 +393,7 @@ private struct NextListContent: View {
                 .accessibilityLabel("\(Copy.done) \(action.title)")
             }
         }
-        .padding(.leading, Spacing.xl)
+        .padding(.leading, NextRow.separatorInset)
     }
 
     // MARK: - Toolbar
@@ -345,6 +435,35 @@ private struct NextListContent: View {
             guard !Task.isCancelled else { return }
             toastLabel = nil
         }
+    }
+}
+
+private extension View {
+    /// What every Next/chase row shares with the `List` around it: the separator starts where
+    /// the row's text starts, for every row alike, and the row is a whole number of points tall.
+    func nextRowChrome() -> some View {
+        WholePointHeight { self }
+            .alignmentGuide(.listRowSeparatorLeading) { _ in NextRow.separatorInset }
+    }
+}
+
+/// Rounds its content's height up to a whole point.
+///
+/// Text and scaled badge metrics give rows heights like 89.67 pt. The iOS list stacks its cells
+/// at those fractional offsets and then snaps each one to the pixel grid on its own, which now
+/// and then leaves a 1 px gap between two cells — the grouped background shows through as a
+/// stray full-width hairline (walkthrough P14). Whole-point rows and headers cannot drift.
+private struct WholePointHeight: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let size = content.sizeThatFits(proposal)
+        return CGSize(width: size.width, height: size.height.rounded(.up))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(
+            at: bounds.origin, anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
     }
 }
 

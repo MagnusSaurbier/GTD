@@ -123,6 +123,11 @@ public struct WaitingInfoSheet: View {
     @State private var who: String
     @State private var followUp: Day?
     @Environment(\.dismiss) private var dismiss
+    /// O3 — this sheet has no scroll view to attach `.scrollDismissesKeyboard` to, and before
+    /// this the keyboard only closed via the sheet's own drag gesture, covering Cancel/save.
+    /// `@FocusState` + a keyboard toolbar Done button (the `ActionDetailView` pattern) plus a
+    /// tap-outside-the-field dismissal fix that.
+    @FocusState private var isWhoFocused: Bool
 
     public init(
         initial: WaitingInfo? = nil,
@@ -145,6 +150,9 @@ public struct WaitingInfoSheet: View {
             TextField(Copy.whoPlaceholder, text: $who)
                 .textFieldStyle(.plain)
                 .font(Typo.body)
+                .focused($isWhoFocused)
+                .submitLabel(.done)
+                .onSubmit { isWhoFocused = false }
 
             if !suggestedWho.isEmpty {
                 FlowLayout {
@@ -172,6 +180,18 @@ public struct WaitingInfoSheet: View {
             }
         }
         .padding(Spacing.cardPadding)
+        // A tap outside the field puts the keyboard away (no scroll view to attach
+        // `.scrollDismissesKeyboard` to here).
+        .contentShape(Rectangle())
+        .onTapGesture { isWhoFocused = false }
+        #if os(iOS)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(Copy.done) { isWhoFocused = false }
+            }
+        }
+        #endif
     }
 
     private var isComplete: Bool {

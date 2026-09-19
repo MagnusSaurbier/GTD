@@ -84,6 +84,6 @@ struct AppModelAcceptanceTests {
         let backend = InMemoryBackend(snapshot: Fixtures.sampleSnapshot)
         var iterator = backend.snapshots().makeAsyncIterator()
         let first = await iterator.next()
-        #expect(first == Fixtures.sampleSnapshot)
+        #expect(first?.snapshot == Fixtures.sampleSnapshot)
     }
 }

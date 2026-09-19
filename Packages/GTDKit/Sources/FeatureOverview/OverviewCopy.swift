@@ -33,6 +33,8 @@ enum OverviewCopy {
     static let noSelectionBody = "Pick an action from the list."
     static let missingActionTitle = "Action is gone"
     static let missingActionBody = "It was completed, trashed or renamed elsewhere."
+    static let closedActionBody = "It was completed or moved to Trash."
+    static let more = "More"
     static let notSaved = "Not saved"
     static let titleTaken = "Another action already has that title."
 
@@ -55,4 +57,5 @@ enum OverviewSymbols {
     static let expand = "chevron.up"
     static let calendar = "calendar"
     static let placeholder = "square.dashed"
+    static let more = "ellipsis.circle"
 }

@@ -111,6 +111,31 @@ public final class NextListModel {
         Rules.capSignal(model.snapshot).map { SignalPresentation.badge(for: $0, today: today) }
     }
 
+    /// The cap the count is measured against (`config.nextCap`).
+    public var capLimit: Int { model.snapshot.config.nextCap }
+
+    /// The Next section's header label — `Next · 14/15`. Never a bare number: a count without
+    /// its label and its limit says nothing (walkthrough P13). At/above the cap the view shows
+    /// `Copy.next` plus `capBadge` instead, which carries the same `15/15`.
+    public var capHeaderText: String { "\(Copy.next) · \(capCount)/\(capLimit)" }
+
+    /// VoiceOver wording for the header — the `·` and `/` are not spoken as symbols.
+    public var capHeaderSpokenText: String {
+        Copy.spoken(["\(capCount) of \(capLimit) in \(Copy.next)"] + (visibleCountText.map { [$0] } ?? []))
+    }
+
+    /// Why the list shows fewer rows than the cap count says: `8 of 14 on the go` on the iPhone
+    /// (whose hard context restriction hides the rest, E2), `3 of 14 shown` under a filter.
+    /// `nil` when every Next action is on screen — nothing to explain.
+    public var visibleCountText: String? {
+        let visible = items.count
+        guard visible != capCount || mode == .onTheGo else { return nil }
+        switch mode {
+        case .onTheGo: return "\(visible) of \(capCount) on the go"
+        case .full: return "\(visible) of \(capCount) shown"
+        }
+    }
+
     // MARK: - Row content
 
     public func badges(for action: Action) -> [BadgeContent] {
@@ -119,6 +144,22 @@ public final class NextListModel {
 
     public func projectTitle(for action: Action) -> String? {
         action.project.flatMap { model.snapshot.project($0)?.title }
+    }
+
+    /// `Project name · mac · phone · ≤30 min` — project first, contexts as plain lowercase text
+    /// (STYLEGUIDE §3.3), as separate parts so the row can join them for display or speech.
+    public func metaParts(for action: Action) -> [String] {
+        var parts: [String] = []
+        if let title = projectTitle(for: action) { parts.append(title) }
+        parts.append(contentsOf: action.contexts)
+        if let bucket = action.timeBucket { parts.append("\(Copy.timeBucket(bucket)) min") }
+        return parts
+    }
+
+    /// What VoiceOver reads for a row's opening target: title, meta and badges as one element,
+    /// the `·` separators spoken as pauses (STYLEGUIDE §8).
+    public func spokenLabel(for action: Action) -> String {
+        Copy.spoken([action.title] + metaParts(for: action) + badges(for: action).map(\.accessibilityLabel))
     }
 
     /// A2 — show the inline checklist once there is more than one checkbox to tick off.

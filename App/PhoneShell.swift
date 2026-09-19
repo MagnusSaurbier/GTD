@@ -9,9 +9,10 @@ import FeatureOverview
 import FeatureRoutines
 import FeatureSettings
 
-/// The iPhone (N5, E2, STYLEGUIDE §4.2): three tabs — **Next** (on-the-go), **Inbox** (count +
-/// `Process inbox`), **Routines**. No full task overview, no settings tab: settings live behind
-/// the gear on Next, and inbox processing and routines run full-screen.
+/// The iPhone (N5, E2, STYLEGUIDE §4.2): three tabs — **Inbox** (count + `Process inbox`),
+/// **Next** (on-the-go; the tab the app opens on, E1 — `AppRouter.tab` starts at `.next`),
+/// **Routines**. No full task overview, no settings tab: settings live behind the gear on Next,
+/// and inbox processing and routines run full-screen.
 struct PhoneShell: View {
     let composition: AppComposition
     @Bindable var router: AppRouter
@@ -19,14 +20,14 @@ struct PhoneShell: View {
 
     var body: some View {
         TabView(selection: $router.tab) {
-            nextTab
-                .tabItem { Label(Copy.next, systemImage: Symbols.next) }
-                .tag(AppTab.next)
-
             inboxTab
                 .tabItem { Label(Copy.inbox, systemImage: Symbols.inbox) }
                 .badge(Rules.inboxQueue(model.snapshot).count)
                 .tag(AppTab.inbox)
+
+            nextTab
+                .tabItem { Label(Copy.next, systemImage: Symbols.next) }
+                .tag(AppTab.next)
 
             routinesTab
                 .tabItem { Label(AppCopy.routines, systemImage: Symbols.routineGeneric) }
@@ -62,6 +63,8 @@ struct PhoneShell: View {
                 onOpen: { router.nextPath.append($0) },
                 onQuickCapture: { router.isCapturePresented = true })
                 .navigationTitle(Copy.next)
+                // P20 — a large title collapses on scroll; `.inline` or a pinned header cannot.
+                .navigationBarTitleDisplayMode(.large)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
@@ -72,9 +75,17 @@ struct PhoneShell: View {
                     }
                 }
                 .navigationDestination(for: NoteID.self) { id in
+                    // The editable, wrapping title in the detail *is* the title (P5); a second,
+                    // truncated copy in the bar only repeats it. A rename moves the note (A1)
+                    // and so changes this id: `AppRouter.apply(snapshot:renames:)` rewrites the
+                    // path entry when the snapshot arrives, which is what keeps the detail open
+                    // instead of landing on "Action is gone".
                     ActionDetailView(action: id)
-                        .navigationTitle(model.snapshot.action(id)?.title ?? "")
+                        .navigationTitle("")
                         .navigationBarTitleDisplayMode(.inline)
+                        // P7 — the detail's own bottom bar (Done / Trash) takes the tab bar's
+                        // place, so nothing floats over the last row of the form.
+                        .toolbar(.hidden, for: .tabBar)
                 }
         }
     }
@@ -85,6 +96,16 @@ struct PhoneShell: View {
         NavigationStack {
             InboxTabContent(onProcess: { router.isProcessingInbox = true })
                 .navigationTitle(Copy.inbox)
+                // P17 — captures land here, so this is where the capture button belongs too.
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            router.isCapturePresented = true
+                        } label: {
+                            Label(Copy.quickCapture, systemImage: Symbols.capture)
+                        }
+                    }
+                }
         }
     }
 

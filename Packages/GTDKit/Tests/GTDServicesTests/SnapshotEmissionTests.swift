@@ -16,14 +16,14 @@ struct SnapshotEmissionTests {
         let store = PassiveStore(snapshot: Fixtures.sampleSnapshot)
         let backend = try await makeBackend(store)
         var snapshots = backend.snapshots().makeAsyncIterator()
-        let first = try #require(await snapshots.next())
+        let first = try #require(await snapshots.next()).snapshot
         #expect(first.actions.contains { $0.title == "Write DAAD motivation letter" })
 
         _ = try await backend.perform(
             .createAction(ActionDraft(title: "Buy a desk lamp", status: .backlog)))
 
         // The store never re-indexed and never published: this can only be the reduced snapshot.
-        let optimistic = try #require(await snapshots.next())
+        let optimistic = try #require(await snapshots.next()).snapshot
         #expect(optimistic.actions.contains { $0.title == "Buy a desk lamp" })
         #expect(await backend.currentSnapshot().actions.contains { $0.title == "Buy a desk lamp" })
         #expect(store.publishCalls == 0, "the store itself never pushed a snapshot")

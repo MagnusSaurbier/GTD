@@ -19,9 +19,9 @@ struct SweepInboxStep: View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             ReviewStepHeader(
                 title: ReviewCopy.stepInbox,
-                counter: session.isInboxZero ? nil : Copy.counter(
-                    remaining: session.inboxRemaining,
-                    total: session.inboxRemaining + session.inboxProcessed),
+                // No counter here: the embedded `InboxProcessingView` counts its own cards,
+                // and the same "n of m left" twice on one screen is noise.
+                counter: nil,
                 symbol: ReviewSymbols.inbox)
 
             if session.isInboxZero {
@@ -30,7 +30,7 @@ struct SweepInboxStep: View {
                     systemImage: ReviewSymbols.inbox,
                     description: Text(ReviewCopy.inboxZeroBody))
             } else {
-                InboxProcessingView(onFinished: {})
+                InboxProcessingView(showsChrome: false, onFinished: {})
                     .frame(minHeight: 420)
             }
         }

@@ -186,7 +186,10 @@ private struct Lifecycle: ViewModifier {
             // Every snapshot change re-plans (debounced): a device only knows what has synced
             // into its own snapshot, so planning once at launch is not enough (T13).
             .onChange(of: model.snapshot) { _, snapshot in
-                router.prune(against: snapshot)
+                // The only consumer of the renames: `consumeRenames()` hands over everything
+                // published since the last change, so the router follows a renamed note before
+                // it prunes the ones that are genuinely gone (A1 — a rename is a file move).
+                router.apply(snapshot: snapshot, renames: model.consumeRenames())
                 notifications.scheduleReplan(
                     snapshot: snapshot, settings: composition.deviceSettings)
             }
@@ -242,6 +245,14 @@ struct QuickCaptureSheet: View {
         }
         .padding(Spacing.screenMargin)
         .frame(minWidth: 320)
+        #if os(iOS)
+        // P17 — a short sheet with the field at the top, not a full-height one with the field
+        // floating in the middle. Cancel and Capture stay above the keyboard, so the sheet
+        // needs no keyboard `Done` of its own.
+        .frame(maxHeight: .infinity, alignment: .top)
+        .presentationDetents([.height(220)])
+        .presentationDragIndicator(.visible)
+        #endif
         .onAppear { focused = true }
     }
 }

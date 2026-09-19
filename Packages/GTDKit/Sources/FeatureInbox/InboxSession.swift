@@ -129,6 +129,9 @@ public final class InboxSession {
     public private(set) var capCandidates: [Action]
     /// An error that is neither the cap nor a validation issue (a title collision, say).
     public private(set) var lastError: GTDError?
+    /// The one-time direction hint of STYLEGUIDE §3.6. **Stored**, so that dismissing it
+    /// invalidates the view — the defaults flag behind it is not observable.
+    public private(set) var isSwipeHintVisible: Bool
 
     private let model: AppModel
     private let defaults: any InboxDefaultsStore
@@ -154,6 +157,7 @@ public final class InboxSession {
         self.queue = items
         self.processed = 0
         self.capCandidates = []
+        self.isSwipeHintVisible = !defaults.flag(forKey: InboxDefaultsKey.didShowSwipeHint)
         self.draft = items.first.map(Draft.init(item:)) ?? Draft()
         self.draftItemID = items.first?.id
     }
@@ -207,12 +211,11 @@ public final class InboxSession {
         defaults.string(forKey: InboxDefaultsKey.lastKnowledgeFolder)
     }
 
-    /// The one-time direction hint of STYLEGUIDE §3.6.
-    public var shouldShowSwipeHint: Bool {
-        !defaults.flag(forKey: InboxDefaultsKey.didShowSwipeHint)
-    }
-
+    /// Hides the one-time hint for good: the stored property invalidates the view, the flag
+    /// keeps it away in the next session. A no-op once it is gone.
     public func dismissSwipeHint() {
+        guard isSwipeHintVisible else { return }
+        isSwipeHintVisible = false
         defaults.setFlag(true, forKey: InboxDefaultsKey.didShowSwipeHint)
     }
 
@@ -443,6 +446,8 @@ public final class InboxSession {
         pending = nil
         capCandidates = []
         validation = nil
+        // Whoever filed a card in one of the four directions has understood the hint.
+        if target.isDirect { dismissSwipeHint() }
         syncDraft()
     }
 

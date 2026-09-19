@@ -150,13 +150,18 @@ struct ProjectSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker(InboxCopy.pickProject, selection: $mode) {
-                    ForEach(Mode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                // The segmented control is its own surface: no grey form-row capsule around it.
+                Section {
+                    Picker(InboxCopy.pickProject, selection: $mode) {
+                        ForEach(Mode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
 
                 if mode == .existing {
                     existingSection
@@ -337,6 +342,10 @@ struct DeferToReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var reason = ""
+    /// O3 — the reason field is the only control on this sheet; without a way to give up the
+    /// keyboard it covered Cancel/Defer entirely. `@FocusState` + a keyboard toolbar Done button
+    /// (the `ActionDetailView` pattern) plus interactive scroll dismissal fix that.
+    @FocusState private var isReasonFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -345,8 +354,12 @@ struct DeferToReviewSheet: View {
                     TextField(Copy.deferToReviewPrompt, text: $reason, axis: .vertical)
                         .textFieldStyle(.plain)
                         .font(Typo.body)
+                        .focused($isReasonFocused)
                 }
             }
+            #if os(iOS)
+            .scrollDismissesKeyboard(.interactively)
+            #endif
             .navigationTitle(Copy.deferToReview)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -356,6 +369,12 @@ struct DeferToReviewSheet: View {
                     Button(Copy.deferLabel) { save() }
                         .disabled(reason.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
+                #if os(iOS)
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(Copy.done) { isReasonFocused = false }
+                }
+                #endif
             }
         }
     }

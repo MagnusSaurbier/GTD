@@ -28,16 +28,26 @@ extension View {
 /// Backlog / Maybe — the two lists no feature target owns (E3).
 ///
 /// Grouped by area / project; context and time are **filters** (chips), never groupings.
+///
+/// On the Mac the list is a stock selectable `List`: a click or the arrow keys select a row,
+/// the selection opens in the detail column (`onOpen`) and `selection` — the note that column
+/// shows — is what the list highlights. The list keeps no selection of its own.
 public struct ActionListView: View {
     private let status: ActionStatus
+    private let selection: NoteID?
     private let onOpen: (NoteID) -> Void
 
     @Environment(AppModel.self) private var model
     @Environment(\.overviewQuery) private var query
     @State private var list: ActionListModel?
 
-    public init(status: ActionStatus, onOpen: @escaping (NoteID) -> Void) {
+    public init(
+        status: ActionStatus,
+        selection: NoteID? = nil,
+        onOpen: @escaping (NoteID) -> Void
+    ) {
         self.status = status
+        self.selection = selection
         self.onOpen = onOpen
     }
 
@@ -66,7 +76,7 @@ public struct ActionListView: View {
             if list.isEmpty {
                 emptyState(list)
             } else {
-                List {
+                selectableList {
                     ForEach(list.groups) { group in
                         if let title = group.title {
                             Section {
@@ -85,6 +95,20 @@ public struct ActionListView: View {
         }
     }
 
+    /// macOS: `List(selection:)` — highlight, arrow keys and accessibility selection for free.
+    /// iOS has no persistent row selection outside edit mode, so rows stay tap-to-open there.
+    @ViewBuilder
+    private func selectableList<Rows: View>(@ViewBuilder rows: () -> Rows) -> some View {
+        #if os(macOS)
+        List(selection: Binding<NoteID?>(
+            get: { selection },
+            set: { if let id = $0 { onOpen(id) } }),
+            content: rows)
+        #else
+        List(content: rows)
+        #endif
+    }
+
     @ViewBuilder private func rows(_ group: ActionGroup, list: ActionListModel) -> some View {
         ForEach(group.actions) { action in
             ActionRow(
@@ -93,7 +117,11 @@ public struct ActionListView: View {
                 badges: list.badges(for: action),
                 onComplete: { send(.complete(action.id)) })
                 .contentShape(Rectangle())
+                .tag(action.id)
+                #if !os(macOS)
                 .onTapGesture { onOpen(action.id) }
+                #endif
+                .accessibilityAddTraits(.isButton)
                 .contextMenu {
                     Button(Copy.done) { send(.complete(action.id)) }
                     Divider()

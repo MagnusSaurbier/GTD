@@ -3,6 +3,7 @@ import Foundation
 import GTDModel
 import GTDAppCore
 import GTDFixtures
+import DesignSystem
 @testable import FeatureWaiting
 
 /// `WaitingListModel` — staleness ordering, defer grouping, timeline bucketing (across month and
@@ -308,6 +309,30 @@ struct FeatureWaitingTests {
         let badges = list.badges(for: action)
         #expect(!badges.isEmpty)
         #expect(badges.first?.step == .attention)
+    }
+
+    /// M10 — the follow-up date chip of a row in chase state takes the chase signal's colour;
+    /// a date still ahead (or no date) stays a plain chip.
+    @Test func followUpChipIsTintedOnlyOnceTheDateHasPassed() {
+        let today = Day(year: 2026, month: 9, day: 19)
+        let list = makeList(actions: [], today: today)
+        let passed = makeAction("A", status: .waiting, who: "X", followUp: today.adding(days: -9))
+        let ahead = makeAction("B", status: .waiting, who: "X", followUp: today.adding(days: 3))
+        let none = makeAction("C", status: .waiting, who: "X", followUp: nil)
+
+        #expect(list.followUpSignal(for: passed) == .attention)
+        #expect(list.followUpSignal(for: ahead) == nil)
+        #expect(list.followUpSignal(for: none) == nil)
+    }
+
+    // MARK: - Copy
+
+    /// The deferred screen is titled with the section's name, not with the date chip's field
+    /// label: the sidebar said "Deferred" while the window title said "Defer"
+    /// (walkthrough 2026-09-19). `SidebarRoutingTests` pins the sidebar's half of this.
+    @Test func deferredScreenIsTitledDeferred() {
+        #expect(WaitingCopy.deferredTitle == "Deferred")
+        #expect(WaitingCopy.deferredTitle != Copy.deferLabel)
     }
 
     // MARK: - Empty snapshot

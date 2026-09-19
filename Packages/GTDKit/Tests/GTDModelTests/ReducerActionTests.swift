@@ -174,6 +174,20 @@ struct ReducerActionTests {
         #expect(result.snapshot.action(original.id) == nil)
         #expect(result.extraOps == [.move(from: original.id.path, to: newID.path)])
         #expect(result.snapshot.projects[0].steps[0].promotedTo == newID)
+        // The one thing the new snapshot cannot say by itself: this note was renamed, not
+        // deleted. Whoever is looking at it follows this instead of concluding it is gone.
+        #expect(result.renames.resolve(original.id) == newID)
+    }
+
+    /// An edit that leaves the title alone renames nothing, so there is nothing to follow.
+    @Test func anEditThatKeepsTheTitleReportsNoRename() throws {
+        let original = TestVault.action("Letter", .next)
+        var edited = original
+        edited.why = "Because the deadline is in March"
+        let result = try Reducer.reduce(
+            TestVault.snapshot(actions: [original]), .updateAction(edited), env: env)
+        #expect(result.renames.isEmpty)
+        #expect(result.extraOps.isEmpty)
     }
 
     @Test func renamingOntoAnExistingTitleIsACollision() {

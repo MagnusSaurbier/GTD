@@ -3,6 +3,7 @@ import GTDModel
 import GTDFixtures
 import GTDIntents
 import GTDNotifications
+import FeatureOverview
 import FeatureSettings
 @testable import GTD
 
@@ -94,16 +95,34 @@ final class AppRouterTests: XCTestCase {
         XCTAssertFalse(router.isProcessingInbox, "a route is delivered at most once")
     }
 
-    func testPruningDropsNotesThatLeftTheVault() {
+    func testApplyingAnUpdateDropsNotesThatLeftTheVault() {
         let router = AppRouter()
         let snapshot = Fixtures.sampleSnapshot
         router.nextPath = [snapshot.actions[0].id, NoteID(path: "Actions/Ghost.md")]
         router.routineRun = NoteTarget(NoteID(path: "GTD/Routines/Ghost.md"))
 
-        router.prune(against: snapshot)
+        router.apply(snapshot: snapshot)
 
         XCTAssertEqual(router.nextPath, [snapshot.actions[0].id])
         XCTAssertNil(router.routineRun)
+    }
+
+    /// A renamed note's old id is as absent from the snapshot as a deleted one's, so the
+    /// renames have to be consumed *with* the snapshot — otherwise the pushed detail of the
+    /// action whose title was just edited is popped. Both platforms in one call: the iPhone's
+    /// path and the Mac's detail column.
+    func testApplyingAnUpdateFollowsARenameOnBothPlatforms() {
+        let router = AppRouter()
+        let snapshot = Fixtures.sampleSnapshot
+        let renamed = snapshot.actions[0].id
+        let old = NoteID(path: "Actions/The title it had before.md")
+        router.nextPath = [old]
+        router.overview.open(action: old)
+
+        router.apply(snapshot: snapshot, renames: RenameMap(from: old, to: renamed))
+
+        XCTAssertEqual(router.nextPath, [renamed], "the detail stays open, under the new id")
+        XCTAssertEqual(router.overview.detail, .action(renamed))
     }
 }
 
