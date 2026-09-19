@@ -219,27 +219,33 @@ public final class ActionEditModel {
             return
         }
         guard !dirty.isEmpty, !retryBlocked else { return }
-        guard let draft else { return }
-        guard let base = model.snapshot.action(id) else {
+        guard draft != nil else { return }
+        guard model.snapshot.action(id) != nil else {
             isMissing = true
             return
         }
 
         let saving = dirty
         let stamp = generation
-        let payload = ActionEditModel.apply(saving, from: draft, onto: base)
 
         isSaving = true
         do {
-            try await model.send(.updateAction(payload))
+            // Derived at the moment the command runs, not now: another command may still be in
+            // flight, and a payload built on the snapshot it is about to replace would write
+            // its fields back (T40-2, `AppModel.send(deriving:)`).
+            try await model.send(deriving: { [weak self] in
+                guard let self, let draft = self.draft,
+                      let base = self.model.snapshot.action(self.id) else { return nil }
+                return .updateAction(ActionEditModel.apply(saving, from: draft, onto: base))
+            })
             isSaving = false
             lastError = nil
             // Only fields that were not touched again while the save was in flight are clean.
             for field in saving where (lastEdit[field] ?? 0) <= stamp {
                 dirty.remove(field)
             }
-            if saving.contains(.title) {
-                followRename(to: payload.title)
+            if saving.contains(.title), let title = draft?.title {
+                followRename(to: title)
             }
             refresh()
         } catch {

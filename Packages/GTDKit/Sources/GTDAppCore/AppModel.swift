@@ -19,6 +19,8 @@ public final class AppModel {
 
     private let backend: any GTDBackend
     private var observation: Task<Void, Never>?
+    /// Tail of the serial command chain — see `send(deriving:)`.
+    private var tail: Task<Void, Never>?
 
     public init(backend: any GTDBackend, today: @escaping () -> Day = Day.today) {
         self.backend = backend
@@ -62,6 +64,30 @@ public final class AppModel {
     /// the snapshot and undo label are refreshed before returning, so callers can read them
     /// immediately after `await`.
     public func send(_ command: GTDCommand) async throws {
+        try await send(deriving: { command })
+    }
+
+    /// Runs a command that is **built at the moment it starts**, from the snapshot as it is
+    /// then. Returning `nil` from `make` cancels the command.
+    ///
+    /// Commands are serialised: at most one is in flight, in call order (T40-2). A caller that
+    /// derives its command from `snapshot` — the autosaving action editor writing a whole
+    /// `Action` back — must use this overload, because a command built before another one that
+    /// is already in flight lands is built on state that command has already superseded, and
+    /// writing it would silently revert the other's fields.
+    public func send(deriving make: @MainActor @escaping () -> GTDCommand?) async throws {
+        let previous = tail
+        let work = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, let command = make() else { return }
+            try await self.run(command)
+        }
+        tail = Task { @MainActor in _ = try? await work.value }
+        try await work.value
+    }
+
+    /// The command itself, once it is this command's turn.
+    private func run(_ command: GTDCommand) async throws {
         do {
             let prompts = try await backend.perform(command)
             snapshot = await backend.currentSnapshot()
@@ -76,7 +102,18 @@ public final class AppModel {
     }
 
     /// N6. Never throws — a refused undo (T16: the file changed remotely) lands in `lastError`.
+    /// Queued behind any command still in flight, like `send`.
     public func undo() async {
+        let previous = tail
+        let work = Task { @MainActor [weak self] in
+            await previous?.value
+            await self?.runUndo()
+        }
+        tail = work
+        await work.value
+    }
+
+    private func runUndo() async {
         do {
             try await backend.undo()
             lastError = nil

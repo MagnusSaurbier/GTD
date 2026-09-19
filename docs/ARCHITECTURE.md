@@ -24,7 +24,8 @@ and record it under "Contract changes" in your task doc so the orchestrator can 
 
 ```
 project.yml                     XcodeGen spec                       (T00, T40)
-App/                            @main, Info.plist, entitlements     (T00, T40)
+App/                            @main, composition root, shells     (T00, T40) — App/README.md
+AppTests/ AppUITests/           the app target's own test bundles    (T40)
 Packages/GTDKit/
   Package.swift                 ALL targets declared by T00; nobody else edits it
   Sources/
@@ -46,6 +47,7 @@ Spikes/VaultAccess/             throw-away on-device spike                      
 Shortcuts/                      capture shortcut recipes                        (T30)
 scripts/check.sh                build + test gate used by every task            (T00)
 scripts/check-docs.sh           doc/path consistency check, called by check.sh   (T00)
+docs/MANUAL_TEST.md             Mac/iPhone test script: real vault, sync, alerts (T40)
 ```
 
 Dependency direction (no cycles, features never import each other except where listed):
@@ -291,12 +293,19 @@ public protocol GTDBackend: Sendable {
   public private(set) var lastError: (any Error)?             // T00-3: a refused undo has nowhere else to go
   public init(backend: any GTDBackend, snapshot: VaultSnapshot, today: @escaping () -> Day = Day.today)  // previews
   public func send(_ command: GTDCommand) async throws       // rethrows GTDError for the UI to handle
+  public func send(deriving: @MainActor @escaping () -> GTDCommand?) async throws   // T40-2
   public func undo() async }
 
 public actor InMemoryBackend: GTDBackend { public init(snapshot: VaultSnapshot) }   // = Reducer only; used by previews, tests
 ```
 
 Views get the model via `@Environment(AppModel.self)`.
+
+**Command order (T40-2, 2026-09-19).** `AppModel` runs commands one at a time, in call order, and
+`send(deriving:)` builds its command only once it is that command's turn. A caller that derives a
+whole entity from `snapshot` — the autosaving action editor — must use it: a command built while
+another is still in flight is built on state that command has already replaced, and sending it
+puts the other one's fields back.
 
 ### GTDMarkdown
 
@@ -442,6 +451,9 @@ Apple SDKs), so the split below is binding for every target:
 | Turn into project (T11) | **2026-09-19:** `convertActionToProject` moves the action note to `GTD/Trash/`, takes its checkboxes as steps and emits `.whatsNext`, so the new project is never born stalled. |
 | Undo depth (T16) | **2026-09-19:** `VaultBackend` keeps 20 journal entries, so ⌘Z walks back through a session; `InMemoryBackend` still restores one snapshot. Both satisfy N6, and every entry is checked against the files before it is applied. T41 may deepen `InMemoryBackend` to match. |
 | Undo toast wording (T16) | **2026-09-19:** the labels are STYLEGUIDE §3.8/§6.3's (`Moved to Backlog`, `Filed to Next`), word for word identical in both backends, rather than T16's briefed `Filed 'Call bank' to Next`. |
+| Onboarding hand-off (T40) | **2026-09-19:** `OnboardingView` gained an optional `onFinished`; only the shell can take onboarding down, and the vault opens while it is still on screen so its validation step shows real counts. |
+| Command order (T40) | **2026-09-19:** `AppModel` serialises commands and offers `send(deriving:)` (§4). This is what fixed `ActionEditModelTests`' intermittent failure — an autosave racing another command, not a flaky test. |
+| Weekly review on Mac (T40) | **2026-09-19:** the review is the `Review` sidebar section (STYLEGUIDE §4.1), with `ReviewResumeBanner` above the window, rather than a separate full-window mode as T40's brief suggested. The style guide wins (§5). |
 | Next list order (T11) | **2026-09-19:** `in-progress` first, then nearest `due`, then oldest capture, then path. The list is never truncated to the cap — an over-cap vault must stay repairable. |
 
 ## 7. Sync safety rules (N3) — apply to every task that writes

@@ -1,51 +1,52 @@
 import SwiftUI
 import GTDAppCore
-import GTDFixtures
 import GTDModel
-import DesignSystem
 import FeatureOverview
 
-/// The app shell. **Owned by T40** — T00 wired up the smallest thing that runs: the fixtures
-/// snapshot behind `InMemoryBackend`, so the whole UI stack can be opened before `GTDVault`
-/// and `GTDServices` exist.
+/// The app shell. **Owned by T40.**
+///
+/// It composes and nothing else: `AppComposition` builds the backend (vault or fixtures),
+/// `AppRouter` holds where the app is looking, `NotificationService` keeps the local
+/// notifications in step, and `RootView` renders the platform shell (N5). Everything with GTD
+/// meaning lives in `GTDModel`; everything that touches files lives in `GTDVault`.
 @main
 struct GTDApp: App {
-    @State private var model: AppModel
+    @State private var composition: AppComposition
+    @State private var router: AppRouter
+    @State private var notifications: NotificationService
 
     init() {
-        // T40: replace with `VaultBackend` + the security-scoped bookmark, keeping
-        // `InMemoryBackend` behind the `-useFixtures` launch argument for UI tests.
-        let snapshot = Fixtures.sampleSnapshot
-        _model = State(initialValue: AppModel(
-            backend: InMemoryBackend(snapshot: snapshot),
-            snapshot: snapshot))
+        let composition = AppComposition()
+        let notifications = NotificationService()
+        _composition = State(initialValue: composition)
+        _router = State(initialValue: AppRouter())
+        _notifications = State(initialValue: notifications)
+        BackgroundRefresh.register(composition: composition, notifications: notifications)
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(model)
+            RootView(composition: composition, router: router, notifications: notifications)
         }
         #if os(macOS)
-        .defaultSize(width: 1000, height: 640)
+        .defaultSize(width: 1100, height: 700)
+        .commands {
+            // STYLEGUIDE §4.5 — the window's keyboard map, mirrored in the menu bar.
+            OverviewCommands(navigation: router.overview, model: composition.model)
+        }
+        #endif
+        #if os(iOS)
+        // D2 — while the app is away, re-read the vault and re-plan the notifications.
+        .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) {
+            await BackgroundRefresh.run()
+        }
+        #endif
+
+        #if os(macOS)
+        Settings {
+            MacSettingsScene(composition: composition)
+                .environment(composition.model)
+        }
         #endif
     }
-}
-
-/// Placeholder root view. T40 replaces it with the real platform split (N5):
-/// `OverviewView` on Mac, a three-tab `TabView` on iPhone.
-struct RootView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        OverviewView()
-    }
-}
-
-#Preview {
-    RootView()
-        .environment(AppModel(
-            backend: InMemoryBackend(snapshot: Fixtures.sampleSnapshot),
-            snapshot: Fixtures.sampleSnapshot,
-            today: { Fixtures.today }))
 }

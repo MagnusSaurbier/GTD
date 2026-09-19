@@ -24,14 +24,19 @@ import UIKit
 /// steps see the loaded snapshot for free.
 public struct OnboardingView: View {
     private let onVaultPicked: (URL) -> Void
+    private let onFinished: (() -> Void)?
     @Environment(AppModel.self) private var model
     @State private var isPickerPresented = false
     @State private var step: Step = .welcome
 
     private enum Step { case welcome, validate, notifications, shortcut }
 
-    public init(onVaultPicked: @escaping (URL) -> Void) {
+    /// `onFinished` (T40-1, defaulted so the frozen one-argument form still compiles) is how the
+    /// shell learns that the last step has been read: onboarding is presented by the shell, so
+    /// only the shell can take it down.
+    public init(onVaultPicked: @escaping (URL) -> Void, onFinished: (() -> Void)? = nil) {
         self.onVaultPicked = onVaultPicked
+        self.onFinished = onFinished
     }
 
     public var body: some View {
@@ -132,6 +137,11 @@ public struct OnboardingView: View {
             Text("You're set. Open Next or process your Inbox to get going.")
                 .font(Typo.meta)
                 .foregroundStyle(Color.textSecondary)
+            if let onFinished {
+                Button("Start", action: onFinished)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.gtdAccent)
+            }
         }
     }
 }

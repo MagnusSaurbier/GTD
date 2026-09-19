@@ -8,13 +8,17 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
 - `GTDBackend` — `snapshots() -> AsyncStream<VaultSnapshot>`, `currentSnapshot()`,
   `perform(_:) -> [AppPrompt]`, `undo()`, `undoLabel()`.
 - `AppModel` — `@MainActor @Observable`. `snapshot`, `undoLabel`, `prompt`, `lastError`,
-  `today: () -> Day`; `send(_:) async throws`, `undo() async`, `start()`/`stop()`.
-  Views get it with `@Environment(AppModel.self)`.
+  `today: () -> Day`; `send(_:) async throws`, `send(deriving:) async throws`, `undo() async`,
+  `start()`/`stop()`. Views get it with `@Environment(AppModel.self)`.
 - `InMemoryBackend` — `actor`, reducer only, single-level undo by keeping the previous snapshot.
   `init(snapshot:)` plus `deviceID:`/`env:` for deterministic tests.
 
 ## Invariants
 
+- **Commands run one at a time, in call order** (T40-2). `send(deriving:)` builds its command
+  only when its turn comes, from the snapshot as it is then — that is what a caller writing a
+  whole entity back (`FeatureOverview.ActionEditModel`'s autosave) must use, or it reverts the
+  fields of a command that was still in flight when it built its payload. `undo()` queues too.
 - `AppModel.send` refreshes `snapshot` and `undoLabel` **before returning**, both on success and
   on a thrown `GTDError`, so a caller can read them straight after `await`. That is why
   `GTDBackend` has `currentSnapshot()` (contract change T00-2).

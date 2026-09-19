@@ -21,7 +21,10 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 
 - **Autosave never clobbers.** `ActionEditModel` keeps the remote action plus the *dirty* fields
   overlaid, and writes only dirty fields onto the *current* snapshot action. A snapshot arriving
-  mid-edit updates untouched fields and leaves the edit alone.
+  mid-edit updates untouched fields and leaves the edit alone. The payload is built through
+  `AppModel.send(deriving:)`, i.e. only when the command's turn comes (T40-2) — building it
+  earlier raced any command still in flight and reverted that command's fields, which is what
+  made `ActionEditModelTests` fail about one run in three until T40.
 - **A rename changes the `NoteID`** (`Actions/<Title>.md`, A1). After a save that included the
   title, the model re-points itself and calls `onRename`, which the shell forwards to
   `OverviewNavigation.replace(_:with:)`.

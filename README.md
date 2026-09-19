@@ -10,10 +10,11 @@ store is the markdown notes in my Obsidian vault (synced via iCloud).
 
 ## Status
 
-Build-out. The scaffold from `agent_task/00-foundation.md` is in place: every target of
-`Packages/GTDKit` exists and builds, the frozen contracts compile, and `InMemoryBackend` +
-`GTDFixtures` let the UI be built before the vault layer lands. The modules themselves are being
-filled in by the remaining briefs.
+Build-out. Every target of `Packages/GTDKit` is implemented and tested on Linux, and the app
+shell wires them together: the vault backend behind onboarding, the iPhone tabs and the Mac
+window, deep links, notifications and background refresh (`App/README.md`). Everything that needs
+an Apple SDK was written without a compiler — `TEST-INSTRUCTIONS.md` and `docs/MANUAL_TEST.md`
+are the checks that close that gap on a Mac.
 
 The build-out ends with `agent_task/42-docs-handover.md`, which rewrites `CLAUDE.md`, this file and
 the architecture doc to describe the code as built. Agent instructions live in `CLAUDE.md`;
@@ -43,12 +44,29 @@ are only validated on a Mac.
 The Swift commands behind it, and how to run a single test, are listed in `CLAUDE.md` under
 "Commands".
 
+## Run it
+
+```bash
+scripts/check.sh --app    # generates GTD.xcodeproj
+open GTD.xcodeproj        # run the GTD scheme on "My Mac" or an iPhone simulator; ⌘U for the tests
+```
+
+On first launch the app asks for the Obsidian folder that holds the Actions notes and remembers
+it as a security-scoped bookmark. Add the launch argument `-useFixtures` (Product → Scheme → Edit
+Scheme → Arguments) to run on the sample snapshot instead, touching no files at all — that is what
+the UI tests use. Signing is yours: set `DEVELOPMENT_TEAM` in `project.yml` before building for a
+device; macOS and the simulator build unsigned. `docs/MANUAL_TEST.md` is the checklist for
+testing against a real (copied!) vault.
+
 ## Layout
 
 ```
 App/                  the app shell (@main); the Xcode project is generated from project.yml
+AppTests/             unit tests for the shell's own logic
+AppUITests/           launch-and-navigate smoke tests (always -useFixtures)
 Packages/GTDKit/      all code, split into small targets — see docs/ARCHITECTURE.md §2
+Shortcuts/            capture Shortcut recipes
 scripts/              check.sh (the gate) and check-docs.sh
-docs/                 requirements, style guide, architecture
+docs/                 requirements, style guide, architecture, manual test script
 agent_task/           build-out briefs, one per task
 ```

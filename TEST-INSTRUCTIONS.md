@@ -57,29 +57,44 @@ scripts/check.sh --app       # xcodegen + xcodebuild of the macOS app
 open GTD.xcodeproj           # then run the GTD scheme on "My Mac" and on an iPhone simulator
 ```
 
-Smoke test with the in-memory backend and the fixtures (the app starts with `InMemoryBackend` +
-`GTDFixtures.sampleSnapshot` until T40 wires the vault backend):
+The shell is wired (T40): the app resolves a security-scoped bookmark, opens the vault through
+`FileVaultStore` + `VaultBackend`, and shows `OnboardingView` when there is no vault yet. The
+launch argument **`-useFixtures`** replaces that whole chain with `InMemoryBackend` +
+`GTDFixtures.sampleSnapshot` — nothing is read or written on disk. Use it for this gate
+(Product → Scheme → Edit Scheme → Arguments → `-useFixtures`).
 
-1. App launches on Mac and on an iPhone simulator without crashing.
+Smoke test with `-useFixtures`:
+
+1. App launches on Mac and on an iPhone simulator without crashing. Mac: sidebar · list · detail,
+   minimum window 900×560. iPhone: three tabs — Next (on-the-go) · Inbox (count badge) · Routines.
 2. Inbox shows ≈6 items; Next shows actions at cap − 1; Projects lists 5 projects incl. one
    stalled and one on hold; Waiting shows an overdue item; Routines shows Morning/Bedtime.
-3. File one inbox item to Next → it appears in Next. File another → the "Next is full" error
-   surfaces in the UI (no silent drop). Undo restores the previous state.
-4. Complete a project action → the "what's next?" prompt appears.
-5. Dark mode + Dynamic Type (largest accessibility size) on iPhone: nothing clipped, nothing
-   overlapping. Check `docs/STYLEGUIDE.md` §9 checklist for the screens that exist.
+3. File one inbox item to Next → it appears in Next. File another → the "Next is full" forced
+   choice appears (no silent drop). Undo (toast, and `⌘Z` on Mac) restores the previous state.
+4. Complete a project action → the "What's next?" sheet appears.
+5. Mac menu bar: `⌘1…⌘7` switch sections, `⌘N` opens the capture sheet, `⌘I` starts processing,
+   `⌘Z` undoes, `⌘,` opens Settings. iPhone: the gear on Next opens Settings.
+6. Deep links: `xcrun simctl openurl booted gtd://inbox` starts processing; `gtd://waiting` opens
+   the waiting list; `gtd://routine/GTD/Routines/Morning.md` opens that routine's runner.
+7. Dark mode + Dynamic Type (largest accessibility size) on iPhone: nothing clipped, nothing
+   overlapping. Check `docs/STYLEGUIDE.md` §9 for the screens that exist.
 
-Once T40 has landed (`agent_task/40-app-integration.md` has a Result): repeat with a **copy** of a
-vault. Use `Packages/GTDKit/Sources/GTDFixtures/Resources/SampleVault` copied to a temp folder,
-or a copy of your real vault. **Never point the app at the real vault under
-`~/Library/Mobile Documents/iCloud~md~obsidian/` while testing.**
+The app's own test bundles (`AppTests`, `AppUITests`) build with the project and run with
+`⌘U`; the UI tests launch with `-useFixtures` themselves.
+
+Then run `docs/MANUAL_TEST.md` — the real-vault (on a **copy**), two-device and notification
+checks that no simulator can cover.
 
 ## Gate 3 — vault access on device (replaces the skipped spike T01)
 
 T01 was skipped on the user's instruction ("assume the app can read local files"). Verify the
 assumption once the vault backend exists (T15/T16 landed):
 
-1. In the app's Settings, pick the vault folder (a copy!) via the folder picker.
+**Never point the app at the real vault under `~/Library/Mobile Documents/iCloud~md~obsidian/`
+while testing** — use a copy of it, or a copy of
+`Packages/GTDKit/Sources/GTDFixtures/Resources/SampleVault`.
+
+1. Onboarding (or Settings → "Change vault…") → pick the vault folder (a copy!).
 2. Quit and relaunch: the app must reopen the folder from its security-scoped bookmark without
    asking again.
 3. Edit a note in Obsidian (or any editor) while the app is running: the change shows up in the

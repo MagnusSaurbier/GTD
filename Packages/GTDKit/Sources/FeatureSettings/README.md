@@ -7,7 +7,9 @@ settings (notification toggles, morning time, vault display name) and the vault-
 
 ## Public API
 
-`OnboardingView(onVaultPicked:)`, `SettingsView(deviceSettings:onChangeVault:)`, `VaultIssuesView()`.
+`OnboardingView(onVaultPicked:onFinished:)` (T40-1: `onFinished` is optional and defaulted — the
+shell presents onboarding, so only the shell can take it down; it backs the last step's `Start`
+button), `SettingsView(deviceSettings:onChangeVault:)`, `VaultIssuesView()`.
 
 Linux-compilable (unit-tested, no SwiftUI):
 - `DeviceSettings` — device-local state, `Codable`.
