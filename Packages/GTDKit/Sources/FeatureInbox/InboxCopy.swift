@@ -66,9 +66,10 @@ public enum InboxCopy {
 
     // MARK: Session summary (STYLEGUIDE §5, reward moment)
 
-    /// `14 processed · 6 min`
+    /// `14 processed · 6 min`. One wording, owned by `DesignSystem` — `RewardMoment.inboxZero`
+    /// renders the same line in the §5.1 moment itself (T41).
     public static func sessionSummary(processed: Int, minutes: Int) -> String {
-        "\(processed) processed · \(minutes) min"
+        Copy.processedSummary(processed: processed, minutes: minutes)
     }
 
     /// `6 Next · 3 Backlog · 1 Trash` — the per-target breakdown under the summary.

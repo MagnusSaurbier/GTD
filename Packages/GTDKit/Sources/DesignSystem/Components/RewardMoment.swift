@@ -60,7 +60,7 @@ public extension RewardMoment {
             symbol: Symbols.inbox,
             showsCheckBadge: true,
             title: Copy.emptyInboxTitle,
-            detail: "\(processed) processed · \(minutes) min")
+            detail: Copy.processedSummary(processed: processed, minutes: minutes))
     }
 
     /// STYLEGUIDE §5.2 — a routine finishes: `checkmark.circle` bounces, `<Routine> done`,

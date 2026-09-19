@@ -395,29 +395,27 @@ struct InboxZeroView: View {
     let session: InboxSession
     let onFinished: () -> Void
 
+    /// STYLEGUIDE §5.1's moment comes from `DesignSystem.RewardMoment` rather than being drawn
+    /// again here (T41): that is where the bouncing tray, the `signalDone` check badge and the
+    /// single `.success` haptic on appear are defined, and §5 allows exactly two such moments,
+    /// so there must be exactly one implementation. Only the per-target breakdown — which is
+    /// inbox vocabulary, not a design-system concept — stays local.
     var body: some View {
-        ContentUnavailableView {
-            Label {
-                Text(Copy.emptyInboxTitle)
-            } icon: {
-                Image(systemName: Symbols.inbox)
-                    .symbolEffect(.bounce, options: .nonRepeating)
+        VStack(spacing: Spacing.l) {
+            RewardMoment.inboxZero(
+                processed: session.processed, minutes: session.elapsedMinutes)
+
+            let breakdown = InboxCopy.targetBreakdown(session.summaryCounts)
+            if !breakdown.isEmpty {
+                Text(breakdown)
+                    .font(Typo.counter)
+                    .foregroundStyle(Color.textSecondary)
             }
-        } description: {
-            VStack(spacing: Spacing.xs) {
-                Text(InboxCopy.sessionSummary(
-                    processed: session.processed,
-                    minutes: session.elapsedMinutes))
-                let breakdown = InboxCopy.targetBreakdown(session.summaryCounts)
-                if !breakdown.isEmpty {
-                    Text(breakdown).font(Typo.counter)
-                }
-            }
-        } actions: {
+
             Button(Copy.done, action: onFinished)
                 .buttonStyle(.borderedProminent)
         }
-        .sensoryFeedback(.success, trigger: session.processed)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 #endif

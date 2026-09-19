@@ -83,6 +83,10 @@ public enum Copy {
     public static let reviewComplete = "Review complete"
     /// `9 of 11 steps`
     public static func stepsSummary(done: Int, total: Int) -> String { "\(done) of \(total) steps" }
+    /// `14 processed · 6 min` — the inbox-zero moment's stats line (STYLEGUIDE §5.1).
+    public static func processedSummary(processed: Int, minutes: Int) -> String {
+        "\(processed) processed · \(minutes) min"
+    }
 
     public static let onTheRemarkable = "On the reMarkable"
 
