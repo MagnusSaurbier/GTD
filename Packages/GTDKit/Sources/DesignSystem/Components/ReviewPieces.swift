@@ -34,15 +34,13 @@ public struct StatTile: View {
     }
 }
 
-/// One heatmap cell's state (STYLEGUIDE §3.10). `.noData` predates the routine or the log file
-/// for that day is missing — never conflated with a deliberate skip.
-public enum HeatmapCellState: Sendable, Equatable {
-    case done, skipped, noData
-}
+// `HeatmapCellState` and the words VoiceOver reads for a row live in `HeatmapContent.swift`,
+// outside the SwiftUI guard, so they can be unit-tested on Linux.
 
 /// The routine heatmap (STYLEGUIDE §3.10, R5): rows = steps, 7 columns = days. Done cells are
-/// `signalDone`; skipped cells are a quiet dot; empty cells are blank. Color is never the only
-/// carrier — each cell's accessibility value spells out what it means.
+/// `signalDone`; skipped cells are a quiet dot; empty cells are blank. Colour is never the only
+/// carrier: each row is one VoiceOver element whose value spells the week out
+/// (`HeatmapSpeech.week`), and the grid scales with Dynamic Type.
 public struct RoutineHeatmap: View {
     public struct Row: Identifiable, Sendable {
         public var id: String { title }
@@ -60,8 +58,12 @@ public struct RoutineHeatmap: View {
 
     private let rows: [Row]
     private let columnLabels: [String]
-    private static let cellSize: CGFloat = 18
     private static let cellGap: CGFloat = 3
+
+    /// The grid scales with the text size (STYLEGUIDE §8: Dynamic Type to AX3 without loss of
+    /// function). A fixed 120 pt row label truncated the step title at the larger sizes.
+    @ScaledMetric(relativeTo: .caption) private var cellSize: CGFloat = 18
+    @ScaledMetric(relativeTo: .footnote) private var rowLabelWidth: CGFloat = 120
 
     public init(rows: [Row], columnLabels: [String]) {
         self.rows = rows
@@ -76,17 +78,18 @@ public struct RoutineHeatmap: View {
                     Text(label)
                         .font(Typo.counter)
                         .foregroundStyle(Color.textSecondary)
-                        .frame(width: Self.cellSize)
+                        .frame(width: cellSize)
                 }
                 Spacer(minLength: 0)
             }
+            .accessibilityHidden(true)          // the day names are repeated in every row's label
             ForEach(rows) { row in
                 HStack(spacing: Self.cellGap) {
                     Text(row.title)
                         .font(Typo.meta)
                         .foregroundStyle(Color.ink)
                         .frame(width: rowLabelWidth, alignment: .leading)
-                        .lineLimit(1)
+                        .lineLimit(2)
                     ForEach(Array(row.cells.enumerated()), id: \.offset) { _, cell in
                         cellView(cell)
                     }
@@ -97,21 +100,20 @@ public struct RoutineHeatmap: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(row.title), \(row.completionPercent) percent complete")
+                .accessibilityValue(HeatmapSpeech.week(row.cells, columnLabels: columnLabels))
             }
         }
     }
-
-    private var rowLabelWidth: CGFloat { 120 }
 
     @ViewBuilder private func cellView(_ state: HeatmapCellState) -> some View {
         RoundedRectangle(cornerRadius: Radius.cell, style: .continuous)
             .fill(fill(for: state))
             .overlay {
                 if state == .skipped {
-                    Circle().fill(Color.textTertiary).frame(width: 4, height: 4)
+                    Circle().fill(Color.textTertiary).frame(width: cellSize / 4.5, height: cellSize / 4.5)
                 }
             }
-            .frame(width: Self.cellSize, height: Self.cellSize)
+            .frame(width: cellSize, height: cellSize)
     }
 
     private func fill(for state: HeatmapCellState) -> Color {

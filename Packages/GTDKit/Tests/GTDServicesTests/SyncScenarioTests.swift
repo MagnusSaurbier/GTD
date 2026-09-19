@@ -122,6 +122,105 @@ import GTDVault
         #expect(fileSystem.snapshotOfFiles[evicted] != nil, "and the file itself is untouched")
     }
 
+    // MARK: - Rename while the note is open somewhere else
+
+    /// The last of the brief's sync scenarios: a note is **renamed while a detail view holds it
+    /// open**. A rename is the one edit that changes a note's identity (`Actions/<Title>.md`,
+    /// A1), so everything still pointing at the old `NoteID` — the open editor, the project
+    /// note's step link, the navigation path — has to follow or refuse. It must never write the
+    /// old path back, which would resurrect a second copy of the action.
+    ///
+    /// `ActionEditModel` (`FeatureOverviewTests`) covers the editor's half: it re-points itself
+    /// after its own rename and reports `isMissing` when the note disappeared under it. This
+    /// covers the vault's half, on real files.
+    @Test func renamingANoteThatIsOpenElsewhereNeverResurrectsTheOldFile() async throws {
+        let root = try SampleVault.copyToTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let mac = try backend(at: root, deviceID: "mac-1")
+        defer { mac.cleanUp() }
+        try await mac.vault.start()
+
+        // An action with a project, so the step link has to follow the rename too.
+        let snapshot = await mac.vault.currentSnapshot()
+        let original = try #require(snapshot.actions.first {
+            $0.project != nil && !$0.status.isClosed
+        })
+        let projectID = try #require(original.project)
+        let project = try #require(snapshot.project(projectID))
+        #expect(project.steps.contains { $0.promotedTo == original.id },
+                "the fixture must have a step pointing at this action")
+
+        // Somewhere else in the app — a second window, a list row, the review deck — the old
+        // value is still in hand. This is the copy an open detail view would be holding.
+        let stale = original
+
+        var renamed = original
+        renamed.title = "Renamed while open"
+        _ = try await mac.vault.perform(.updateAction(renamed))
+
+        let newID = NoteID(path: "Actions/Renamed while open.md")
+        let afterRename = try rescan(root)
+        #expect(afterRename.action(original.id) == nil, "the old path is gone")
+        let moved = try #require(afterRename.action(newID))
+        #expect(moved.why == original.why, "the body travelled with the file")
+        #expect(moved.passthrough == original.passthrough, "N2: unknown keys travelled too")
+        let movedProject = try #require(afterRename.project(project.id))
+        #expect(movedProject.steps.contains { $0.promotedTo == newID },
+                "the project's step link followed the rename, in the same commit")
+
+        // The stale command the open view would send on its next autosave.
+        await #expect(throws: GTDError.notFound(stale.id)) {
+            _ = try await mac.vault.perform(.updateAction(stale))
+        }
+
+        let afterStaleWrite = try rescan(root)
+        #expect(afterStaleWrite.action(original.id) == nil,
+                "a refused command must not recreate the file at the old path")
+        #expect(afterStaleWrite.actions.count == afterRename.actions.count)
+        #expect(afterStaleWrite.issues.isEmpty)
+    }
+
+    /// The same situation across two devices, where the second one cannot know yet: the phone's
+    /// snapshot still has the note at its old path because nothing has told it otherwise.
+    ///
+    /// **This is a documented limitation, not a fixed bug** (ARCHITECTURE §7 "one writer per
+    /// file where possible"): a device acting on a snapshot older than the rename writes the old
+    /// path, and the vault ends up with two notes instead of one. Nothing is *lost* — both files
+    /// are on disk with their content intact, and the user resolves it like any duplicate. The
+    /// test pins the actual behaviour so it cannot get quietly worse, and
+    /// `agent_task/53-stale-write-guard.md` is the follow-up that would refuse the write.
+    @Test func aDeviceWritingFromABeforeTheRenameSnapshotDuplicatesRatherThanLoses() async throws {
+        let root = try SampleVault.copyToTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let mac = try backend(at: root, deviceID: "mac-1")
+        let phone = try backend(at: root, deviceID: "iphone-2")
+        defer { mac.cleanUp(); phone.cleanUp() }
+        try await mac.vault.start()
+        try await phone.vault.start()          // both now hold the same snapshot
+
+        let snapshot = await phone.vault.currentSnapshot()
+        let original = try #require(snapshot.actions.first { $0.status == .backlog })
+
+        var renamed = original
+        renamed.title = "Renamed on the Mac"
+        _ = try await mac.vault.perform(.updateAction(renamed))
+
+        // The phone never saw it (its watcher is a `NullVaultWatcher` here, as it would be while
+        // the device is asleep) and edits the note it still believes in.
+        var edited = original
+        edited.why = "edited on the phone"
+        _ = try await phone.vault.perform(.updateAction(edited))
+
+        let after = try rescan(root)
+        let macCopy = try #require(after.action(NoteID(path: "Actions/Renamed on the Mac.md")))
+        let phoneCopy = try #require(after.action(original.id))
+        #expect(macCopy.why == original.why)
+        #expect(phoneCopy.why == "edited on the phone")
+        #expect(after.issues.isEmpty, "two real notes, not a corrupt one")
+    }
+
     // MARK: - Helpers
 
     /// A second backend over the **same** folder, with its own device id and its own

@@ -125,6 +125,18 @@ public enum Copy {
         case .over60: "60+"
         }
     }
+
+    /// `Project name · mac · ≤30 min` — the metadata line under a row title. Missing values are
+    /// simply left out, never written as "No project" or "0 min" (§1 "no lying defaults").
+    public static func metaLine(_ parts: [String]) -> String {
+        parts.joined(separator: " · ")
+    }
+
+    /// The same parts as one spoken phrase: VoiceOver reads a `·` as "middle dot" or swallows it,
+    /// so the separator becomes a comma (STYLEGUIDE §8).
+    public static func spoken(_ parts: [String]) -> String {
+        parts.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
 }
 
 /// Date and age wording (STYLEGUIDE §6.3): relative within 7 days (`today`, `tomorrow`, `Thu`),

@@ -78,6 +78,9 @@ struct ReviewWizardView: View {
     let onFinished: () -> Void
 
     @State private var isShowingStale = false
+    /// The rail is a column of text, so its width follows the system text size (STYLEGUIDE §8:
+    /// "Mac respects system text size"). At a fixed 220 pt the stage sub-steps clipped.
+    @ScaledMetric(relativeTo: .headline) private var railWidth: CGFloat = 220
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.xl) {
@@ -110,7 +113,7 @@ struct ReviewWizardView: View {
                     title: $0.title, subSteps: $0.subSteps, isComplete: $0.isComplete)
             },
             current: session.rail.first(where: \.isCurrent)?.title)
-            .frame(width: 220, alignment: .leading)
+            .frame(width: railWidth, alignment: .leading)
             .accessibilityLabel(Copy.weeklyReview)
     }
 

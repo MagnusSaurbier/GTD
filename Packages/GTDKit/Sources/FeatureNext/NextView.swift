@@ -232,6 +232,9 @@ private struct NextListContent: View {
         }
         #endif
         .contextMenu {
+            // Every swipe action needs a non-swipe route: the Mac has no swipes at all, and
+            // VoiceOver reaches the menu but not a gesture (STYLEGUIDE §8).
+            Button(Copy.done) { run { try await list.complete(action) } }
             if action.status != .inProgress {
                 Button(Copy.start) { run { try await list.start(action) } }
             }

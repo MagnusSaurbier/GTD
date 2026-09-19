@@ -10,6 +10,11 @@ public struct Badge: View {
     @Environment(\.colorScheme) private var colorScheme
     private let content: BadgeContent
 
+    /// The capsule grows with the text (STYLEGUIDE §8: Dynamic Type to AX3 without loss of
+    /// function). It used to be a hard `height: 20`, which clipped `16 days old` at the
+    /// accessibility sizes.
+    @ScaledMetric(relativeTo: .caption2) private var height: CGFloat = 20
+
     public init(_ content: BadgeContent) {
         self.content = content
     }
@@ -26,7 +31,7 @@ public struct Badge: View {
         }
         .font(Typo.badge)
         .padding(.horizontal, Spacing.s)
-        .frame(height: 20)
+        .frame(minHeight: height)
         .background(background)
         .clipShape(Radius.chipShape)
         .accessibilityElement(children: .ignore)
@@ -88,6 +93,10 @@ public struct ActionRow: View {
                         .foregroundStyle(Color.textSecondary)
                 }
             }
+            // One VoiceOver element for the row's text, with the `·` separators spoken as
+            // pauses instead of "middle dot" (STYLEGUIDE §8).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spokenTitleAndMeta)
             Spacer(minLength: Spacing.s)
             ForEach(Array(badges.prefix(SignalPresentation.maxBadgesPerRow).enumerated()), id: \.offset) {
                 Badge($0.element)
@@ -132,11 +141,19 @@ public struct ActionRow: View {
 
     /// `Project name · mac · phone · ≤30 min` — project first, contexts as plain lowercase text.
     private var metaLine: String {
+        Copy.metaLine(metaParts)
+    }
+
+    private var metaParts: [String] {
         var parts: [String] = []
         if let projectTitle { parts.append(projectTitle) }
         parts.append(contentsOf: action.contexts)
         if let bucket = action.timeBucket { parts.append("\(Copy.timeBucket(bucket)) min") }
-        return parts.joined(separator: " · ")
+        return parts
+    }
+
+    private var spokenTitleAndMeta: String {
+        Copy.spoken([action.title] + metaParts)
     }
 }
 
@@ -166,9 +183,15 @@ public struct ProjectRow: View {
                         for: Signal(kind: .stalled, step: .attention), today: today))
                 }
             }
-            Text("\(row.activeActions.count) active · \(row.remainingSteps) steps left")
+            // The row's own heading reads as one phrase; the action buttons below stay separate
+            // elements because each of them is a target (STYLEGUIDE §8).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Copy.spoken(
+                [row.project.title, row.isStalled ? Copy.stalled : "", countsLine]))
+            Text(countsLine)
                 .font(Typo.meta)
                 .foregroundStyle(Color.textSecondary)
+                .accessibilityHidden(true)      // already in the header's label
             ForEach(row.activeActions.prefix(3), id: \.id) { action in
                 Button {
                     onOpenAction?(action.id)
@@ -183,6 +206,14 @@ public struct ProjectRow: View {
             }
         }
         .padding(.vertical, Spacing.rowVertical)
+    }
+
+    /// `2 active · 5 steps left`.
+    private var countsLine: String {
+        Copy.metaLine([
+            "\(row.activeActions.count) active",
+            "\(row.remainingSteps) steps left",
+        ])
     }
 }
 #endif
