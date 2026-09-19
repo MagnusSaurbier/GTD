@@ -9,7 +9,7 @@ either deliberate or already written up.
 The app was built in a Linux container with Swift but no Xcode. Every file behind
 `#if canImport(SwiftUI)` / `UserNotifications` / `AppIntents`, all of `App/`, `AppTests/` and
 `AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the macOS app and the
-iOS-simulator app built, all 851 package tests and the app's own test bundles passed, and the app
+iOS-simulator app built, all package tests (852 now) and the app's own test bundles passed, and the app
 launched on fixtures on both platforms. **No view has been walked through by hand beyond that, and
 no real vault has been opened.**
 

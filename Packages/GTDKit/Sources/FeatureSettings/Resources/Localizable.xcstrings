@@ -1,5 +1,171 @@
 {
   "sourceLanguage" : "en",
-  "strings" : {},
+  "strings" : {
+    "%lld action%@ still use \"%@\". They keep the text; it just won't show as a chip." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld action%2$@ still use \"%3$@\". They keep the text; it just won't show as a chip."
+          }
+        }
+      }
+    },
+    "%lld actions found" : {
+
+    },
+    "%lld file%@ need attention — see Vault issues in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld file%2$@ need attention — see Vault issues in Settings."
+          }
+        }
+      }
+    },
+    "%lld item%@ in Inbox" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld item%2$@ in Inbox"
+          }
+        }
+      }
+    },
+    "%lld projects found" : {
+
+    },
+    "A higher cap makes Next less focused." : {
+
+    },
+    "A personal GTD app over a plain-markdown Obsidian vault." : {
+
+    },
+    "About" : {
+
+    },
+    "Add" : {
+
+    },
+    "Add a context" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Change vault…" : {
+
+    },
+    "Choose folder…" : {
+
+    },
+    "Choose the Obsidian folder that contains Actions/. The app reads and writes markdown files there — nothing else is touched." : {
+
+    },
+    "Contexts" : {
+
+    },
+    "Continue" : {
+
+    },
+    "Down" : {
+
+    },
+    "Inbox is empty" : {
+
+    },
+    "Install the capture Shortcut to add to your Inbox from anywhere — the share sheet, Siri, or the lock screen. See Shortcuts/README.md for the recipe." : {
+
+    },
+    "Looks like this" : {
+
+    },
+    "Morning time" : {
+
+    },
+    "Name" : {
+
+    },
+    "Next cap: %lld" : {
+
+    },
+    "No issues" : {
+
+    },
+    "Not now" : {
+
+    },
+    "Notifications" : {
+
+    },
+    "On the go" : {
+
+    },
+    "One more thing" : {
+
+    },
+    "Open in Obsidian" : {
+
+    },
+    "Pick your vault" : {
+
+    },
+    "Remove" : {
+
+    },
+    "Remove %@" : {
+
+    },
+    "Remove context?" : {
+
+    },
+    "Removing a context in use asks first; it never rewrites existing actions." : {
+
+    },
+    "Rename" : {
+
+    },
+    "Rename context" : {
+
+    },
+    "Reveal" : {
+
+    },
+    "Start" : {
+
+    },
+    "Stay on top of things" : {
+
+    },
+    "These contexts make up the iPhone's on-the-go Next list." : {
+
+    },
+    "Time" : {
+
+    },
+    "Turn on notifications" : {
+
+    },
+    "Turn on notifications for due dates, follow-ups and routines. You can change this anytime in Settings." : {
+
+    },
+    "Up" : {
+
+    },
+    "Vault" : {
+
+    },
+    "Vault issues" : {
+
+    },
+    "Version" : {
+
+    },
+    "You're set. Open Next or process your Inbox to get going." : {
+
+    }
+  },
   "version" : "1.0"
 }

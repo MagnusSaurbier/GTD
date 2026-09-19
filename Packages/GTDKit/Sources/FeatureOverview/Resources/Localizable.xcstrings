@@ -1,5 +1,9 @@
 {
   "sourceLanguage" : "en",
-  "strings" : {},
+  "strings" : {
+    "%lld" : {
+
+    }
+  },
   "version" : "1.0"
 }

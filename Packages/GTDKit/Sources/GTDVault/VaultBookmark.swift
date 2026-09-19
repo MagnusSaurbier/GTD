@@ -76,6 +76,11 @@ public final class VaultBookmark: @unchecked Sendable {
     /// Stores a bookmark for a folder the user picked.
     public func save(url: URL) throws {
         let data: Data
+        // A URL handed over by `.fileImporter` is security-scoped: without access the sandbox
+        // refuses to bookmark it ("Could not open() the item"). `false` just means the URL needs
+        // no scope (tests, an already-open vault), so it is not an error.
+        let opened = store.startAccess(url)
+        defer { if opened { store.stopAccess(url) } }
         do {
             data = try store.bookmarkData(for: url)
         } catch {

@@ -155,6 +155,18 @@ struct VaultBookmarkTests {
         #expect(!mark.startAccess())
     }
 
+    @Test func savingOpensTheScopeOfAPickedFolderBeforeBookmarkingIt() throws {
+        // What `.fileImporter` hands over on a Mac: bookmarking it outside
+        // start/stopAccessing fails with "Could not open() the item" (Gate 3, first real run).
+        let store = ScopedBookmarkStore()
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gtd-bookmark-\(UUID().uuidString).data")
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        try VaultBookmark(store: store, fileURL: file).save(url: URL(fileURLWithPath: "/picked"))
+        #expect(store.log.events == ["start", "bookmark", "stop"])
+    }
+
     @Test func aCorruptBookmarkIsReportedAsStale() throws {
         let (mark, file) = try bookmark()
         defer { try? FileManager.default.removeItem(at: file) }
@@ -167,5 +179,29 @@ struct VaultBookmarkTests {
         let url = VaultBookmark.defaultFileURL()
         #expect(url.lastPathComponent == "vault-bookmark.data")
         #expect(url.deletingLastPathComponent().lastPathComponent == "GTD")
+    }
+}
+
+/// Refuses to bookmark unless the URL's scope is open, and records the order of calls.
+private struct ScopedBookmarkStore: BookmarkStore {
+    final class Log: @unchecked Sendable {   // test-only; every call is on the test's one thread
+        var events: [String] = []
+        var isOpen = false
+    }
+    let log = Log()
+
+    func bookmarkData(for url: URL) throws -> Data {
+        guard log.isOpen else { throw VaultError.ioFailed(path: url.path, reason: "scope closed") }
+        log.events.append("bookmark")
+        return Data(url.path.utf8)
+    }
+    func resolve(_ data: Data) throws -> (url: URL, isStale: Bool) {
+        (URL(fileURLWithPath: String(decoding: data, as: UTF8.self)), false)
+    }
+    func startAccess(_ url: URL) -> Bool {
+        log.events.append("start"); log.isOpen = true; return true
+    }
+    func stopAccess(_ url: URL) {
+        log.events.append("stop"); log.isOpen = false
     }
 }

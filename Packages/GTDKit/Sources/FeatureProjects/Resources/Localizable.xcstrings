@@ -1,5 +1,45 @@
 {
   "sourceLanguage" : "en",
-  "strings" : {},
+  "strings" : {
+    "Action title" : {
+
+    },
+    "Done when…" : {
+
+    },
+    "Log" : {
+
+    },
+    "Move step down" : {
+
+    },
+    "Move step up" : {
+
+    },
+    "New action" : {
+
+    },
+    "New area" : {
+
+    },
+    "New step" : {
+
+    },
+    "Nothing yet" : {
+
+    },
+    "Project is done" : {
+
+    },
+    "Project title" : {
+
+    },
+    "Step" : {
+
+    },
+    "Steps" : {
+
+    }
+  },
   "version" : "1.0"
 }

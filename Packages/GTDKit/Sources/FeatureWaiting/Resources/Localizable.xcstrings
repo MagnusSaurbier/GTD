@@ -1,5 +1,27 @@
 {
   "sourceLanguage" : "en",
-  "strings" : {},
+  "strings" : {
+    "+%lld" : {
+
+    },
+    "Bump follow-up" : {
+
+    },
+    "Edit who" : {
+
+    },
+    "Later" : {
+
+    },
+    "Overdue" : {
+
+    },
+    "This week" : {
+
+    },
+    "Un-defer now" : {
+
+    }
+  },
   "version" : "1.0"
 }
