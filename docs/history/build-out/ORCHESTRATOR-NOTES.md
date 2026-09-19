@@ -1,6 +1,10 @@
 # ORCHESTRATOR-NOTES — cross-task findings for T40/T41/T42
 
-<!-- REMOVE THIS FILE in T42 (docs handover) after folding anything durable into module READMEs / ARCHITECTURE §6. -->
+> **Archived by T42.** Everything still open when the build-out ended was folded into
+> `docs/KNOWN_ISSUES.md`, `docs/ARCHITECTURE.md` §6 and the module READMEs, and the six unstarted
+> briefs moved to `docs/follow-ups/`. This file is kept only as the record of what T40 and T41
+> closed and why. Read `docs/KNOWN_ISSUES.md` instead; `agent_task/…` paths below now mean
+> `docs/history/build-out/…`, except briefs 50–55, which are in `docs/follow-ups/`.
 
 Collected from the Wave 1/2 reports for T40 (app integration) and T41 (QA). **T41 has been
 through the whole list**: items it closed are struck out with the commit that did it; everything
@@ -111,6 +115,6 @@ is a read-through plus fixes, and `docs/MANUAL_TEST.md` §6 holds what only a de
 performance work measures and fixes what is measurable in a debug build on this machine, and
 `agent_task/55-incremental-reindex.md` holds the cost it found but did not remove.
 
-For T42: `docs/TRACEABILITY.md` is the input for `docs/KNOWN_ISSUES.md` (its "Follow-ups" table
+For T42 (done): `docs/TRACEABILITY.md` was the input for `docs/KNOWN_ISSUES.md` (its "Follow-ups" table
 and every **partial** row), and the six new briefs must not be archived with the rest of
 `agent_task/` — they are work that has not happened yet.

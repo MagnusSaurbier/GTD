@@ -18,7 +18,7 @@ that reads the vault is a second reader of the user's files.
   unit-tested), scheduled and routed (`App/NotificationService.swift`, tapping one opens the
   right screen). What they do not have is **actions on the notification itself** — "Start
   routine" on a routine reminder, "Done" on a due/follow-up one — so every notification costs a
-  full app launch. Skipped by T13/T30, recorded in `agent_task/ORCHESTRATOR-NOTES.md`.
+  full app launch. Skipped by T13/T30, recorded in `docs/history/build-out/ORCHESTRATOR-NOTES.md`.
 - **R3 is partial in the same way.** "Start via … home-screen button / Shortcut" is satisfied by
   the Routines tab and `StartRoutineIntent`. The `ControlWidget` (Control Centre / Lock Screen
   button) was skipped because there is no widget-extension target.

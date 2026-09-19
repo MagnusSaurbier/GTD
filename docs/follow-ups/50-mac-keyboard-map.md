@@ -29,7 +29,7 @@ These are **not**:
 
 They all act on **the focused row**, and no feature view exposes a focus target the shell can
 reach — which is why T40 left them out and T41 declined to add them blind (T40 decision #2, in
-`agent_task/ORCHESTRATOR-NOTES.md`).
+`docs/history/build-out/ORCHESTRATOR-NOTES.md`).
 
 ## Owns
 

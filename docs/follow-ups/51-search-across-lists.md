@@ -8,7 +8,7 @@
 
 One environment key and four call sites. It is small; it was left undone only because it changes
 a shared file across four targets that had never been compiled (T41's note in
-`agent_task/ORCHESTRATOR-NOTES.md`). Once the app builds, this is mechanical.
+`docs/history/build-out/ORCHESTRATOR-NOTES.md`). Once the app builds, this is mechanical.
 
 ## The gap
 

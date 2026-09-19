@@ -1,3 +1,18 @@
+# Build-out archive (historical — do not follow these briefs)
+
+> This folder is the task board the app was built from, between 2026-09-18 and 2026-09-19, by a
+> swarm of agents working in parallel. It is kept for the `## Result` sections: they record why
+> the code is the way it is, which files were written blind, and what each task decided when the
+> requirements were silent. **Nothing in this folder is an instruction any more.** The waves,
+> the per-task "Owns" paths, the branch-per-task rule, the "frozen" `Package.swift` and
+> `docs/ARCHITECTURE.md` §4, and the contract-change procedure all ended with the build-out.
+> For how to work in this repo now, read `CLAUDE.md` and `docs/CONTRIBUTING-AGENTS.md`; for what
+> is still open, `docs/KNOWN_ISSUES.md` and the unstarted briefs in `docs/follow-ups/`.
+> Paths inside these files are as they were written; `agent_task/NN-*.md` now means
+> `docs/history/build-out/NN-*.md`, and briefs 50–55 live in `docs/follow-ups/`.
+
+---
+
 # Agent task board
 
 Each `NN-*.md` file is a self-contained brief for one subagent. Before starting, every agent reads:
