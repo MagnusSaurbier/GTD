@@ -41,6 +41,8 @@ public enum Copy {
     public static let deferToReview = "Defer to review"
     public static let promote = "Promote"
     public static let demote = "Demote"
+    /// Review deck's fourth choice (STYLEGUIDE §3.10): leaves a card exactly where it is.
+    public static let keep = "Keep"
     public static let done = "Done"
     public static let skip = "Skip"
     /// Row context menu (E1, T21) — start working on it now (→ `in-progress`).

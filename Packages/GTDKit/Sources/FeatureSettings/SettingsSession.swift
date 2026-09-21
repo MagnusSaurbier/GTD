@@ -46,6 +46,57 @@ public final class SettingsSession {
         try await model.send(.updateConfig(ContextsEditing.togglingOnTheGo(name, in: config)))
     }
 
+    // MARK: Lists (L2, R-5)
+
+    /// Every list, alphabetically, with its open/finished counts (`Rules.listRows`).
+    public var listRows: [Rules.ListRow] { Rules.listRows(model.snapshot) }
+
+    /// The effective favourites, in order: the stored choice, or — while nothing has been
+    /// chosen — the derived default (`Rules.favouriteLists`: first four alphabetically). Reading
+    /// this never writes `favouriteLists` (R-5's "never written until the user changes
+    /// something"); only `toggleFavourite`/`reorderFavourites` do.
+    public var favouriteListNames: [String] {
+        config.favouriteLists ?? Rules.favouriteLists(model.snapshot).map(\.name)
+    }
+
+    /// Lists not currently a favourite — what `addFavourite`'s picker offers.
+    public var listsAvailableToFavourite: [String] {
+        let chosen = Set(favouriteListNames.map { $0.lowercased() })
+        return listRows.map(\.list.name).filter { !chosen.contains($0.lowercased()) }
+    }
+
+    /// Open + finished items a removal's `confirmationDialog` names (R-5: "takes items with it").
+    public func itemCount(inList name: String) -> Int {
+        guard let row = listRows.first(where: { GTDList.sameName($0.list.name, name) }) else { return 0 }
+        return row.openCount + row.finishedCount
+    }
+
+    public func createList(_ name: String) async throws {
+        try await model.send(.createList(name: name))
+    }
+
+    public func renameList(_ old: String, to new: String) async throws {
+        try await model.send(.renameList(from: old, to: new))
+    }
+
+    public func removeList(_ name: String) async throws {
+        try await model.send(.removeList(name: name))
+    }
+
+    /// Adds `name` to the favourites or removes it, capped at `ListsEditing.storageLimit`
+    /// (`ListsEditing.FavouriteError.limitReached` when adding past it). The first toggle turns
+    /// the shown derived default into a stored choice.
+    public func toggleFavourite(_ name: String) async throws {
+        let next = try ListsEditing.toggling(name, in: favouriteListNames)
+        try await model.send(.setFavouriteLists(next))
+    }
+
+    /// Reorders the favourites the way `List.onMove` reports a drag.
+    public func reorderFavourites(from source: IndexSet, to destination: Int) async throws {
+        let next = ListsEditing.reordering(favouriteListNames, from: source, to: destination)
+        try await model.send(.setFavouriteLists(next))
+    }
+
     // MARK: Next cap (A3)
 
     /// Rethrows `GTDError.invalid` for cap <= 0 (`Reducer.updateConfig`) — the UI never

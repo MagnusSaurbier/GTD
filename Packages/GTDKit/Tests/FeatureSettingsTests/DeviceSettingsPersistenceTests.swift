@@ -71,4 +71,21 @@ struct DeviceSettingsPersistenceTests {
         settingsStore.save(settings)
         #expect(settingsStore.load().keyBindings.key(for: .stepAction) == .letter("Q"))
     }
+
+    /// The Keyboard pane's "Reset to defaults" (STYLEGUIDE §4.5) restores every screen at once,
+    /// and the reset itself persists exactly like a rebind does.
+    @Test func keyBindingsResetPersistsThroughTheStore() throws {
+        var settings = DeviceSettings.default
+        try settings.keyBindings.rebind(.stepAction, to: .letter("Q"))
+        try settings.keyBindings.rebind(.deckKeep, to: .letter("Z"))
+        #expect(!settings.keyBindings.rebound.isEmpty)
+
+        settings.keyBindings.reset()
+        #expect(settings.keyBindings == .defaults)
+
+        let store = InMemorySettingsStore()
+        let settingsStore = DeviceSettingsStore(store: store)
+        settingsStore.save(settings)
+        #expect(settingsStore.load().keyBindings == .defaults)
+    }
 }

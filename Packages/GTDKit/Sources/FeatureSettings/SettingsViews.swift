@@ -161,6 +161,23 @@ public struct SettingsView: View {
     /// Done button (the `ActionDetailView` pattern) plus interactive scroll dismissal fix that.
     @FocusState private var isAddContextFocused: Bool
 
+    // MARK: Lists (L2, R-5)
+
+    @State private var newListName = ""
+    @State private var addListRefusal: String?
+    @FocusState private var isAddListFocused: Bool
+    @State private var renamingList: String?
+    @State private var renameListText = ""
+    @State private var renameListRefusal: String?
+    @State private var pendingListRemoval: String?
+
+    #if os(macOS)
+    // MARK: Keyboard (R-10, N7, STYLEGUIDE §4.5) — Mac only
+
+    @State private var recordingCommand: KeyCommand?
+    @State private var keyRefusals: [KeyCommand: String] = [:]
+    #endif
+
     public init(deviceSettings: Binding<DeviceSettings>, onChangeVault: @escaping () -> Void) {
         self._deviceSettings = deviceSettings
         self.onChangeVault = onChangeVault
@@ -171,9 +188,14 @@ public struct SettingsView: View {
         Form {
             contextsSection(session)
             onTheGoSection(session)
+            listsSection(session)
+            favouritesSection(session)
             nextCapSection(session)
             routinesSection(session)
             notificationsSection
+            #if os(macOS)
+            keyboardSection
+            #endif
             vaultSection
             aboutSection
         }
@@ -201,6 +223,24 @@ public struct SettingsView: View {
         } message: { context in
             let count = session.affectedActionCount(for: context)
             Text("\(count) action\(count == 1 ? "" : "s") still use \"\(context)\". They keep the text; it just won't show as a chip.")
+        }
+        // L2/R-5: removing a list is undoable, but it takes every item with it — that bulk
+        // consequence is why this one still asks first (ARCHITECTURE §6), unlike most undoable
+        // actions in this app.
+        .confirmationDialog(
+            SettingsCopy.removeListTitle,
+            isPresented: Binding(
+                get: { pendingListRemoval != nil },
+                set: { if !$0 { pendingListRemoval = nil } }),
+            presenting: pendingListRemoval
+        ) { list in
+            Button(SettingsCopy.removeList, role: .destructive) {
+                Task { try? await session.removeList(list) }
+                pendingListRemoval = nil
+            }
+            Button(Copy.cancel, role: .cancel) { pendingListRemoval = nil }
+        } message: { list in
+            Text(SettingsCopy.removeListMessage(name: list, itemCount: session.itemCount(inList: list)))
         }
         .alert(
             "Rename context",
@@ -348,6 +388,212 @@ public struct SettingsView: View {
         }
     }
 
+    // MARK: Lists (L2, R-5)
+
+    @ViewBuilder
+    private func listsSection(_ session: SettingsSession) -> some View {
+        Section {
+            ForEach(session.listRows, id: \.list.id) { row in
+                if renamingList == row.list.name {
+                    renamingListRow(session, name: row.list.name)
+                } else {
+                    listRow(session, row: row)
+                }
+            }
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack {
+                    TextField(SettingsCopy.addList, text: $newListName)
+                        .focused($isAddListFocused)
+                        .submitLabel(.done)
+                        .onSubmit { addList(session) }
+                    Button("Add") { addList(session) }
+                        .disabled(newListName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if let addListRefusal {
+                    Text(addListRefusal).font(Typo.meta).foregroundStyle(Color.signalAttention)
+                }
+            }
+        } header: {
+            Text(Copy.lists)
+        } footer: {
+            Text("Each list is a folder. Removing one asks first — it takes its items with it.")
+        }
+    }
+
+    private func listRow(_ session: SettingsSession, row: Rules.ListRow) -> some View {
+        HStack(spacing: Spacing.s) {
+            Image(systemName: Symbols.list(named: row.list.name))
+                .foregroundStyle(Color.textSecondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.list.name).font(Typo.body).foregroundStyle(Color.ink)
+                Text(Copy.counter(remaining: row.openCount, total: row.openCount + row.finishedCount))
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.textSecondary)
+            }
+            Spacer()
+            Button {
+                renameListText = row.list.name
+                renamingList = row.list.name
+                renameListRefusal = nil
+            } label: {
+                Image(systemName: Symbols.rename)
+            }
+            Button(role: .destructive) {
+                pendingListRemoval = row.list.name
+            } label: {
+                Image(systemName: Symbols.trash)
+            }
+            .accessibilityLabel("\(SettingsCopy.removeList) \(row.list.name)")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.gtdAccent)
+        #if os(iOS)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) { pendingListRemoval = row.list.name } label: {
+                Label(SettingsCopy.removeList, systemImage: Symbols.trash)
+            }
+            Button {
+                renameListText = row.list.name
+                renamingList = row.list.name
+                renameListRefusal = nil
+            } label: {
+                Label("Rename", systemImage: Symbols.rename)
+            }
+            .tint(Color.gtdAccent)
+        }
+        #endif
+    }
+
+    /// The row turns into its own inline editor while renamed — refusals show here, never as an
+    /// alert (STYLEGUIDE §4.3/T13).
+    private func renamingListRow(_ session: SettingsSession, name: String) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            TextField(Copy.list, text: $renameListText)
+                .onSubmit { commitRename(session, from: name) }
+            if let renameListRefusal {
+                Text(renameListRefusal).font(Typo.meta).foregroundStyle(Color.signalAttention)
+            }
+            HStack {
+                Button(Copy.cancel) {
+                    renamingList = nil
+                    renameListRefusal = nil
+                }
+                Spacer()
+                Button("Save") { commitRename(session, from: name) }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.gtdAccent)
+            }
+        }
+    }
+
+    private func addList(_ session: SettingsSession) {
+        let name = newListName
+        Task {
+            do {
+                try await session.createList(name)
+                newListName = ""
+                addListRefusal = nil
+            } catch let error as GTDError {
+                addListRefusal = SettingsCopy.message(for: error)
+            } catch {
+                addListRefusal = Copy.actionFailed
+            }
+        }
+    }
+
+    private func commitRename(_ session: SettingsSession, from old: String) {
+        let new = renameListText
+        Task {
+            do {
+                try await session.renameList(old, to: new)
+                renamingList = nil
+                renameListRefusal = nil
+            } catch let error as GTDError {
+                renameListRefusal = SettingsCopy.message(for: error)
+            } catch {
+                renameListRefusal = Copy.actionFailed
+            }
+        }
+    }
+
+    // MARK: Favourites (I4b, R-5)
+
+    @ViewBuilder
+    private func favouritesSection(_ session: SettingsSession) -> some View {
+        Section {
+            #if os(iOS)
+            ForEach(Array(session.favouriteListNames.enumerated()), id: \.element) { index, name in
+                favouriteRow(name: name, index: index)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            Task { try? await session.toggleFavourite(name) }
+                        } label: {
+                            Label(SettingsCopy.removeList, systemImage: Symbols.trash)
+                        }
+                    }
+            }
+            .onMove { offsets, destination in
+                Task { try? await session.reorderFavourites(from: offsets, to: destination) }
+            }
+            #else
+            ForEach(Array(session.favouriteListNames.enumerated()), id: \.element) { index, name in
+                HStack(spacing: Spacing.s) {
+                    favouriteRow(name: name, index: index)
+                    Spacer()
+                    Button("Up") { moveFavourite(session, at: index, up: true) }
+                        .disabled(index == 0)
+                    Button("Down") { moveFavourite(session, at: index, up: false) }
+                        .disabled(index == session.favouriteListNames.count - 1)
+                    Button {
+                        Task { try? await session.toggleFavourite(name) }
+                    } label: {
+                        Image(systemName: Symbols.trash)
+                    }
+                    .accessibilityLabel("\(SettingsCopy.removeList) \(name)")
+                }
+                .buttonStyle(.plain)
+                .font(Typo.meta)
+                .foregroundStyle(Color.gtdAccent)
+            }
+            #endif
+            if session.favouriteListNames.count < ListsEditing.storageLimit {
+                Menu(SettingsCopy.addFavourite) {
+                    ForEach(session.listsAvailableToFavourite, id: \.self) { name in
+                        Button(name) { Task { try? await session.toggleFavourite(name) } }
+                    }
+                }
+                .disabled(session.listsAvailableToFavourite.isEmpty)
+            } else {
+                Text(SettingsCopy.favouritesFull(ListsEditing.storageLimit))
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.textSecondary)
+            }
+        } header: {
+            Text(SettingsCopy.favourites)
+        } footer: {
+            Text(SettingsCopy.favouritesFooter)
+        }
+    }
+
+    private func favouriteRow(name: String, index: Int) -> some View {
+        HStack(spacing: Spacing.s) {
+            Image(systemName: Symbols.list(named: name)).foregroundStyle(Color.textSecondary)
+            Text(name).font(Typo.body).foregroundStyle(Color.ink)
+            if !ListsEditing.isShownOnPhone(index: index) {
+                Text(SettingsCopy.macOnlyFavourite)
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.textSecondary)
+            }
+        }
+    }
+
+    #if !os(iOS)
+    private func moveFavourite(_ session: SettingsSession, at index: Int, up: Bool) {
+        let destination = up ? index - 1 : index + 2
+        Task { try? await session.reorderFavourites(from: IndexSet(integer: index), to: destination) }
+    }
+    #endif
+
     // MARK: Next cap (A3)
 
     @ViewBuilder
@@ -381,6 +627,85 @@ public struct SettingsView: View {
             Text(Copy.routine)
         }
     }
+
+    #if os(macOS)
+    // MARK: Keyboard (R-10, N7, STYLEGUIDE §4.5) — Mac only; the model itself is not.
+
+    private var keyboardSection: some View {
+        Section {
+            ForEach(KeyBindingsEditing.screens, id: \.screen) { screen, commands in
+                Text(SettingsCopy.screenTitle(screen))
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.textSecondary)
+                    .padding(.top, Spacing.xs)
+                ForEach(commands, id: \.self) { command in
+                    keyRow(command)
+                }
+            }
+            Button(SettingsCopy.resetToDefaults) {
+                deviceSettings.keyBindings.reset()
+                keyRefusals.removeAll()
+                recordingCommand = nil
+            }
+            .foregroundStyle(Color.gtdAccent)
+        } header: {
+            Text(SettingsCopy.keyboardSection)
+        } footer: {
+            Text(SettingsCopy.keyboardFooter)
+        }
+    }
+
+    private func keyRow(_ command: KeyCommand) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack {
+                Text(SettingsCopy.commandTitle(command)).font(Typo.body).foregroundStyle(Color.ink)
+                Spacer()
+                keyRecorder(command)
+            }
+            if let refusal = keyRefusals[command] {
+                Text(refusal).font(Typo.meta).foregroundStyle(Color.signalAttention)
+            }
+        }
+    }
+
+    /// Captures one key press (STYLEGUIDE §4.5's "key-recorder field"). Tapping starts recording;
+    /// the next key press attempts the rebind and shows any refusal inline on the row above.
+    private func keyRecorder(_ command: KeyCommand) -> some View {
+        let isRecording = recordingCommand == command
+        return Button {
+            recordingCommand = isRecording ? nil : command
+            keyRefusals[command] = nil
+        } label: {
+            Text(isRecording ? SettingsCopy.pressAKey : deviceSettings.keyBindings.key(for: command).display)
+                .font(Typo.meta)
+                .frame(minWidth: 72)
+        }
+        .buttonStyle(.bordered)
+        .tint(isRecording ? Color.gtdAccent : Color.textSecondary)
+        .onKeyPress(.leftArrow) { attemptRebind(command, to: .arrowLeft, isRecording: isRecording) }
+        .onKeyPress(.rightArrow) { attemptRebind(command, to: .arrowRight, isRecording: isRecording) }
+        .onKeyPress(.escape) { attemptRebind(command, to: .escape, isRecording: isRecording) }
+        .onKeyPress(phases: .down) { press in
+            guard isRecording, let character = press.characters.first,
+                  let stroke = KeyBindingsEditing.stroke(forCharacter: character)
+            else { return .ignored }
+            return attemptRebind(command, to: stroke, isRecording: isRecording)
+        }
+    }
+
+    private func attemptRebind(_ command: KeyCommand, to stroke: KeyStroke, isRecording: Bool) -> KeyPress.Result {
+        guard isRecording else { return .ignored }
+        switch KeyBindingsEditing.rebinding(command, to: stroke, in: deviceSettings.keyBindings) {
+        case let .success(next):
+            deviceSettings.keyBindings = next
+            keyRefusals[command] = nil
+        case let .failure(error):
+            keyRefusals[command] = SettingsCopy.message(for: error)
+        }
+        recordingCommand = nil
+        return .handled
+    }
+    #endif
 
     // MARK: Device-local (D2, notifications + morning time)
 

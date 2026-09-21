@@ -78,12 +78,15 @@ same fact.
 
 ## 4. Smaller things worth knowing
 
-- **Lists have a domain but no UI yet (§5a).** T03 built the whole Lists domain — the folder
-  layout, the item note, the classifier, the eight commands and the `Rules` queries — and the
-  views come with T10 (the iPhone tab and the Mac sidebar row) and T13 (settings: add, rename,
-  remove, favourites). Until then nothing in the app can create a list, file a capture into one
-  or check an item off, and a user who makes `Lists/Read/` by hand in Obsidian gets a vault the
-  app reads correctly and cannot yet show. `docs/TRACEABILITY.md` §5a says the same per ID.
+- **Lists have a domain and a Settings section, but no browsing UI yet (§5a).** T03 built the
+  whole Lists domain — the folder layout, the item note, the classifier, the eight commands and
+  the `Rules` queries; T13 added Settings' Lists section (add, rename, remove with a
+  `confirmationDialog`) and Favourites section (choose/order, capped at 8, "Mac only" past the
+  iPhone's four). The iPhone tab and the Mac sidebar row that *browse* a list's items are still
+  T10. Until then a user can create/rename/remove lists and pick favourites, but nothing in the
+  app can file a capture into a list or check an item off, and a user who makes `Lists/Read/` by
+  hand in Obsidian gets a vault the app reads correctly and cannot yet browse.
+  `docs/TRACEABILITY.md` §5a says the same per ID.
 - **`createList` is not undoable, on purpose.** A list is a folder, and the only inverse of
   creating one would be removing a directory — the hard delete this vault never does. ⌘Z after
   creating a list therefore undoes the command *before* it. Same for choosing favourites, which
@@ -108,6 +111,13 @@ same fact.
   under its other name. Nothing is lost.
 - **`FeatureSettings.RoutineTimeRow` seeds its `@State` in `init`**, so a routine time changed on
   another device while Settings is open does not move the picker. Harmless; not a sync bug.
+- **The Settings Lists/Favourites sections and the Keyboard pane's rebind flow were not clicked
+  through on a device or simulator** (T13): both scratch app builds are warning-free on macOS and
+  the iOS Simulator, and the Keyboard pane's *rendering* (row grouping, key legends) was confirmed
+  by a screenshot on fixtures, but the Lists section, the remove `confirmationDialog`, the
+  favourites `Menu` and the key-recorder's actual capture were only compiled + unit-tested +
+  code-reviewed in this session. `docs/TRACEABILITY.md` N7/L2/I4b note the same; T15 should drive
+  both sections on screen.
 - **`VaultIssuesView`'s "Open in Obsidian"** builds `obsidian://open?path=<vault-relative path>`.
   That probably needs the vault name or root, which the target cannot resolve by contract.
 - **`FeatureProjects`' views materialise their model in `.task` on first appearance.** A tap
