@@ -200,25 +200,14 @@ struct ProjectSheet: View {
         }
     }
 
-    /// The tree, filtered by what has been typed.
-    private var groups: [ProjectGroup] {
-        let term = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !term.isEmpty else { return session.projectGroups }
-        return session.projectGroups.compactMap { group in
-            let matches = group.projects.filter { $0.title.lowercased().contains(term) }
-            return matches.isEmpty ? nil : ProjectGroup(area: group.area, projects: matches)
-        }
-    }
+    /// The whole sheet is `ProjectPicker.model(_:search:)` — the filtered tree (area-less first,
+    /// no header) and whether the create row is offered. The view decides neither (T08).
+    private var model: ProjectPickerModel { session.projectPicker(search: search) }
+
+    private var groups: [ProjectGroup] { model.groups }
 
     /// `Create project "<text>"` — offered only when nothing matches exactly (STYLEGUIDE §3.6).
-    private var creatableName: String? {
-        let term = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !term.isEmpty else { return nil }
-        let exact = session.projectGroups.contains {
-            $0.projects.contains { $0.title.lowercased() == term.lowercased() }
-        }
-        return exact ? nil : term
-    }
+    private var creatableName: String? { model.createTitle }
 
     private func rows(of group: ProjectGroup) -> some View {
         ForEach(group.projects) { project in
@@ -354,6 +343,39 @@ struct CapSheet: View {
     private func cancel() {
         dismiss()
         session.cancelSheet()
+    }
+}
+
+// MARK: - More… (I4b)
+
+/// The navbar's last slot: every list, not only the favourites. Tapping one files the card.
+struct MoreListsSheet: View {
+    @Bindable var session: InboxSession
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(session.allLists) { list in
+                Button {
+                    dismiss()
+                    Task { await session.take(.list(list.name)) }
+                } label: {
+                    Label(list.name, systemImage: Symbols.list(named: list.name))
+                        .font(Typo.body)
+                        .foregroundStyle(Color.ink)
+                }
+                .buttonStyle(.plain)
+            }
+            .navigationTitle(Copy.lists)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(InboxCopy.cancel) {
+                        dismiss()
+                        session.cancelSheet()
+                    }
+                }
+            }
+        }
     }
 }
 

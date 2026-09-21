@@ -1,6 +1,7 @@
 import Foundation
 import GTDModel
 import GTDAppCore
+import DesignSystem
 import GTDFixtures
 @testable import FeatureInbox
 
@@ -136,15 +137,30 @@ enum InboxTestSupport {
     static func makeSession(
         snapshot: VaultSnapshot = Fixtures.sampleSnapshot,
         lastKnowledgeFolder: String? = nil,
-        defaults: (any InboxDefaultsStore)? = nil
+        defaults: (any InboxDefaultsStore)? = nil,
+        bindings: KeyBindings = .defaults,
+        platform: NavbarPlatform = .iPhone
     ) -> (session: InboxSession, model: AppModel, backend: TestBackend) {
         let backend = TestBackend(snapshot: snapshot)
         let model = AppModel(backend: backend, snapshot: snapshot, today: { Fixtures.today })
         let session = InboxSession(
             model: model,
             defaults: defaults ?? EphemeralInboxDefaults(lastKnowledgeFolder: lastKnowledgeFolder),
+            bindings: bindings,
+            platform: platform,
             now: { Fixtures.date(Fixtures.today, 10, 0) })
         return (session, model, backend)
+    }
+
+    /// Most tests are about what the *opened* action card does, so they start one step in.
+    @MainActor
+    static func openedActionCard(
+        snapshot: VaultSnapshot = Fixtures.sampleSnapshot,
+        defaults: (any InboxDefaultsStore)? = nil
+    ) async -> (session: InboxSession, model: AppModel, backend: TestBackend) {
+        let made = makeSession(snapshot: snapshot, defaults: defaults)
+        await made.session.take(.openAction)
+        return made
     }
 
     /// Waits for the snapshot stream to reach the model (bounded, so a wrong expectation fails

@@ -22,7 +22,7 @@ struct InboxCardView: View {
     @Bindable var session: InboxSession
     @FocusState.Binding var focus: CardField?
     /// Non-nil while a drag is past its threshold — drives the destination label and the tint.
-    let dragTarget: CardTarget?
+    let dragTarget: InboxExit?
     let translation: CGSize
     let shake: CGFloat
 
@@ -56,9 +56,12 @@ struct InboxCardView: View {
         .overlay { tintOverlay }
         .overlay(alignment: dragAlignment) { destinationLabel }
         .accessibilityElement(children: .contain)
+        // STYLEGUIDE §3.6 — "VoiceOver exposes every exit of the current step as a custom
+        // action". The list and its wording are the session's (`InboxExit.title`), never the
+        // view's.
         .accessibilityActions {
-            ForEach(CardTarget.allCases) { target in
-                Button(target.title) { Task { await session.choose(target) } }
+            ForEach(session.exits, id: \.self) { exit in
+                Button(exit.title) { Task { await session.take(exit) } }
             }
             Button(Copy.undo) { Task { await session.undo() } }
         }
@@ -293,11 +296,11 @@ struct InboxCardView: View {
     // MARK: Drag feedback (STYLEGUIDE §3.6)
 
     private var dragAlignment: Alignment {
-        guard let direction = dragTarget?.swipe else { return .center }
-        switch direction {
-        case .right: return .trailing
-        case .left: return .leading
-        case .down: return .bottom
+        switch dragTarget {
+        case .next: return .trailing
+        case .someday: return .leading
+        case .collapse: return .bottom
+        default: return .center
         }
     }
 
@@ -318,9 +321,12 @@ struct InboxCardView: View {
         }
     }
 
-    private func tint(for target: CardTarget) -> Color {
-        switch target {
+    /// STYLEGUIDE §3.6's tint column: `accentWash` for Next, `fillQuiet` for Someday, **none**
+    /// for the downward drag, which only collapses the card.
+    private func tint(for exit: InboxExit) -> Color {
+        switch exit {
         case .next: Color.accentWash
+        case .collapse: Color.clear
         case .trash: Color.signalOverdue.opacity(CardTarget.trashTintOpacity)
         default: Color.fillQuiet
         }

@@ -124,7 +124,7 @@ struct SweepDeferredStep: View {
 
             targets(for: item)
             KeyLegendRow(DeferredSweep.targets.map {
-                KeyLegendRow.Entry(key: $0.key, label: $0.title)
+                KeyLegendRow.Entry(key: Self.legendKey(for: $0), label: $0.title)
             })
         }
     }
@@ -170,8 +170,9 @@ struct SweepDeferredStep: View {
         }
     }
 
-    /// The same key map as the inbox card (STYLEGUIDE §3.6); `CardTarget` owns the mapping,
-    /// this only turns it into a `KeyEquivalent`.
+    /// The sweep's own key map. The inbox's map moved into `GTDAppCore.KeyBindings` when the
+    /// card became a two-step state machine (R-10, T08) and is resolved per *step* there; the
+    /// sweep has one flat row of targets, so it keeps this local table until T12 revisits it.
     private static func shortcut(for target: CardTarget) -> KeyEquivalent {
         switch target {
         case .next: .rightArrow
@@ -179,8 +180,23 @@ struct SweepDeferredStep: View {
         case .done: .return
         case .trash: "x"
         case .knowledge: "k"
+        case .list: "l"
         case .waiting: "w"
         case .deferToReview: "r"
+        }
+    }
+
+    /// How `shortcut(for:)` reads in the legend row.
+    private static func legendKey(for target: CardTarget) -> String {
+        switch target {
+        case .next: "→"
+        case .someday: "←"
+        case .done: "⌘↩"
+        case .trash: "X"
+        case .knowledge: "K"
+        case .list: "L"
+        case .waiting: "W"
+        case .deferToReview: "R"
         }
     }
 

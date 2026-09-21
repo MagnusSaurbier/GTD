@@ -63,7 +63,9 @@ public enum DeferredSweep {
         case .knowledge:
             guard let folder = knowledgeFolder else { return nil }
             return .knowledge(.folder(folder), notes: notes)
-        case .deferToReview:
+        // Neither is in `targets`: parking a deferred item again would make the escape hatch a
+        // loop (I5), and the sweep has no navbar to pick a list with (T08).
+        case .deferToReview, .list:
             return nil
         }
     }

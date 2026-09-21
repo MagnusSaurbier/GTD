@@ -4,120 +4,106 @@ import GTDModel
 import GTDAppCore
 import DesignSystem
 
-/// One inbox-processing session: LIFO queue, one card at a time, no skipping, exit only by
-/// quitting (I1). Plain and unit-testable — **no SwiftUI**. Owned by T20.
+/// One inbox-processing session (I1–I7): LIFO queue, one card at a time, no skipping, exit only
+/// by quitting. Plain and unit-testable — **no SwiftUI**.
 ///
-/// Everything the card can do goes through this object: the five sub-flows, the cap choice, the
-/// validation rule and undo. Views hold no decision logic; they render `draft`, `sheet` and
-/// `queue` and call back in.
+/// Since the rework it is an explicit **state machine** over `InboxStep` (I2, STYLEGUIDE
+/// §3.5/§3.6): the small step-1 card decides the *kind*, and one of the two opened cards decides
+/// the rest. Every gesture, key and VoiceOver action funnels into `take(_:)`, which refuses an
+/// exit that does not belong to the current step instead of quietly doing it — that is what keeps
+/// Trash and `Defer to review` reachable from step 1 only.
+///
+/// Views hold no decision logic: they render `step`, `draft`, `exits`, `sheet` and `queue`, and
+/// call back in.
 @MainActor
 @Observable
 public final class InboxSession {
 
-    // MARK: - Draft
+    /// The draft type, named here too so a call site reads as "the session's draft".
+    public typealias Draft = InboxDraft
 
-    /// What the user has decided about the card in front of them. Nothing here is written to the
-    /// vault until the card is filed, and nothing is pre-filled (§1 "no lying defaults").
-    public struct Draft: Sendable, Equatable {
-        /// The captured text, editable in place — and, since R-4, the **title** as well: the
-        /// note is named after its first line and keeps the whole text in its body.
-        public var text: String
-        public var why: String
-        public var what: String
-        public var contexts: [String]
-        public var timeBucket: TimeBucket?
-        public var deferDate: Day?
-        public var due: Day?
-        /// I4a — the `+ project` chip: an existing project…
-        public var project: NoteID?
-        /// …or one the picker is creating with this name (R-8). Never both.
-        public var newProjectTitle: String?
-
-        public init(
-            text: String = "",
-            why: String = "",
-            what: String = "",
-            contexts: [String] = [],
-            timeBucket: TimeBucket? = nil,
-            deferDate: Day? = nil,
-            due: Day? = nil,
-            project: NoteID? = nil,
-            newProjectTitle: String? = nil
-        ) {
-            self.text = text
-            self.why = why
-            self.what = what
-            self.contexts = contexts
-            self.timeBucket = timeBucket
-            self.deferDate = deferDate
-            self.due = due
-            self.project = project
-            self.newProjectTitle = newProjectTitle
-        }
-
-        public init(item: InboxItem) {
-            self.init(text: item.text)
-        }
-
-        /// R-4 — the file name this card would get, for the card to show. `nil` while the
-        /// capture is only whitespace, which is the one thing that cannot be filed.
-        public var noteTitle: String? { CaptureText.title(of: text) }
-
-        /// A2 — a second checkbox in *What?* offers "Turn into project".
-        public var suggestsProject: Bool { Checkbox.scan(what).count >= 2 }
-
-        /// True while the user has changed nothing about this card.
-        public func isPristine(for item: InboxItem) -> Bool {
-            self == Draft(item: item)
-        }
-    }
-
-    /// The five sub-flows and the cap choice, as the sheet the card is showing (I4).
+    /// The sub-flows and the cap choice, as the sheet the card is showing (I4).
     public enum Sheet: String, Sendable, Equatable, Identifiable, CaseIterable {
+        /// The Knowledge folder tree + the `Projects` section (I4b).
         case knowledge
+        /// The `+ project` chip's picker (I4a).
         case project
         case waiting
         case deferToReview
-        /// `Next is full` — demote one, or send this card to Someday. Never automatic.
+        /// `Next is full` — demote one, or cancel. Never automatic (D14).
         case cap
-        /// The raw captured text in full, when the card had to collapse it (STYLEGUIDE §3.5).
+        /// `More…` — every list, for the navbar's last slot.
+        case more
+        /// The raw captured text in full (only reachable while the step-1 card still collapses
+        /// long text; STYLEGUIDE §3.5 wants it to scroll instead — T09).
         case fullText
 
         public var id: String { rawValue }
     }
 
-    /// Why the card refused to leave. The card shakes and focuses the field — never an alert
-    /// (STYLEGUIDE §3.6, §4.3). `nonce` changes on every refusal so a repeated one animates again.
-    public struct Validation: Sendable, Equatable {
-        public enum Issue: Sendable, Equatable {
-            /// R-3/D12 — the tier the card is leaving to needs fields the draft does not have.
-            /// Every one of them is listed, in `RequiredField` order, so the card can mark each.
-            case missing([RequiredField])
-            /// Defer to review needs a reason (I5).
-            case reasonRequired
-        }
-
-        public var issue: Issue
+    /// The last refusal, with a `nonce` that changes on every one so a repeated refusal animates
+    /// again. The card shakes and marks the fields — never an alert (STYLEGUIDE §3.6, §4.3).
+    public struct Refused: Sendable, Equatable {
+        public var reason: InboxRefusal
         public var nonce: Int
+
+        public init(reason: InboxRefusal, nonce: Int) {
+            self.reason = reason
+            self.nonce = nonce
+        }
+    }
+
+    /// What `Esc` did — the ladder of STYLEGUIDE §3.6: focused field → blur; opened card →
+    /// collapse; step 1 → quit. The view owns the focus and the way out, so it acts on this.
+    public enum EscapeOutcome: Sendable, Equatable {
+        case blurField
+        case collapsed
+        case quit
     }
 
     // MARK: - State
 
+    /// Which of the three cards is on screen (I2). The only place it changes is `take(_:)` /
+    /// `collapse()` / `undo()`.
+    public private(set) var step: InboxStep = .step1
+
     public private(set) var queue: [InboxItem]
     /// The card being worked on, or `nil` when the session is finished (inbox zero).
     public var current: InboxItem? { queue.first }
+
+    /// Draft, validation flags and cap state of the current card — the same value type
+    /// `MakeActionModel` drives, so neither re-implements a rule (`ActionCard.swift`).
+    public var card: ActionCardState
+
     /// The current card's draft. Views bind straight to it.
-    public var draft: Draft
+    public var draft: InboxDraft {
+        get { card.draft }
+        set { card.draft = newValue }
+    }
+
+    /// STYLEGUIDE §3.6 — while a text field has the keyboard, swipes and single keys are off.
+    /// The view sets this; `DragResolver` and `KeyMap` are asked through the session.
+    public var isFieldFocused: Bool {
+        get { card.isFieldFocused }
+        set { card.isFieldFocused = newValue }
+    }
+
     public var sheet: Sheet?
     public private(set) var processed: Int
-    public private(set) var validation: Validation?
-    /// The Next items offered for demotion while the cap sheet is up (I4, A3).
-    public private(set) var capCandidates: [Action]
-    /// An error that is neither the cap nor a validation issue (a title collision, say).
-    public private(set) var lastError: GTDError?
-    /// The one-time direction hint of STYLEGUIDE §3.6. **Stored**, so that dismissing it
+    public private(set) var refusal: Refused?
+
+    /// The device's key map (R-10, N7). The app passes the stored value; tests and previews get
+    /// the defaults.
+    public var keyBindings: KeyBindings
+
+    /// Which navbar the Knowledge / List card is showing — four favourite slots on iPhone,
+    /// eight on Mac (STYLEGUIDE §3.6). The shell sets it.
+    public var platform: NavbarPlatform
+
+    /// The one-time direction hint of STYLEGUIDE §3.6, shown the **first time an action card
+    /// opens** (there is nothing to hint at on the small card). **Stored**, so that dismissing it
     /// invalidates the view — the defaults flag behind it is not observable.
-    public private(set) var isSwipeHintVisible: Bool
+    public private(set) var isSwipeHintVisible: Bool = false
 
     private let model: AppModel
     private let defaults: any InboxDefaultsStore
@@ -125,26 +111,38 @@ public final class InboxSession {
     private let startedAt: Date
     private var draftItemID: NoteID?
     private var counts: [CardTarget: Int] = [:]
-    /// What the cap sheet would file once a slot is free.
-    private var pending: (decision: InboxDecision, target: CardTarget)?
-    /// One entry per filed card, so undo can put the card **and its draft** back (I6, N6).
-    private var history: [(item: InboxItem, draft: Draft, target: CardTarget)] = []
+    /// True until the hint has been shown once on this device.
+    private var hintPending: Bool
+
+    /// One entry per filed card, so undo can put the card back **in the step it was filed from,
+    /// with its draft intact** (R-9, I6, N6).
+    private struct Filing {
+        var item: InboxItem
+        var card: ActionCardState
+        var step: InboxStep
+        var target: CardTarget
+        var toastLabel: String
+    }
+    private var history: [Filing] = []
 
     public init(
         model: AppModel,
         defaults: any InboxDefaultsStore = InboxDefaults.shared,
+        bindings: KeyBindings = .defaults,
+        platform: NavbarPlatform = .iPhone,
         now: @escaping () -> Date = Date.init
     ) {
         self.model = model
         self.defaults = defaults
+        self.keyBindings = bindings
+        self.platform = platform
         self.now = now
         self.startedAt = now()
         let items = Rules.inboxQueue(model.snapshot)
         self.queue = items
         self.processed = 0
-        self.capCandidates = []
-        self.isSwipeHintVisible = !defaults.flag(forKey: InboxDefaultsKey.didShowSwipeHint)
-        self.draft = items.first.map(Draft.init(item:)) ?? Draft()
+        self.hintPending = !defaults.flag(forKey: InboxDefaultsKey.didShowSwipeHint)
+        self.card = ActionCardState(draft: items.first.map(InboxDraft.init(item:)) ?? InboxDraft())
         self.draftItemID = items.first?.id
     }
 
@@ -163,11 +161,11 @@ public final class InboxSession {
     /// What `undo()` would revert, as the backend words it (N6).
     public var undoLabel: String? { model.undoLabel }
 
-    /// The toast's wording, in the canonical form of STYLEGUIDE §6.3 (`Moved to Someday`).
-    /// `nil` when there is nothing to undo.
+    /// The toast's wording, in the canonical form of STYLEGUIDE §6.3 (`Moved to Someday`,
+    /// `Added to Read`). `nil` when there is nothing to undo.
     public var undoToastLabel: String? {
         guard canUndo, let last = history.last else { return nil }
-        return last.target.undoToastLabel
+        return last.toastLabel
     }
 
     public var snapshot: VaultSnapshot { model.snapshot }
@@ -197,17 +195,7 @@ public final class InboxSession {
         defaults.string(forKey: InboxDefaultsKey.lastKnowledgeFolder)
     }
 
-    /// Hides the one-time hint for good: the stored property invalidates the view, the flag
-    /// keeps it away in the next session. A no-op once it is gone.
-    public func dismissSwipeHint() {
-        guard isSwipeHintVisible else { return }
-        isSwipeHintVisible = false
-        defaults.setFlag(true, forKey: InboxDefaultsKey.didShowSwipeHint)
-    }
-
     public var knowledgeFolders: [String] { model.snapshot.knowledgeFolders }
-
-    public var projectGroups: [ProjectGroup] { ProjectPicker.groups(model.snapshot) }
 
     /// I4b/D36 — the active projects whose folders the Knowledge picker offers as targets.
     public var activeProjects: [Project] {
@@ -216,13 +204,180 @@ public final class InboxSession {
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 
+    /// The Knowledge sheet's whole model: the suggested folder, the tree, and the `Projects`
+    /// section (I4b, STYLEGUIDE §3.6).
+    public var knowledgePicker: KnowledgePickerModel {
+        KnowledgeTree.model(
+            folders: knowledgeFolders,
+            projects: activeProjects,
+            suggestion: suggestedKnowledgeFolder)
+    }
+
+    /// The `+ project` picker's model for a search text (I4a).
+    public func projectPicker(search: String = "") -> ProjectPickerModel {
+        ProjectPicker.model(model.snapshot, search: search)
+    }
+
+    /// Kept for the picker's grouped tree without a search.
+    public var projectGroups: [ProjectGroup] { ProjectPicker.groups(model.snapshot) }
+
+    /// The navbar of the Knowledge / List card: `Knowledge`, the favourites in the user's order
+    /// clipped to the platform limit, then `More…` (STYLEGUIDE §3.6, I4b).
+    public var navbarSlots: [NavbarSlot] {
+        NavbarLayout.slots(
+            favourites: Rules.favouriteLists(model.snapshot).map(\.name),
+            platform: platform)
+    }
+
+    /// Every list, for the `More…` sheet (§5a).
+    public var allLists: [GTDList] { Rules.lists(model.snapshot) }
+
+    // MARK: - Validation flags (STYLEGUIDE §3.6)
+
+    /// The fields the card marks with an asterisk right now, in `RequiredField` order. A field
+    /// the user has since filled drops out by itself.
+    public var missingFields: [RequiredField] { card.missingFields }
+
+    /// Whether this one field's label wears the asterisk.
+    public func isMissing(_ field: RequiredField) -> Bool { card.isMissing(field) }
+
+    /// Bumped on every refusal — drives `View.shake(trigger:)` and the `.error` haptic.
+    public var shakeTrigger: Int { card.shakeTrigger }
+
+    /// The first missing **text** field, for the card to focus. `nil` when only a chip group is
+    /// missing.
+    public var focusRequest: RequiredField? { card.focusRequest }
+
+    /// The card took the focus request; it is not asked for again.
+    public func consumeFocusRequest() { card.clearFocusRequest() }
+
+    /// The Next items offered for demotion while the cap sheet is up (I4, A3).
+    public var capCandidates: [Action] { card.capCandidates }
+
+    /// An error that is neither the cap nor a validation issue (a title collision, say).
+    public var lastError: GTDError? { card.lastError }
+
+    public func clearError() { card.lastError = nil }
+
+    // MARK: - Exits of the current step (I4, STYLEGUIDE §3.6)
+
+    /// Every exit the current step offers, in the order the style guide's table lists them. This
+    /// is what VoiceOver exposes as custom actions ("VoiceOver exposes every exit of the current
+    /// step as a custom action") and what a bar or a menu is built from.
+    public var exits: [InboxExit] { exits(of: step) }
+
+    public func exits(of step: InboxStep) -> [InboxExit] {
+        switch step {
+        case .step1:
+            return [.openAction, .openKeep, .trash, .deferToReview]
+        case .actionCard:
+            return [.next, .someday, .waiting, .done, .collapse]
+        case .keepCard:
+            return navbarSlots.map { slot in
+                switch slot.kind {
+                case .knowledge: InboxExit.knowledge
+                case let .list(name): InboxExit.list(name)
+                case .more: InboxExit.more
+                }
+            } + [.collapse]
+        }
+    }
+
+    /// True when `exit` can be taken right now. `take(_:)` refuses anything else.
+    public func canTake(_ exit: InboxExit) -> Bool {
+        if exit == .collapse { return step.isOpened }
+        if case .list = exit { return step == .keepCard }
+        return exit.step == step
+    }
+
+    // MARK: - The state machine
+
+    /// The single entry point for a swipe, a key, a bar button and a VoiceOver action alike
+    /// (STYLEGUIDE §3.6). An exit that does not belong to the current step is **refused**.
+    public func take(_ exit: InboxExit) async {
+        guard current != nil else {
+            refuse(.noCard)
+            return
+        }
+        guard canTake(exit) else {
+            refuse(.notAvailable(exit, in: step))
+            return
+        }
+        switch exit {
+        case .openAction:
+            open(.actionCard)
+        case .openKeep:
+            open(.keepCard)
+        case .trash:
+            await fileDecision(.trash, as: .trash)
+        case .deferToReview:
+            sheet = .deferToReview
+        case .next:
+            await fileAction(status: .next, as: .next)
+        case .someday:
+            await fileAction(status: .someday, as: .someday)
+        case .waiting:
+            sheet = .waiting
+        case .done:
+            await fileAction(status: .done, as: .done)
+        case .knowledge:
+            sheet = .knowledge
+        case let .list(name):
+            await confirmList(name: name)
+        case .more:
+            sheet = .more
+        case .collapse:
+            collapse()
+        }
+    }
+
+    /// Expands the card in place (STYLEGUIDE §3.5: never a new screen, never a sheet). The draft
+    /// is whatever the card already carries — reopening after a collapse shows it again.
+    private func open(_ target: InboxStep) {
+        step = target
+        refusal = nil
+        // The one-time hint belongs to the swipes, which only the action card has.
+        if target == .actionCard, hintPending {
+            hintPending = false
+            isSwipeHintVisible = true
+            defaults.setFlag(true, forKey: InboxDefaultsKey.didShowSwipeHint)
+        }
+    }
+
+    /// `↓` / `Esc` on an opened card: back to step 1. **Everything already typed stays** — the
+    /// draft survives until the card is filed or the session ends (STYLEGUIDE §3.6).
+    public func collapse() {
+        guard step.isOpened else { return }
+        step = .step1
+        sheet = nil
+        card.clearCap()
+        refusal = nil
+    }
+
+    /// `Esc` is a ladder: focused field → blur; opened card → collapse; step 1 → quit
+    /// (STYLEGUIDE §3.6 "Always"). The session takes the step it owns and tells the view what
+    /// happened, because focus and "quit" are the view's.
+    @discardableResult
+    public func escape() -> EscapeOutcome {
+        if isFieldFocused {
+            isFieldFocused = false
+            return .blurField
+        }
+        if step.isOpened {
+            collapse()
+            return .collapsed
+        }
+        return .quit
+    }
+
     // MARK: - Queue
 
     /// New captures that arrived mid-session go on top (LIFO, I7), and items that left the inbox
     /// elsewhere (another device, the weekly review) disappear from the queue.
     ///
-    /// One refinement over a literal "always on top": a card the user is **already editing** is
-    /// not yanked away — a fresh capture is then queued directly behind it and processed next.
+    /// One refinement over a literal "always on top": a card the user is **already working on** —
+    /// opened, or with something typed into it — is not yanked away; a fresh capture is then
+    /// queued directly behind it and processed next.
     public func refresh() {
         let live = Rules.inboxQueue(model.snapshot)
         let liveByID = Dictionary(uniqueKeysWithValues: live.map { ($0.id, $0) })
@@ -232,7 +387,7 @@ public final class InboxSession {
         // Keep the order the session established, but pick up remote text edits.
         var kept = queue.compactMap { liveByID[$0.id] }
 
-        if let head = kept.first, let current, head.id == current.id, !draft.isPristine(for: current) {
+        if let head = kept.first, let current, head.id == current.id, isWorkingOnCurrentCard {
             kept.insert(contentsOf: fresh, at: 1)
             queue = kept
         } else {
@@ -241,256 +396,429 @@ public final class InboxSession {
         syncDraft()
     }
 
+    private var isWorkingOnCurrentCard: Bool {
+        guard let current else { return false }
+        return step.isOpened || !draft.isPristine(for: current)
+    }
+
     // MARK: - Filing
 
-    /// The single entry point for a swipe, a key and a VoiceOver action alike (STYLEGUIDE §3.6).
-    public func choose(_ target: CardTarget) async {
-        guard current != nil else { return }
-        guard validate(for: target) else { return }
-        switch target {
-        case .next, .someday, .done:
-            guard let status = target.status else { return }
-            await file(.action(actionDraft(status: status)), as: target)
-        case .trash:
-            await file(.trash, as: .trash)
-        case .knowledge:
-            sheet = .knowledge
-        case .waiting:
-            sheet = .waiting
-        case .deferToReview:
-            sheet = .deferToReview
+    /// Next / Someday / Waiting / Done — the four exits that create an action (I4).
+    private func fileAction(
+        status: ActionStatus, waiting: WaitingInfo? = nil, as target: CardTarget
+    ) async {
+        guard let item = current else {
+            refuse(.noCard)
+            return
+        }
+        let filedStep = step
+        let filedCard = card
+        let result = await ActionCardEngine.file(
+            state: card, status: status, waiting: waiting, model: model,
+            send: { [weak self] payload in
+                guard let self else { return }
+                try await self.persistTextEdit(for: item.id)
+                try await self.model.send(.fileInbox(item.id, .action(payload)))
+            })
+        card = result.state
+        switch result.outcome {
+        case .filed:
+            finish(item: item, card: filedCard, step: filedStep, target: target,
+                   toastLabel: target.undoToastLabel())
+        case let .refused(reason):
+            present(reason)
         }
     }
 
-    /// Validation before leaving (STYLEGUIDE §3.6, R-3): Next needs `Why?`, `What?`, a context
-    /// and a time estimate, Someday needs `What?`, Waiting needs `What?` and the sheet's date,
-    /// and Done, Knowledge, lists and Trash need nothing. The reducer refuses anything that
-    /// slips through — this only saves the round trip and marks the fields.
-    @discardableResult
-    public func validate(for target: CardTarget, waiting: WaitingInfo? = nil) -> Bool {
-        guard let status = target.status else { return true }
-        let missing = RequiredField.missing(
-            status: status,
-            previous: nil,
-            why: draft.why,
-            what: draft.what,
-            contexts: draft.contexts,
-            timeEstimate: draft.timeBucket?.minutes,
-            followUpDate: waiting?.followUp)
-        guard !missing.isEmpty else { return true }
-        fail(.missing(missing))
-        return false
+    /// Trash, Knowledge and the lists — the exits that need nothing and create no action.
+    private func fileDecision(
+        _ decision: InboxDecision, as target: CardTarget, toastLabel: String? = nil
+    ) async {
+        guard let item = current else {
+            refuse(.noCard)
+            return
+        }
+        let filedStep = step
+        let filedCard = card
+        do {
+            try await persistTextEdit(for: item.id)
+            try await model.send(.fileInbox(item.id, decision))
+            card.clearFlags()
+            card.clearCap()
+            finish(item: item, card: filedCard, step: filedStep, target: target,
+                   toastLabel: toastLabel ?? target.undoToastLabel())
+        } catch let error as GTDError {
+            card.lastError = error
+            refuse(.failed(error))
+        } catch {
+            let wrapped = GTDError.invalid("\(error)")
+            card.lastError = wrapped
+            refuse(.failed(wrapped))
+        }
     }
 
-    /// The fields the card must mark with an asterisk right now (STYLEGUIDE §3.6).
-    public var missingFields: [RequiredField] {
-        guard case let .missing(fields) = validation?.issue else { return [] }
-        return fields
+    /// The raw text is editable on the card (I2). For Knowledge the capture file *becomes* the
+    /// note and for Trash it is moved as is, so an edit has to reach the file before it moves.
+    /// Re-read from the snapshot, so a cap retry does not send the same edit twice.
+    private func persistTextEdit(for id: NoteID) async throws {
+        let edited = draft.text
+        guard let stored = model.snapshot.inboxItem(id)?.text, edited != stored else { return }
+        try await model.send(.editInboxText(id, edited))
     }
+
+    // MARK: - Sub-flows
 
     /// I4b — Knowledge: the capture file becomes the knowledge note, with the notes panel (and
     /// the full capture text above it when the title had to cut it) as its body. The folder is
     /// remembered on this device so the next card can *suggest* it.
-    public func confirmKnowledge(target: KnowledgeTarget, notes: String = "") async {
+    public func confirmKnowledge(target: KnowledgeTarget, notes: String? = nil) async {
         if case let .folder(folder) = target {
             defaults.setString(folder, forKey: InboxDefaultsKey.lastKnowledgeFolder)
         }
-        await file(.knowledge(target, notes: notes), as: .knowledge)
+        await fileDecision(.knowledge(target, notes: notes ?? draft.notes), as: .knowledge)
     }
 
-    /// I4b/§5a — the capture becomes one item of a list. Not a commitment, so nothing is required.
-    public func confirmList(name: String, notes: String = "") async {
-        await file(.list(name: name, notes: notes), as: .knowledge)
+    /// I4b/§5a — the capture becomes one item of a list. Not a commitment, so nothing is
+    /// required; the navbar files at once (STYLEGUIDE §3.6).
+    public func confirmList(name: String, notes: String? = nil) async {
+        await fileDecision(
+            .list(name: name, notes: notes ?? draft.notes),
+            as: .list,
+            toastLabel: CardTarget.list.undoToastLabel(listName: name))
     }
 
     /// W1/D39 — the follow-up date is required, who is optional; both arrive confirmed.
     public func confirmWaiting(_ info: WaitingInfo) async {
-        guard validate(for: .waiting, waiting: info) else { return }
-        await file(.action(actionDraft(status: .waiting, waiting: info)), as: .waiting)
+        guard step == .actionCard else {
+            refuse(.notAvailable(.waiting, in: step))
+            return
+        }
+        await fileAction(status: .waiting, waiting: info, as: .waiting)
     }
 
-    /// I4a/R-8 — the `+ project` chip. The card **stays an action**: it names a project instead
-    /// of turning into one (D33). Nothing is written until the card is filed.
-    public func chooseProject(_ id: NoteID?) {
-        draft.project = id
-        draft.newProjectTitle = nil
-    }
+    /// I4a/R-8 — the `+ project` chip.
+    public func chooseProject(_ id: NoteID?) { card.draft.chooseProject(id) }
 
     /// The picker's `Create project "<text>"` row: the project is created with a name only, in
     /// the same command that files the card (R-8).
-    public func createProject(named title: String) {
-        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return }
-        draft.project = nil
-        draft.newProjectTitle = clean
-    }
+    public func createProject(named title: String) { card.draft.createProject(named: title) }
 
     /// What the chip shows: the chosen project's title, the name being created, or `nil`.
     public func projectChipTitle(in snapshot: VaultSnapshot) -> String? {
-        if let newProjectTitle = draft.newProjectTitle { return newProjectTitle }
-        guard let id = draft.project else { return nil }
-        return snapshot.project(id)?.title ?? id.title
+        draft.projectChipTitle(in: snapshot)
     }
 
-    /// I5 — the escape hatch. The reason is required; the item leaves the queue and shows up in
-    /// the weekly review with its reason.
+    /// I5 — the escape hatch, step 1 only. The reason is required; the item leaves the queue and
+    /// shows up in the weekly review with its reason.
     public func confirmDeferToReview(reason: String) async {
-        let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            fail(.reasonRequired)
+        guard step == .step1 else {
+            refuse(.notAvailable(.deferToReview, in: step))
             return
         }
-        guard let item = current else { return }
-        let filed = draft
+        let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            refuse(.reasonRequired)
+            return
+        }
+        guard let item = current else {
+            refuse(.noCard)
+            return
+        }
+        let filedCard = card
         do {
-            try await persistTextEdit(for: item)
+            try await persistTextEdit(for: item.id)
             try await model.send(.deferInboxToReview(item.id, reason: trimmed))
-            finish(item: item, draft: filed, target: .deferToReview)
+            finish(item: item, card: filedCard, step: .step1, target: .deferToReview,
+                   toastLabel: CardTarget.deferToReview.undoToastLabel())
         } catch let error as GTDError {
-            lastError = error
+            card.lastError = error
+            refuse(.failed(error))
         } catch {
-            lastError = .invalid("\(error)")
+            let wrapped = GTDError.invalid("\(error)")
+            card.lastError = wrapped
+            refuse(.failed(wrapped))
         }
     }
 
     // MARK: - Cap (A3, I4)
 
-    /// Demote one of the current Next items and file the card that was refused.
+    /// Demote one of the current Next items and file the card that was refused. The other half of
+    /// the forced choice is `cancelSheet()` — there is no "send to Someday instead" (D14).
     public func demoteAndRetry(_ id: NoteID) async {
-        guard let pending else { return }
-        do {
-            try await model.send(.setStatus(id, .someday, waiting: nil))
-        } catch let error as GTDError {
-            lastError = error
-            return
-        } catch {
-            lastError = .invalid("\(error)")
-            return
+        guard let item = current, card.pending != nil else { return }
+        let filedStep = step
+        let filedCard = card
+        guard let result = await ActionCardEngine.demoteAndRetry(
+            state: card, demoting: id, model: model,
+            send: { [weak self] payload in
+                guard let self else { return }
+                try await self.persistTextEdit(for: item.id)
+                try await self.model.send(.fileInbox(item.id, .action(payload)))
+            })
+        else { return }
+        card = result.state
+        switch result.outcome {
+        case let .filed(payload):
+            sheet = nil
+            let target: CardTarget = payload.status == .waiting
+                ? .waiting
+                : (CardTarget.allCases.first { $0.status == payload.status } ?? .next)
+            finish(item: item, card: filedCard, step: filedStep, target: target,
+                   toastLabel: target.undoToastLabel())
+        case let .refused(reason):
+            present(reason)
         }
-        self.pending = nil
-        sheet = nil
-        await file(pending.decision, as: pending.target)
     }
 
-    /// Closes a sub-flow sheet without filing anything. The card and its draft stay.
+    /// Closes a sub-flow sheet without filing anything. The card, its step and its draft stay.
     public func cancelSheet() {
         sheet = nil
-        pending = nil
-        capCandidates = []
+        card.clearCap()
     }
 
-    public func clearError() { lastError = nil }
+    // MARK: - Undo (R-9, I6, N6)
 
-    // MARK: - Undo (I6, N6)
-
-    /// Undo the last card: it comes back at the head of the queue **with its draft restored**.
+    /// Undo the last card. Per R-9 it comes back **at the head of the queue, in the step it was
+    /// filed from, with its draft intact**: the opened action card for Next / Someday / Waiting /
+    /// Done, the opened Knowledge / List card for a list or Knowledge filing, and the small card
+    /// for Trash and Defer to review.
     public func undo() async {
         guard let last = history.popLast() else { return }
         await model.undo()
         refresh()
 
-        if let restored = model.snapshot.inboxItem(last.item.id), restored.reviewReason == nil {
-            queue.removeAll { $0.id == restored.id }
-            queue.insert(restored, at: 0)
-            draft = last.draft
-            draftItemID = restored.id
-        } else {
+        guard let restored = model.snapshot.inboxItem(last.item.id), restored.reviewReason == nil
+        else {
             // The backend refused the undo — leave the session consistent with the vault.
             history.append(last)
             syncDraft()
             return
         }
 
+        queue.removeAll { $0.id == restored.id }
+        queue.insert(restored, at: 0)
+        card = last.card
+        card.clearCap()
+        draftItemID = restored.id
+        step = last.step
+
         processed = max(processed - 1, 0)
         counts[last.target] = max((counts[last.target] ?? 1) - 1, 0)
         sheet = nil
-        pending = nil
-        capCandidates = []
+        refusal = nil
+    }
+
+    // MARK: - Swipe hint (STYLEGUIDE §3.6)
+
+    /// Hides the one-time hint for good: the stored property invalidates the view, the flag —
+    /// already written when the hint appeared — keeps it away in the next session.
+    public func dismissSwipeHint() {
+        guard isSwipeHintVisible else { return }
+        isSwipeHintVisible = false
+    }
+
+    // MARK: - Keys (STYLEGUIDE §3.6, Mac)
+
+    /// Resolves and performs one key press for the **current step**, through the device's
+    /// bindings (R-10). Returns `false` when nothing on this step uses the key, so the view can
+    /// report `.ignored`. A press while a field has the keyboard is always ignored except `Esc`.
+    @discardableResult
+    public func handle(
+        character: Character, shift: Bool = false, command: Bool = false
+    ) async -> Bool {
+        guard let key = KeyMap.resolve(
+            character, shift: shift, command: command, step: step, bindings: keyBindings)
+        else { return false }
+        return await handle(key)
+    }
+
+    /// The same for a key that already is a `KeyStroke` — the arrows, and anything a legend row
+    /// spells.
+    @discardableResult
+    public func handle(stroke: KeyStroke) async -> Bool {
+        guard let key = KeyMap.resolve(stroke: stroke, step: step, bindings: keyBindings)
+        else { return false }
+        return await handle(key)
+    }
+
+    /// Performs an already-resolved key. `escape()` is the one thing that works while a field is
+    /// focused (it is what blurs it).
+    @discardableResult
+    public func handle(_ key: InboxKey) async -> Bool {
+        if case .escape = key {
+            escape()
+            return true
+        }
+        guard !isFieldFocused else { return false }
+        switch key {
+        case let .command(command):
+            return await perform(command)
+        case let .context(index):
+            guard index < contexts.count else { return false }
+            toggleContext(contexts[index])
+            return true
+        case let .time(bucket):
+            card.draft.timeBucket = card.draft.timeBucket == bucket ? nil : bucket
+            return true
+        case .done:
+            await take(.done)
+            return true
+        case .undo:
+            await undo()
+            return true
+        case .escape:
+            return true
+        }
+    }
+
+    private func perform(_ command: KeyCommand) async -> Bool {
+        switch command {
+        case .stepAction: await take(.openAction)
+        case .stepKnowledge: await take(.openKeep)
+        case .stepTrash: await take(.trash)
+        case .stepDefer: await take(.deferToReview)
+        case .cardNext: await take(.next)
+        case .cardSomeday: await take(.someday)
+        case .cardWaiting: await take(.waiting)
+        // R-8 — `P` opens the project chip's picker; it never files the card.
+        case .cardProject: sheet = .project
+        case .listKnowledge: await take(.knowledge)
+        case .listMore: await take(.more)
+        case .listSlot2, .listSlot3, .listSlot4, .listSlot5,
+             .listSlot6, .listSlot7, .listSlot8, .listSlot9:
+            guard let index = KeyCommand.knowledgeListFavouriteSlots.firstIndex(of: command),
+                  let slot = navbarSlots.first(where: { $0.keyIndex == index + 2 }),
+                  case let .list(name) = slot.kind
+            else { return false }
+            await take(.list(name))
+        case .deckKeep, .deckDemote, .deckPromote, .deckTrash:
+            // Another screen's commands — `KeyMap` never returns one here, and if a stored table
+            // ever did, the inbox ignores it rather than guessing.
+            return false
+        }
+        return true
+    }
+
+    public func toggleContext(_ context: String) {
+        if let index = card.draft.contexts.firstIndex(of: context) {
+            card.draft.contexts.remove(at: index)
+        } else {
+            card.draft.contexts.append(context)
+        }
+    }
+
+    // MARK: - Legend (STYLEGUIDE §3.6 Mac — "the legend always renders the current bindings")
+
+    /// The current step's legend rows, keys first. Built from `KeyBindings`, so a rebind in
+    /// Settings › Keyboard changes the legend without a line changing here.
+    public var legend: [KeyBindings.LegendEntry] {
+        switch step {
+        case .step1:
+            return keyBindings.legend(for: .inboxStep1, titles: [
+                .stepAction: Copy.actionKind,
+                .stepKnowledge: Copy.knowledgeOrList,
+                .stepTrash: Copy.trash,
+                .stepDefer: Copy.deferToReview,
+            ])
+        case .actionCard:
+            let directions = keyBindings.legend(for: .actionCard, titles: [
+                .cardSomeday: Copy.someday,
+                .cardNext: Copy.next,
+            ])
+            let rest = keyBindings.legend(for: .actionCard, titles: [
+                .cardWaiting: Copy.waiting,
+                .cardProject: Copy.project,
+            ])
+            // `⌘↩ Done` and `Esc Back` are fixed keys, not commands (`KeyBindings.fixedKeys`).
+            let done = KeyBindings.LegendEntry(
+                key: KeyStroke.commandReturn.display, label: Copy.done)
+            let back = KeyBindings.LegendEntry(key: KeyStroke.escape.display, label: Copy.back)
+            // `W Waiting · ⌘↩ Done · P Project · Esc Back` — `Done` sits between the two
+            // commands, so the two halves are interleaved rather than concatenated.
+            guard rest.count == 2 else { return directions + rest + [done, back] }
+            return directions + [rest[0], done, rest[1], back]
+        case .keepCard:
+            var titles: [KeyCommand: String] = [
+                .listKnowledge: Copy.knowledge,
+                .listMore: Copy.more,
+            ]
+            for slot in navbarSlots {
+                guard case let .list(name) = slot.kind,
+                      slot.keyIndex >= 2,
+                      slot.keyIndex - 2 < KeyCommand.knowledgeListFavouriteSlots.count
+                else { continue }
+                titles[KeyCommand.knowledgeListFavouriteSlots[slot.keyIndex - 2]] = name
+            }
+            let rows = keyBindings.legend(for: .knowledgeListCard, titles: titles)
+            return rows + [
+                KeyBindings.LegendEntry(key: KeyStroke.escape.display, label: Copy.back),
+            ]
+        }
+    }
+
+    /// The legend as STYLEGUIDE §3.6 prints it. The action card's row keeps its two groups: the
+    /// commitment axis, wide space, then the rest.
+    public var legendString: String {
+        func join(_ rows: [KeyBindings.LegendEntry], _ separator: String) -> String {
+            rows.map { "\($0.key) \($0.label)" }.joined(separator: separator)
+        }
+        guard step == .actionCard else { return join(legend, " · ") }
+        let rows = legend
+        return join(Array(rows.prefix(2)), "  ") + "    " + join(Array(rows.dropFirst(2)), " · ")
+    }
+
+    // MARK: - Drag (STYLEGUIDE §3.6)
+
+    /// What the drag map is allowed to see right now: the step, and whether a field has the
+    /// keyboard. Views pass it straight to `DragResolver` instead of re-deciding either.
+    public var dragContext: DragContext {
+        DragContext(step: step, isFieldFocused: isFieldFocused)
+    }
+
+    /// Performs a completed drag (`DragResolver.outcome`).
+    public func perform(_ outcome: DragOutcome) async {
+        switch outcome {
+        case let .file(exit): await take(exit)
+        case .collapse: collapse()
+        }
     }
 
     // MARK: - Internals
 
-    /// Builds the draft for a decision. Suggestions are never in here — only confirmed values.
-    func actionDraft(status: ActionStatus, waiting: WaitingInfo? = nil) -> ActionDraft {
-        ActionDraft(
-            // R-4 — the reducer names the note after the capture text; what travels here is the
-            // text the card shows, so the two can never disagree.
-            title: draft.text,
-            status: status,
-            contexts: draft.contexts,
-            timeEstimate: draft.timeBucket?.minutes,
-            project: draft.project,
-            newProjectTitle: draft.newProjectTitle,
-            deferDate: draft.deferDate,
-            due: draft.due,
-            waiting: waiting,
-            why: draft.why,
-            what: draft.what)
-    }
-
-    private func file(_ decision: InboxDecision, as target: CardTarget) async {
-        guard let item = current else { return }
-        let filed = draft
-        do {
-            try await persistTextEdit(for: item)
-            try await model.send(.fileInbox(item.id, decision))
-            finish(item: item, draft: filed, target: target)
-        } catch let error as GTDError {
-            handle(error, decision: decision, target: target)
-        } catch {
-            lastError = .invalid("\(error)")
-        }
-    }
-
-    /// The raw text is editable on the card (I2). For Knowledge the capture file *becomes* the
-    /// note and for Trash it is moved as is, so an edit has to reach the file before it moves.
-    private func persistTextEdit(for item: InboxItem) async throws {
-        let edited = draft.text
-        guard edited != item.text else { return }
-        try await model.send(.editInboxText(item.id, edited))
-    }
-
-    private func finish(item: InboxItem, draft filed: Draft, target: CardTarget) {
-        history.append((item: item, draft: filed, target: target))
+    private func finish(
+        item: InboxItem, card filedCard: ActionCardState, step filedStep: InboxStep,
+        target: CardTarget, toastLabel: String
+    ) {
+        history.append(
+            Filing(item: item, card: filedCard, step: filedStep, target: target,
+                   toastLabel: toastLabel))
         queue.removeAll { $0.id == item.id }
         processed += 1
         counts[target, default: 0] += 1
         sheet = nil
-        pending = nil
-        capCandidates = []
-        validation = nil
-        // Whoever filed a card in one of the four directions has understood the hint.
-        if target.isDirect { dismissSwipeHint() }
+        refusal = nil
+        // Whoever filed a card along the commitment axis has understood the hint.
+        if target == .next || target == .someday { dismissSwipeHint() }
+        step = .step1
         syncDraft()
     }
 
-    private func handle(_ error: GTDError, decision: InboxDecision, target: CardTarget) {
-        switch error {
-        case .nextCapReached:
-            // Forced choice, never automatic (ARCHITECTURE §6): the card springs back and the
-            // sheet lists the current Next items to demote — or the user cancels. There is no
-            // "send to Someday instead" shortcut (STYLEGUIDE §3.6).
-            pending = (decision, target)
-            capCandidates = Rules.nextList(model.snapshot, today: today)
-            sheet = .cap
-        case let .missingFields(fields):
-            // R-3 — the reducer is the authority; the card marks what it named.
-            fail(.missing(fields))
-        default:
-            lastError = error
-        }
+    private func present(_ reason: InboxRefusal) {
+        if case .capReached = reason { sheet = .cap }
+        refuse(reason)
     }
 
-    private func fail(_ issue: Validation.Issue) {
-        validation = Validation(issue: issue, nonce: (validation?.nonce ?? 0) + 1)
+    private func refuse(_ reason: InboxRefusal) {
+        refusal = Refused(reason: reason, nonce: (refusal?.nonce ?? 0) + 1)
     }
 
-    /// Keeps `draft` attached to the card at the head of the queue.
+    /// Keeps `card` attached to the item at the head of the queue. A fresh card always starts at
+    /// step 1 with an empty draft — nothing of the last one leaks into it.
     private func syncDraft() {
         guard draftItemID != current?.id else { return }
-        draft = current.map(Draft.init(item:)) ?? Draft()
+        card = ActionCardState(draft: current.map(InboxDraft.init(item:)) ?? InboxDraft())
         draftItemID = current?.id
-        validation = nil
+        refusal = nil
+        step = .step1
     }
-
 }

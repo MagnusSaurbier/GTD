@@ -68,7 +68,7 @@ struct InboxSessionView: View {
     @FocusState private var focus: CardField?
 
     @State private var translation: CGSize = .zero
-    @State private var dragTarget: CardTarget?
+    @State private var dragTarget: InboxExit?
     @State private var cardSize: CGSize = .zero
     @State private var shake: CGFloat = 0
     @State private var toast: String?
@@ -101,16 +101,23 @@ struct InboxSessionView: View {
                     nanoseconds: UInt64(MotionTiming.toastDuration * 1_000_000_000))
                 toast = nil
             }
-            .onChange(of: session.validation?.nonce) { _, _ in
-                // R-3 — the first missing field takes focus; every one of them is marked on the
-                // card itself (STYLEGUIDE §3.6).
-                let missing = session.missingFields
-                guard !missing.isEmpty else { return }
-                focus = missing.contains(.why) ? .why : (missing.contains(.what) ? .what : nil)
+            .onChange(of: session.shakeTrigger) { old, new in
+                // R-3 — the first missing text field takes focus; every missing field is marked
+                // on the card itself (STYLEGUIDE §3.6). The session decides which one.
+                guard new > old else { return }
+                switch session.focusRequest {
+                case .why: focus = .why
+                case .what: focus = .what
+                default: break
+                }
+                session.consumeFocusRequest()
                 guard !reduceMotion else { return }
                 withAnimation(Motion.standard) { shake += 1 }
             }
-            .sensoryFeedback(.error, trigger: session.validation?.nonce)
+            .onChange(of: focus) { _, field in
+                session.isFieldFocused = field != nil
+            }
+            .sensoryFeedback(.error, trigger: session.shakeTrigger)
             .sensoryFeedback(.impact(weight: .medium), trigger: dragTarget)
     }
 
@@ -213,21 +220,21 @@ struct InboxSessionView: View {
                 .font(Typo.counter)
                 .foregroundStyle(Color.textSecondary)
             card
-            Text(CardTarget.keyLegend)
+            // The legend always renders the current bindings, per step (STYLEGUIDE §3.6, R-10).
+            Text(session.legendString)
                 .font(Typo.counter)
                 .foregroundStyle(Color.textSecondary)
                 .multilineTextAlignment(.center)
                 .accessibilityLabel(InboxCopy.keyLegendLabel)
-                .accessibilityValue(CardTarget.keyLegend)
+                .accessibilityValue(session.legendString)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Spacing.screenMargin)
         .focusable()
         .focusEffectDisabled()
-        .onKeyPress(.leftArrow) { press(.someday) }
-        .onKeyPress(.rightArrow) { press(.next) }
-        .onKeyPress(.downArrow) { press(.trash) }
-        .onKeyPress(.escape) { quit() }
+        .onKeyPress(.leftArrow) { press(.arrowLeft) }
+        .onKeyPress(.rightArrow) { press(.arrowRight) }
+        .onKeyPress(.escape) { escape() }
         .onKeyPress(characters: Self.keyCharacters, phases: .down) {
             handle($0)
         }
@@ -269,77 +276,129 @@ struct InboxSessionView: View {
     }
 
     #if os(iOS)
+    /// The drag map is the session's `dragContext`: no drag at all on step 1, only `↓` on the
+    /// Knowledge / List card, nothing at all while a field has the keyboard (STYLEGUIDE §3.6).
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: DragThresholds.axisLock)
             .onChanged { value in
                 let dx = value.translation.width
                 let dy = value.translation.height
-                translation = DragResolver.lockedTranslation(dx: dx, dy: dy)
-                dragTarget = DragResolver.target(dx: dx, dy: dy, cardSize: cardSize)
+                let context = session.dragContext
+                translation = DragResolver.lockedTranslation(dx: dx, dy: dy, in: context)
+                switch DragResolver.outcome(
+                    dx: dx, dy: dy, cardSize: cardSize, in: context
+                ) {
+                case let .file(exit): dragTarget = exit
+                case .collapse: dragTarget = .collapse
+                case nil: dragTarget = nil
+                }
             }
             .onEnded { value in
-                let target = DragResolver.target(
+                let outcome = DragResolver.outcome(
                     dx: value.translation.width,
                     dy: value.translation.height,
-                    cardSize: cardSize)
+                    cardSize: cardSize,
+                    in: session.dragContext)
                 dragTarget = nil
-                guard let target else {
+                switch outcome {
+                case let .file(exit):
+                    fly(to: exit)
+                case .collapse:
+                    withAnimation(reduceMotion ? Motion.reduced : Motion.standard) {
+                        translation = .zero
+                        session.collapse()
+                    }
+                case nil:
                     withAnimation(reduceMotion ? Motion.reduced : Motion.cardReturn) {
                         translation = .zero
                     }
-                    return
                 }
-                fly(to: target)
             }
     }
 
-    /// The card flies out in the target's direction, then the next one springs up.
-    private func fly(to target: CardTarget) {
-        guard session.validate(for: target) else {
-            withAnimation(reduceMotion ? Motion.reduced : Motion.cardReturn) { translation = .zero }
-            return
-        }
+    /// The card flies out in the exit's direction, then the next one springs up. A refusal
+    /// (missing fields, the cap) springs it back — the session has already marked the card.
+    private func fly(to exit: InboxExit) {
+        let processedBefore = session.processed
         withAnimation(reduceMotion ? Motion.reduced : Motion.cardExit) {
-            translation = exitTranslation(for: target)
+            translation = exitTranslation(for: exit)
         }
         Task {
-            await session.choose(target)
-            translation = .zero
+            await session.take(exit)
+            if session.processed == processedBefore {
+                withAnimation(reduceMotion ? Motion.reduced : Motion.cardReturn) {
+                    translation = .zero
+                }
+            } else {
+                translation = .zero
+            }
         }
     }
 
-    private func exitTranslation(for target: CardTarget) -> CGSize {
-        guard let direction = target.swipe else { return .zero }
+    private func exitTranslation(for exit: InboxExit) -> CGSize {
         let width = max(cardSize.width, 320) * 1.5
-        let height = max(cardSize.height, 480) * 1.5
-        switch direction {
-        case .right: return CGSize(width: width, height: 0)
-        case .left: return CGSize(width: -width, height: 0)
-        case .down: return CGSize(width: 0, height: height)
+        switch exit {
+        case .next: return CGSize(width: width, height: 0)
+        case .someday: return CGSize(width: -width, height: 0)
+        default: return .zero
         }
     }
 
-    /// Floating glass capsule above the home indicator: the four targets that have no swipe as
-    /// labelled buttons, and `⋯` with the swipe targets for whoever cannot or will not
-    /// swipe (one-handed use, Switch Control, a card taller than the screen).
-    private var actionBar: some View {
+    /// The bottom bar of the current step (STYLEGUIDE §3.6). The three bars are
+    /// `DesignSystem`'s (`StepOneBar` / `ActionCardBar` / `KnowledgeListNavbar`); this is the
+    /// minimal wiring T08 left for T09 to dress — every exit still comes from `session.exits`.
+    @ViewBuilder private var actionBar: some View {
+        switch session.step {
+        case .step1: stepOneBar
+        case .actionCard: openedActionBar
+        case .keepCard: keepNavbar
+        }
+    }
+
+    /// Three equal, neutral buttons — none accent-filled, because the app does not know the
+    /// right answer (§1.2) — with `Defer to review` as a quiet text button above them.
+    private var stepOneBar: some View {
+        VStack(spacing: Spacing.s) {
+            Button(Copy.deferToReview) { Task { await session.take(.deferToReview) } }
+                .buttonStyle(.plain)
+                .font(Typo.meta)
+                .foregroundStyle(Color.textSecondary)
+            GlassActionBar {
+                ForEach(InboxExit.stepOneButtons, id: \.self) { exit in
+                    Button {
+                        Task { await session.take(exit) }
+                    } label: {
+                        barLabel(exit.title, symbol: exit.symbol)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.ink)
+                    .accessibilityLabel(exit.title)
+                }
+            }
+        }
+        .padding(.bottom, Spacing.s)
+    }
+
+    /// `Waiting` and `Done` as labelled buttons, `⋯` ("File to") repeating the two swipe exits
+    /// so a card taller than the screen can still be filed.
+    private var openedActionBar: some View {
         GlassActionBar {
-            ForEach(CardTarget.buttonTargets) { target in
+            ForEach([InboxExit.waiting, .done], id: \.self) { exit in
                 Button {
-                    Task { await session.choose(target) }
+                    Task { await session.take(exit) }
                 } label: {
-                    barLabel(target.shortTitle, symbol: target.symbol)
+                    barLabel(exit.title, symbol: exit.symbol)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.ink)
-                .accessibilityLabel(target.title)
+                .accessibilityLabel(exit.title)
             }
             Menu {
-                ForEach(CardTarget.menuTargets) { target in
-                    Button(role: target == .trash ? .destructive : nil) {
-                        fly(to: target)
+                ForEach([InboxExit.someday, .next], id: \.self) { exit in
+                    Button {
+                        fly(to: exit)
                     } label: {
-                        Label(target.title, systemImage: target.symbol)
+                        Label(exit.title, systemImage: exit.symbol)
                     }
                 }
             } label: {
@@ -347,6 +406,24 @@ struct InboxSessionView: View {
             }
             .foregroundStyle(Color.ink)
             .accessibilityLabel(InboxCopy.fileMenuLabel)
+        }
+        .padding(.bottom, Spacing.s)
+    }
+
+    /// The fixed-slot navbar: `Knowledge`, the favourite lists in the order Settings fixes, then
+    /// `More…`. A list button files the card at once (I4b).
+    private var keepNavbar: some View {
+        GlassActionBar {
+            ForEach(session.exits.filter { $0 != .collapse }, id: \.self) { exit in
+                Button {
+                    Task { await session.take(exit) }
+                } label: {
+                    barLabel(exit.title, symbol: exit.symbol)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.ink)
+                .accessibilityLabel(exit.title)
+            }
         }
         .padding(.bottom, Spacing.s)
     }
@@ -375,56 +452,44 @@ struct InboxSessionView: View {
         .union(.punctuationCharacters)
         .union(.symbols)
 
-    private func press(_ target: CardTarget) -> KeyPress.Result {
+    private func press(_ stroke: KeyStroke) -> KeyPress.Result {
         guard focus == nil else { return .ignored }
-        Task { await session.choose(target) }
+        Task {
+            let handled = await session.handle(stroke: stroke)
+            _ = handled
+        }
         return .handled
     }
 
-    private func quit() -> KeyPress.Result {
-        guard focus == nil else {
-            focus = nil        // Esc first blurs the field, so the next Esc quits
-            return .handled
+    /// `Esc` is a ladder (STYLEGUIDE §3.6): focused field → blur; opened card → collapse;
+    /// step 1 → quit. The session owns the middle rung; the view owns the two ends.
+    private func escape() -> KeyPress.Result {
+        session.isFieldFocused = focus != nil
+        switch session.escape() {
+        case .blurField: focus = nil
+        case .collapsed: break
+        case .quit: onFinished()
         }
-        onFinished()
         return .handled
     }
 
     private func handle(_ keyPress: KeyPress) -> KeyPress.Result {
         guard focus == nil, let character = keyPress.characters.first else { return .ignored }
-        guard let resolved = KeyMap.resolve(
+        // Everything rebindable resolves through `KeyBindings` for the **current step** (R-10).
+        guard KeyMap.resolve(
             character,
             shift: keyPress.modifiers.contains(.shift),
-            command: keyPress.modifiers.contains(.command))
+            command: keyPress.modifiers.contains(.command),
+            step: session.step,
+            bindings: session.keyBindings) != nil
         else { return .ignored }
-        switch resolved {
-        case let .target(target):
-            Task { await session.choose(target) }
-        case let .command(command):
-            // Only `cardProject` is reachable today (R-10): `P` opens the project chip/picker,
-            // the same sheet the `+ project` chip presents (R-8).
-            if command == .cardProject {
-                session.sheet = .project
-            }
-        case let .context(index):
-            guard index < session.contexts.count else { return .ignored }
-            toggleContext(session.contexts[index])
-        case let .time(bucket):
-            session.draft.timeBucket = session.draft.timeBucket == bucket ? nil : bucket
-        case .undo:
-            Task { await session.undo() }
-        case .quit:
-            onFinished()
+        Task {
+            await session.handle(
+                character: character,
+                shift: keyPress.modifiers.contains(.shift),
+                command: keyPress.modifiers.contains(.command))
         }
         return .handled
-    }
-
-    private func toggleContext(_ context: String) {
-        if let index = session.draft.contexts.firstIndex(of: context) {
-            session.draft.contexts.remove(at: index)
-        } else {
-            session.draft.contexts.append(context)
-        }
     }
     #endif
 
@@ -469,6 +534,8 @@ struct InboxSessionView: View {
             DeferToReviewSheet(session: session)
         case .cap:
             CapSheet(session: session)
+        case .more:
+            MoreListsSheet(session: session)
         case .fullText:
             FullTextSheet(session: session)
         }

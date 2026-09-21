@@ -1,59 +1,95 @@
 # FeatureInbox
 
 Inbox processing: one card at a time, LIFO, forced order, exit only by quitting (I1–I7).
-`docs/STYLEGUIDE.md` §3.5/§3.6 is the binding spec for the card and its gestures.
+`docs/STYLEGUIDE.md` §3.5/§3.6 is the binding spec for the card, its steps and its gestures.
 
 ## Public API
 
-- `InboxProcessingView(showsChrome:onFinished:)` — the whole session. `FeatureReview` embeds it (§10.1) with `showsChrome: false`, which drops the counter and `Done` from the toolbar.
+- `InboxProcessingView(showsChrome:onFinished:)` — the whole session. `FeatureReview` embeds it (§10.1) with `showsChrome: false`, which drops the counter and `Close` from the toolbar.
 - `InboxStartButton(action:)` — home-screen entry point with the live queue count.
+- `MakeActionModel(model:item:bindings:)` — **Make action** (L4), for `FeatureLists`: see below.
 
 Linux-compilable (this is where all the logic lives, and all of it is unit-tested):
 
-- `InboxSession` — `@MainActor @Observable`. Queue, `draft`, `sheet`, counter, validation,
-  cap choice, every sub-flow, undo. Views own no decisions; they call `choose(_:)`,
-  `confirm*(...)`, `chooseProject(_:)`/`createProject(named:)`, `demoteAndRetry(_:)`, `undo()`.
-  (T08 replaces it with the two-step state machine of I2–I4c.)
-- `CardTargets.swift` — `CardTarget` (the 7 targets with key, swipe, symbol, title and the
-  `missingFields(…)` a target demands), `SwipeDirection`, `DragResolver` (axis lock, thresholds,
-  commitment, and `collapses(…)` for the downward drag), `KeyMap` (Mac keys).
-  The **single** definition of the swipe/key map (ARCHITECTURE §6).
-  `KeyMap.resolve` takes a `GTDAppCore.KeyBindings` (default `.defaults`, R-10/N7): the Mac `P`
-  key resolves to `InboxKey.command(.cardProject)`, a rebindable command.
-- `InboxPickers.swift` — `KnowledgeTree`, `ProjectPicker`, `InboxDefaultsStore`
-  (device-local last-used folder + one-time hint; `EphemeralInboxDefaults` for tests).
+- `InboxSession` — `@MainActor @Observable`. The **state machine**: `step`, `queue`, `card`
+  (draft + validation flags + cap state), `sheet`, counter, every sub-flow, keys, legend, undo.
+  Views own no decisions; they render and call `take(_:)` / `collapse()` / `escape()` /
+  `confirm*(…)` / `demoteAndRetry(_:)` / `undo()` / `handle(…)`.
+- `CardTargets.swift` — the vocabulary, defined **once** for both platforms (ARCHITECTURE §6):
+  `InboxStep` (`step1` / `actionCard` / `keepCard`, each with its `KeyScreen`), `InboxExit` (one
+  case per row of STYLEGUIDE §3.6's three tables, with `step`, `title`, `symbol`), `CardTarget`
+  (where a card *ended up* — the session summary and the undo toast), `SwipeDirection`,
+  `DragContext`/`DragOutcome`/`DragResolver`, and `KeyMap`, which resolves every letter and digit
+  through `GTDAppCore.KeyBindings` for the **current step's** screen (R-10/N7).
+- `ActionCard.swift` — `InboxDraft`, `ActionCardState` (draft + per-field flags + shake trigger +
+  cap state) and `ActionCardEngine` (pre-validate → send → fold every refusal back into the
+  state). `InboxSession` and `MakeActionModel` both drive exactly this; neither owns a copy of a
+  required field, the cap flow or the asterisk rule. `InboxRefusal` is the one list of ways the
+  card says no.
+- `MakeActionModel.swift` — L4's entry point: the opened action card alone, over a `ListItem`,
+  sending `promoteListItem`. Same draft, same validation, same cap flow; exits → Next / ← Someday
+  / Waiting / Done; `cancel()` leaves the item in its list. There is no step 1 under it, so `Esc`
+  blurs then cancels, and `undo` belongs to the list, not to the card.
+- `InboxPickers.swift` — `KnowledgeTree` (+ `KnowledgePickerModel`: suggestion, tree, `Projects`
+  section), `ProjectPicker` (+ `ProjectPickerModel`: filtered tree, `Create project "<text>"`),
+  `InboxDefaultsStore` (device-local last-used folder + one-time hint; `EphemeralInboxDefaults`
+  for tests).
 - `InboxCopy.swift` — inbox-only strings (the shared ones stay in `DesignSystem.Copy`) and
-  `ChecklistText` (checklist toggling, `- ` auto-format, title derivation).
+  `ChecklistText` (checklist toggling, `- ` auto-format).
 
 ## Invariants
 
+- **The card is a two-step state machine** (I2): `step1` → `actionCard` or `keepCard`, and back
+  by `collapse()`. `take(_:)` **refuses** an exit that does not belong to the current step
+  (`InboxRefusal.notAvailable`) rather than quietly doing it — that is what keeps **Trash and
+  `Defer to review` reachable from step 1 only** (I4c, I5).
+- **Collapsing keeps the draft.** It survives until the card is filed or the session ends; a
+  fresh card always starts at step 1 with an empty draft.
 - Nothing is pre-filled and no suggestion is ever persisted: the last-used knowledge folder and
-  the +7 d follow-up are **suggested** chips until the user taps them (§1, STYLEGUIDE §3.1).
+  the +7 d follow-up are **suggested** until the user taps them (§1, STYLEGUIDE §3.1). The
+  suggestion travels as its own field of `KnowledgePickerModel`, never as a chosen folder.
 - **The capture text is the title** (R-4): the title field edits the capture itself, and the
-  reducer names the file after its first line. `Draft.noteTitle` shows what that will be.
+  reducer names the file after its first line. `InboxDraft.noteTitle` shows what that will be.
 - **Required fields are R-3's** (`RequiredField.missing`, shared with the reducer): Next asks for
   `Why?` + `What?` + a context + a time estimate, Someday for `What?`, Waiting for `What?` plus
-  the sheet's date, and Done/Knowledge/lists/Trash for nothing. `InboxSession.missingFields`
-  lists every one of them; the card shakes and marks them — never an alert.
+  the sheet's date, and Done/Knowledge/lists/Trash for nothing. The session pre-validates *and*
+  still handles the reducer's `GTDError.missingFields`, which is the authority. `missingFields` /
+  `isMissing(_:)` drop a field as soon as it is filled, `shakeTrigger` counts refusals and
+  `focusRequest` names the first missing **text** field — never an alert.
 - The cap is a **forced choice**: demote a Next item, or cancel and decide differently. There is
   no "send to Someday instead" shortcut any more (STYLEGUIDE §3.6, D14).
 - **The project is a chip on the card, not a target** (I4a/R-8): the card stays an action and
   names an existing project or one created with `createProject(named:)` — never both.
-- Undo returns the card to the head of the queue **with its draft restored**.
-- A card being edited is never displaced by a mid-session capture; the capture is queued next.
+- **Undo is R-9**: the card returns to the head of the queue **in the step it was filed from**,
+  draft intact — opened action card for Next/Someday/Waiting/Done, opened Knowledge/List card for
+  a list or Knowledge filing, small card for Trash and Defer to review.
+- A card being worked on — **opened, or with something typed** — is never displaced by a
+  mid-session capture; the capture is queued next.
 - Items deferred to the weekly review leave the queue and never come back to it (I5).
+
+### Invariants this rework replaced (T08)
+
+| Old | New |
+| --- | --- |
+| One card, four swipe targets; `↓` = Trash | Two steps; `←`/`→` file, `↓` **collapses**, `↑` does nothing, and there is **no drag at all** on step 1 (`DragContext`) |
+| `CardTarget` was the swipe **and** key map (`key`, `isDirect`, `keyLegend`, `buttonTargets`, `menuTargets`) | `InboxExit` is the map; `CardTarget` is only the outcome taxonomy. Keys come from `KeyBindings` per step, legends from `InboxSession.legendString` |
+| `choose(_:)` / `validate(for:)` / `Validation` | `take(_:)` / `ActionCardState.preValidate` / `InboxRefusal` + `Refused(nonce:)` |
+| Undo restored the draft but always showed the small card | R-9: undo restores the **step** as well |
+| The swipe hint showed on the first card of a fresh device | It shows the first time an **action card opens** — there is nothing to hint at on the small card |
+| `InboxSession.Draft` (nested) | `InboxDraft` (top level, `+ notes`), with the nested name kept as a typealias for `FeatureReview` |
 
 ## Platform guards (ARCHITECTURE §5)
 
 `InboxProcessingView.swift`, `InboxCardView.swift`, `InboxSheets.swift` and `InboxPreviews.swift`
-are wrapped entirely in `#if canImport(SwiftUI)` and were written **without a compiler** — verify
-them on a Mac (`scripts/check.sh`). Previews build their own sample data (`InboxPreviewData`).
+are wrapped entirely in `#if canImport(SwiftUI)`. T08 adapted them **mechanically** to the state
+machine (per-step bar, per-step keys, per-step legend, the collapse gesture, the `More…` sheet)
+so the package keeps building; **T09 owns their design** — STYLEGUIDE §3.5/§3.6's three bars,
+asterisks, expand-in-place motion, previews and the VoiceOver pass.
 
-`InboxProcessingView` carries its own `.toolbar` (card counter, `⌘Z` undo, `Done`) but **does
+`InboxProcessingView` carries its own `.toolbar` (card counter, `⌘Z` undo, `Close`) but **does
 not** wrap itself in a `NavigationStack`: the review wizard embeds it inline, where a second
-navigation bar would be wrong. Every other presenter must supply one, or the session has no
-visible way out — `PhoneShell` and `FeatureOverview` do (only the previews had
-one before).
+navigation bar would be wrong. Every other presenter must supply one — `PhoneShell` and
+`FeatureOverview` do.
 
 **iPhone keyboard.** On iOS the card sits in a `ScrollView` (`InboxSessionView.phoneContent`):
 the keyboard shrinks the viewport, never the card. Every card `TextField` is `fixedSize`
@@ -61,18 +97,15 @@ vertically and carries its `CardField` as `.id`, so the focused one is scrolled 
 keyboard goes away by dragging the content (`.scrollDismissesKeyboard(.interactively)`), by the
 `Done` button that rides above the keyboard (`keyboardBar` in the bottom inset, `focus = nil` —
 `ToolbarItemGroup(placement: .keyboard)` did not render inside `PhoneShell`'s full-screen cover)
-or by a tap next to a field. Scrolling is **off** while no
-field is focused and the card fits, so the vertical swipes stay the card's; a card taller than
-the screen scrolls, and is then filed from the action bar. The bar holds the non-swipe targets
-as labelled buttons plus `⋯` with the two swipe targets (`CardTarget.buttonTargets` /
-`menuTargets`); it hides while a field is focused, and the undo toast lives in the same bottom
-inset above it. The Mac layout (`macContent`: counter, card, key legend, key handling) has no
-scroll view. Placeholders go through `prompt:` in `textTertiary` — on macOS a plain field
-otherwise draws them like a value.
+or by a tap next to a field. The view mirrors focus into `InboxSession.isFieldFocused`, which is
+what turns the swipes and the single keys off (STYLEGUIDE §3.6) — it is a model flag, not a view
+check. The Mac layout (`macContent`: counter, card, per-step legend, key handling) has no scroll
+view. Placeholders go through `prompt:` in `textTertiary` — on macOS a plain field otherwise
+draws them like a value.
 
-The one-time swipe hint is the **stored** `InboxSession.isSwipeHintVisible` (the defaults flag
-behind it is not observable); `dismissSwipeHint()` and the first card filed by a swipe target
-clear it.
+The one-time swipe hint is the **stored** `InboxSession.isSwipeHintVisible`; the device-local
+flag behind it is written the moment the hint appears, and `dismissSwipeHint()` (or the first
+card filed along the commitment axis) hides it.
 
 Inbox zero is `DesignSystem.RewardMoment.inboxZero`, not a local drawing of it (STYLEGUIDE §5
 allows exactly two reward moments, so there is exactly one implementation). The card drag
@@ -82,4 +115,4 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (56 tests).
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (107 tests).

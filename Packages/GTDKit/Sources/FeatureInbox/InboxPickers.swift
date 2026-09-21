@@ -71,6 +71,41 @@ public enum KnowledgeTree {
         guard !folders.contains(path) else { return folders }
         return folders + [path]
     }
+
+    /// Everything the Knowledge sheet renders (I4b, STYLEGUIDE §3.6): the last-used folder as a
+    /// **suggestion**, the `Knowledge/` tree, and a `Projects` section with the active projects'
+    /// folders as filing targets.
+    public static func model(
+        folders: [String], projects: [Project], suggestion: String?
+    ) -> KnowledgePickerModel {
+        let tree = build(folders)
+        // A suggestion that names a folder which no longer exists is dropped rather than shown
+        // as a row that files nowhere (§1 "no lying UI").
+        let known = Set(folders)
+        return KnowledgePickerModel(
+            suggestion: suggestion.flatMap { known.contains($0) ? $0 : nil },
+            tree: tree,
+            projects: projects.filter { $0.status == .active })
+    }
+}
+
+/// The Knowledge sheet's model. The suggestion is **never** part of a decision until the user
+/// taps it (STYLEGUIDE §1.2, §3.1) — it travels as its own field, not as a pre-selected folder.
+public struct KnowledgePickerModel: Sendable, Equatable {
+    /// Last folder used on this device, drawn as the dashed suggested row at the top.
+    public var suggestion: String?
+    public var tree: [FolderNode]
+    /// I4b/D36 — the `Projects` section: active projects, whose folders take reference material.
+    public var projects: [Project]
+
+    public init(suggestion: String? = nil, tree: [FolderNode] = [], projects: [Project] = []) {
+        self.suggestion = suggestion
+        self.tree = tree
+        self.projects = projects
+    }
+
+    /// The target the suggested row would file to, or `nil` when there is no suggestion.
+    public var suggestedTarget: KnowledgeTarget? { suggestion.map(KnowledgeTarget.folder) }
 }
 
 // MARK: - Project picker
@@ -88,6 +123,23 @@ public struct ProjectGroup: Identifiable, Sendable, Equatable {
 
     public var id: String { area?.id.path ?? "" }
     public var title: String? { area?.title }
+}
+
+/// The `+ project` sheet's model (I4a): the tree it draws and whether the create row is offered.
+public struct ProjectPickerModel: Sendable, Equatable {
+    /// Area-less projects first, without a header, then the areas — already filtered by the
+    /// search text.
+    public var groups: [ProjectGroup]
+    /// Non-`nil` ⇒ show `Create project "<createTitle>"` as the last row. Choosing it sets
+    /// `InboxDraft.newProjectTitle`; the project is created by the command that files the card.
+    public var createTitle: String?
+
+    public init(groups: [ProjectGroup] = [], createTitle: String? = nil) {
+        self.groups = groups
+        self.createTitle = createTitle
+    }
+
+    public var isEmpty: Bool { groups.isEmpty }
 }
 
 public enum ProjectPicker {
@@ -110,6 +162,34 @@ public enum ProjectPicker {
             groups.append(ProjectGroup(area: area, projects: projects))
         }
         return groups
+    }
+
+    /// Everything the `+ project` sheet renders for a search text (I4a, STYLEGUIDE §3.6): the
+    /// filtered tree — **area-less projects first and without a header** — and, when the text
+    /// matches no project exactly, the `Create project "<text>"` row.
+    public static func model(_ snapshot: VaultSnapshot, search: String = "") -> ProjectPickerModel {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let all = groups(snapshot)
+        let filtered: [ProjectGroup] = query.isEmpty
+            ? all
+            : all.compactMap { group in
+                let hits = group.projects.filter {
+                    $0.title.localizedCaseInsensitiveContains(query)
+                }
+                return hits.isEmpty ? nil : ProjectGroup(area: group.area, projects: hits)
+            }
+        // "When the text matches no project exactly, the last row is `Create project "<text>"`."
+        // Exact means the whole trimmed text, compared case-insensitively, against **every**
+        // open project — not only the ones the filter left on screen.
+        let exists = all.contains { group in
+            group.projects.contains {
+                $0.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .localizedCaseInsensitiveCompare(query) == .orderedSame
+            }
+        }
+        return ProjectPickerModel(
+            groups: filtered,
+            createTitle: query.isEmpty || exists ? nil : query)
     }
 
     /// The status a *first next action* gets (I4). Only active projects may put actions into Next
