@@ -14,6 +14,9 @@ struct GTDApp: App {
     @State private var composition: AppComposition
     @State private var router: AppRouter
     @State private var notifications: NotificationService
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(ShellAppDelegate.self) private var appDelegate
+    #endif
 
     init() {
         let composition = AppComposition()

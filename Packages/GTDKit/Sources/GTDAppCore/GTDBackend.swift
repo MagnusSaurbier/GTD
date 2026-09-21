@@ -21,6 +21,31 @@ public struct SnapshotUpdate: Sendable, Equatable {
     public static let empty = SnapshotUpdate(snapshot: .empty)
 }
 
+/// A change the person already saw happen that the store then could not save.
+///
+/// A backend that writes behind the UI (`GTDServices.VaultBackend`) reverts the snapshot to what
+/// the store really holds and reports one of these. `discarded` counts the later changes that
+/// were queued behind the refused one and went with it — they were built on top of it.
+public struct WriteFailure: Error, Sendable, CustomStringConvertible {
+    /// `UndoLabel` of the command whose write was refused — the words the person saw in the toast.
+    public var label: String
+    public var reason: any Error
+    public var discarded: Int
+
+    public init(label: String, reason: any Error, discarded: Int = 0) {
+        self.label = label
+        self.reason = reason
+        self.discarded = discarded
+    }
+
+    public var description: String {
+        var text = "\u{201C}\(label)\u{201D} could not be saved to the vault and was reverted. \(reason)"
+        if discarded == 1 { text += " One later change was reverted with it." }
+        if discarded > 1 { text += " \(discarded) later changes were reverted with it." }
+        return text
+    }
+}
+
 /// What the UI is allowed to know about the store. Two implementations exist:
 /// `InMemoryBackend` (here, reducer only — previews and tests) and `GTDServices.VaultBackend`
 /// (the real vault). Features never see either type; they hold `AppModel`.
@@ -33,6 +58,10 @@ public protocol GTDBackend: Sendable {
     /// renames of the last published update, so that path cannot lose them either.
     func currentUpdate() async -> SnapshotUpdate
 
+    /// Writes that were refused **after** `perform` returned. A backend whose `perform` only
+    /// returns once the change is stored never yields (the default).
+    func writeFailures() -> AsyncStream<WriteFailure>
+
     /// Runs one command. Throws `GTDError` for anything the UI must handle (cap, waiting info…).
     func perform(_ command: GTDCommand) async throws -> [AppPrompt]
 
@@ -44,6 +73,10 @@ public protocol GTDBackend: Sendable {
 }
 
 public extension GTDBackend {
+    func writeFailures() -> AsyncStream<WriteFailure> {
+        AsyncStream { $0.finish() }
+    }
+
     /// The snapshot as of right now, for callers that do not care about identity changes.
     func currentSnapshot() async -> VaultSnapshot {
         await currentUpdate().snapshot

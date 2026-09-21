@@ -189,6 +189,12 @@ final class AppComposition {
         await model.perform(.archiveCompleted)
     }
 
+    /// Returns once every change the person made is in the vault's files (or was refused and
+    /// reported). Writes are queued behind the UI; see `PendingWrites.swift` for who waits.
+    func flushWrites() async {
+        await backend?.flush()
+    }
+
     /// Closes the vault cleanly: stop watching, stop security-scoped access.
     ///
     /// **Nothing calls this yet, on purpose.** `scenePhase == .background` is not termination —
@@ -208,13 +214,18 @@ final class AppComposition {
     /// and goes straight through `InboxWriter`, exactly like the Shortcut and the App Intent do.
     /// It gets its **own** `VaultBookmark` instance so its `startAccess`/`stopAccess` pair cannot
     /// close the access the open vault is holding.
+    ///
+    /// The write is a coordinated one into an iCloud folder and can take a moment, so it runs
+    /// off the main actor: the capture sheet is already gone while the file is being written.
     @discardableResult
-    func capture(text: String) -> NoteID? {
+    func capture(text: String) async -> NoteID? {
         if isUsingFixtures { return nil }
-        let writer = InboxWriter(
-            layout: model.snapshot.config.layout, bookmark: VaultBookmark())
+        let layout = model.snapshot.config.layout
         do {
-            let id = try CaptureRequest(text: text).perform(writer: writer)
+            let id = try await Task.detached {
+                try CaptureRequest(text: text).perform(
+                    writer: InboxWriter(layout: layout, bookmark: VaultBookmark()))
+            }.value
             // The watcher will see the new file, but the queue should not wait for a poll.
             Task { await refreshFromDisk() }
             return id

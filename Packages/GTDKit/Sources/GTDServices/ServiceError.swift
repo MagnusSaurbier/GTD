@@ -12,6 +12,11 @@ public enum ServiceError: Error, Equatable {
     /// The undo would overwrite a file that changed since the command ran — another device,
     /// Obsidian, or a sync landing late (N3). Undo is refused, never forced.
     case undoStale(path: String)
+
+    /// A queued write was dropped because the one before it was refused: it was built on a
+    /// state the vault never reached. Also what `undo()` answers when the thing it was meant to
+    /// undo turned out not to have been saved.
+    case writeDiscarded
 }
 
 extension ServiceError: CustomStringConvertible {
@@ -21,6 +26,8 @@ extension ServiceError: CustomStringConvertible {
             "There is nothing to undo."
         case let .undoStale(path):
             "\(path) changed since then, so undoing would overwrite that change."
+        case .writeDiscarded:
+            "That change was not saved to the vault, so it has already been reverted."
         }
     }
 }

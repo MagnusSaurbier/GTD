@@ -38,7 +38,13 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
   every foreground) all go through `AppRouter.apply(url:)`.
 - **Notifications:** every snapshot change re-plans (debounced), as does foregrounding and the
   background refresh — a device only knows what has synced into its own snapshot.
-- **Errors:** `AppModel.lastError` and shell failures share one alert. Nothing is swallowed.
+- **Errors:** `AppModel.writeFailure`, `AppModel.lastError` and shell failures share one alert.
+  Nothing is swallowed.
+- **Queued writes:** the vault is written behind the UI. `PendingWrites.swift` waits for the
+  queue where the app is about to stop running: iOS backgrounding (background assertion) and
+  ⌘Q on the Mac (`ShellAppDelegate`); `teardown()` flushes through `VaultBackend.stop()`.
+  In-app capture (`AppComposition.capture`) writes its one file off the main actor for the
+  same reason.
 
 ## What to verify on a Mac (everything here is compiled blind)
 

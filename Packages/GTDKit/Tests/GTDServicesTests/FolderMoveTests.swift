@@ -143,7 +143,8 @@ private struct FolderMoveVault {
             deviceID: "test-device",
             journal: UndoJournal(directory: stateDirectory),
             stateDirectory: stateDirectory,
-            env: { Fixtures.reducerEnv(deviceID: "test-device") })
+            env: { Fixtures.reducerEnv(deviceID: "test-device") },
+            writes: .awaited)
     }
 
     func cleanUp() {

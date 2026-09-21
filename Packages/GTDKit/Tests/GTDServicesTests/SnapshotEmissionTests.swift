@@ -69,7 +69,8 @@ struct SnapshotEmissionTests {
             deviceID: "test-device",
             journal: UndoJournal(directory: directory),
             stateDirectory: directory,
-            env: { Fixtures.reducerEnv(deviceID: "test-device") })
+            env: { Fixtures.reducerEnv(deviceID: "test-device") },
+            writes: .awaited)
         try await backend.start()
         return backend
     }

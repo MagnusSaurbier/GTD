@@ -6,14 +6,15 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
 ## Public API
 
 - `GTDBackend` — `snapshots() -> AsyncStream<SnapshotUpdate>`, `currentUpdate()`,
-  `perform(_:) -> [AppPrompt]`, `undo()`, `undoLabel()`; `currentSnapshot()` is an extension
+  `perform(_:) -> [AppPrompt]`, `undo()`, `undoLabel()`, `writeFailures()` (defaults to a
+  stream that never yields — for a backend whose `perform` returns only once stored); `currentSnapshot()` is an extension
   over `currentUpdate()`.
 - `SnapshotUpdate` — one published state: the `VaultSnapshot` and the `RenameMap` of the command
   that produced it.
 - `NavigationRemap` — `path(_:renames:exists:)` / `selection(_:renames:exists:)`: follow a
   rename, then drop what is gone. Both shells navigate by it.
 - `AppModel` — `@MainActor @Observable`. `snapshot`, `renames`/`consumeRenames()`, `undoLabel`,
-  `prompt`, `lastError`,
+  `prompt`, `lastError`, `writeFailure`,
   `today: () -> Day`; `send(_:) async throws`, `send(deriving:) async throws`,
   `perform(_:) async -> Bool`, `report(_:) async -> Bool`, `undo() async`, `start()`/`stop()`.
   Views get it with `@Environment(AppModel.self)`.
@@ -57,6 +58,10 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   error in `lastError` for the shell's one alert. `try? await model.send(…)` in a view is a bug:
   the person taps and nothing happens (STYLEGUIDE §1 "no lying UI"). A command that goes through
   clears `lastError`, exactly as `undo()` does.
+- **A write refused after the fact is held until dismissed.** `VaultBackend` writes behind the
+  UI; its `WriteFailure` lands in `writeFailure`, not `lastError`, because the next command that
+  goes through clears `lastError` — and would do so before the person has read it. Only
+  `clearError()` clears it. The snapshot has already been reverted by the backend.
 - `snapshots()` is synchronous on purpose, so an actor backend must implement it `nonisolated`.
   `SnapshotHub` does the fan-out under an `NSLock` — the one justified `@unchecked Sendable`
   in this target. Its first element is always the current snapshot.
@@ -75,7 +80,7 @@ item is checked off (and when a card is filed by the 2-minute rule, I4/D13), and
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — 51 tests. The acceptance scenario (file an
+`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — 53 tests (`WriteFailureTests`: held until dismissed, wording). The acceptance scenario (file an
 inbox item to Next, hit the cap, complete a project action (prompt), undo), the command-order
 tests, `ErrorSurfacingTests` for `perform`/`report`, and `KeyBindingsTests` (defaults, rebind
 happy path, duplicate-within-screen refusal naming the conflicting command, same key on a

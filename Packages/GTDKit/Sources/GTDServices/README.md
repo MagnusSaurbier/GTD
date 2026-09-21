@@ -1,6 +1,6 @@
 # GTDServices
 
-The production backend: `Reducer.reduce` → `SnapshotDiff` → `VaultStore.commit` → undo journal.
+The production backend: `Reducer.reduce` → `SnapshotDiff` → publish → (queued) `VaultStore.commit` → undo journal.
 Foundation-only — every file here compiles and is tested on Linux.
 
 ## Public API
@@ -8,7 +8,8 @@ Foundation-only — every file here compiles and is tested on Linux.
 - `VaultBackend` (actor, conforms to `GTDAppCore.GTDBackend`) — `init(store:deviceID:)`, plus a
   full initialiser taking `journal`, `stateDirectory` and `env` for tests. `start()` / `stop()`
   bracket its lifetime; `perform`, `undo`, `undoLabel`, `snapshots`, `currentSnapshot` are the
-  protocol. `lastHousekeepingError` says why the last automatic archive did not run.
+  protocol, plus `writeFailures()` and `flush()`; `writes: WritePolicy` (`.queued` by default,
+  `.awaited` for tests that read files straight after a command). `lastHousekeepingError` says why the last automatic archive did not run.
 - `SnapshotDiff.ops(from:to:extraOps:filedNotes:timeZone:)` — two snapshots, the reducer's
   `extraOps` and its `filedNotes`
   into one ordered list of `VaultFileOp`. A `.moveFolder` in `extraOps` owns *both* ends of the
@@ -21,7 +22,7 @@ Foundation-only — every file here compiles and is tested on Linux.
   replaces whatever the file holds (never a stale copy of the capture), its own text rides along
   so unknown frontmatter survives, and the put comes after the move that put the file there.
 - `UndoJournal` (actor) — device-local, persisted in Application Support, keeps 20 entries.
-- `ServiceError` — `.nothingToUndo`, `.undoStale(path:)`.
+- `ServiceError` — `.nothingToUndo`, `.undoStale(path:)`, `.writeDiscarded`.
 
 ## Invariants
 
@@ -42,9 +43,19 @@ Foundation-only — every file here compiles and is tested on Linux.
    they are the ones the undo carries back, so the journal asks the store for
    `folderContents` and hashes every one. The journal is deeper than N6 asks (20), so ⌘Z walks
    back a session.
-5. **Optimistic then authoritative.** A successful command publishes the reduced snapshot at
-   once; the store's scanned snapshot replaces it when it arrives. `pullFromStore` always asks
-   the store for its *current* value, so a late event can never walk the app backwards.
+5. **Optimistic then authoritative — and the UI never waits for a file.** `perform` publishes the
+   reduced snapshot and returns; its ops join a serial queue (`drain`) that commits in command
+   order. The store's scanned snapshot replaces the reduced one once the queue is **empty** —
+   while it is not, store events are ignored, because the store cannot know the queued writes and
+   its snapshot would take back what the person just did. `pullFromStore` always asks the store
+   for its *current* value, so a late event can never walk the app backwards.
+   **A refused write** drops everything queued behind it (reduced on top of a state the vault
+   never reached), rescans, publishes the truth with the dropped renames inverted, and yields a
+   `WriteFailure` on `writeFailures()`. `undo()` waits for the queue, and refuses with
+   `.writeDiscarded` if a write failed while it waited — the entry below is not what the person
+   meant. "Written" is the local file; nothing waits for iCloud. Collisions with files the index
+   does not know (`Knowledge/`) are found on the queue, so they arrive as a `WriteFailure`, not
+   as a thrown `titleCollision`.
 6. The archive and the trash pick a free name on collision (they are app-owned); anywhere else a
    taken destination is `GTDError.titleCollision` for the user to resolve. Folder moves follow
    the same policy (R-5): "remove list" is a `.moveFolder` into `GTD/Trash/` and gets a free
@@ -57,7 +68,10 @@ Foundation-only — every file here compiles and is tested on Linux.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 77 tests. `ParityTests` drives 21
+`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 84 tests. `TestVault` builds its
+backend with `.awaited`; `QueuedWriteTests` runs the production policy against a store whose
+commits wait at a gate: publish-before-write, order, no walk-back on a store event, a refused
+write (revert + report + discarded count), undo waiting for the queue, and `stop()` flushing. `ParityTests` drives 21
 commands through `InMemoryBackend` and `VaultBackend` and compares a fresh scan of the vault with
 the in-memory snapshot after every step; `SnapshotShape` says which fields are compared and why.
 `FolderMoveTests` is the one suite here that uses `@testable`: the collision policy is a private
