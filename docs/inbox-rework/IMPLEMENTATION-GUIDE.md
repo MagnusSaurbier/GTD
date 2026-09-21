@@ -371,8 +371,8 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T03 | done | 48c6c1e | Opus | 2 | gate green, 1040 tests (Model 191, Markdown 139, Vault 143, Services 67). Round 1 rejected: sample vault's empty `Lists/Wish/` would vanish in a git clone — Wish got an item + a clone-fidelity test. `createList`/`setFavouriteLists` are not undoable; `VaultFileOp.createFolder` added (no inverse); action encoder appends headings below a promoted item's notes |
 | T04 | done | 9658e01 | Opus | 1 | gate green, 1073 tests (Model 215, Markdown 145, Inbox 55); both app builds green. `InboxDecision` = action / knowledge / list / trash; filing moves the capture file; `Reduction.filedNotes` carries the Knowledge note; promotion sheets outside the inbox still offer `Send to Someday instead` (T11 to check against STYLEGUIDE) |
 | T05 | **in progress** (started 2026-09-21, worktree, ∥ T06/T07) | | Opus | 1 | |
-| T06 | **in progress** (started 2026-09-21, worktree, ∥ T05/T07) | | Sonnet | 1 | |
-| T07 | **in progress** (started 2026-09-21 during T04, worktree) | | Sonnet | 1 | |
+| T06 | done | 38f8797 | Sonnet | 1 | worktree, merged clean; gate green (1113 tests, DesignSystem 46); both app builds green. New: `StepOneBar`, `ActionCardBar`, `KnowledgeListNavbar`, `NavbarLayout`, `SectionLabel`, `ListItemRow`, `shake(trigger:)`. Left for T09: `ItemCard`/`CollapsibleText` still truncates with `Show all` (§3.5 says the step-1 card scrolls instead) |
+| T07 | done | e1616bc | Sonnet | 1 | worktree; merge conflicts with T04 in `CardTargets`/`InboxProcessingView` resolved by the manager (`P` opens the project sheet); gate green. `KeyBindings` lives in `GTDAppCore` (all three consumers depend on it; no Package.swift change). Legacy single-card letters still resolve via `CardTarget.key` until T08/T09 |
 | T08 | | | | | |
 | T09 | | | | | |
 | T10 | | | | | |
@@ -399,3 +399,4 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 - 2026-09-21 · T04 · check order: project active → missing fields → cap; a punctuation-only capture becomes `Untitled` with the text kept in the body · ARCHITECTURE §6.
 
 _(one line each: date · task · decision · why — and the ARCHITECTURE §6 row it became)_
+- 2026-09-21 · T07 · `KeyBindings` is a `GTDAppCore` type, persisted through `DeviceSettings` · FeatureInbox/Review/Settings all need it and may not depend on each other · ARCHITECTURE §6.
