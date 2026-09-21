@@ -26,11 +26,31 @@ struct ReducerProjectTests {
         #expect(project.outcome == "Vertrag unterschrieben")
     }
 
-    @Test func aProjectWithoutAnAreaLivesDirectlyUnderProjects() throws {
+    /// R-6/P1/D40 — a project with no area is not loose under `Projects/`; it lives in
+    /// `Projects/no_area/`, and it still has no area.
+    @Test func aProjectWithoutAnAreaLivesInTheNoAreaFolder() throws {
         let result = try Reducer.reduce(
             TestVault.snapshot(), .createProject(ProjectDraft(title: "Wohnungssuche")), env: env)
-        #expect(result.snapshot.projects.first?.id.path == "Projects/Wohnungssuche/Wohnungssuche.md")
+        #expect(result.snapshot.projects.first?.id.path
+                == "Projects/no_area/Wohnungssuche/Wohnungssuche.md")
         #expect(result.snapshot.projects.first?.area == nil)
+    }
+
+    /// R-6 — `no_area` is the folder that holds the area-less projects, so it cannot also be an
+    /// area. Case-insensitively, because the file system is.
+    @Test func anAreaCannotBeCalledNoArea() {
+        for spelling in ["no_area", "NO_AREA", "No_Area", " no_area "] {
+            #expect(TestVault.error(TestVault.snapshot(), .createArea(title: spelling), env: env)
+                    == .invalid("\"no_area\" is the folder for projects without an area "
+                                + "and cannot be an area"),
+                    "\(spelling) must be refused")
+        }
+        // …including through the "create the area alongside the project" path.
+        #expect(TestVault.error(
+            TestVault.snapshot(),
+            .createProject(ProjectDraft(title: "Umzug", newAreaTitle: "no_area")), env: env)
+                == .invalid("\"no_area\" is the folder for projects without an area "
+                            + "and cannot be an area"))
     }
 
     @Test func creatingTheAreaAlongsideTheProjectReusesAnExistingOne() throws {
@@ -132,20 +152,122 @@ struct ReducerProjectTests {
         #expect(result.snapshot.actions[0].status == .someday)   // never automatic (I4)
     }
 
-    @Test func renamingOrMovingAProjectIsRefused() {
-        let area = Area(id: TestVault.layout.areaPath(title: "Wohnen"), title: "Wohnen")
+    /// The *title* half of the old refusal stands: the folder name is the project's identity.
+    @Test func renamingAProjectIsStillRefused() {
         let project = TestVault.project("DAAD")
-        let vault = TestVault.snapshot(areas: [area], projects: [project])
+        let vault = TestVault.snapshot(projects: [project])
 
         var renamed = project
         renamed.title = "DAAD 2027"
         #expect(TestVault.error(vault, .updateProject(renamed), env: env)
                 == .invalid("Renaming a project is not supported"))
+    }
+
+    // MARK: - R-7: changing a project's area moves its folder
+
+    /// One command, one commit: the folder moves, the project note travels, every action's
+    /// `project:` link follows it, and the renames say so.
+    @Test func assigningAnAreaMovesTheProjectFolder() throws {
+        let area = Area(id: TestVault.layout.areaPath(title: "Wohnen"), title: "Wohnen")
+        var project = TestVault.project("DAAD", steps: [
+            ProjectStep(text: "Write the letter", promotedTo: TestVault.actionID("Letter")),
+        ])
+        project.referenceFiles = ["Projects/no_area/DAAD/Transcript.pdf"]
+        let vault = TestVault.snapshot(
+            actions: [TestVault.action("Letter", .next, project: project.id)],
+            areas: [area],
+            projects: [project])
 
         var moved = project
         moved.area = area.id
-        #expect(TestVault.error(vault, .updateProject(moved), env: env)
-                == .invalid("Moving a project to another area is not supported"))
+        let result = try Reducer.reduce(vault, .updateProject(moved), env: env)
+
+        #expect(result.extraOps
+                == [.moveFolder(from: "Projects/no_area/DAAD", to: "Projects/Wohnen/DAAD")])
+        let newID = NoteID(path: "Projects/Wohnen/DAAD/DAAD.md")
+        #expect(result.snapshot.projects[0].id == newID)
+        #expect(result.snapshot.projects[0].area == area.id)
+        #expect(result.snapshot.projects[0].referenceFiles == ["Projects/Wohnen/DAAD/Transcript.pdf"])
+        // The action's `project:` wikilink is written from this id, so it is rewritten on disk.
+        #expect(result.snapshot.actions[0].project == newID)
+        #expect(result.snapshot.actions[0].status == .next, "an area change demotes nothing")
+        // A promoted step points at an action in `Actions/`, which did not move.
+        #expect(result.snapshot.projects[0].steps[0].promotedTo == TestVault.actionID("Letter"))
+        // Both the project note and every file inside its folder, so open views follow.
+        #expect(result.renames.pairs.map { ($0.old.path, $0.new.path) }.sorted { $0.0 < $1.0 }
+                .map { [$0.0, $0.1] }
+                == [["Projects/no_area/DAAD/DAAD.md", "Projects/Wohnen/DAAD/DAAD.md"],
+                    ["Projects/no_area/DAAD/Transcript.pdf", "Projects/Wohnen/DAAD/Transcript.pdf"]])
+    }
+
+    /// Taking the area away puts the project back in `Projects/no_area/` (R-6).
+    @Test func removingTheAreaMovesTheProjectIntoNoArea() throws {
+        let area = Area(id: TestVault.layout.areaPath(title: "Wohnen"), title: "Wohnen")
+        let project = TestVault.project("Umzug", area: area.id)
+        let vault = TestVault.snapshot(
+            actions: [TestVault.action("Kisten", .someday, project: project.id)],
+            areas: [area], projects: [project])
+
+        var moved = project
+        moved.area = nil
+        let result = try Reducer.reduce(vault, .updateProject(moved), env: env)
+
+        #expect(result.extraOps
+                == [.moveFolder(from: "Projects/Wohnen/Umzug", to: "Projects/no_area/Umzug")])
+        let newID = NoteID(path: "Projects/no_area/Umzug/Umzug.md")
+        #expect(result.snapshot.projects[0].id == newID)
+        #expect(result.snapshot.projects[0].area == nil)
+        #expect(result.snapshot.actions[0].project == newID)
+    }
+
+    /// R-6 — a project a pre-rework vault left directly under `Projects/` is never moved on its
+    /// own, but giving it an area moves it out of there like any other project.
+    @Test func aLegacyTopLevelProjectMovesOutOfTheProjectsRoot() throws {
+        let area = Area(id: TestVault.layout.areaPath(title: "Wohnen"), title: "Wohnen")
+        let legacy = Project(
+            id: NoteID(path: "Projects/Altbau/Altbau.md"), title: "Altbau", status: .active)
+        let vault = TestVault.snapshot(areas: [area], projects: [legacy])
+
+        var moved = legacy
+        moved.area = area.id
+        let result = try Reducer.reduce(vault, .updateProject(moved), env: env)
+
+        #expect(result.extraOps
+                == [.moveFolder(from: "Projects/Altbau", to: "Projects/Wohnen/Altbau")])
+        #expect(result.snapshot.projects[0].id.path == "Projects/Wohnen/Altbau/Altbau.md")
+    }
+
+    /// Never overwrite: an area that already holds a project of this name refuses the move.
+    @Test func movingOntoATakenFolderIsACollision() {
+        let area = Area(id: TestVault.layout.areaPath(title: "Wohnen"), title: "Wohnen")
+        let occupant = TestVault.project("Umzug", area: area.id)
+        let project = TestVault.project("Umzug")
+        let vault = TestVault.snapshot(areas: [area], projects: [occupant, project])
+
+        var moved = project
+        moved.area = area.id
+        #expect(TestVault.error(vault, .updateProject(moved), env: env) == .titleCollision("Umzug"))
+    }
+
+    @Test func movingIntoAnUnknownAreaIsNotFound() {
+        let project = TestVault.project("DAAD")
+        let ghost = TestVault.layout.areaPath(title: "Ghost")
+        var moved = project
+        moved.area = ghost
+        #expect(TestVault.error(TestVault.snapshot(projects: [project]), .updateProject(moved), env: env)
+                == .notFound(ghost))
+    }
+
+    /// Editing anything else about a project still moves no folder and renames nothing.
+    @Test func anEditThatLeavesTheAreaAloneMovesNothing() throws {
+        let project = TestVault.project("DAAD")
+        var edited = project
+        edited.outcome = "Scholarship confirmed"
+        let result = try Reducer.reduce(
+            TestVault.snapshot(projects: [project]), .updateProject(edited), env: env)
+        #expect(result.extraOps.isEmpty)
+        #expect(result.renames.isEmpty)
+        #expect(result.snapshot.projects[0].id == project.id)
     }
 
     @Test func updatingAnUnknownProjectIsNotFound() {

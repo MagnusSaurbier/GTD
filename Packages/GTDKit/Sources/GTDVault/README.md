@@ -20,7 +20,9 @@ The only module that touches the file system.
   `VaultListing` — files **and** folders from one walk; the index calls it on every refresh, and
   the two-walk default is only for a conformer that does not override it), `VaultIndex`, `VaultClassifier`,
   `VaultNoteParser` / `NoteCodecParser` (its `listItem(id:text:layout:)` is the seam for §5a),
-  `VaultClassifier.listFolderName(of:)` / `misplacedListReason(of:)`, `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
+  `VaultClassifier.listFolderName(of:)` / `misplacedListReason(of:)` /
+  `isNoAreaFolder(of:)` / `noAreaNoteReason()` / `areaLessProjectHasAreaReason(_:)` (R-6),
+  `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
   `DebounceState` / `ChangeDebouncer`, `VaultClock`, `VaultError`.
 
 ## Invariants
@@ -49,10 +51,16 @@ The only module that touches the file system.
    a list, `Done/` is reserved (a list's finished log, never a list), an **empty** folder is a
    list all the same, and a markdown note directly in `Lists/` or nested deeper becomes a
    `VaultIssue` — ignored, never moved, never guessed at.
-8. Decode failures, evicted iCloud items and conflict copies become `VaultIssue`s. Conflict
+8. **`Projects/no_area/` is a folder, not an area** (R-6). `VaultFileKind.noAreaNote` is what
+   `Projects/no_area/no_area.md` classifies as: it becomes a `VaultIssue` and the file is left
+   exactly where it is — never decoded as an `Area`, never moved, never rewritten. A project
+   inside `Projects/no_area/` whose frontmatter still names an area is reported the same way, with the
+   value read as the file spells it. A project a pre-rework vault left directly under `Projects/`
+   is indexed as it always was, with `area == nil`, and nothing moves it.
+9. Decode failures, evicted iCloud items and conflict copies become `VaultIssue`s. Conflict
    copies are reported, never resolved, and are still indexed so nothing disappears.
-9. `Action.modified` is the file mtime — the only field the codec cannot supply.
-10. `GTDMarkdown.NoteCodec` is reached only through `VaultNoteParser`.
+10. `Action.modified` is the file mtime — the only field the codec cannot supply.
+11. `GTDMarkdown.NoteCodec` is reached only through `VaultNoteParser`.
 
 ## Platform split (ARCHITECTURE §5)
 
@@ -72,7 +80,8 @@ watch: it coordinates the *directory* with `.forMoving` and then announces the m
 - The index cache key is `size + mtime`. A second-granularity file system can hide a same-size
   edit within one second; the watcher's next poll picks it up.
 - `Projects/X/X.md` is an area or a project depending on its `kind:` key — `Frontmatter.scalar`
-  peeks at it for classification only; all real parsing is the codec's.
+  peeks at it for classification only; all real parsing is the codec's. The one exception is
+  `Projects/no_area/no_area.md`, which is neither whatever its `kind:` says (R-6).
 - A refresh costs one directory walk plus one decode **per changed file** — never a re-parse of
   the vault. What it does still cost is re-assembling the whole snapshot (`VaultIndex.snapshot`)
   and, after a commit, a full re-listing, which is what `docs/follow-ups/55-incremental-reindex.md`
@@ -80,7 +89,10 @@ watch: it coordinates the *directory* with `.forMoving` and then announces the m
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDVaultTests` (142 tests, never the real vault).
+`cd Packages/GTDKit && swift test --filter GTDVaultTests` (152 tests, never the real vault).
+`NoAreaIndexTests` pins R-6: `no_area` is never an area, a project inside it has `area == nil`,
+a legacy top-level project is still indexed, and both contradictions are reported rather than
+fixed.
 `TransactionFuzzTests` throws 900 random op sequences at `VaultTransaction` — puts, file moves,
 folder moves and deletes — half of them against an injected write or move failure, and asserts
 the three rules the vault depends on: a refused commit changes nothing outside `GTD/Trash/`, a

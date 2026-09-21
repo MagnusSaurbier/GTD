@@ -51,6 +51,13 @@ Compiles and tests on Linux.
 - **The project chip is a draft field (R-8).** `ActionDraft.newProjectTitle` creates the project
   it links, area-less and in the same command; naming an existing one as well is `.invalid`.
   There is no inbox Project *target* any more.
+- **A project's area is the folder its folder sits in** (P1, R-6/R-7). An area-less project lives
+  in `Projects/no_area/` — a *folder*, never an `Area`: no area may be called `no_area`
+  (case-insensitively), and a project inside it writes no `area:` line. Changing the area is one
+  command: `updateProject` emits one `VaultFileOp.moveFolder`, re-points every action's `project:`
+  link so it is rewritten in the same commit, and reports the project note plus every file inside
+  the folder in `Reduction.renames`. Promoted-step links point at actions and stay put. A taken
+  destination is `.titleCollision`; a changed **title** is still `.invalid`.
 - Only active projects put actions into Next; leaving `active` demotes them to Someday.
 - **A Next item may carry a future `defer`** (R-2). It is hidden until its date and holds no cap
   slot while hidden; on its date it returns with the `back` badge, even if that puts Next over
@@ -86,8 +93,11 @@ Compiles and tests on Linux.
   over-cap vault must stay repairable.
 - `Rules.isUndoable` is the single definition of N6: both backends call it, and the labels live
   in `GTDAppCore/UndoLabel`.
-- Renaming an action moves the file and rewrites `ProjectStep.promotedTo`. Renaming or re-filing
-  a **project** is refused (`.invalid`) — the folder name is its identity.
+- Renaming an action moves the file and rewrites `ProjectStep.promotedTo`. Renaming a **project**
+  is still refused (`.invalid`) — the folder name is its identity — but re-filing one into another
+  area is `updateProject`'s folder move (R-7), and it takes its *source* from the note's real path,
+  so a pre-rework project still sitting directly in `Projects/` moves out of there correctly. Such
+  a project is never moved on its own (R-6, `docs/MANUAL_TEST.md` §9).
 - `GTD/Trash/<file>` keeps the source file name; `GTDServices` uniquifies on collision — a
   removed list lands there as a whole folder, under a free name.
 - `Rules.listItems(_:in:finished:)` needs the `finished:` flag: the open items and the `Done/`

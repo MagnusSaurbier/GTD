@@ -446,8 +446,18 @@ public enum Reducer {
     }
 
     /// P3 — a project that is not `active` cannot hold actions in Next; changing its status
-    /// demotes them to Someday. Renaming or re-filing a project is not supported in v1: the
-    /// folder name is the identity, so the title must keep matching the note's path.
+    /// demotes them to Someday.
+    ///
+    /// **Renaming** a project is still refused: the folder name is its identity and the title has
+    /// to keep matching the note's path. Its **area**, however, is exactly that folder's parent,
+    /// so changing it is one command and one commit (R-7, D42): the project folder moves
+    /// (`VaultFileOp.moveFolder`, R-5) into the area's folder — or into `Projects/no_area/` when
+    /// the area is taken away — every action linked to the project follows the note to its new
+    /// path, and the project note plus every file that travelled inside the folder is reported in
+    /// `renames`, so an open detail view follows the project instead of concluding it is gone.
+    ///
+    /// A promoted step is deliberately *not* retargeted: `ProjectStep.promotedTo` points at an
+    /// action in `Actions/`, which does not move.
     private static func updateProject(
         _ s: VaultSnapshot, project: Project, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
@@ -458,21 +468,82 @@ public enum Reducer {
         guard VaultLayout.sanitize(project.title) == previous.title else {
             throw .invalid(Message.projectRenameUnsupported)
         }
-        guard project.area == previous.area else { throw .invalid(Message.projectMoveUnsupported) }
         if let areaID = project.area, s.area(areaID) == nil { throw .notFound(areaID) }
 
         var next = s
-        next.projects[index] = project
+        var extraOps: [VaultFileOp] = []
+        var renames = RenameMap.empty
+        var updated = project
 
-        if project.status != .active {
+        // R-7 — the area *is* the folder the project folder sits in. The source is taken from
+        // the note's real path rather than from `previous.area`, so a legacy project still
+        // sitting directly under `Projects/` moves out of there correctly too (R-6).
+        let oldFolder = previous.id.folder
+        let folderName = NoteID(path: oldFolder).title
+        let newFolder = "\(project.area?.folder ?? s.config.layout.noArea)/\(folderName)"
+        if newFolder != oldFolder {
+            guard !folderIsTaken(newFolder, in: s) else { throw .titleCollision(folderName) }
+            let movedID = NoteID(path: newFolder + previous.id.path.dropFirst(oldFolder.count))
+            updated = rekey(project, to: movedID, movingFrom: oldFolder, to: newFolder)
+            extraOps.append(.moveFolder(from: oldFolder, to: newFolder))
+            renames.record(previous.id, as: movedID)
+            // Everything else inside the folder travels with it — reference files (P6) and the
+            // Knowledge notes filed into a project folder (I4b). An open one must follow too.
+            for path in previous.referenceFiles {
+                let file = NoteID(path: path)
+                guard file.isInside(oldFolder) else { continue }
+                renames.record(file, as: NoteID(path: newFolder + file.path.dropFirst(oldFolder.count)))
+            }
+            // The `project:` wikilink of every action is written from this id, so re-pointing the
+            // entity is what rewrites the line on disk — in the same commit as the folder move.
             for actionIndex in next.actions.indices
-            where next.actions[actionIndex].project == project.id
+            where next.actions[actionIndex].project == previous.id {
+                next.actions[actionIndex].project = movedID
+            }
+        }
+        next.projects[index] = updated
+
+        if updated.status != .active {
+            for actionIndex in next.actions.indices
+            where next.actions[actionIndex].project == updated.id
                 && next.actions[actionIndex].status.countsTowardCap {
                 next.actions[actionIndex].status = .someday
                 next.actions[actionIndex].modified = env.now
             }
         }
-        return Reduction(snapshot: next)
+        return Reduction(snapshot: next, extraOps: extraOps, renames: renames)
+    }
+
+    /// Is something already sitting on `folder`? The snapshot only knows about notes, which is
+    /// enough for the refusal the user sees; `GTDVault` refuses a `.moveFolder` onto an occupied
+    /// destination as well, so a folder nothing was indexed from cannot be overwritten either.
+    private static func folderIsTaken(_ folder: String, in s: VaultSnapshot) -> Bool {
+        let id = NoteID(path: folder)
+        return s.projects.contains { $0.id.isInside(id.path) }
+            || s.areas.contains { $0.id.isInside(id.path) }
+            || s.actions.contains { $0.id.isInside(id.path) }
+            || s.listItems.contains { $0.id.isInside(id.path) }
+    }
+
+    /// The same project under a new path, with the files inside its folder re-pointed (R-7).
+    private static func rekey(
+        _ project: Project, to id: NoteID, movingFrom oldFolder: String, to newFolder: String
+    ) -> Project {
+        Project(
+            id: id,
+            title: project.title,
+            area: project.area,
+            status: project.status,
+            outcome: project.outcome,
+            why: project.why,
+            steps: project.steps,
+            log: project.log,
+            referenceFiles: project.referenceFiles.map { path in
+                let file = NoteID(path: path)
+                guard file.isInside(oldFolder) else { return path }
+                return newFolder + file.path.dropFirst(oldFolder.count)
+            },
+            passthrough: project.passthrough)
     }
 
     /// P4 — turning a checklist line of the project note into a real action note.
@@ -516,6 +587,9 @@ public enum Reducer {
         title: String, to s: inout VaultSnapshot, reusingExisting: Bool
     ) throws(GTDError) -> Area {
         let name = try requireTitle(title)
+        // R-6 — `no_area` is the folder that holds the area-less projects. Letting an area take
+        // that name would make `Projects/no_area/` mean two things at once.
+        guard !VaultLayout.isNoAreaFolderName(name) else { throw .invalid(Message.areaNameReserved) }
         let id = s.config.layout.areaPath(title: name)
         if let existing = s.area(id) {
             guard reusingExisting else { throw .titleCollision(name) }
@@ -528,6 +602,10 @@ public enum Reducer {
     }
 
     /// P1/P2 — a new project note, optionally creating its area in the same step.
+    ///
+    /// R-6 — a project with no area is **not** loose under `Projects/`: `projectPath` puts it in
+    /// `Projects/no_area/`. This is the one place a project is born (`createProject`, the inbox
+    /// project chip of R-8, `convertActionToProject`), so that holds for all three.
     @discardableResult
     private static func addProject(_ draft: ProjectDraft, to s: inout VaultSnapshot) throws(GTDError) -> Project {
         let title = try requireTitle(draft.title)
@@ -1039,7 +1117,9 @@ public enum Reducer {
         static let projectChoiceAmbiguous =
             "An action names either an existing project or a new one, not both"
         static let projectRenameUnsupported = "Renaming a project is not supported"
-        static let projectMoveUnsupported = "Moving a project to another area is not supported"
+        static let areaNameReserved =
+            "\"\(VaultLayout.noAreaFolderName)\" is the folder for projects without an area "
+            + "and cannot be an area"
         static let stepAlreadyPromoted = "This step is already promoted"
         static let stepAlreadyDone = "This step is already done"
         static let knowledgeTargetIsSource = "The knowledge note would overwrite the capture"

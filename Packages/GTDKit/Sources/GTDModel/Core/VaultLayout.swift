@@ -70,11 +70,47 @@ public struct VaultLayout: Sendable, Equatable, Codable {
         return NoteID(path: "\(projects)/\(name)/\(name).md")
     }
 
-    /// `Projects/[<Area>/]<Project>/<Project>.md` (P1).
+    /// `Projects/<Area>/<Project>/<Project>.md`, or `Projects/no_area/<Project>/<Project>.md`
+    /// for a project that has no area (P1, D40, R-6).
     public func projectPath(title: String, inArea area: NoteID?) -> NoteID {
         let name = VaultLayout.sanitize(title)
-        let base = area?.folder ?? projects
+        let base = area?.folder ?? noArea
         return NoteID(path: "\(base)/\(name)/\(name).md")
+    }
+
+    // MARK: Area-less projects (R-6)
+
+    /// The folder area-less projects live in — a **folder, not an area** (P1, D40, R-6).
+    ///
+    /// There is no `no_area/no_area.md`: the classifier never yields an `Area` for it, a project
+    /// inside it has `area == nil`, and no area may be called this. Projects that a pre-rework
+    /// vault kept directly under `Projects/` keep working and are never moved automatically —
+    /// `docs/MANUAL_TEST.md` §9 asks the user to move them.
+    public static let noAreaFolderName = "no_area"
+
+    /// `Projects/no_area` — where `projectPath` puts a project with no area (R-6).
+    public var noArea: String { "\(projects)/\(VaultLayout.noAreaFolderName)" }
+
+    /// `Projects/no_area/no_area.md` — the file that must never be read as an area (R-6).
+    /// It is reported as a `VaultIssue` and left exactly where it is.
+    public var noAreaNotePath: NoteID {
+        NoteID(path: "\(noArea)/\(VaultLayout.noAreaFolderName).md")
+    }
+
+    /// True when `name` is the reserved area-less folder, compared the way a macOS/iOS file
+    /// system compares names — case-insensitively (R-6).
+    public static func isNoAreaFolderName(_ name: String) -> Bool {
+        sanitize(name).lowercased() == noAreaFolderName.lowercased()
+    }
+
+    /// True for a project note directly inside `Projects/no_area/<Project>/` (R-6). Such a
+    /// project has no area; the folder says so, and no frontmatter key is needed.
+    public func isAreaLessProjectPath(_ id: NoteID) -> Bool {
+        let parts = id.components
+        let root = noArea.split(separator: "/").map(String.init)
+        guard parts.count == root.count + 2 else { return false }
+        return zip(parts.prefix(root.count), root)
+            .allSatisfy { $0.lowercased() == $1.lowercased() }
     }
 
     /// `Archive/YYYY/MM/<file>` (A5).

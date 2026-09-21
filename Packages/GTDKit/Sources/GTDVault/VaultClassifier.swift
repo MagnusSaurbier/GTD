@@ -7,6 +7,10 @@ public enum VaultFileKind: String, Sendable, Equatable, CaseIterable {
     case action
     /// `Projects/…/<X>/<X>.md` — area or project, told apart by the `kind:` frontmatter key.
     case projectNote
+    /// `Projects/no_area/no_area.md` — the one note under `Projects/` that is never an area
+    /// (R-6): `no_area` is the folder area-less projects live in, not an area of its own.
+    /// Reported as a `VaultIssue`, never moved and never rewritten.
+    case noAreaNote
     case routine
     case routineLog
     case review
@@ -57,6 +61,9 @@ public struct VaultClassifier: Sendable {
             return layout.listName(of: NoteID(path: path)) == nil ? .listMisplaced : .listItem
         }
         if VaultPath.isInside(path, layout.projects) {
+            // R-6 — `Projects/no_area/` is a folder, not an area, so the note that would be its
+            // area note is never read as one. It is reported and left exactly where it is.
+            if markdown, isNoAreaNote(path) { return .noAreaNote }
             // `Projects/[<Area>/]<Name>/<Name>.md` is the area or project note; everything else
             // in the folder is a reference file.
             let folderName = VaultPath.name(of: VaultPath.folder(of: path))
@@ -71,6 +78,43 @@ public struct VaultClassifier: Sendable {
     /// The folder a project or area note owns — where its reference files live.
     public func projectFolder(of notePath: String) -> String {
         VaultPath.folder(of: notePath)
+    }
+
+    // MARK: Area-less projects (R-6)
+
+    /// `Projects/no_area/no_area.md` — the file `Projects/no_area/` would have if it were an
+    /// area. It is not one, so this answers `true` for it and the index reports it (R-6).
+    /// Compared case-insensitively, because the file systems this app runs on are.
+    func isNoAreaNote(_ path: String) -> Bool {
+        let parts = VaultPath.normalize(path).split(separator: "/").map(String.init)
+        let expected = VaultPath.normalize(layout.noAreaNotePath.path)
+            .split(separator: "/").map(String.init)
+        guard parts.count == expected.count else { return false }
+        return zip(parts, expected).allSatisfy { $0.lowercased() == $1.lowercased() }
+    }
+
+    /// True for a **folder** that is `Projects/no_area` itself (R-6) — never a list of projects'
+    /// own folders, and never an area.
+    public func isNoAreaFolder(of rawPath: String) -> Bool {
+        let parts = VaultPath.normalize(rawPath).split(separator: "/").map(String.init)
+        let expected = VaultPath.normalize(layout.noArea).split(separator: "/").map(String.init)
+        guard parts.count == expected.count else { return false }
+        return zip(parts, expected).allSatisfy { $0.lowercased() == $1.lowercased() }
+    }
+
+    /// Why `Projects/no_area/no_area.md` is not an area — the `VaultIssue`'s message (R-6).
+    public func noAreaNoteReason() -> String {
+        "\"\(VaultLayout.noAreaFolderName)\" is the folder for projects without an area, not an "
+            + "area of its own (P1). The app ignores this note and leaves it where it is — "
+            + "rename it in Obsidian, or move it into a real area folder."
+    }
+
+    /// Why a project inside `Projects/no_area/` must not carry an `area:` key (R-6). The value is
+    /// **not** changed and the note is **not** rewritten; the contradiction is only reported.
+    public func areaLessProjectHasAreaReason(_ area: NoteID) -> String {
+        "This project sits in \(layout.noArea)/, which means it has no area, but its frontmatter "
+            + "still says `area: \(area.title)`. The app leaves the note alone — pick an area for "
+            + "the project in the app (which moves its folder), or remove the line in Obsidian."
     }
 
     /// A **folder** path → the list it is, or `nil`. `Lists/Read` is the list `Read`;

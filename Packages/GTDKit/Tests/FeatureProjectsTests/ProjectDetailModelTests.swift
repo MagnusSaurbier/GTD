@@ -25,6 +25,52 @@ struct ProjectDetailModelTests {
         #expect(detail.project?.why == "New why text")
     }
 
+    // MARK: - Area (R-7)
+
+    /// The API T11's area picker drives: picking an area moves the project's folder, and the
+    /// actions linked to it follow the note to its new path.
+    @Test func settingAnAreaMovesTheProjectAndItsLinkedActions() async throws {
+        let model = makeModel()
+        let detail = ProjectDetailModel(project: Fixtures.flatProject.id, model: model)
+        #expect(detail.area == nil)
+        #expect(detail.areas.map(\.title) == ["Applications", "Karriereplanung"])
+
+        let area = try #require(detail.areas.first { $0.title == "Karriereplanung" })
+        try await detail.setArea(area.id)
+
+        let moved = NoteID(path: "Projects/Karriereplanung/Wohnungssuche/Wohnungssuche.md")
+        #expect(model.snapshot.project(moved)?.area == area.id)
+        #expect(model.snapshot.project(Fixtures.flatProject.id) == nil)
+        #expect(model.snapshot.actions.allSatisfy { $0.project != Fixtures.flatProject.id })
+    }
+
+    /// …and taking it away again puts the folder back in `Projects/no_area/` (R-6).
+    @Test func clearingTheAreaMovesTheProjectIntoNoArea() async throws {
+        let model = makeModel()
+        let detail = ProjectDetailModel(project: Fixtures.thesisProject.id, model: model)
+        #expect(detail.area?.title == "Karriereplanung")
+
+        try await detail.setArea(nil)
+        let moved = NoteID(path: "Projects/no_area/Masterarbeit/Masterarbeit.md")
+        #expect(model.snapshot.project(moved)?.area == nil)
+    }
+
+    /// The refusal reaches the caller instead of being swallowed — the picker shows it (R-7).
+    @Test func settingAnAreaThatAlreadyHoldsThatProjectNameIsRefused() async throws {
+        var snapshot = Fixtures.sampleSnapshot
+        // An area-less project whose name is taken inside `Applications`.
+        snapshot.projects.append(Project(
+            id: NoteID(path: "Projects/no_area/DAAD/DAAD.md"), title: "DAAD", status: .active))
+        let model = makeModel(snapshot: snapshot)
+        let detail = ProjectDetailModel(
+            project: NoteID(path: "Projects/no_area/DAAD/DAAD.md"), model: model)
+
+        await #expect(throws: GTDError.titleCollision("DAAD")) {
+            try await detail.setArea(Fixtures.applicationsArea.id)
+        }
+        #expect(model.snapshot.project(NoteID(path: "Projects/no_area/DAAD/DAAD.md")) != nil)
+    }
+
     // MARK: - Status and demotion (P3)
 
     @Test func demotionCountIsZeroWhenStayingActive() {

@@ -59,6 +59,32 @@ public final class ProjectDetailModel {
         try await model.send(.updateProject(project))
     }
 
+    // MARK: - Area (R-7)
+
+    /// Every area the picker may offer, in vault order. "No area" is not one of them — it is the
+    /// `nil` `area` of `setArea`, and it is offered without inventing a "No area" heading
+    /// (STYLEGUIDE forbids one, ARCHITECTURE §6).
+    public var areas: [Area] { model.snapshot.areas }
+
+    public var area: Area? { project?.area.flatMap { model.snapshot.area($0) } }
+
+    /// R-7/D42 — re-assigns the project's area. **This moves the project's folder** into the
+    /// area's folder, or into `Projects/no_area/` when `area` is `nil`: one command, one commit,
+    /// one undo. Every action linked to the project follows it and every note inside the folder
+    /// travels with it, so the caller has nothing else to do.
+    ///
+    /// Refusals it can throw, both of which the picker shows rather than swallows:
+    /// * `GTDError.titleCollision(<project name>)` — the destination already holds a project
+    ///   (or a file) of that name; nothing was moved.
+    /// * `GTDError.notFound(<area id>)` — the area is gone (another device removed it).
+    ///
+    /// Renaming a project is still refused; the folder name is its identity.
+    public func setArea(_ area: NoteID?) async throws {
+        guard var project, project.area != area else { return }
+        project.area = area
+        try await model.send(.updateProject(project))
+    }
+
     // MARK: - Status
 
     /// How many Next actions leaving `active` would demote to Someday (P3) — shown before

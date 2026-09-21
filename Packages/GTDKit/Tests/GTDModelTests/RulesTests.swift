@@ -159,6 +159,20 @@ struct RulesTests {
         #expect(flat.isStalled)
     }
 
+    /// R-6/P1 — the area-less projects come first, and no "No area" header is invented for them
+    /// (that is `ProjectsListModel.sections`' job, and it renders them headerless).
+    @Test func projectRowsListAreaLessProjectsFirst() {
+        let rows = Rules.projectRows(snapshot, today: today)
+        let firstWithArea = rows.firstIndex { $0.project.area != nil } ?? rows.count
+        #expect(rows.prefix(firstWithArea).allSatisfy { $0.project.area == nil })
+        #expect(rows.dropFirst(firstWithArea).allSatisfy { $0.project.area != nil })
+        #expect(rows.first?.project.id == Fixtures.flatProject.id,
+                "the vault's only area-less project heads the list")
+        // Within each half the old order still holds: active first, then title.
+        let withArea = rows.filter { $0.project.area != nil }
+        #expect(withArea.map { $0.project.status == .active } == [true, true, true, false])
+    }
+
     @Test func archiveCandidatesAreOldClosedNotes() {
         let candidates = Rules.archiveCandidates(snapshot, today: today, calendar: Fixtures.calendar)
         #expect(candidates.map(\.title) == ["Collect DAAD transcripts"])

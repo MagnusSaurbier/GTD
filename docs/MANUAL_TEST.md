@@ -194,6 +194,16 @@ reorder it: steps 1–3 are reversible only because of step 1.
    - [ ] Quit and relaunch: it opens straight in, no second folder prompt.
    - [ ] Settings → any vault issues listed are ones you recognise (conflict copies, files iCloud
          has not pulled yet). The app never fixes them by itself.
+   - [ ] **Tidy up the area-less projects yourself (R-6).** New projects without an area now live
+         in `Projects/no_area/`. The ones your vault already has, sitting directly in `Projects/`,
+         keep working exactly as before and the app will **never move them on its own** — it does
+         not touch files you have not asked it about. In Obsidian, drag each of those project
+         folders into `Projects/no_area/` (create the folder if it is not there yet). Two things
+         it must **not** contain: a `no_area.md` note (`no_area` is a folder, not an area — the
+         app reports one as a vault issue and leaves it alone), and an area of your own called
+         `no_area` (the app refuses to create one). Either way you can skip this entirely and
+         just pick an area for such a project in the app later — that moves its folder for you,
+         rewrites the links of every action in it, and is undoable in one step.
 6. **The first weekly review is the real migration.** M1 put every ambiguous `to-do` into Someday
    with a `reviewReason` (the fallback word is always `someday`, never `backlog`/`maybe`), and M2
    imported waiting items with no who and no follow-up date — deliberately, because neither is

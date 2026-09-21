@@ -117,7 +117,8 @@ public enum Fixtures {
         ],
         log: [])
 
-    /// Active with zero open actions ⇒ stalled (P4).
+    /// Active with zero open actions ⇒ stalled (P4), and the vault's one project **without an
+    /// area**, so it lives in `Projects/no_area/` (P1, R-6) and writes no `area:` line.
     public static let flatProject = Project(
         id: projectID("Wohnungssuche", area: nil),
         title: "Wohnungssuche",

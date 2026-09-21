@@ -39,8 +39,18 @@ same fact.
 
 ## 3. Deliberate limitations — do not file these as bugs
 
-- **A project cannot be renamed** and its area cannot be changed in the app: the folder is the
-  project's identity (ARCHITECTURE §6). `updateProject` refuses it with `.invalid`.
+- **A project cannot be renamed** in the app: the folder name is the project's identity
+  (ARCHITECTURE §6), and `updateProject` refuses a changed title with `.invalid`. Its **area**
+  can be changed since R-7 — that moves the project's folder — but no view offers it yet (T11),
+  so today it is reachable only through `ProjectDetailModel.setArea(_:)`.
+- **Projects a pre-rework vault left directly under `Projects/`** keep working with no area and
+  are **never moved automatically** (R-6): moving files nobody asked about is the one thing this
+  app does not do. They show up first in the projects list, next to the `Projects/no_area/` ones.
+  `docs/MANUAL_TEST.md` §9 asks you to drag them into `Projects/no_area/` yourself — or just give them an
+  area in the app, which moves the folder for you.
+- **A project in `Projects/no_area/` whose note still says `area:`** is reported as a vault issue
+  rather than corrected. Picking an area (or "no area") for it in the app repairs the file and
+  the folder in one commit; nothing rewrites it behind your back (ARCHITECTURE §6).
 - **A routine run left open across midnight** may re-ask a step logged before midnight: the log
   is one file per day, and a fresh run reads only today's. Every entry still carries its own real
   day, so no log is ever wrong (`FeatureRoutines/README.md`).

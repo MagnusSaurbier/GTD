@@ -48,7 +48,8 @@ Foundation-only — every file here compiles and is tested on Linux.
 6. The archive and the trash pick a free name on collision (they are app-owned); anywhere else a
    taken destination is `GTDError.titleCollision` for the user to resolve. Folder moves follow
    the same policy (R-5): "remove list" is a `.moveFolder` into `GTD/Trash/` and gets a free
-   name, while renaming a list onto a name that exists is the user's to resolve.
+   name, while renaming a list onto a name that exists — or moving a project into an area that
+   already holds one of that name (R-7) — is the user's to resolve.
 7. Housekeeping (`start()`): folder skeleton from `VaultLayout`, then `archiveCompleted` once per
    day, remembered in `housekeeping.json` next to the journal — never in the vault. The day is
    recorded **only on success**, so a failed archive is retried at the next launch rather than
@@ -64,6 +65,10 @@ step of `perform`. `ListJourneyTests` is the §5a counterpart end to end on a te
 sample vault — capture → filed into a list → finished → undone → "Make action" refused at the cap
 → demote → Next, plus create / rename / remove of the folders themselves — and every assertion is
 about the **files**, not about the snapshot the backend happens to hold.
+`ProjectAreaJourneyTests` is the R-6/R-7 counterpart, also on a temp copy: a project created by
+name only lands in `Projects/no_area/`, giving it an area moves the folder with the reference
+files inside it and rewrites the linked action's `project:` line in the same commit, one undo
+restores every byte, and a move onto a taken name is refused without touching the tree.
 `SyncScenarioTests` runs the situations that need two writers on one folder — two devices
 logging the same routine, an undo refused after someone else wrote, a conflict copy, an evicted
 file, and a rename while another view holds the old `NoteID`. `PerformanceTests` generates

@@ -85,7 +85,8 @@ Defaults live in `VaultLayout` and are overridable in `GTD/Config.md`.
 | `Actions/<Title>.md` | one note per action (A1) |
 | `Archive/YYYY/MM/` | done actions older than 30 days (A5) |
 | `Projects/<Area>/<Area>.md` | area note, frontmatter `kind: area` |
-| `Projects/[<Area>/]<Project>/<Project>.md` | project note, frontmatter `kind: project`, `status` |
+| `Projects/<Area>/<Project>/<Project>.md` | project note, frontmatter `kind: project`, `status`, `area` |
+| `Projects/no_area/<Project>/<Project>.md` | a project with **no area** (P1, R-6). `no_area` is a *folder*, not an area: there is no `Projects/no_area/no_area.md`, the classifier never reads one as an `Area`, no area may be called that, and a project inside writes no `area:` line. Changing a project's area moves its folder (R-7). A pre-rework project still sitting directly in `Projects/` keeps working with `area == nil` and is **never moved automatically** (`docs/MANUAL_TEST.md` §9). |
 | `Knowledge/**` | free folder tree (I4) |
 | `Lists/<List>/<Item>.md` | one note per list item (§5a). **Every direct subfolder of `Lists/` is a list**, empty ones included; there is no list note. |
 | `Lists/<List>/Done/<Item>.md` | the list's finished items, kept as a log (L3). `Done` is reserved: it is never a list, and no list may be called that. |
@@ -138,9 +139,11 @@ Frontmatter is optional in full — a note somebody typed in Obsidian with no `-
 a valid item. A note directly in `Lists/`, or nested deeper than a list's `Done/`, is in no list:
 it is ignored and reported as a `VaultIssue`, never moved and never guessed at.
 
-Project note (P2): frontmatter `kind: project`, `status`; body sections `# Outcome`, `# Why?`,
-`# Steps` (checkbox list; a promoted step becomes `- [ ] text → [[Action title]]`),
-`# Log` (`- 2026-09-18 Did X`).
+Project note (P2): frontmatter `kind: project`, `status`, optional `area` (a wikilink to the area
+note; **absent** means no area, and the folder says so too — R-6); body sections `# Outcome`,
+`# Why?`, `# Steps` (checkbox list; a promoted step becomes `- [ ] text → [[Action title]]`),
+`# Log` (`- 2026-09-18 Did X`). The folder name **is** the project's title, so a title change is
+refused; re-assigning the area is a folder move (R-7).
 
 Routine template (R1): frontmatter `time: "07:00"`; body is a checkbox list, one top-level item
 per step, nested items are sub-steps. Step id = slug of the step text. All steps are done/skip
@@ -178,6 +181,11 @@ together. Public signatures are **not** repeated here — read the source and th
   the Knowledge note a capture becomes (I4b). The reducer says where it goes and what its body
   says; `GTDServices` encodes it, because `GTDModel` never produces markdown (§6). The put runs
   after `extraOps`, so it patches the note where the move has just put it.
+- **A project's folder is its identity, and its area is that folder's parent (R-6/R-7).**
+  `createProject` puts an area-less project in `Projects/no_area/`; `updateProject` still refuses
+  a changed *title* and now performs a changed *area* as one `VaultFileOp.moveFolder`, re-points
+  every action's `project:` link and reports the project note plus every file inside the folder in
+  `Reduction.renames`. A promoted step is deliberately not retargeted — it points at an action.
 - `Rules` holds the derived queries (`nextList`, `onTheGoNextList`, `chaseItems`, `visibleActions`,
   `deferredList`, `waitingList`, `stalledProjects`, `projectRows`, `sidebarCounts`,
   `lists`, `listRows`, `listItems`, `openListItemCount`, `favouriteLists`,
@@ -230,6 +238,12 @@ items into `snapshot.lists` so an **empty** list folder is a list too);
 loading the vault** (C1); `Platform/` holds the Apple-only implementations and the portable
 stand-in they fall back to off Apple platforms.
 
+- **`Projects/no_area/` is a folder, never an area (R-6).** `VaultClassifier` answers
+  `.noAreaNote` for `Projects/no_area/no_area.md` — the index reports it as a `VaultIssue` and
+  leaves the file exactly where it is rather than decoding an `Area` out of it. A project inside
+  `Projects/no_area/` that still carries an `area:` key is reported the same way: the value is read as the
+  file spells it and nothing is rewritten. A project a pre-rework vault left directly under
+  `Projects/` is indexed as it always was, with `area == nil`, and is never moved.
 - `commit(ops)` applies ops in order and is **all-or-nothing**: on failure it rolls back what it
   applied and rethrows; a failing rollback is `VaultError.rollbackFailed(reason:rollbackReason:)`
   and means the vault is in a mixed state — show it to the user, never retry silently. The
@@ -375,7 +389,7 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-19 | **Liquid Glass:** `GlassActionBar`/`UndoToast` use `.glassEffect()` behind `if #available(iOS 26, macOS 26, *)` with a `.ultraThinMaterial` fallback. Nobody has compiled the call — `TEST-INSTRUCTIONS.md` "Where to look first" #1. |
 | 2026-09-19 · reversed 2026-09-21 | **Defer × Next (R-2):** a Next item **may** carry a future `defer`. While hidden it does not occupy a cap slot (`Rules.countsTowardCap(_:today:)`, so the cap queries take a `Day`); on its date it returns to Next with the `back` badge. If Next is then over the cap nothing is demoted automatically: the `16/15` signal shows and `NextListModel.showsCapSheet` asks the view to present `Next is full` once per foreground until the user demotes something. This reverses the earlier "the reducer refuses the combination" decision (D15). |
 | 2026-09-19 · rev. 2026-09-21 | **"Open action" for stalled (P4):** a project is stalled when it has no *visible, non-`someday`* open action. The merged "not now" tier is not a commitment (it replaces the old `maybe` exception) and a deferred action is not now. |
-| 2026-09-19 · rev. 2026-09-21 | **Project rename:** `updateProject` refuses a changed title or area (`.invalid`) — the folder is the project's identity. Status, outcome, why, steps and log are editable. The *area* half of this is being reversed by R-7: `VaultFileOp.moveFolder` (T02) is the primitive it needs, and T05 is the command; renaming a project's **title** stays refused. |
+| 2026-09-19 · rev. 2026-09-21 | **Project rename:** `updateProject` refuses a changed **title** (`.invalid`) — the folder name is the project's identity. Status, outcome, why, steps and log are editable in place. The *area* half of this refusal is gone (R-7, D42): changing the area moves the folder, in the row below. |
 | 2026-09-19 | **Turn into project:** `convertActionToProject` moves the action note to `GTD/Trash/`, takes its checkboxes as steps and emits `.whatsNext`, so the new project is never born stalled. |
 | 2026-09-19 | **Next list order:** `in-progress` first, then nearest `due`, then oldest capture, then path. The list is **never truncated to the cap** — an over-cap vault must stay repairable; `capSignal` shows `17/15` instead. |
 | 2026-09-19 | **Undo depth:** `VaultBackend` keeps 20 journal entries, so `⌘Z` walks back through a session; `InMemoryBackend` restores one snapshot. Every entry is checked against the files before it is applied. |
@@ -410,6 +424,13 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-21 | **A Knowledge note is written through `Reduction.filedNotes`.** It lives in no snapshot collection, so the reducer names its path and its body and `GTDServices` encodes it (the `lastReview` precedent). The body is replaced outright, so what lands on disk is what the reducer decided and never a stale copy of the capture; the note's own text rides along so unknown frontmatter survives. Its target may be a folder under `Knowledge/` **or an active project's folder** (I4b/D36). |
 | 2026-09-21 · T04-1 | **A promoted step takes its `What?` from the step line, and the one-tap P5 promotion answers instead of guessing.** The step text is the next physical action, so `promoteStep` fills an empty `what` with it — which makes a one-tap promotion into **Someday** always possible. Next still needs `Why?`, a context and a time estimate (R-3), so `PromotionOutcome` gained `.missingFields([RequiredField])` next to `.capReached`: the "What's next?" sheet and the project detail name what is missing and offer Someday, exactly as they already do for the cap. The alternative — letting a promotion into Next quietly land in Someday — was rejected: it rewrites the user's decision, and it leaves the project stalled, which is the one thing P5 exists to fix. |
 | 2026-09-21 | **The cap's second option is `Cancel`, not "send to Someday instead" (D14, STYLEGUIDE §3.6).** `InboxSession.sendToSomedayInstead` and the demotion helper behind it are gone from the model layer; the user demotes a Next item or cancels and swipes ← themselves. The editor's own simplified fallback (`Copy.sendToSomedayInstead` in `ActionDetailView`, and the Someday retry of the promotion sheets) is a different flow and stays. |
+| 2026-09-21 · T05 | **`no_area` is a folder, not an area (R-6, P1/D40).** `VaultLayout.noAreaFolderName = "no_area"`, and `projectPath(title:inArea: nil)` puts an area-less project in `Projects/no_area/<P>/<P>.md`. There is no `Projects/no_area/no_area.md`: the classifier answers `.noAreaNote` for one, the index reports it as a `VaultIssue`, and the file is never moved or rewritten. An area may not be called `no_area` (`.invalid`, case-insensitively, through `createArea` and through `ProjectDraft.newAreaTitle`). |
+| 2026-09-21 · T05 | **A pre-rework project directly under `Projects/` is left exactly where it is.** It indexes with `area == nil` and works normally; nothing moves it on first launch, because moving files the user has not asked about is the one thing this app does not do. `docs/MANUAL_TEST.md` §9 asks the user to drag such folders into `Projects/no_area/` (or into an area) themselves — and giving one an area in the app moves it out of the `Projects/` root correctly, because `updateProject` takes the source folder from the note's real path rather than from its old `area`. |
+| 2026-09-21 · T05 | **Changing a project's area is one command and one commit (R-7, D42).** `updateProject` emits a single `VaultFileOp.moveFolder` of the project folder — into the area's folder, or into `Projects/no_area/` when the area is removed — re-points every action's `project:` wikilink so the links are rewritten in the *same* transaction, and reports the project note **and every file inside the folder** in `Reduction.renames`, so an open project detail or reference note follows instead of looking deleted. Promoted-step links are deliberately untouched (they point at actions in `Actions/`). One undo journal entry carries the whole tree back; a taken destination is `GTDError.titleCollision` and nothing moves. Renaming a project's **title** is still refused. |
+| 2026-09-21 · T05 | **A stale `area:` inside `Projects/no_area/` is reported, not corrected.** The folder and the frontmatter then disagree; the index surfaces a `VaultIssue` and reads the value exactly as the file spells it. Silently forcing `area` to `nil` would make the next edit of that project delete a line the user never asked about — and picking an area (or "no area") in the app repairs it properly, by moving the folder and rewriting the note in one commit. |
+| 2026-09-21 · T05 | **`Projects/no_area/` is not in `VaultLayout.requiredFolders`.** It is created by the first area-less project that lands in it, so a vault that never has one never grows an empty folder it did not ask for. |
+| 2026-09-21 · T05 | **`Rules.projectRows` lists area-less projects first**, active-before-on-hold-before-someday-before-done inside each half. They are rendered **without a section header** (`ProjectsListModel.sections`), the same way ungrouped actions are: STYLEGUIDE forbids inventing a "No area" heading for a decision the user has simply not taken. |
+| 2026-09-21 · T05 | **The sample vault's area-less project moved to `Projects/no_area/Wohnungssuche/`.** The fixtures show the shape the app writes, so previews and the fixture walkthrough exercise `no_area` end to end; the *legacy* top-level shape is covered by `GTDVaultTests/NoAreaIndexTests` instead of by a second fixture project. |
 | 2026-09-21 | **The sample vault keeps one `status: trash` note** (`Actions/Look into that podcast app.md`). `GTDFixtures` is the only writer of that word, on purpose: it is what makes R-1 — hidden state, tolerant decode, archive-to-trash routing — testable end to end against a realistic pre-rework vault. |
 
 ## 7. Sync safety rules (N3) — apply to every change that writes

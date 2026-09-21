@@ -111,6 +111,9 @@ public struct VaultIndex: Sendable {
         case .listMisplaced:
             // §5a — the app never guesses which list a stray note belongs to and never moves it.
             return entry(.failed(classifier.misplacedListReason(of: info.path)))
+        case .noAreaNote:
+            // R-6 — `no_area` is a folder, never an area. Reported, never moved, never rewritten.
+            return entry(.failed(classifier.noAreaNoteReason()))
         case .inbox, .action, .listItem, .projectNote, .routine, .routineLog, .review, .config:
             break
         }
@@ -161,7 +164,7 @@ public struct VaultIndex: Sendable {
                 return entry(.review(try parser.weeklyReview(id: id, text: text)))
             case .config:
                 return entry(.config(try parser.config(id: id, text: text)))
-            case .reference, .knowledge, .archive, .trash, .listMisplaced, .other:
+            case .reference, .knowledge, .archive, .trash, .listMisplaced, .noAreaNote, .other:
                 return entry(.ignored)
             }
         } catch {
@@ -255,6 +258,14 @@ public struct VaultIndex: Sendable {
         for index in projects.indices {
             let folder = classifier.projectFolder(of: projects[index].id.path)
             projects[index].referenceFiles = (referencesByFolder[folder] ?? []).sorted()
+            // R-6 — the folder says a project in `Projects/no_area/` has no area. A leftover
+            // `area:` key contradicts that; the value is left exactly as the file spells it and
+            // the note is never rewritten, but the user is told rather than shown two truths.
+            if layout.isAreaLessProjectPath(projects[index].id), let area = projects[index].area {
+                issues.append(VaultIssue(
+                    path: projects[index].id.path,
+                    message: classifier.areaLessProjectHasAreaReason(area)))
+            }
         }
 
         // N3 §7.5 — surfaced, never resolved.

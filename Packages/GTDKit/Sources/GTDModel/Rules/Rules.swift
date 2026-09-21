@@ -242,7 +242,14 @@ public enum Rules {
         }
     }
 
-    /// Rows for the projects list (E4): active projects first, then on-hold, someday, done.
+    /// Rows for the projects list (E4).
+    ///
+    /// **Area-less projects come first** — the `Projects/no_area/` ones and any legacy project
+    /// still sitting directly under `Projects/` (R-6, P1). They are listed *without* a section
+    /// header, exactly as ungrouped actions are (ARCHITECTURE §6): STYLEGUIDE forbids inventing a
+    /// "No area" heading for something the user has simply not decided yet.
+    /// Within that split: active projects first, then on-hold, someday, done; then title, then
+    /// path, so the order is total.
     public static func projectRows(_ s: VaultSnapshot, today: Day) -> [ProjectRow] {
         let byProject = visibleActionsByProject(s, today: today)
         return s.projects
@@ -257,6 +264,9 @@ public enum Rules {
                     isStalled: isStalled(project, visible: visible))
             }
             .sorted { lhs, rhs in
+                let leftHasArea = lhs.project.area != nil
+                let rightHasArea = rhs.project.area != nil
+                if leftHasArea != rightHasArea { return !leftHasArea }
                 let l = statusRank(lhs.project.status)
                 let r = statusRank(rhs.project.status)
                 if l != r { return l < r }

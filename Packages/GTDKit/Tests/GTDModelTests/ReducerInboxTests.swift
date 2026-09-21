@@ -82,7 +82,7 @@ struct ReducerInboxTests {
             env: env)
         #expect(result.extraOps == [.move(
             from: capture.id.path,
-            to: "Projects/Wohnungssuche/call the Hausverwaltung.md")])
+            to: "Projects/no_area/Wohnungssuche/call the Hausverwaltung.md")])
     }
 
     @Test func knowledgeIntoAProjectThatIsNotActiveIsRefused() {

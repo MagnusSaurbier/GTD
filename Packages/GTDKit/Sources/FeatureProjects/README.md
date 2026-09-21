@@ -18,7 +18,10 @@ height inside the action detail's `ScrollView`. `ProjectPickerContent` decides t
 
 Linux-compilable models (no SwiftUI — this is where the logic worth testing lives):
 - `ProjectsListModel` — grouping by area/status filters, open steps, demotion count, create area/project.
-- `ProjectDetailModel` — header edits, status + demotion count, step add/edit/check/reorder, promote.
+- `ProjectDetailModel` — header edits, **area** (`areas`, `area`, `setArea(_:)` — R-7: picking an
+  area moves the project's folder, one command, one commit, one undo; `nil` moves it into
+  `Projects/no_area/`, and `titleCollision`/`notFound` are thrown for the picker to show), status +
+  demotion count, step add/edit/check/reorder, promote.
 - `WhatsNextModel` — one-tap step promotion, free-text action, "project is done".
 - `ConvertToProjectModel` — seeds a `ProjectDraft` from an action's checkboxes, converts, promotes
   the pre-selected first step.
@@ -41,8 +44,9 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 
 ## Known gaps / deviations
 
-- `updateProject` refuses a changed title or area — the UI never offers project
-  rename or an area change after creation; only outcome/why/status/steps are editable in place.
+- `updateProject` still refuses a changed **title**, so the UI never offers project rename; the
+  folder name is the project's identity. Its *area* is editable (R-7) through
+  `ProjectDetailModel.setArea(_:)`, but **no view calls it yet** — the area picker itself is T11.
 - The reorder chevrons (`chevron.up`/`chevron.down`) and the convert-sheet selection dot
   (`Symbols.done`/`circle`) are the closest stock symbols; STYLEGUIDE §7's icon map has no
   "move up/down" or "selected step" concept and this target cannot edit the style guide.
@@ -52,6 +56,6 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureProjectsTests` — 64 tests, all Linux-only
-(the picker chip's content, reorder maths, grouping/filtering, step CRUD, status-change demotion, and the cap-reached →
-Someday-fallback path on every promotion entry point).
+`cd Packages/GTDKit && swift test --filter FeatureProjectsTests` — 67 tests, all Linux-only
+(the picker chip's content, reorder maths, grouping/filtering, step CRUD, status-change demotion, the area change of R-7 and
+its refusal, and the cap-reached → Someday-fallback path on every promotion entry point).

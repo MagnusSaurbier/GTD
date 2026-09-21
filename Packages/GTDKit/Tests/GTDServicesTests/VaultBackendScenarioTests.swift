@@ -100,15 +100,16 @@ struct VaultBackendScenarioTests {
             why: "The semester ticket may be deductible.",
             what: "Ask in the student forum."))))
 
-        // The project note exists, area-less, and the action links to it with a wikilink.
+        // The project note exists, area-less — so in `Projects/no_area/` (R-6) — and the action
+        // links to it with a wikilink.
         let project = try #require(try vault.text(
-            "Projects/Steuererklärung 2025/Steuererklärung 2025.md"))
+            "Projects/no_area/Steuererklärung 2025/Steuererklärung 2025.md"))
         #expect(project.contains("kind: project"))
         #expect(project.contains("status: active"))
         let actionPath = "Actions/Steuererklärung — find out whether the semester ticket is.md"
         let action = try #require(try vault.text(actionPath))
         #expect(action.contains(
-            "project: \"[[Projects/Steuererklärung 2025/Steuererklärung 2025]]\""))
+            "project: \"[[Projects/no_area/Steuererklärung 2025/Steuererklärung 2025]]\""))
         // R-4 — the title was cut at a word boundary, so the whole dictation stays in the note.
         #expect(action.contains("Steuererklärung — find out whether the semester ticket is deductible"))
         #expect(try vault.text(item.id.path) == nil, "the capture became the action note")
@@ -242,10 +243,10 @@ struct VaultBackendScenarioTests {
             action.id,
             ProjectDraft(title: "Lab presentation", outcome: "Fifteen good minutes.", steps: [])))
 
-        #expect(prompts == [.whatsNext(project: NoteID(path: "Projects/Lab presentation/Lab presentation.md"))])
+        #expect(prompts == [.whatsNext(project: NoteID(path: "Projects/no_area/Lab presentation/Lab presentation.md"))])
         #expect(try vault.text(action.id.path) == nil)
         #expect(try vault.text("GTD/Trash/Prepare the lab presentation.md") != nil)
-        let note = try #require(try vault.text("Projects/Lab presentation/Lab presentation.md"))
+        let note = try #require(try vault.text("Projects/no_area/Lab presentation/Lab presentation.md"))
         #expect(note.contains("- [ ] Outline five slides"))
         #expect(note.contains("- [ ] Rehearse once out loud"))
     }
