@@ -1,6 +1,6 @@
 # GTD App — UI Style Guide (v1)
 
-Status: decisions agreed 2026-09-18. Companion to [[GTD App Requirements]] (IDs like I2, E3 refer to it).
+Status: decisions agreed 2026-09-18; inbox card, tiers and lists revised 2026-09-21 (two-step card, Someday, Lists — see requirements §4, §5, §5a). Companion to [[GTD App Requirements]] (IDs like I2, E3 refer to it).
 Audience: every agent implementing UI for the SwiftUI macOS and iOS apps. **This document is binding.** If something is not covered, choose the most stock SwiftUI/HIG solution and the quietest visual option — do not invent.
 
 ## 0. Decision record
@@ -18,7 +18,7 @@ Audience: every agent implementing UI for the SwiftUI macOS and iOS apps. **This
 | 9 | Chip fill | **Ink** (label color), never accent. |
 | 10 | Mac list density | **Two-line comfortable rows**, no density toggle. |
 | 11 | Cards | **Solid elevated card**; glass only for floating controls. |
-| 12 | Swipe map | **Commitment axis**: → Next, ← Backlog, ↑ Maybe, ↓ Trash; buttons for Project / Knowledge / Waiting / Review; ⋯ (`File to`) repeats the four swipe targets for one-handed and AX use. |
+| 12 | Card map | **Two-step card.** Step 1 is **buttons only**: Action / Knowledge or List / Trash, plus a quiet `Defer to review` link. The opened action card keeps the **commitment axis**: → Next, ← Someday; ↓ collapses back to step 1; buttons for Waiting / Done; ⋯ (`File to`) repeats Next / Someday for one-handed and AX use. No swipe ever trashes. |
 | 13 | Motion | **Functional + two reward moments** (inbox zero, routine/review complete). |
 | 14 | Copy | **English, terse GTD terms**, String Catalog for later localisation. |
 | 15 | Icons | **SF Symbols only, fixed map** (§7). No ad-hoc symbol choices. |
@@ -176,7 +176,8 @@ Used in every action list on both platforms (E1–E3).
 - Title: `Typo.body`, `ink`. Second line: `Typo.meta`, items joined by ` · ` — project (if any) first, then contexts as plain lowercase text (not chips), then time bucket. Missing values are simply omitted — never "No project", never "0 min".
 - Trailing: badges (§3.2). No chevrons on Mac; stock disclosure chevron on iOS only where a push follows.
 - Chase items (W2) use the same row with title `Chase: <who> — <what>` and the `chase` badge; they sort above regular Next items, separated by a section header `Chase`.
-- iOS swipe actions: trailing = `Done` (full swipe), leading = `Backlog` (demote). Mac: context menu + shortcuts (§4.5).
+- iOS swipe actions: trailing = `Done` (full swipe), leading = `Someday` (demote). Mac: context menu + shortcuts (§4.5).
+- **List items** (L1) use the same row: completion circle + title only — no second line, no badges, no age (a list item is not a commitment and cannot go stale). Trailing swipe = `Done` (moves it to the list's `Done/`, L3); context menu: `Make action`, `Trash`.
 - Stock `List` row; selection uses system selection color (accent). No custom row backgrounds, no card-per-row.
 
 ### 3.4 `ProjectRow` (E4)
@@ -187,40 +188,77 @@ Line 1: project name + `stalled` badge if applicable. Line 2 (`Typo.meta`): `<n>
 
 Solid card: `surfaceCard`, `Radius.card`, `Elevation.card`, `cardPadding`, on `surfaceGrouped`. Max width 560 pt (Mac / iPad-like widths), centered.
 
-Inbox card content order (fixed):
-1. Meta line: capture timestamp, relative (`Typo.counter`) + inbox age badge if any.
-2. Raw captured text — `Typo.cardText`, editable in place (`TextField(axis: .vertical)`), no visible field border until focused.
-3. `Why?` — `Typo.sectionHeader` label + borderless multi-line field, placeholder `What do I gain?`
-4. `What?` — same, placeholder `The next physical action`. Typing `- ` or pressing the checklist button turns lines into checkboxes. When a **second checkbox** exists, show inline text button `Turn into project` (accent, `square.stack` symbol) under the field (A2).
-5. Chips: `Context` group, `Time` group (`≤10` `≤30` `≤60` `60+`), then value chips `+ defer` `+ due` `+ project`. Group labels in `Typo.meta`.
+The inbox card has **two steps** (I2). It is the same card view in both; step 2 **expands in place** (`Motion.standard`), it is never a new screen or a sheet.
 
-The card does **not scroll internally**. It grows with content up to the available height; beyond that the raw text collapses to 6 lines with a `Show all` button that opens the full text in a sheet.
+**Step 1 — small card** (content order fixed):
+1. Meta line: capture timestamp, relative (`Typo.counter`) + inbox age badge if any.
+2. The **full capture text** — `Typo.cardText`, no truncation, no `Show all`. It is the item's **title**: tapping it makes it editable in place (`TextField(axis: .vertical)`, no visible field border until focused).
+
+Nothing else is on the step-1 card: no fields, no chips. The card grows with its text up to the available height; beyond that **the text scrolls inside the card** (the only place a card scrolls internally).
+
+**Step 2a — opened action card** (after `Action`):
+1. Meta line and title as in step 1 (title still editable on tap).
+2. `Why?` — `Typo.sectionHeader` label + borderless multi-line field, placeholder `What do I gain?`
+3. `What?` — same, placeholder `The next physical action`. Typing `- ` or pressing the checklist button turns lines into checkboxes. When a **second checkbox** exists, show inline text button `Turn into project` (accent, `square.stack` symbol) under the field (A2).
+4. Chips: `Context` group, `Time` group (`≤10` `≤30` `≤60` `60+`), then value chips `+ defer` `+ due` `+ project`. Group labels in `Typo.meta`.
+
+**Step 2b — opened Knowledge / List card** (after `Knowledge / List`):
+1. Meta line and title as in step 1.
+2. `Notes` — one borderless multi-line field, placeholder `Notes (optional)`. No chips, nothing required.
+
+On iPhone an opened card taller than the screen scrolls with the page (not internally); see §3.6 for how it is then filed.
 
 Stack look: the next card peeks 8 pt below, scaled 0.96, no content visible (forced order — the peek only signals "more").
 
-### 3.6 Inbox action bar + gestures (I4, decision #12)
+### 3.6 Inbox action bar + gestures (I2–I4, decision #12)
 
-| Target | iPhone | Mac key | Drag/confirm tint | Symbol |
+**Step 1 — buttons only, no gestures.** No drag is recognised on the small card.
+
+| Target | iPhone | Mac key (default) | Symbol |
+| --- | --- | --- | --- |
+| Action | bar button | `A` | `bolt` |
+| Knowledge / List | bar button | `K` | `archivebox` |
+| Trash | bar button | `X` | `trash` |
+| Defer to review | quiet text button under the card | `D` | `arrow.uturn.right.circle` |
+
+**Step 2a — opened action card.**
+
+| Target | iPhone | Mac key (default) | Drag/confirm tint | Symbol |
 | --- | --- | --- | --- | --- |
 | Next | swipe → | `→` | `accentWash` | `arrow.right.circle` |
-| Backlog | swipe ← | `←` | `fillQuiet` | `tray.full` |
-| Maybe | swipe ↑ | `↑` | `fillQuiet` | `moon.zzz` |
-| Trash | swipe ↓ | `↓` | `signalOverdue` @ 18 % | `trash` |
-| Project | button | `P` | — | `square.stack` |
-| Knowledge | button | `K` | — | `books.vertical` |
-| Waiting | button | `W` | — | `hourglass` |
-| Defer to review | `Review` button | `R` | — | `arrow.uturn.right.circle` |
-| Undo last card | toolbar button | `⌘Z` | — | `arrow.uturn.backward` |
-| Quit session | toolbar `Done` | `Esc` (when no field focused) | — | — |
+| Someday | swipe ← | `←` | `fillQuiet` | `moon.zzz` |
+| Collapse to step 1 | swipe ↓ | `Esc` | none | `chevron.down` |
+| Waiting | bar button | `W` | — | `hourglass` |
+| Done (2-minute rule) | bar button | `⌘↩` | — | `checkmark.circle` |
+| Project | `+ project` chip | `P` | — | `square.stack` |
 
-- **Drag behaviour (iPhone):** card follows the finger on the dominant axis only (axis locks after 12 pt), max rotation 4°. Past the threshold (35 % of card width / 25 % of card height) a destination label (symbol + name, `Typo.sectionHeader`) fades in on the card's leading/trailing/top/bottom edge, the card gets the tint overlay, and one `.impact(.medium)` haptic fires. Release past threshold → card flies out (0.25 s) and next card springs up. Release before → springs back.
-- **Swipes are disabled while any text field is focused** (keyboard up). A `Done` keyboard-toolbar button dismisses the keyboard. This removes the scroll/typing vs. vertical-swipe conflict.
-- **Trash** needs a longer threshold (40 % height) and is always undoable; no confirmation dialog.
-- **Validation before leaving:** Next/Backlog require a non-empty `What?`. If missing, the card shakes once (6 pt, 0.3 s), `What?` gets focus, `.error` haptic. No alert. Contexts/time may stay empty (undecided is a legal state).
-- **Next at cap:** swiping → at 15/15 springs the card back and presents a sheet `Next is full` listing the 15 Next items with `Demote` buttons plus `Send to Backlog instead`. (Visual spec only; the behavioural choice is still open in requirements §13.)
-- **Button targets** open a sheet (iOS, `.medium`/`.large` detents) or popover-sized sheet (Mac): Project picker, Knowledge folder tree (stock `OutlineGroup`, last-used folder shown as a **suggested** dashed row at top), Waiting (who field + follow-up date chip, suggested +7 d). Defer to review asks for the reason in a single text field; `Defer` stays disabled until non-empty.
-- **Action bar (iPhone):** floating glass capsule pinned above the home indicator: `Project` `Knowledge` `Waiting` `Review` as labelled buttons (symbol over text), `⋯` at the end. The `⋯` menu (`File to`) repeats the four swipe targets (Next / Backlog / Maybe / Trash) so a card can be filed without a swipe (walkthrough 2026-09-19). While a field has the keyboard, the bar is replaced by a `Done` bar that blurs the field. A one-time hint overlay shows the four directions on first session, and VoiceOver exposes all seven as custom actions.
-- **Mac:** same card centered in the window; below it a quiet key legend row (`← Backlog  ↑ Maybe  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review`) in `Typo.counter`. `Tab` moves raw text → Why? → What? → chips; `Esc` blurs the field so arrow/letter keys file the card; contexts toggle with `1…8`, time buckets with `⇧1…⇧4` when no field is focused. Filing animates the card out in the key's direction.
+**Step 2b — opened Knowledge / List card.**
+
+| Target | iPhone | Mac key (default) | Symbol |
+| --- | --- | --- | --- |
+| Knowledge | navbar slot 1 → folder picker | `1` | `books.vertical` |
+| Favourite lists | navbar slots, fixed order → files instantly | `2`…`9` | the list's symbol (§7) |
+| More… | last navbar slot → sheet with all lists | `0` | `ellipsis` |
+| Collapse to step 1 | swipe ↓ | `Esc` | `chevron.down` |
+
+**Always:** Undo last card — toolbar button / `⌘Z` (`arrow.uturn.backward`). Quit session — toolbar `Close` / `Esc` on step 1 with no field focused (it is `Close`, not `Done`, because `Done` on this screen files the card as done). `Esc` is a ladder: focused field → blur; opened card → collapse; step 1 → quit.
+
+- **Step-1 bar (iPhone):** floating glass capsule pinned above the home indicator with three **equal, neutral** labelled buttons (symbol over text): `Action` · `Knowledge / List` · `Trash`. **None of them is accent-filled** — the app does not know the right answer, so it must not look like it suggests one (§1.2). `Defer to review` is a quiet text button (`Typo.meta`, `textSecondary`) centred between card and bar. **Mac:** the same three as a row of stock bordered buttons under the card, `Defer to review` as a text button beside them, and the key legend below.
+- **Opening and collapsing:** choosing `Action` or `Knowledge / List` expands the card in place and swaps the bar with a cross-fade; focus goes to `Why?` (2a) or stays unfocused (2b). Collapsing keeps everything already typed — the draft survives until the card is filed or the session ends. Trash and Defer are reachable **only from step 1**.
+- **Drag behaviour (opened action card, iPhone):** card follows the finger on the dominant axis only (axis locks after 12 pt), max rotation 4°. Horizontal: past 35 % of card width a destination label (symbol + name, `Typo.sectionHeader`) fades in on the leading/trailing edge, the card gets the tint overlay, and one `.impact(.medium)` haptic fires. Release past threshold → card flies out (0.25 s) and the next card springs up. Release before → springs back. Downward: past 25 % of card height the label `Back` (`chevron.down`) appears, no tint; release → the card collapses to step 1. **Upward drags do nothing.** The Knowledge / List card recognises only the downward drag.
+- **Swipes are disabled while any text field is focused** (keyboard up). A `Done` keyboard-toolbar button dismisses the keyboard.
+- **Action bar (opened action card, iPhone):** glass capsule with `Waiting` and `Done` as labelled buttons and `⋯` at the end. The `⋯` menu (`File to`) repeats the two swipe targets (Next / Someday) so a card can be filed without a swipe, and is how a card taller than the screen is filed. While a field has the keyboard, the bar is replaced by a `Done` bar that blurs the field.
+- **Navbar (Knowledge / List card):** glass capsule, a **fixed row with stable positions**: `Knowledge` first, then the favourite lists in the order set in Settings (at most **four** on iPhone, eight on Mac), then `More…`. Positions never reorder by use. A list button files the card at once (undoable); `Knowledge` and `More…` open a sheet.
+- **Validation before leaving (D12):** Next requires `Why?`, `What?`, at least one context and a time bucket; Someday requires `What?`; Waiting requires `What?` plus the sheet's follow-up date; Done, lists, Knowledge and Trash require nothing. If something is missing the card shakes once (6 pt, 0.3 s), `.error` haptic, the first missing text field gets focus, and **every missing field or chip group shows a leading `asterisk` symbol in `signalAttention` on its label** until it is filled. No alert, no red borders. Undecided remains a legal state for every other exit.
+- **Next at cap:** filing to Next at 15/15 springs the card back and presents a sheet `Next is full` listing the Next items with `Demote` buttons (demotes to Someday, then files the card) and `Cancel`. There is no automatic choice and no "send to Someday instead" shortcut — after `Cancel` the user swipes ← themselves.
+- **Sheets** (iOS `.medium`/`.large` detents; Mac popover-sized sheet):
+  - **Project picker** (from the `+ project` chip, I4a): stock search field on top; below it a stock `OutlineGroup` — projects without an area first, **without a header** (never a "No area" label), then areas with their projects. Typing filters the tree. When the text matches no project exactly, the last row is `Create project "<text>"` (`plus` symbol); it creates the project with that name only and confirms the chip.
+  - **Knowledge folder tree:** stock `OutlineGroup`, last-used folder shown as a **suggested** dashed row at top; below the tree a section `Projects` lists the active projects' folders as filing targets (reference material, I4b).
+  - **Waiting:** follow-up date chip (**required**; +7 d shown as a *suggested* chip the user must confirm) and a `Who or what (optional)` field. `Set waiting` stays disabled until a date is confirmed.
+  - **Defer to review:** the reason in a single text field; `Defer` stays disabled until non-empty.
+  - **More…:** plain list of all lists; tapping one files the card.
+- **Hints and VoiceOver:** a one-time hint overlay shows `← Someday` / `→ Next` / `↓ Back` the first time an action card is opened. VoiceOver exposes **every exit of the current step** as a custom action.
+- **Mac:** same card centered in the window; below it a quiet key legend row in `Typo.counter`, per step — step 1: `A Action · K Knowledge / List · X Trash · D Defer to review`; action card: `← Someday  → Next    W Waiting · ⌘↩ Done · P Project · Esc Back`; Knowledge / List card: `1 Knowledge · 2 Read · 3 Watch · 4 Wish · 0 More… · Esc Back`. **The legend always renders the current bindings** (they are rebindable, §4.5). `Tab` moves title → Why? → What? → chips; `Esc` blurs a focused field so the keys act on the card; on the action card contexts toggle with `1…8` and time buckets with `⇧1…⇧4` when no field is focused. Filing animates the card out in the key's direction.
 - **Counter:** `3 of 14 left` in `Typo.counter`, top center (iOS nav bar principal / Mac toolbar). No progress bar.
 
 ### 3.7 Routine card (R2)
@@ -230,7 +268,7 @@ Bottom glass bar with two large buttons, each ≥ 56 pt tall, equal width: `Skip
 
 ### 3.8 Undo toast (N6)
 
-After any filing/status change: bottom-anchored glass capsule, `Moved to Backlog` + `Undo` button, auto-dismiss 5 s, one at a time (new replaces old). Mac additionally supports `⌘Z`. Same component for completion of actions.
+After any filing/status change: bottom-anchored glass capsule, `Moved to Someday` + `Undo` button, auto-dismiss 5 s, one at a time (new replaces old). Mac additionally supports `⌘Z`. Same component for completion of actions.
 
 ### 3.9 Empty states
 
@@ -239,7 +277,7 @@ Stock `ContentUnavailableView` with the concept's symbol (§7), a title naming t
 ### 3.10 Review-only components (Mac)
 
 - **Wizard frame:** stock window; left rail lists the 4 stages with sub-steps (checkmark when done, accent dot for current), content centered max 720 pt, bottom bar with `Back` / `Continue` (primary). Resumable: rail shows progress on reopen.
-- **Deck cards** (Next ↔ Backlog ↔ Maybe): reuse `ItemCard`, read-only content, keys `K` keep · `D` demote · `P` promote · `T` trash, legend row as in §3.6.
+- **Deck cards** (Next ↔ Someday): reuse `ItemCard`, read-only content, default keys `K` keep · `D` demote · `P` promote · `T` trash (rebindable, §4.5), legend row as in §3.6. The Someday part of the deck is ordered stalest first, project-linked before unlinked, and its header shows the `untouched > 30 days` count (`Typo.counter`). List items never appear in the deck.
 - **Stat tile:** `surfaceCard`, `Radius.tile`, `Typo.meta` label on top, `Typo.stat` number, optional trend line `▲ 3 vs last week` in `Typo.counter` (`textSecondary` — trends are **not** colored).
 - **Routine heatmap:** rows = steps, 7 columns = days; cells 18×18, `Radius.cell`, gap 3. Done = `signalDone` @ 85 %, skipped = `fillQuiet` with a centered 4 pt `textTertiary` dot, no data = `fillQuiet` empty. Row trailing: completion % (`Typo.counter`). Legend below. Weekday initials as column headers.
 - **Calendar strip (D3):** horizontal 14-day strip, `Radius.tile`; each day column shows up to 3 markers, distinguished by **symbol** not hue: `defer` = `arrow.uturn.up`, `due` = `calendar`, follow-up = `hourglass`; markers take a signal color only when §2.2 says so. Today column has an accent 2 pt underline.
@@ -247,10 +285,10 @@ Stock `ContentUnavailableView` with the concept's symbol (§7), a title naming t
 ## 4. Platform patterns
 
 ### 4.1 macOS window (E3)
-`NavigationSplitView` three columns: **sidebar** (stock `List(.sidebar)`: Inbox · Next · Backlog · Waiting · Maybe · Projects · Deferred, then `Review`, `Routines`; live counts as trailing `Typo.counter` text, turning into a signal badge per §2.2) · **content list** (grouped by area/project with section headers; filter chips in a bar under the toolbar) · **detail** (note editor: title, Why?/What? fields, chips — same building blocks as the card, without card chrome). Minimum window 900×560. Inbox row shows a primary toolbar button `Process inbox` when count > 0.
+`NavigationSplitView` three columns: **sidebar** (stock `List(.sidebar)`: Inbox · Next · Someday · Waiting · Lists · Projects · Deferred, then `Review`, `Routines`; live counts as trailing `Typo.counter` text, turning into a signal badge per §2.2) · **content list** (grouped by area/project with section headers; filter chips in a bar under the toolbar) · **detail** (note editor: title, Why?/What? fields, chips — same building blocks as the card, without card chrome). **Lists** is a single sidebar row (count = open items across all lists); its content column shows every list as a section (header = list name + count, items as list-item rows §3.3, a quiet `Show done` text button at the end of a section that has finished items); the detail column is the note editor (title + notes) with a `Make action` toolbar button. Minimum window 900×560. Inbox row shows a primary toolbar button `Process inbox` when count > 0.
 
 ### 4.2 iPhone
-`TabView` with three tabs, in this order: **Inbox** (count badge; big `Process inbox` primary button + read-only list of raw captures) · **Next** (selected on launch, E2) · **Routines**. Inbox processing and routines run as `fullScreenCover`. No settings tab — settings via toolbar gear on Next.
+`TabView` with four tabs, in this order: **Inbox** (count badge; big `Process inbox` primary button + read-only list of raw captures) · **Next** (selected on launch, E2) · **Lists** (stock `List` of the lists with counts → push to the list's items; rows per §3.3; tapping an item pushes the note editor with `Make action` in the toolbar; L5) · **Routines**. `Make action` opens the opened action card (§3.5 step 2a) as a sheet. Inbox processing and routines run as `fullScreenCover`. No settings tab — settings via toolbar gear on Next.
 
 ### 4.3 Sheets, dialogs, alerts
 Sheets for pickers and sub-flows. `confirmationDialog` only for destructive actions that are **not** undoable (there should be almost none). Never use `alert` for validation — use inline shake/focus (§3.6).
@@ -259,7 +297,9 @@ Sheets for pickers and sub-flows. `confirmationDialog` only for destructive acti
 Borderless text fields inside cards/detail; stock `Form` (grouped) in settings. Placeholders are real prompts (§6.3). Editing autosaves; there are no Save buttons anywhere.
 
 ### 4.5 Mac keyboard map (global within the main window)
-`⌘N` new capture · `⌘1…7` sidebar sections · `⌘⏎` mark done · `⌘⇧N/B/M` move to Next/Backlog/Maybe · `⌘⇧W` set waiting · `⌘F` search · `⌘Z` undo · `⌘I` process inbox · `Space` toggles focused chip/checkbox. All shortcuts also appear in the menu bar (stock `Commands`).
+`⌘N` new capture · `⌘1…7` sidebar sections · `⌘⏎` mark done · `⌘⇧N/S` move to Next/Someday · `⌘⇧W` set waiting · `⌘F` search · `⌘Z` undo · `⌘I` process inbox · `Space` toggles focused chip/checkbox. All shortcuts also appear in the menu bar (stock `Commands`). These `⌘` shortcuts are **fixed**.
+
+**Rebindable keys (N7).** The single-key commands of inbox processing (§3.6: `A K X D`, `← →`, `W P`, `1…9 0`) and of the review deck (§3.10: `K D P T`) are rebindable in **Settings › Keyboard** (Mac only, stored per device): a stock `Form` with one row per command, grouped by screen, each with a key-recorder field, and `Reset to defaults` at the end. A key already used on the same screen is refused inline (`Already used by <command>`) — never an alert. `Esc`, `Tab`, `⌘Z` and `⌘↩` are not rebindable. Every legend row renders the current binding.
 
 ## 5. Motion, haptics, sound
 
@@ -278,8 +318,8 @@ Borderless text fields inside cards/detail; stock `Form` (grouped) in settings. 
 English. Sentence case everywhere. Verb-first buttons, 1–3 words. No exclamation marks, no "please", no "successfully", no emoji, no praise ("Great job"). GTD terms are fixed vocabulary — never synonyms.
 
 ### 6.2 Fixed vocabulary
-Inbox · Next · Backlog · Maybe · Waiting · Project · Area · Knowledge · Trash · Defer · Due · Follow-up · Chase · Stalled · Routine · Weekly review · `Why?` · `What?` · Process inbox · Turn into project · Defer to review · Promote · Demote · Done · Skip.
-Never: "Task", "To-do", "Someday" (for actions), "Priority", "Tag", "Snooze", "Archive" (user-facing).
+Inbox · Next · Someday · Waiting · List · Project · Area · Knowledge · Trash · Action · Notes · Defer · Due · Follow-up · Chase · Stalled · Routine · Weekly review · `Why?` · `What?` · Process inbox · Turn into project · Make action · Defer to review · Promote · Demote · Done · Skip · Back · Close · More….
+Never: "Task", "To-do", "Backlog", "Maybe", "Later", "Priority", "Tag", "Snooze", "Archive" (user-facing). List names (`Read`, `Watch`, `Wish`, …) are the user's folder names, shown as they are.
 
 ### 6.3 Canonical strings
 | Place | Copy |
@@ -287,11 +327,17 @@ Never: "Task", "To-do", "Someday" (for actions), "Priority", "Tag", "Snooze", "A
 | Why? placeholder | `What do I gain?` |
 | What? placeholder | `The next physical action` |
 | Counter | `3 of 14 left` |
-| Undo toast | `Moved to Backlog` · `Undo` |
-| Cap sheet | `Next is full` / `Demote one, or send this to Backlog.` |
+| Undo toast | `Moved to Someday` · `Undo` — lists: `Added to Read`; list item finished: `Done` |
+| Cap sheet | `Next is full` / `Demote one to make room.` |
+| Notes placeholder (Knowledge / List card) | `Notes (optional)` |
+| Waiting sheet, who field | `Who or what (optional)` |
+| Project picker, create row | `Create project "<text>"` |
+| Rebinding a taken key | `Already used by <command>` |
 | Defer-to-review prompt | `Why doesn't this fit?` |
 | After completing a project action (P5) | `What's next for <project>?` |
-| Empty Next | `Nothing in Next` / `Promote from Backlog, or process your inbox.` |
+| Empty Next | `Nothing in Next` / `Promote from Someday, or process your inbox.` |
+| Empty Someday | `Nothing in Someday` |
+| Empty list | `Nothing in <list>` |
 | Empty Next (filtered) | `No match` / `Nothing in Next fits these filters.` + `Clear filters` |
 | Empty Waiting | `Not waiting on anyone` |
 | Empty Inbox | `Inbox zero` |
@@ -308,8 +354,8 @@ Rendering: `.symbolRenderingMode(.hierarchical)`, monochrome `ink`/`textSecondar
 | --- | --- | --- | --- | --- |
 | Inbox | `tray` | | Done / complete | `checkmark.circle` |
 | Next | `arrow.right.circle` | | Undo | `arrow.uturn.backward` |
-| Backlog | `tray.full` | | Suggestion | `sparkles` |
-| Maybe | `moon.zzz` | | Stale (attention) | `clock.badge.exclamationmark` |
+| Someday | `moon.zzz` | | Suggestion | `sparkles` |
+| Lists (and any custom list) | `list.bullet` | | Stale (attention) | `clock.badge.exclamationmark` |
 | Waiting | `hourglass` | | Aging | `clock` |
 | Chase | `bell.badge` | | Due | `calendar` |
 | Projects | `square.stack` | | Overdue | `exclamationmark.circle` |
@@ -318,14 +364,18 @@ Rendering: `.symbolRenderingMode(.hierarchical)`, monochrome `ink`/`textSecondar
 | Trash | `trash` | | Stalled | `pause.circle` |
 | Routines | `sunrise` (Morning), `moon.stars` (Bedtime), `repeat` (generic) | | Weekly review | `checklist` |
 | Capture | `plus.circle` | | reMarkable journaling | `pencil.and.scribble` |
-| Settings | `gearshape` | | Promote step | `arrow.up.right.circle` |
+| Settings | `gearshape` | | Promote step / Make action | `arrow.up.right.circle` |
+| Action (step-1 kind) | `bolt` | | Knowledge / List (step-1 kind) | `archivebox` |
+| List: Read | `book` | | List: Watch | `play.rectangle` |
+| List: Wish | `gift` | | More… | `ellipsis` |
+| Collapse / Back | `chevron.down` | | Required field missing | `asterisk` |
 
-Contexts have **no icons** — they are lowercase text chips (`mac`, `phone`, `home`, `campus`, `errands`, `calls`, `reading`, `deep-work`). A concept missing from this table → add it here first, then use it.
+Contexts have **no icons** — they are lowercase text chips (`mac`, `phone`, `home`, `campus`, `errands`, `calls`, `deep-work`). A concept missing from this table → add it here first, then use it.
 
 ## 8. Accessibility (non-negotiable)
 
 - Dynamic Type to AX3 (iOS) without loss of function; Mac respects system text size.
-- VoiceOver: every custom component has label, value, traits; inbox card exposes all 8 targets as `accessibilityAction(named:)`; badges read in full words (`16 days old`, `due Thursday`).
+- VoiceOver: every custom component has label, value, traits; the inbox card exposes every exit of its current step as `accessibilityAction(named:)`; badges read in full words (`16 days old`, `due Thursday`).
 - Contrast ≥ 4.5:1 for text, ≥ 3:1 for chip outlines/controls; provide High Contrast variants for `accent` (`#2F5A87` / `#9CC6EE`) and thicken chip outline to 1.5 pt under `accessibilityContrast == .increased`.
 - Differentiate Without Color: satisfied by design (symbols + text everywhere) — keep it that way.
 - Reduce Motion / Reduce Transparency honoured (glass bars fall back to `surfaceCard` + hairline).
@@ -345,7 +395,6 @@ Contexts have **no icons** — they are lowercase text chips (`mac`, `phone`, `h
 
 ## 10. Open items (UI-relevant, not yet decided)
 
-- Behaviour when Next is at cap during processing (forced-demote sheet is specced visually in §3.6; auto-Backlog alternative still open in requirements §13).
 - Exact staleness thresholds (14 d / 30 d / inbox 7 d) are first guesses — tune after two weekly reviews; they live in `StalenessPolicy`.
 - App icon and launch appearance.
 - iPad / Apple Watch: out of scope.
