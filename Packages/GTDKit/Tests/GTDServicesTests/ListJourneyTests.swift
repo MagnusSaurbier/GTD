@@ -177,6 +177,38 @@ import GTDVault
         #expect(rescanned.issues.isEmpty)
     }
 
+    /// I4b `More…` › `New list…` — what `InboxSession.createListAndFile` sends, against the
+    /// files: the folder is made, the capture lands in it, and undo takes the capture back out
+    /// while the (now empty) list stays, because `createList` has no inverse.
+    @Test func aCaptureIsFiledIntoAListCreatedForIt() async throws {
+        let vault = try TestVault.onDisk(deviceID: "mac-1")
+        defer { vault.cleanUp() }
+        let root = try #require(vault.root)
+        try await vault.backend.start()
+        let model = AppModel(backend: vault.backend, today: { Fixtures.today })
+        defer { model.stop() }
+        await settle(model) { !$0.actions.isEmpty }
+
+        let writer = InboxWriter(fileSystem: PlainFileSystem(root: root), calendar: Fixtures.calendar)
+        let captured = try writer.capture(
+            text: "Espresso tamper, 58 mm", at: Fixtures.date(Fixtures.today, 9, 30))
+        await vault.store.simulateChangeForTesting()
+        _ = await settle(model) { snapshot in snapshot.inbox.contains { $0.id == captured } }
+
+        try await model.send(.createList(name: "Buy"))
+        try await model.send(.fileInbox(captured, .list(name: "Buy", notes: "")))
+        #expect(try vault.text("Lists/Buy/Espresso tamper, 58 mm.md") != nil)
+        #expect(try vault.text(captured.path) == nil)
+        #expect(model.undoLabel == "Added to Buy")
+
+        await model.undo()
+        #expect(model.lastError == nil)
+        #expect(try vault.text(captured.path) != nil, "the capture is back in the inbox")
+        #expect(try vault.text("Lists/Buy/Espresso tamper, 58 mm.md") == nil)
+        #expect(try await vault.store.folderContents("Lists/Buy") == [])
+        #expect(model.snapshot.list(named: "Buy") != nil)
+    }
+
     /// I4c — a trashed item goes to `GTD/Trash/` like everything else the user throws away.
     @Test func trashingAnItemMovesItsNoteToTheTrash() async throws {
         let vault = try TestVault.onDisk()

@@ -90,6 +90,9 @@ watch: it coordinates the *directory* with `.forMoving` and then announces the m
 ## Testing
 
 `cd Packages/GTDKit && swift test --filter GTDVaultTests` (152 tests, never the real vault).
+`FileVaultStoreTests.scansAThousandNotesAndRefreshesIncrementally` compares two wall-clock timings
+(`refreshSeconds < scanSeconds`) and failed once in three full runs on a busy Mac (2026-09-21);
+a re-run passed. A failure there alone is load, not a regression.
 `NoAreaIndexTests` pins R-6: `no_area` is never an area, a project inside it has `area == nil`,
 a legacy top-level project is still indexed, and both contradictions are reported rather than
 fixed.

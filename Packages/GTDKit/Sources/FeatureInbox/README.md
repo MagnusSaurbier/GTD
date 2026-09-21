@@ -84,6 +84,11 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 - A card being worked on — **opened, or with something typed** — is never displaced by a
   mid-session capture; the capture is queued next.
 - Items deferred to the weekly review leave the queue and never come back to it (I5).
+- **`More…` is never a dead end.** `hasNoLists` turns the sheet into an empty state naming
+  `listsFolderName`, and `createListAndFile(name:)` sends `createList` then files the card like
+  any list exit. The reducer owns the name rules; its refusal is `newListRefusal` (inline, the
+  sheet stays open). Undo returns the card to the keep card; the list stays (`createList` has no
+  inverse). The session never creates a list the user did not name.
 
 ### Invariants this rework replaced (T08)
 
@@ -96,7 +101,36 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 | The swipe hint showed on the first card of a fresh device | It shows the first time an **action card opens** — there is nothing to hint at on the small card |
 | `InboxSession.Draft` (nested) | `InboxDraft` (top level, `+ notes`), with the nested name kept as a typealias for `FeatureReview` |
 
+## `Esc` on the Mac (gotcha)
+
+`.onKeyPress(.escape)` on the focusable card area is **not** how `Esc` arrives: while a
+`TextField` is first responder (and `Why?` is, the moment the action card opens) the field editor
+turns `Esc` into `cancelOperation:`, the handler never fires, and the macOS sheet dismisses itself
+— the ladder is skipped and the session closes. `EscapeKeyMonitor.swift` (`onEscapeKey`, macOS
+only) therefore takes `Esc` from a local `NSEvent` monitor scoped to the view's own window and
+swallows it: one press, one rung, whatever has focus. A nested sheet is another window, so its
+`Esc` is left alone; so is an `Esc` that cancels an input-method composition.
+`.interactiveDismissDisabled()` sits under it as the net. After a blur or a collapse the view
+takes key focus back (`hasKeyFocus`), so the single keys and the next `Esc` still land.
+`InboxSessionView` and `MakeActionCardView` both use it.
+
+## Sheets on the Mac (gotcha)
+
+Every `Form` in `InboxSheets.swift` and `MakeActionProjectSheet` ends in
+`DesignSystem.sheetFormStyle()`, every `List` sheet in `scrollingSheetFrame()`. Without the first,
+macOS picks the `.columns` form style: it does not scroll (projects past the sheet's bottom edge
+were unreachable on a real vault) and it draws `TextField("Pick a project", …)` as a label in a
+left column. For the same reason the text fields in these forms pass their placeholder as an
+explicit `prompt:` and are `.labelsHidden()` — in a Mac form the title alone becomes a row label,
+not a placeholder. The search field is the form's first row: it scrolls with the list, and typing
+filters the list back to the top. The sheets have no arrow-key/Return selection; `Esc` and
+`Cancel` are the stock sheet behaviour (a nested sheet is its own window, so `onEscapeKey` of the
+session underneath ignores it). `InboxPreviews.swift` has `Project — 40 projects, must scroll`
+and a crowded `Knowledge` preview, because the fixtures have too few projects to overflow.
+
 ## Platform guards (ARCHITECTURE §5)
+
+`EscapeKeyMonitor.swift` is wrapped in `#if canImport(SwiftUI) && os(macOS)`.
 
 `InboxProcessingView.swift`, `InboxCardView.swift`, `InboxSheets.swift`, `InboxPreviews.swift` and
 `MakeActionCardView.swift` are wrapped entirely in `#if canImport(SwiftUI)`. T08 adapted the views
@@ -150,7 +184,7 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 113 tests, all Linux-compilable.
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 118 tests, all Linux-compilable.
 
 `InboxSessionTests` pins one transition or one refusal at a time: the LIFO queue, every step
 change, every exit of STYLEGUIDE §3.6's three tables, the validation flags and the asterisk

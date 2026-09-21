@@ -34,6 +34,14 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   `FeatureReview.ReviewSession` both resolve keys through it and neither may depend on the other's
   feature target or on `FeatureSettings` (ARCHITECTURE §2) — `GTDAppCore` is the one target all
   three already depend on.
+- `ObsidianLink` — the one builder of "Open in Obsidian" URLs: `url(for: NoteID, vaultRoot:form:)`
+  / `url(forVaultPath:vaultRoot:form:)`. Obsidian's `path=` must be an **absolute** path (a
+  vault-relative one fails with "Vault not found"); a relative path goes in `file=` beside
+  `vault=<vault folder name>`. `Form.platformDefault` is `.absolutePath` on macOS and
+  `.vaultAndFile` elsewhere (the path an iOS bookmark resolves to is not known to be the one
+  Obsidian's sandbox uses). Values are escaped down to RFC 3986 unreserved characters, so `&`,
+  `#`, `+`, `=` in a file name survive. `nil` without a vault root — the views then show no link.
+  Here because three feature targets need it and may not depend on each other.
 
 ## Invariants
 
@@ -83,7 +91,7 @@ item is checked off (and when a card is filed by the 2-minute rule, I4/D13), and
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — 53 tests (`WriteFailureTests`: held until dismissed, wording). The acceptance scenario (file an
+`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — 61 tests (`WriteFailureTests`: held until dismissed, wording). The acceptance scenario (file an
 inbox item to Next, hit the cap, complete a project action (prompt), undo), the command-order
 tests, `ErrorSurfacingTests` for `perform`/`report`, and `KeyBindingsTests` (defaults, rebind
 happy path, duplicate-within-screen refusal naming the conflicting command, same key on a

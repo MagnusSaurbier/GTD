@@ -171,6 +171,7 @@ struct ReviewDeckStep: View {
                     }
                 }
             }
+            .scrollingSheetFrame()
             .navigationTitle(Copy.capSheetTitle)
             .safeAreaInset(edge: .bottom) {
                 Text(Copy.capSheetBody)

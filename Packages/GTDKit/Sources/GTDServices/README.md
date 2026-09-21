@@ -71,7 +71,7 @@ Foundation-only — every file here compiles and is tested on Linux.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 86 tests. `TestVault` builds its
+`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 87 tests. `TestVault` builds its
 backend with `.awaited`; `QueuedWriteTests` runs the production policy against a store whose
 commits wait at a gate: publish-before-write, order, no walk-back on a store event, a refused
 write (revert + report + discarded count), undo waiting for the queue, `stop()` flushing, opening the vault writing nothing, and the

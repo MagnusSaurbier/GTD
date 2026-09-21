@@ -536,6 +536,7 @@ private struct NextCapSheet: View {
                     }
                 }
             }
+            .scrollingSheetFrame()
             .navigationTitle(Copy.capSheetTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

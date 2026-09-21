@@ -28,7 +28,8 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
   resolves) → `OnboardingView`; the folder it returns is saved, the vault opens behind it so the
   validation step shows real counts, and `onFinished` takes onboarding down.
 - **Snapshots:** `AppModel` is swapped when the vault opens, and it is the only thing features
-  see. The environment carries it plus `\.vaultRootPath` (for "Open in Obsidian").
+  see. The environment carries it plus `\.vaultRootPath` (for "Open in Obsidian"; the Mac
+  `Settings` scene inherits nothing from `RootView`, so `GTDApp` sets both there too).
 - **Renames:** every snapshot change goes to `AppRouter.apply(snapshot:renames:)` with
   `AppModel.consumeRenames()` — `RootView` is the one consumer. A rename moves the note's file
   (A1), so its old `NoteID` leaves the snapshot like a deleted one's; the router therefore

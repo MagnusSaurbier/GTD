@@ -12,7 +12,7 @@ and `AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the m
 iOS-simulator app built, all package tests and the app's own test bundles passed, and the app
 launched on fixtures on both platforms.
 
-The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 295 package
+The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 309 package
 tests pass and both scratch app builds are warning-free — and parts of it have been driven on
 screen: the two-step card's step 1, the opened action card with its asterisk refusal, a swipe to
 Next, Trash with its toast, the project picker, the keep card's navbar, the Mac per-step key
@@ -43,6 +43,7 @@ of the same fact.
 | I4/D12 (R-3) | The inbox card, "Make action" and the review deck's `Promote` turn `GTDError.missingFields` into an inline, per-card notice; the action editor's status chip names the fields inline (T11). `⌘⇧N` and "What's next?" still route it through `perform`/`report`, so the **shell's alert** names the fields (`Still missing: Why?, Context, Time`) instead of marking them. Acceptable for v1, and deliberate: the reducer is the single authority either way. | — |
 | L1/L3–L5 | `FeatureLists`'s views (`ListsHomeView`/`ListItemsView`/`ListItemEditorView`/`ListsSectionsView`/`MakeActionSheet`) compile warning-free on both scratch app builds, every state has a `#Preview`, and the Mac sidebar's `Lists` row has been seen on screen. Nothing below it has been clicked: the iPhone tab's push stack, the `Done` swipe, `Show done`, the item editor and `Make action`. The models under them (`ListsModel`, `ListItemEditModel`, `MakeActionModel`) are unit-tested. | — `docs/MANUAL_TEST.md` §2 |
 | I4b | The Knowledge/List navbar (`DesignSystem.KnowledgeListNavbar`, wired into `InboxProcessingView`) renders correctly — `Knowledge · Read · Watch · Wish · More…` was read off a simulator screen — but **tapping a navbar slot has never been confirmed on screen**: the simulator automation available at the time could not reliably hit that particular button row, though the identical `GlassActionBar` row worked for the step-1 and action-card bars in the same session. The code path is the same `session.take(_:)` those bars use and is covered by `InboxSessionTests`. | — `docs/MANUAL_TEST.md` §1.5 |
+| I4b/L1 | The `More…` sheet's `New list…` row and its `No lists yet` empty state are compiled (macOS package build) and unit-tested, but **have not been seen on screen**. REQUIREMENTS L1 names Read / Watch / Wish as the *initial* lists, yet nothing creates them: the app never seeds folders, and `Tools/migrate` only makes `Lists/Read/` when a `readlist` note moves there. On a fresh vault the user creates them — Settings › Lists, or `New list…` in the inbox. | — `docs/MANUAL_TEST.md` §1.5 |
 | N7/I9 | The Mac per-step legend renders correctly from `KeyBindings` (step 1 and the action card were read off a Mac build). The **full Mac keyboard path has never been driven end to end**: arrows, the single-key commands, `⌘Z` and `⌘↩` were not exercised on screen, because the automation available could click bordered buttons but could not reliably type into the card's borderless `TextField`s. `FeatureInboxTests`/`GTDAppCoreTests` cover the key resolution itself. | — `docs/MANUAL_TEST.md` §1.7 |
 | performance | Every command re-lists and re-assembles the whole vault (~235 ms of a 276 ms `setStatus` at 1 000 notes, debug build on Linux). Measured by `scripts/benchmark.sh`. | `55-incremental-reindex.md` |
 
@@ -135,10 +136,26 @@ of the same fact.
   the Keyboard pane's *rendering* (row grouping, key legends) was confirmed by a screenshot on
   fixtures. The Lists section, the remove `confirmationDialog`, the favourites `Menu` and the
   key-recorder's actual capture are compiled, unit-tested and code-reviewed only.
+- **The Mac Settings window's scrolling fix has not been seen on screen.** The form is now
+  `.formStyle(.grouped)` (which scrolls on macOS) in a resizable window; the app builds and
+  launches on fixtures, but `⌘,` was not opened on that build (MANUAL_TEST §3.5, first line).
   `docs/TRACEABILITY.md` N7/L2 say the same per requirement; `docs/MANUAL_TEST.md` §3.5 is the
   script for driving them.
-- **`VaultIssuesView`'s "Open in Obsidian"** builds `obsidian://open?path=<vault-relative path>`.
-  That probably needs the vault name or root, which the target cannot resolve by contract.
+- **The Mac sheet-scrolling fix has not been seen on screen.** The inbox sheets (`Project`,
+  `Knowledge`, `Defer to review`) and `Make action`'s project sheet were `Form`s with macOS'
+  default `.columns` style, which never scrolls — with many projects the lower ones were
+  unreachable (user report, real vault). They are now `DesignSystem`'s `sheetFormStyle()`
+  (grouped + a min/ideal sheet frame); the `List` sheets (`Next is full` ×4, `More…`) got the
+  same frame, and `WhatsNextSheet`/`ConvertToProjectSheet` scroll a long step list
+  (`OverflowScroll`). Compiled for macOS and the iOS Simulator, never opened: MANUAL_TEST §1.3
+  and §3.4 are the checks. `OverflowScroll` (`ViewThatFits` + a capped frame) is the part most
+  likely to need a tweak once seen.
+- **"Open in Obsidian" has not been clicked against a real vault since its URL was fixed.**
+  `GTDAppCore.ObsidianLink` builds `path=<absolute path>` on the Mac and
+  `vault=<folder name>&file=<relative path>` on iOS, unit-tested against Obsidian's documented
+  URI scheme only. The iOS form assumes Obsidian's vault name is the picked folder's name — wrong
+  if the picked folder is a subfolder of a larger vault. `docs/MANUAL_TEST.md` §4 has the check.
+- **`VaultIssuesView`'s "Reveal"** still passes a vault-relative path to `NSWorkspace`.
 - **`FeatureProjects`' views materialise their model in `.task` on first appearance.** A tap
   between the first render and that task would mutate a throwaway instance. Should be unreachable
   in practice; watch for it once the app runs.
