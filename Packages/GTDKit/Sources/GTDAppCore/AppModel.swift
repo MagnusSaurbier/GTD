@@ -189,6 +189,29 @@ public final class AppModel {
         undoLabel = await backend.undoLabel()
     }
 
+    // MARK: - Held edits
+
+    /// Something that holds typed text back from the vault until a natural moment (the editors:
+    /// blur, close) and can be told that such a moment is now.
+    public protocol HeldEdits: AnyObject {
+        @MainActor func flush() async
+    }
+
+    private struct WeakHolder { weak var value: (any HeldEdits)? }
+    private var holders: [ObjectIdentifier: WeakHolder] = [:]
+
+    /// Editors register themselves; they are held weakly and forgotten once they are gone.
+    public func register(_ holder: any HeldEdits) {
+        holders = holders.filter { $0.value.value != nil }
+        holders[ObjectIdentifier(holder)] = WeakHolder(value: holder)
+    }
+
+    /// Sends every held edit now. The shell calls it when the app is about to stop running —
+    /// backgrounding on iOS, ⌘Q on the Mac — before it waits for the write queue.
+    public func flushHeldEdits() async {
+        for holder in holders.values.compactMap(\.value) { await holder.flush() }
+    }
+
     public func clearError() {
         lastError = nil
         writeFailure = nil

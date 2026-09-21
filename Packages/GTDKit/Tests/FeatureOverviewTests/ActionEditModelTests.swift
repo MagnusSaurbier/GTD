@@ -65,6 +65,27 @@ struct ActionEditModelTests {
         #expect(editor.lastError == nil)
     }
 
+    /// The app's configuration (no debounce): typing never writes. The text goes to the vault
+    /// when the field blurs or the editor closes (`flush()`), or when the shell says the app is
+    /// about to stop running (`AppModel.flushHeldEdits()`); a chip tap still saves at once.
+    @Test func typedTextIsHeldUntilANaturalMomentButAChipSavesAtOnce() async throws {
+        let (model, _) = make(fixture())
+        let id = fixture().id
+        let editor = ActionEditModel(model: model, id: id)
+
+        editor.setWhy("typed")
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(model.snapshot.action(id)?.why == "old why", "no timer wrote it")
+        #expect(editor.hasUnsavedEdits)
+
+        await model.flushHeldEdits()
+        #expect(model.snapshot.action(id)?.why == "typed")
+
+        editor.setContexts(["phone"])
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(id)?.contexts == ["phone"])
+    }
+
     @Test func flushWritesImmediately() async {
         let (model, editor) = make(fixture())
         editor.setWhat("- [ ] one")

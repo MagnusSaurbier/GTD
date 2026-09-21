@@ -62,6 +62,9 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   UI; its `WriteFailure` lands in `writeFailure`, not `lastError`, because the next command that
   goes through clears `lastError` — and would do so before the person has read it. Only
   `clearError()` clears it. The snapshot has already been reverted by the backend.
+- **Held edits.** An editor that keeps typed text back until blur/close conforms to
+  `AppModel.HeldEdits` and calls `register(_:)` (held weakly). `flushHeldEdits()` is the shell's
+  "the app is about to stop running" — it runs before the write queue is flushed.
 - `snapshots()` is synchronous on purpose, so an actor backend must implement it `nonisolated`.
   `SnapshotHub` does the fan-out under an `NSLock` — the one justified `@unchecked Sendable`
   in this target. Its first element is always the current snapshot.

@@ -36,7 +36,7 @@ public enum ActionField: String, Hashable, Sendable, CaseIterable {
 /// No SwiftUI: the clock and the debounce are injected, so all of this is tested on Linux.
 @MainActor
 @Observable
-public final class ActionEditModel {
+public final class ActionEditModel: AppModel.HeldEdits {
     public typealias Sleep = @Sendable (Duration) async throws -> Void
 
     /// The note being edited. Changes when a rename lands.
@@ -61,7 +61,10 @@ public final class ActionEditModel {
     public var onRename: ((NoteID) -> Void)?
 
     private let model: AppModel
-    private let debounce: Duration
+    /// `nil` in the app: typed text is **held** until the field blurs, the editor closes or the
+    /// app leaves the foreground (`flush()`), so typing never writes to the vault — the vault is
+    /// written when the person does something, not when a timer fires. Tests pass a duration.
+    private let debounce: Duration?
     private let sleep: Sleep
     private var pending: Task<Void, Never>?
     /// Monotonic edit counter — tells an in-flight save whether a field was touched again
@@ -77,13 +80,14 @@ public final class ActionEditModel {
     public init(
         model: AppModel,
         id: NoteID,
-        debounce: Duration = .milliseconds(600),
+        debounce: Duration? = nil,
         sleep: @escaping Sleep = { try await Task.sleep(for: $0) }
     ) {
         self.model = model
         self.id = id
         self.debounce = debounce
         self.sleep = sleep
+        model.register(self)
         refresh()
     }
 
@@ -274,8 +278,9 @@ public final class ActionEditModel {
         pending = Task { [weak self] in
             guard let self else { return }
             if !immediate {
+                guard let debounce = self.debounce else { return }   // held until `flush()`
                 do {
-                    try await self.sleep(self.debounce)
+                    try await self.sleep(debounce)
                 } catch {
                     return                       // superseded by a newer edit
                 }

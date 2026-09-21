@@ -171,7 +171,6 @@ private struct Lifecycle: ViewModifier {
                 case .active:
                     Task {
                         await composition.refreshFromDisk()
-                        await composition.runDailyHousekeeping()
                         router.consumePendingRoute(
                             composition.pendingRoute, snapshot: composition.model.snapshot)
                         await notifications.replanNow(

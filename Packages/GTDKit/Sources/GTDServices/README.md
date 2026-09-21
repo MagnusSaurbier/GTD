@@ -61,17 +61,21 @@ Foundation-only — every file here compiles and is tested on Linux.
    the same policy (R-5): "remove list" is a `.moveFolder` into `GTD/Trash/` and gets a free
    name, while renaming a list onto a name that exists — or moving a project into an area that
    already holds one of that name (R-7) — is the user's to resolve.
-7. Housekeeping (`start()`): folder skeleton from `VaultLayout`, then `archiveCompleted` once per
-   day, remembered in `housekeeping.json` next to the journal — never in the vault. The day is
+7. Housekeeping: `start()` creates the folder skeleton from `VaultLayout` if it is missing and
+   otherwise **writes nothing**. `archiveCompleted` runs once per day, queued behind the first
+   write of the day that landed (`queueHousekeepingIfDue`) — the vault is only written when the
+   person acts on an item. A refused archive is a `WriteFailure` like any other.
+   (`WritePolicy.awaited` archives inside `start()`, for the file-asserting suites.) Remembered in `housekeeping.json` next to the journal — never in the vault. The day is
    recorded **only on success**, so a failed archive is retried at the next launch rather than
    skipped until tomorrow; the reason is on `lastHousekeepingError`.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 84 tests. `TestVault` builds its
+`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 86 tests. `TestVault` builds its
 backend with `.awaited`; `QueuedWriteTests` runs the production policy against a store whose
 commits wait at a gate: publish-before-write, order, no walk-back on a store event, a refused
-write (revert + report + discarded count), undo waiting for the queue, and `stop()` flushing. `ParityTests` drives 21
+write (revert + report + discarded count), undo waiting for the queue, `stop()` flushing, opening the vault writing nothing, and the
+daily archive riding behind the first change of the day — once. `ParityTests` drives 21
 commands through `InMemoryBackend` and `VaultBackend` and compares a fresh scan of the vault with
 the in-memory snapshot after every step; `SnapshotShape` says which fields are compared and why.
 `FolderMoveTests` is the one suite here that uses `@testable`: the collision policy is a private

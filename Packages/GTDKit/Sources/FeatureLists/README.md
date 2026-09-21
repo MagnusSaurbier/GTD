@@ -22,7 +22,8 @@ Lists home, one list's items, the title+notes item editor and **Make action** (�
 - `ListsModel(model:)` — rows with counts (`Rules.listRows`), a list's open/finished items,
   `complete`/`trash` (both go through `AppModel.perform`, so a refusal reaches the shell's alert),
   and `makeActionModel(for:)`.
-- `ListItemEditModel(model:id:)` — the title/notes autosave brain, the same shape as
+- `ListItemEditModel(model:id:)` — the title/notes autosave brain (typed text is held until
+  blur, close or `AppModel.flushHeldEdits()`; no typing-pause timer in the app), the same shape as
   `FeatureOverview.ActionEditModel` reduced to the two fields a list item has: dirty-field overlay
   so a snapshot arriving mid-edit never clobbers an edit in flight, `send(deriving:)` so the
   written command is always built from the *current* snapshot (ARCHITECTURE §4 "Command order"),

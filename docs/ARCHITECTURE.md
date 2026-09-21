@@ -318,7 +318,9 @@ serial write queue: `VaultStore.commit(ops + extraOps)` → push the inverse ont
   file — nothing waits for iCloud's upload. A refused write drops the writes queued behind it
   (they were reduced on top of it), re-reads the vault, publishes that, and reports a
   `WriteFailure` on `writeFailures()`. `undo()` waits for the queue; `flush()`/`stop()` let it
-  land. `WritePolicy.awaited` (tests) makes `perform` wait and throw instead.
+  land. **Only the person acting on an item writes to the vault:** opening it writes nothing, no
+  timer writes, and the daily `archiveCompleted` joins the queue behind the first write of the
+  day that landed. `WritePolicy.awaited` (tests) makes `perform` wait and throw instead.
 - Collisions in `Archive/` and `GTD/Trash/` get a free name (app-owned folders); anywhere else a
   taken destination is `GTDError.titleCollision`. Folder moves included: "remove list" is a
   `.moveFolder` into `GTD/Trash/`.
@@ -496,6 +498,7 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-21 · T10/T09 | **`MakeActionSheet` is a host, not a copy of the card.** `FeatureLists/MakeActionSheet.swift` presents `FeatureInbox.MakeActionCardView` over `FeatureInbox.MakeActionModel` in a `NavigationStack`; the card body, bar, sub-sheets and every decision are the inbox's (L4). |
 | 2026-09-21 · T10 | **The Lists tab's push stack needs two kinds of route, so it is not `[NoteID]`.** `FeatureLists.ListsRoute` (`.list(String)` / `.item(NoteID)`) is `AppRouter.listsPath`'s element type; `AppRouter.apply(snapshot:renames:)` remaps it with a small local helper (`.list` entries pass through, `.item` entries follow a rename/prune exactly as `NavigationRemap.path` does for `[NoteID]`) rather than generalising `NavigationRemap` itself for a single two-case caller. |
 | 2026-09-21 | **Vault writes are queued behind the UI.** On the real iCloud vault every command waited for coordinated writes plus a whole-vault re-index before anything moved on screen. `VaultBackend.perform` now publishes the reduced snapshot and returns; one serial queue writes the files. The price, accepted: a file-system refusal (disk, permissions, a collision with a file the index does not know, e.g. in `Knowledge/`) is no longer thrown from `send` — the snapshot reverts and the shell shows a `WriteFailure` alert naming the change and how many later ones went with it. Rule refusals (cap, missing fields, collisions inside the snapshot) are still synchronous. The shell flushes the queue on iOS backgrounding (background assertion), on ⌘Q (`ShellAppDelegate`) and before closing a vault. |
+| 2026-09-22 | **The vault is written only when the person acts on an item, and never on the thread that draws.** Launch and foregrounding write nothing: the daily archive (A5) rides the write queue behind the first change of the day instead of running inside `start()` (which launch awaited) or on foreground. The editors no longer autosave on a 600 ms typing pause — typed text is held until the field blurs, the editor closes, or the shell calls `AppModel.flushHeldEdits()` (iOS backgrounding, ⌘Q); chips, pickers and status changes still save at once. The price: a crash or force-quit mid-typing loses the text of the field being typed in. The device-local review-progress file is written on a background queue too. |
 
 ## 7. Sync safety rules (N3) — apply to every change that writes
 

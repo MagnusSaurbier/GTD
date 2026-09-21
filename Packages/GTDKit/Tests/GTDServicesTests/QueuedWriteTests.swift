@@ -37,21 +37,20 @@ struct QueuedWriteTests {
         let rig = try await Rig()
         defer { rig.cleanUp() }
         let action = try await rig.nextAction()
-        let commitsAtStart = await rig.store.commits   // start-up housekeeping
 
         _ = try await rig.backend.perform(.setStatus(action.id, .someday, waiting: nil))
         var edited = try #require(await rig.backend.currentSnapshot().action(action.id))
         #expect(edited.status == .someday, "the second command sees the first one's snapshot")
         edited.contexts = ["errands"]
         _ = try await rig.backend.perform(.updateAction(edited))
-        #expect(await rig.store.commits == commitsAtStart)
+        #expect(await rig.store.commits == 0)
 
         await rig.store.open()
         await rig.backend.flush()
         let onDisk = try #require(try rig.rescan().action(action.id))
         #expect(onDisk.status == .someday)
         #expect(onDisk.contexts == ["errands"])
-        #expect(await rig.store.commits == commitsAtStart + 2)
+        #expect(await rig.store.commits == 2)
     }
 
     /// The watcher fires for write 1 while write 2 is still queued. The store's snapshot does
@@ -142,6 +141,36 @@ struct QueuedWriteTests {
         #expect(rig.fileSystem.snapshotOfFiles == saved, "the first command is still in the vault")
     }
 
+    // MARK: - Nothing is written unless the person acts on an item
+
+    @Test func openingTheVaultWritesNothing() async throws {
+        let rig = try await Rig(archivedToday: false)
+        defer { rig.cleanUp() }
+        await rig.store.open()
+        await rig.backend.flush()
+
+        #expect(await rig.store.commits == 0, "no archive at launch, although one is due")
+        #expect(rig.fileSystem.snapshotOfFiles == SampleVault.files)
+    }
+
+    @Test func theDailyArchiveRidesBehindTheFirstChangeOfTheDay() async throws {
+        let rig = try await Rig(archivedToday: false)
+        defer { rig.cleanUp() }
+        let archived = "Archive/2026/08/Collect DAAD transcripts.md"
+        await rig.store.open()
+
+        let first = try await rig.nextAction()
+        _ = try await rig.backend.perform(.setStatus(first.id, .someday, waiting: nil))
+        await rig.backend.flush()
+        #expect(rig.fileSystem.snapshotOfFiles[archived] != nil)
+        #expect(await rig.store.commits == 2, "the person's write, then the archive")
+
+        let second = try await rig.nextAction()
+        _ = try await rig.backend.perform(.setStatus(second.id, .someday, waiting: nil))
+        await rig.backend.flush()
+        #expect(await rig.store.commits == 3, "once a day, not behind every write")
+    }
+
     @Test func stopLetsTheQueuedWritesLand() async throws {
         let rig = try await Rig()
         defer { rig.cleanUp() }
@@ -162,22 +191,24 @@ private struct Rig {
     let backend: VaultBackend
     let stateDirectory: URL
 
-    /// Started with the gate **open** (start-up housekeeping commits), then shut.
-    init() async throws {
+    /// `archivedToday` pretends the daily archive already ran, so a test sees only its own
+    /// writes; the housekeeping tests pass `false`.
+    init(archivedToday: Bool = true) async throws {
         fileSystem = InMemoryFileSystem(files: SampleVault.files)
         store = GatedStore(inner: FileVaultStore(
             fileSystem: fileSystem, watcher: NullVaultWatcher(), today: { Fixtures.today }))
         stateDirectory = TestVault.temporaryDirectory()
+        if archivedToday {
+            try Data(#"{"lastArchiveDay":"\#(Fixtures.today.iso)"}"#.utf8)
+                .write(to: stateDirectory.appendingPathComponent("housekeeping.json"))
+        }
         backend = VaultBackend(
             store: store,
             deviceID: "test-device",
             journal: UndoJournal(directory: stateDirectory),
             stateDirectory: stateDirectory,
             env: { Fixtures.reducerEnv(deviceID: "test-device") })
-        await store.open()
         try await backend.start()
-        await backend.flush()
-        await store.shut()
     }
 
     func nextAction() async throws -> Action {

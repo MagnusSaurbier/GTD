@@ -38,8 +38,11 @@ import GTDVault
 ///
 /// ### Housekeeping
 /// `start()` (also run lazily before the first command) creates the folder skeleton
-/// `VaultLayout` requires, scans, starts watching and runs `archiveCompleted` once per day —
-/// the day of the last run is remembered next to the undo journal, outside the vault.
+/// `VaultLayout` requires if it is missing, scans and starts watching. `archiveCompleted` runs
+/// once per day **behind the first write the person causes** — never at launch, never on a
+/// timer — and the day of the last run is remembered next to the undo journal, outside the
+/// vault. (`WritePolicy.awaited` archives inside `start()`, which is what the file-asserting
+/// suites expect.)
 public actor VaultBackend: GTDBackend {
 
     private let store: any VaultStore
@@ -115,7 +118,9 @@ public actor VaultBackend: GTDBackend {
     ///
     /// Nothing between reading `latest` and enqueueing suspends, so two commands can never
     /// reduce against the same base: the second one always sees the first one's snapshot.
-    private func perform(_ command: GTDCommand, awaitingWrite: Bool) async throws -> [AppPrompt] {
+    private func perform(
+        _ command: GTDCommand, awaitingWrite: Bool, housekeepingDay: Day? = nil
+    ) async throws -> [AppPrompt] {
         try await startIfNeeded()
         let env = makeEnv()
         let old = latest
@@ -134,6 +139,7 @@ public actor VaultBackend: GTDBackend {
         guard !ops.isEmpty else {
             // Nothing to write (e.g. a status set to the value it already had). The reduced
             // snapshot is still published so the UI and `InMemoryBackend` behave alike.
+            if let housekeepingDay { await housekeeping.didArchive(on: housekeepingDay) }
             return reduction.prompts
         }
 
@@ -142,7 +148,8 @@ public actor VaultBackend: GTDBackend {
             layout: old.config.layout,
             label: UndoLabel.of(command, in: old),
             isUndoable: Rules.isUndoable(command),
-            renames: reduction.renames)
+            renames: reduction.renames,
+            housekeepingDay: housekeepingDay)
         if awaitingWrite {
             try await withCheckedThrowingContinuation { waiter in
                 enqueue(write, waiter: waiter)
@@ -162,6 +169,8 @@ public actor VaultBackend: GTDBackend {
         var label: String
         var isUndoable: Bool
         var renames: RenameMap
+        /// Set on the daily archive: the day to record once its files really moved (A5).
+        var housekeepingDay: Day?
         /// Set when somebody awaits this very write (`WritePolicy.awaited`, housekeeping): the
         /// failure is thrown to them instead of being announced on `writeFailures()`.
         var waiter: CheckedContinuation<Void, any Error>?
@@ -186,6 +195,12 @@ public actor VaultBackend: GTDBackend {
                     try await commit(write)
                     pending.removeFirst()
                     write.waiter?.resume()
+                    if let day = write.housekeepingDay {
+                        await housekeeping.didArchive(on: day)
+                        lastHousekeepingError = nil
+                    } else {
+                        await queueHousekeepingIfDue()
+                    }
                 } catch {
                     await abandonQueue(after: error)
                 }
@@ -244,6 +259,7 @@ public actor VaultBackend: GTDBackend {
         }
 
         guard let first = dropped.first else { return }
+        if first.housekeepingDay != nil { lastHousekeepingError = error }
         if let waiter = first.waiter {
             waiter.resume(throwing: error)
         } else {
@@ -318,7 +334,9 @@ public actor VaultBackend: GTDBackend {
         // placeholder a store publishes before its first scan.
         await pullFromStore()
         startForwarding()
-        await runHousekeeping()
+        // Queued policy: opening the vault writes **nothing**. The archive rides behind the
+        // first change the person makes that day (`queueHousekeepingIfDue`).
+        if writes == .awaited { await runHousekeeping() }
     }
 
     private func startForwarding() {
@@ -396,6 +414,28 @@ public actor VaultBackend: GTDBackend {
             lastHousekeepingError = error
         }
     }
+
+    /// The production path of A5. The vault is only ever written when the person acts on an item,
+    /// so the daily archive does not get a write of its own at launch or on a timer: it joins the
+    /// queue right behind the first write of the day that landed — the queue is writing anyway,
+    /// and nobody waits for either. A Mac that stays open over midnight is covered by the same
+    /// check. A refused archive is reported like any refused write; the day is not recorded, so
+    /// the next launch tries again.
+    private func queueHousekeepingIfDue() async {
+        guard writes == .queued else { return }
+        let today = makeEnv().today
+        guard housekeepingCheckedOn != today else { return }
+        housekeepingCheckedOn = today
+        guard await housekeeping.shouldArchive(on: today) else { return }
+        do {
+            _ = try await perform(.archiveCompleted, awaitingWrite: false, housekeepingDay: today)
+        } catch {
+            lastHousekeepingError = error
+        }
+    }
+
+    /// The day `queueHousekeepingIfDue` last looked, so it asks once per day and process.
+    private var housekeepingCheckedOn: Day?
 
     /// Why the last automatic archive did not run, for the settings screen and for tests.
     /// `nil` once one succeeds.

@@ -20,6 +20,8 @@ action editor no other feature target owns.
   first two and `navigation.openProject` to Projects.
 - `OverviewLayout` — column and window minimum sizes; `App/MacShell.swift` sizes the window from it.
 - `ActionDetailView(action:onRename:)` — the autosaving note editor (also the iPhone detail).
+  Autosave means: chips and pickers save at once; typed text is held until blur, close or
+  `AppModel.flushHeldEdits()` — there is no typing-pause timer in the app (tests inject one).
 - `SidebarItem.lists` (T10) — the single `Lists` sidebar row (count = open items across every
   list, `Rules.SidebarCounts.lists`); the content column is `FeatureLists.ListsSectionsView`
   (one section per list) and the detail column is `FeatureLists.ListItemEditorView` for

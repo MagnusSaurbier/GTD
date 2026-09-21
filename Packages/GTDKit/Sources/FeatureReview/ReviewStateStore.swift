@@ -68,21 +68,31 @@ public struct FileReviewStateStore: ReviewStateStore {
         return base.appendingPathComponent(defaultFolderName, isDirectory: true)
     }
 
+    /// Every write goes through this serial queue: `save` is called from the main actor on each
+    /// review step, and no file write — however small — belongs on the thread that draws.
+    /// `load` and `clear` go through it too, so they see the saves that came before them.
+    private static let io = DispatchQueue(label: "gtd.review-state", qos: .utility)
+
     public func load() -> ReviewSessionState? {
-        guard let url, let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(ReviewSessionState.self, from: data)
+        guard let url else { return nil }
+        return Self.io.sync {
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return try? JSONDecoder().decode(ReviewSessionState.self, from: data)
+        }
     }
 
     public func save(_ state: ReviewSessionState) {
         guard let url, let data = try? JSONEncoder().encode(state) else { return }
-        let folder = url.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // Atomic: a crash mid-write must not leave a truncated file that decodes into nonsense.
-        try? data.write(to: url, options: .atomic)
+        Self.io.async {
+            let folder = url.deletingLastPathComponent()
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            // Atomic: a crash mid-write must not leave a truncated file that decodes into nonsense.
+            try? data.write(to: url, options: .atomic)
+        }
     }
 
     public func clear() {
         guard let url else { return }
-        try? FileManager.default.removeItem(at: url)
+        Self.io.async { try? FileManager.default.removeItem(at: url) }
     }
 }
