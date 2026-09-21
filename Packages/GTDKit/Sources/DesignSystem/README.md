@@ -6,8 +6,10 @@ colours, sizes, durations, symbol names or user-facing strings — it references
 ## Public API
 
 Platform-free (compiles on Linux, unit-tested):
-- `Spacing`, `Radius`, `Elevation`, `MotionTiming`, `DragThresholds` — the numbers of §2.4/§3.6/§5.
-- `Symbols` — the exhaustive SF Symbols map of §7.
+- `Spacing`, `Radius`, `Elevation`, `MotionTiming`, `ShakeMetrics`, `DragThresholds` — the numbers
+  of §2.4/§3.6/§5.
+- `Symbols` — the exhaustive SF Symbols map of §7, including `Symbols.list(named:)` (the three
+  named lists' own glyph, `listBullet` fallback for a custom list).
 - `Copy` — the fixed vocabulary of §6.2 and the canonical strings of §6.3; `DateText` — date and
   age wording of §6.3, written without `DateFormatter`.
 - `ChipState { unset, suggested, confirmed, disabled }`, `BadgeContent`,
@@ -15,17 +17,30 @@ Platform-free (compiles on Linux, unit-tested):
   `GTDModel.Signal` into text and a symbol.
 - `CardDragGeometry` — the pure drag-to-file maths behind `ItemCard` (§3.6): axis lock, per-
   direction thresholds, rotation, exit offset. `FlowLayoutEngine` — the row-wrapping algorithm
-  behind `FlowLayout` (§3.1). Both are unit-tested directly; the SwiftUI types below are thin
-  wrappers over them.
+  behind `FlowLayout` (§3.1). `NavbarPlatform`/`NavbarSlot`/`NavbarLayout.slots(favourites:platform:)`
+  — the Knowledge/List navbar's fixed-slot layout (§3.6): which slots exist for N favourites and a
+  platform limit (4 on iPhone, 8 on Mac), in which order, with which Mac key index. All are
+  unit-tested directly; the SwiftUI types below are thin wrappers over them.
 
 SwiftUI (inside `#if canImport(SwiftUI)`):
 - `Color.ink`/`inkInverse`/`textSecondary`/`textTertiary`/`surface`/`surfaceGrouped`/`surfaceCard`/
   `hairline`/`fillQuiet`/`gtdAccent`/`accentWash`/`signalAging`/`signalAttention`/`signalOverdue`/
   `signalDone`, `Color.dynamic(light:dark:)`.
-- `Typo`, `Motion`, `Radius.chipShape`/`cardShape`/`tileShape`, `View.cardElevation()`.
+- `Typo`, `Motion`, `Radius.chipShape`/`cardShape`/`tileShape`, `View.cardElevation()`,
+  `View.shake(trigger:)` (§3.6/§5's validation shake — 6 pt, 0.3 s, a no-op under Reduce Motion).
 - `Chip`, `FlowLayout`, `ContextChipGroup`, `TimeBucketChipGroup`, `DateValueChip`,
-  `Badge`, `ActionRow`, `ProjectRow`, `ItemCard`, `CollapsibleText`, `View.itemCardPeek(hasNext:)`,
-  `UndoToast`, `GlassActionBar`, `WaitingInfoSheet(initial:suggestedWho:today:onSave:)`.
+  `Badge`, `ActionRow`, `ListItemRow` (§3.3 "List items": completion circle + title only, no
+  second line, no badges, no age), `ProjectRow`, `ItemCard`, `CollapsibleText`,
+  `View.itemCardPeek(hasNext:)`, `UndoToast`,
+  `SectionLabel(_:isMissing:font:foreground:)` — a field/chip-group label with the required-field
+  asterisk (§3.6: leading `asterisk` in `signalAttention`, VoiceOver says "required"),
+  `WaitingInfoSheet(initial:suggestedWho:today:onSave:)` — follow-up date **required** (+7 d is a
+  suggested chip until confirmed), who optional, `Set waiting` disabled until a date is confirmed.
+- `GlassActionBar` (the generic capsule) and its three STYLEGUIDE §3.6 variants:
+  `StepOneBar` (three equal, neutral, symbol-over-text buttons — none accent-filled),
+  `ActionCardBar` (`Waiting`/`Done` buttons + `⋯` "File to" menu → Next/Someday; swaps to a single
+  `Done` button while a field is focused), `KnowledgeListNavbar` (the fixed-slot navbar, built on
+  `NavbarLayout`).
 - Drag-to-file (§3.6): `CardDragDirection`, `CardFilingController` (`@Observable`; one per card —
   owns the live `translation`/`previewDirection`/`previewProgress`, and `dismiss(to:onFile:)` for
   Mac-key/VoiceOver filing), `View.cardSwipeFiling(controller:isEnabled:onFile:)` (the gesture),
@@ -84,6 +99,13 @@ holds none of them. Adding is normal, renaming is a cross-target change.
   `Resources/Localizable.xcstrings` — left as-is since it cannot be verified under `xcodebuild`
   here either; a Mac-side follow-up, not a blocker (call sites do not change either way).
 
+- **T06 (2026-09-21, inbox rework).** `WaitingInfoSheet` now requires the follow-up date and
+  makes `who` optional (W1/D39 reversed the old "who and date" requirement); its save button is
+  `Set waiting`, disabled until a date is confirmed, and sends `who: nil` for a blank field rather
+  than an empty string. `ActionRow` and `ListItemRow` share one private `CompletionCircle` — the
+  check-draw animation lives in one place. `StepOneBar`/`ActionCardBar`/`KnowledgeListNavbar` are
+  the only place a feature should reach for the inbox card's bars; a feature target building its
+  own `GlassActionBar` row for one of these three purposes is duplicating this file.
 - **Accessibility wording is Linux-testable on purpose.** `HeatmapContent.swift` (the
   `HeatmapCellState` cases and `HeatmapSpeech.week`) and `Copy.metaLine`/`Copy.spoken` sit outside
   the SwiftUI guard, so what VoiceOver reads for a heatmap row and for a row's meta line is

@@ -54,6 +54,17 @@ public enum Copy {
     public static let actionFailed = "Couldn't complete that"
     public static let undo = "Undo"
     public static let clearFilters = "Clear filters"
+    /// The `Lists` sidebar row / iPhone tab and the fixed-vocabulary singular "one list" term
+    /// (§6.2: "List").
+    public static let list = "List"
+    public static let lists = "Lists"
+    /// Step-1 kind button (T06, STYLEGUIDE §3.6/§7): "Action".
+    public static let actionKind = "Action"
+    /// Step-1 kind button and its opened card: "Knowledge / List".
+    public static let knowledgeOrList = "Knowledge / List"
+    public static let more = "More…"
+    public static let makeAction = "Make action"
+    public static let showDone = "Show done"
 
     // MARK: Canonical strings (§6.3)
 
@@ -61,7 +72,13 @@ public enum Copy {
     public static let whatPlaceholder = "The next physical action"
     /// W1/D39 — who is optional, and the field says so (STYLEGUIDE §6.3).
     public static let whoPlaceholder = "Who or what (optional)"
+    /// Knowledge / List card's single body field (§3.5 step 2b).
+    public static let notesPlaceholder = "Notes (optional)"
     public static let showAll = "Show all"
+    /// Waiting sheet's save button — disabled until a follow-up date is confirmed (§3.6).
+    public static let setWaiting = "Set waiting"
+    /// The action-card `⋯` menu (§3.6): repeats the two swipe targets, Next / Someday.
+    public static let fileTo = "File to"
 
     /// `3 of 14 left`
     public static func counter(remaining: Int, total: Int) -> String {
@@ -100,9 +117,32 @@ public enum Copy {
     public static let emptyNextBody = "Promote from Someday, or process your inbox."
     public static let emptyNextFilteredTitle = "No match"
     public static let emptyNextFilteredBody = "Nothing in Next fits these filters."
+    public static let emptySomedayTitle = "Nothing in Someday"
     public static let emptyWaitingTitle = "Not waiting on anyone"
     public static let emptyInboxTitle = "Inbox zero"
     public static let stalledProjectBody = "No open action. Add one or put the project on hold."
+
+    /// `Nothing in Read` — an empty list, by name (§6.3 "Empty list").
+    public static func emptyListTitle(_ list: String) -> String { "Nothing in \(list)" }
+
+    /// Project picker, create row: `Create project "Renew passport"`.
+    public static func createProject(_ text: String) -> String { "Create project \"\(text)\"" }
+
+    /// Key-binding conflict (STYLEGUIDE §4.5): `Already used by Trash`.
+    public static func alreadyUsedBy(_ command: String) -> String { "Already used by \(command)" }
+
+    /// Undo toast, list filing (§6.3): `Added to Read`.
+    public static func addedTo(_ list: String) -> String { "Added to \(list)" }
+
+    /// The word VoiceOver adds to a missing required field's label (§3.6's asterisk, spelled out
+    /// rather than left to the symbol alone — STYLEGUIDE §8 "colour/shape is never the only
+    /// carrier"). `Why?, required`.
+    public static func requiredFieldLabel(_ label: String) -> String { "\(label), required" }
+
+    /// The review deck's Someday header (§3.10): count of items stale past the 30-day threshold.
+    public static func untouchedOver30Days(_ count: Int) -> String {
+        count == 1 ? "1 untouched > 30 days" : "\(count) untouched > 30 days"
+    }
 
     /// `Morning done` / `Review complete` (§5 reward moments)
     public static func routineDone(_ routine: String) -> String { "\(routine) done" }

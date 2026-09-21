@@ -113,33 +113,11 @@ public struct ActionRow: View {
     /// the visual reward plays before the data changes, not after.
     @State private var isDrawingCheck = false
 
-    @ViewBuilder private var completionControl: some View {
-        Button {
-            guard !isDrawingCheck else { return }
-            withAnimation(Motion.standard) { isDrawingCheck = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + MotionTiming.checkDraw) {
-                onComplete?()
-            }
-        } label: {
-            ZStack {
-                Circle().strokeBorder(isDrawingCheck ? Color.signalDone : Color.textTertiary, lineWidth: 1.5)
-                if isDrawingCheck {
-                    Circle().fill(Color.signalDone)
-                    Image(systemName: Symbols.done)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(Color.inkInverse)
-                        .font(.system(size: 13, weight: .medium))
-                } else if action.status == .inProgress {
-                    Circle().fill(Color.ink).frame(width: 11, height: 11)
-                }
-            }
-            .frame(width: 22, height: 22)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(onComplete == nil)
-        .sensoryFeedback(.success, trigger: isDrawingCheck)
-        .accessibilityLabel(Copy.done)
+    private var completionControl: some View {
+        CompletionCircle(
+            isDrawingCheck: $isDrawingCheck,
+            isInProgress: action.status == .inProgress,
+            onComplete: onComplete)
     }
 
     /// `Project name · mac · phone · ≤30 min` — project first, contexts as plain lowercase text.
@@ -157,6 +135,72 @@ public struct ActionRow: View {
 
     private var spokenTitleAndMeta: String {
         Copy.spoken([action.title] + metaParts)
+    }
+}
+
+/// List-item variant of `ActionRow` (STYLEGUIDE §3.3 "List items"): completion circle + title
+/// only — no second line, no badges, no age, because a list item is not a commitment and cannot
+/// go stale.
+public struct ListItemRow: View {
+    private let item: ListItem
+    private let onComplete: (() -> Void)?
+
+    public init(item: ListItem, onComplete: (() -> Void)? = nil) {
+        self.item = item
+        self.onComplete = onComplete
+    }
+
+    @State private var isDrawingCheck = false
+
+    public var body: some View {
+        HStack(alignment: .center, spacing: Spacing.m) {
+            CompletionCircle(isDrawingCheck: $isDrawingCheck, isInProgress: false, onComplete: onComplete)
+            Text(item.title)
+                .font(Typo.body)
+                .foregroundStyle(Color.ink)
+                .lineLimit(2)
+        }
+        .padding(.vertical, Spacing.rowVertical)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.title)
+    }
+}
+
+/// The completion control shared by `ActionRow` and `ListItemRow` (STYLEGUIDE §3.3): tap draws
+/// the checkmark in `signalDone` over `MotionTiming.checkDraw` with one `.success` haptic before
+/// the actual completion follows — the visual reward plays before the data changes.
+private struct CompletionCircle: View {
+    @Binding var isDrawingCheck: Bool
+    let isInProgress: Bool
+    let onComplete: (() -> Void)?
+
+    var body: some View {
+        Button {
+            guard !isDrawingCheck else { return }
+            withAnimation(Motion.standard) { isDrawingCheck = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + MotionTiming.checkDraw) {
+                onComplete?()
+            }
+        } label: {
+            ZStack {
+                Circle().strokeBorder(isDrawingCheck ? Color.signalDone : Color.textTertiary, lineWidth: 1.5)
+                if isDrawingCheck {
+                    Circle().fill(Color.signalDone)
+                    Image(systemName: Symbols.done)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.inkInverse)
+                        .font(.system(size: 13, weight: .medium))
+                } else if isInProgress {
+                    Circle().fill(Color.ink).frame(width: 11, height: 11)
+                }
+            }
+            .frame(width: 22, height: 22)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(onComplete == nil)
+        .sensoryFeedback(.success, trigger: isDrawingCheck)
+        .accessibilityLabel(Copy.done)
     }
 }
 

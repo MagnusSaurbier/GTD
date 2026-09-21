@@ -60,4 +60,42 @@ public enum Symbols {
         default: routineGeneric
         }
     }
+
+    // MARK: Lists (§5a, T06)
+
+    /// "Lists (and any custom list)" — the fallback for a list the table below has no entry for.
+    public static let listBullet = "list.bullet"
+    public static let listRead = "book"
+    public static let listWatch = "play.rectangle"
+    public static let listWish = "gift"
+
+    /// The symbol for a list by name: the three named lists get their own glyph, any custom list
+    /// falls back to `listBullet` (STYLEGUIDE §7 "Lists (and any custom list)"). Pure so the
+    /// navbar's slot layout can be tested without SwiftUI.
+    public static func list(named name: String) -> String {
+        switch name.lowercased() {
+        case "read": listRead
+        case "watch": listWatch
+        case "wish": listWish
+        default: listBullet
+        }
+    }
+
+    // MARK: Inbox step 1 kinds, navbar, required field (T06)
+
+    /// Step-1 kind button: `Action`.
+    public static let actionKind = "bolt"
+    /// Step-1 kind button: `Knowledge / List`.
+    public static let knowledgeOrListKind = "archivebox"
+    /// Navbar's last slot, and the action-card `⋯` "File to" menu.
+    public static let more = "ellipsis"
+    /// Collapsing an opened card back to step 1 (distinct from the routine runner's `back`,
+    /// which is a step-back chevron, not a card gesture).
+    public static let collapse = "chevron.down"
+    /// The leading glyph STYLEGUIDE §3.6 puts on a missing required field's label.
+    public static let requiredField = "asterisk"
+    /// Same glyph as `promoteStep` — STYLEGUIDE §7 lists them as one table entry ("Promote step /
+    /// Make action"), because promoting a project step and making a list item into an action are
+    /// the same gesture on two different kinds of note.
+    public static let makeAction = promoteStep
 }

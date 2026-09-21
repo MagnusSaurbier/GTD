@@ -34,5 +34,54 @@ struct CopyWordingTests {
         #expect(Copy.routines == "Routines")
         #expect(Copy.project == "Project")
         #expect(Copy.routine == "Routine")
+        #expect(Copy.lists == "Lists")
+        #expect(Copy.list == "List")
+    }
+
+    /// T06 — R-3's validation flow (STYLEGUIDE §3.6): "every missing field or chip group shows a
+    /// leading asterisk … until it is filled". VoiceOver must say the word, not just draw a glyph.
+    @Test func requiredFieldLabelSpellsOutTheWord() {
+        #expect(Copy.requiredFieldLabel(Copy.why) == "Why?, required")
+        #expect(Copy.requiredFieldLabel("Context") == "Context, required")
+    }
+
+    /// STYLEGUIDE §6.3 canonical strings, word for word.
+    @Test func canonicalStringsMatchTheStyleguideTable() {
+        #expect(Copy.createProject("Renew passport") == "Create project \"Renew passport\"")
+        #expect(Copy.alreadyUsedBy("Trash") == "Already used by Trash")
+        #expect(Copy.addedTo("Read") == "Added to Read")
+        #expect(Copy.notesPlaceholder == "Notes (optional)")
+        #expect(Copy.setWaiting == "Set waiting")
+    }
+
+    /// §6.3's `Nothing in <list>` empty state, and Someday's own (`Nothing in Someday` is listed
+    /// separately in the table, so it is its own constant rather than `emptyListTitle(someday)`).
+    @Test func emptyStatesNameTheirScreen() {
+        #expect(Copy.emptySomedayTitle == "Nothing in Someday")
+        #expect(Copy.emptyListTitle("Read") == "Nothing in Read")
+        #expect(Copy.emptyListTitle("Watch") == "Nothing in Watch")
+    }
+
+    /// §3.10 — the Someday deck header's stale count. Break-proof: a naive implementation that
+    /// always used the plural ("1 untouched > 30 days" vs "1 untouched...") would fail this.
+    @Test func untouchedOver30DaysIsPluralisedCorrectly() {
+        #expect(Copy.untouchedOver30Days(1) == "1 untouched > 30 days")
+        #expect(Copy.untouchedOver30Days(0) == "0 untouched > 30 days")
+        #expect(Copy.untouchedOver30Days(7) == "7 untouched > 30 days")
+        #expect(Copy.untouchedOver30Days(1) != Copy.untouchedOver30Days(2))
+    }
+
+    /// No Backlog/Maybe wording anywhere in the fixed vocabulary or canonical strings (§6.2:
+    /// "Never: … Backlog, Maybe …").
+    @Test func noLegacyTierWordingRemains() {
+        let mirror = [
+            Copy.inbox, Copy.next, Copy.someday, Copy.waiting, Copy.project, Copy.projects,
+            Copy.area, Copy.knowledge, Copy.trash, Copy.lists, Copy.list, Copy.actionKind,
+            Copy.knowledgeOrList,
+        ]
+        for word in mirror {
+            #expect(!word.lowercased().contains("backlog"))
+            #expect(!word.lowercased().contains("maybe"))
+        }
     }
 }

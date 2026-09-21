@@ -21,10 +21,15 @@ public struct DesignGallery: View {
                 section("Chip groups") { chipGroups }
                 section("Badge") { badgeStates }
                 section("ActionRow") { actionRows }
+                section("ListItemRow") { listItemRows }
                 section("ProjectRow") { ProjectRow(row: Self.sampleProjectRow, today: Self.today) }
                 section("ItemCard") { itemCard }
                 section("GlassActionBar") { glassActionBar }
+                section("Inbox bars") { inboxBars }
+                section("Required-field label") { requiredFieldLabels }
+                section("WaitingInfoSheet") { waitingInfoSheet }
                 section("UndoToast") { UndoToast(label: Copy.movedTo(Copy.someday), onUndo: {}) }
+                section("Empty states") { emptyStates }
                 section("Reward moments") { rewardMoments }
                 section("Review pieces") { reviewPieces }
                 section("Key legend") {
@@ -121,6 +126,19 @@ public struct DesignGallery: View {
         }
     }
 
+    // MARK: List items
+
+    private static let sampleListItem = ListItem(
+        id: NoteID(path: "Lists/Read/Sapiens.md"), list: "Read", title: "Sapiens")
+
+    private var listItemRows: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ListItemRow(item: Self.sampleListItem, onComplete: {})
+            Divider()
+            ListItemRow(item: Self.sampleListItem, onComplete: nil)
+        }
+    }
+
     // MARK: ItemCard
 
     private var itemCard: some View {
@@ -142,6 +160,64 @@ public struct DesignGallery: View {
             Label(Copy.waiting, systemImage: Symbols.waiting)
         }
         .labelStyle(.iconOnly)
+    }
+
+    // MARK: Inbox bars (T06)
+
+    @State private var isFieldFocused = false
+    @State private var validationTrigger = 0
+
+    private var inboxBars: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            StepOneBar(onAction: {}, onKnowledgeOrList: {}, onTrash: {})
+            ActionCardBar(
+                isFieldFocused: isFieldFocused,
+                onWaiting: {}, onDone: {}, onFileToNext: {}, onFileToSomeday: {},
+                onDismissKeyboard: { isFieldFocused = false })
+            Button(isFieldFocused ? "Show buttons" : "Show keyboard Done bar") {
+                isFieldFocused.toggle()
+            }
+            .font(Typo.meta)
+            KnowledgeListNavbar(
+                favourites: ["Read", "Watch", "Wish"],
+                platform: .iPhone,
+                onKnowledge: {}, onList: { _ in }, onMore: {})
+            ItemCard {
+                Text(Copy.whyPlaceholder).font(Typo.body)
+            }
+            .shake(trigger: validationTrigger)
+            Button("Trigger shake") { validationTrigger += 1 }
+                .font(Typo.meta)
+        }
+    }
+
+    // MARK: Required-field label (T06)
+
+    private var requiredFieldLabels: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            SectionLabel(Copy.why)
+            SectionLabel(Copy.why, isMissing: true)
+            SectionLabel("Context", isMissing: true, font: Typo.meta, foreground: .textSecondary)
+        }
+    }
+
+    // MARK: WaitingInfoSheet (T06)
+
+    private var waitingInfoSheet: some View {
+        WaitingInfoSheet(suggestedWho: ["Marie", "Landlord"], today: Self.today, onSave: { _ in })
+            .frame(maxWidth: 360)
+            .background(Color.surfaceCard, in: Radius.cardShape)
+    }
+
+    // MARK: Empty states (T06 — Someday and Lists)
+
+    private var emptyStates: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            ContentUnavailableView(
+                Copy.emptySomedayTitle, systemImage: Symbols.someday)
+            ContentUnavailableView(
+                Copy.emptyListTitle("Read"), systemImage: Symbols.list(named: "Read"))
+        }
     }
 
     // MARK: Reward moments

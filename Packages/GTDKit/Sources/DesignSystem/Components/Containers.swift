@@ -110,10 +110,12 @@ public struct UndoToast: View {
     }
 }
 
-/// W1 — setting `waiting` requires who **and** a follow-up date.
+/// W1/D39 — setting `waiting` requires the **follow-up date**; who is optional (STYLEGUIDE §3.6).
 ///
 /// The `+7 days` default is offered as a **suggested** (dashed) chip and is not part of the
-/// returned `WaitingInfo` until the user taps it: a default must never be written silently.
+/// returned `WaitingInfo` until the user confirms it: a default must never be written silently.
+/// `Set waiting` stays disabled until a date is confirmed; a blank who is sent as `nil`, never
+/// an empty string, so no `waitingFor:` line is written (D39, "no lying defaults").
 public struct WaitingInfoSheet: View {
     private let initial: WaitingInfo?
     private let suggestedWho: [String]
@@ -147,6 +149,13 @@ public struct WaitingInfoSheet: View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             Text(Copy.waiting).font(Typo.sectionHeader)
 
+            SectionLabel(Copy.followUp, isMissing: followUp == nil, font: Typo.meta, foreground: .textSecondary)
+            DateValueChip(
+                label: Copy.followUp,
+                value: $followUp,
+                suggestion: WaitingInfo.suggestedFollowUp(from: today),
+                today: today)
+
             TextField(Copy.whoPlaceholder, text: $who)
                 .textFieldStyle(.plain)
                 .font(Typo.body)
@@ -162,21 +171,16 @@ public struct WaitingInfoSheet: View {
                 }
             }
 
-            Text(Copy.followUp).font(Typo.meta).foregroundStyle(Color.textSecondary)
-            DateValueChip(
-                label: Copy.followUp,
-                value: $followUp,
-                suggestion: WaitingInfo.suggestedFollowUp(from: today),
-                today: today)
-
             HStack {
                 Spacer()
-                Button(Copy.done) {
-                    guard let followUp, !who.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                    onSave(WaitingInfo(who: who, followUp: followUp))
+                Button(Copy.setWaiting) {
+                    guard let followUp else { return }
+                    let trimmedWho = who.trimmingCharacters(in: .whitespaces)
+                    onSave(WaitingInfo(who: trimmedWho.isEmpty ? nil : trimmedWho, followUp: followUp))
                     dismiss()
                 }
-                .disabled(!isComplete)
+                .buttonStyle(.borderedProminent)
+                .disabled(followUp == nil)
             }
         }
         .padding(Spacing.cardPadding)
@@ -192,10 +196,6 @@ public struct WaitingInfoSheet: View {
             }
         }
         #endif
-    }
-
-    private var isComplete: Bool {
-        followUp != nil && !who.trimmingCharacters(in: .whitespaces).isEmpty
     }
 }
 #endif

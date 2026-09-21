@@ -70,6 +70,13 @@ public enum MotionTiming {
     public static let toastDuration: Double = 5
 }
 
+/// Validation shake (STYLEGUIDE §3.6, §5): "shakes once (6 pt, 0.3 s)". Reduce Motion drops the
+/// shake entirely — focus + the `.error` haptic still carry the signal (§5: "no shake").
+public enum ShakeMetrics {
+    public static let amplitude: CGFloat = 6
+    public static let duration: Double = 0.3
+}
+
 /// Inbox-card drag behaviour (STYLEGUIDE §3.6). Pure numbers so the gesture logic is testable.
 public enum DragThresholds {
     /// The drag locks onto one axis after this distance.
