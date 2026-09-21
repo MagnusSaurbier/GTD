@@ -76,12 +76,14 @@ struct ReducerProjectTests {
         let vault = TestVault.snapshot(projects: [project])
         for actionStatus in [ActionStatus.next, .inProgress] {
             let error = TestVault.error(vault, .createAction(ActionDraft(
-                title: "CV updaten", status: actionStatus, project: project.id)), env: env)
+                title: "CV updaten", status: actionStatus, contexts: ["mac"], timeEstimate: 10,
+                project: project.id, why: "Bewerbung", what: "CV updaten")), env: env)
             #expect(error == .invalid("Only active projects put actions into Next"))
         }
         // …but the Someday tier and waiting are fine.
         #expect(TestVault.error(vault, .createAction(ActionDraft(
-            title: "CV updaten", status: .someday, project: project.id)), env: env) == nil)
+            title: "CV updaten", status: .someday, project: project.id,
+            what: "CV updaten")), env: env) == nil)
     }
 
     @Test(arguments: [ProjectStatus.onHold, .someday, .done])
@@ -159,8 +161,9 @@ struct ReducerProjectTests {
         ])
         let vault = TestVault.snapshot(projects: [project])
         let result = try Reducer.reduce(
-            vault, .promoteStep(project: project.id, stepIndex: 0,
-                                ActionDraft(title: "", status: .next, contexts: ["mac"])), env: env)
+            vault, .promoteStep(project: project.id, stepIndex: 0, ActionDraft(
+                title: "", status: .next, contexts: ["mac"], timeEstimate: 30,
+                why: "The application needs it.")), env: env)
 
         let action = try #require(result.snapshot.actions.first)
         #expect(action.title == "Write the motivation letter")   // the step's own wording
@@ -174,14 +177,17 @@ struct ReducerProjectTests {
         let project = TestVault.project("DAAD", steps: [ProjectStep(text: "Write")])
         var full = TestVault.nextOccupied(15)
         full.projects = [project]
-        #expect(TestVault.error(full, .promoteStep(project: project.id, stepIndex: 0,
-                                                   ActionDraft(title: "Write", status: .next)), env: env)
+        #expect(TestVault.error(full, .promoteStep(
+            project: project.id, stepIndex: 0,
+            ActionDraft(title: "Write", status: .next, contexts: ["mac"], timeEstimate: 30,
+                        why: "It is due.")), env: env)
                 == .nextCapReached(cap: 15))
 
         let onHold = TestVault.project("Nebenjob", status: .onHold, steps: [ProjectStep(text: "CV")])
         #expect(TestVault.error(TestVault.snapshot(projects: [onHold]),
-                                .promoteStep(project: onHold.id, stepIndex: 0,
-                                             ActionDraft(title: "CV", status: .next)), env: env)
+                                .promoteStep(project: onHold.id, stepIndex: 0, ActionDraft(
+                                    title: "CV", status: .next, contexts: ["mac"],
+                                    timeEstimate: 30, why: "Bewerbung")), env: env)
                 == .invalid("Only active projects put actions into Next"))
     }
 

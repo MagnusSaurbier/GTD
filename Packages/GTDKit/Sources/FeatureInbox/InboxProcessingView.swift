@@ -102,8 +102,11 @@ struct InboxSessionView: View {
                 toast = nil
             }
             .onChange(of: session.validation?.nonce) { _, _ in
-                guard session.validation?.issue == .whatRequired else { return }
-                focus = .what
+                // R-3 — the first missing field takes focus; every one of them is marked on the
+                // card itself (STYLEGUIDE §3.6).
+                let missing = session.missingFields
+                guard !missing.isEmpty else { return }
+                focus = missing.contains(.why) ? .why : (missing.contains(.what) ? .what : nil)
                 guard !reduceMotion else { return }
                 withAnimation(Motion.standard) { shake += 1 }
             }
@@ -440,7 +443,8 @@ struct InboxSessionView: View {
         }
         if showsChrome {
             ToolbarItem(placement: .confirmationAction) {
-                Button(Copy.done, action: onFinished)
+                // `Close`, not `Done`: on this screen `Done` files a card (STYLEGUIDE §3.6).
+                Button(Copy.close, action: onFinished)
             }
         }
     }

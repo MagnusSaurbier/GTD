@@ -136,8 +136,22 @@ struct SweepDeferredStep: View {
             FlowLayout {
                 DateValueChip(label: Copy.deferLabel, value: $draft.deferDate, today: session.today)
                 DateValueChip(label: Copy.due, value: $draft.due, today: session.today)
+                // I4a/R-8 — the project is a chip on the draft here too: the item stays an
+                // action and names the project it belongs to (D33).
+                Chip(
+                    projectChipTitle,
+                    state: draft.project == nil ? .unset : .confirmed,
+                    symbol: draft.project == nil ? "plus" : nil
+                ) {
+                    picker = .project
+                }
             }
         }
+    }
+
+    private var projectChipTitle: String {
+        guard let id = draft.project else { return Copy.project }
+        return session.snapshot.project(id)?.title ?? id.title
     }
 
     private func targets(for item: InboxItem) -> some View {
@@ -162,8 +176,8 @@ struct SweepDeferredStep: View {
         switch target {
         case .next: .rightArrow
         case .someday: .leftArrow
-        case .trash: .downArrow
-        case .project: "p"
+        case .done: .return
+        case .trash: "x"
         case .knowledge: "k"
         case .waiting: "w"
         case .deferToReview: "r"
@@ -174,7 +188,6 @@ struct SweepDeferredStep: View {
         switch target {
         case .waiting: picker = .waiting
         case .knowledge: picker = .knowledge
-        case .project: picker = .project
         default:
             guard let decision = DeferredSweep.decision(target: target, draft: draft) else { return }
             file(decision, item: item)
@@ -200,6 +213,8 @@ struct SweepDeferredStep: View {
         case .knowledge:
             knowledgePicker
         case .project:
+            // I4a/R-8 — the project is a **chip on the draft**, not a target of its own: the
+            // card stays an action and names the project it belongs to (D33).
             projectPicker
         }
     }
@@ -228,16 +243,8 @@ struct SweepDeferredStep: View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             Text(Copy.project).font(Typo.sectionHeader).foregroundStyle(Color.ink)
             ProjectPicker(selection: $draft.project)
-            Button(Copy.done) {
-                picker = nil
-                guard let item = session.currentDeferredItem,
-                      let decision = DeferredSweep.decision(
-                        target: .project, draft: draft, project: draft.project)
-                else { return }
-                file(decision, item: item)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(draft.project == nil)
+            Button(Copy.done) { picker = nil }
+                .buttonStyle(.borderedProminent)
         }
         .padding(Spacing.cardPadding)
         .frame(minWidth: 360, minHeight: 320)

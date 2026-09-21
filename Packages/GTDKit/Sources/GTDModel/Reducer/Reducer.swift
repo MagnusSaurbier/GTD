@@ -23,7 +23,10 @@ import Foundation
 /// | A4 contexts are a closed list | `normalizeContexts` |
 /// | A5 done sets a closing date, archive after 30 d | `normalize`, `archiveCompleted` |
 /// | I4c trash is a move, never a status | `trashAction`, `fileInbox` |
-/// | W1 waiting needs who + follow-up, leaving clears both | `normalize` |
+/// | W1/D39 waiting needs a follow-up date (who is optional); leaving clears both | `normalize` |
+/// | I4/D12/R-3 a new transition into a tier brings that tier's required fields | `normalize` |
+/// | I2/R-4 the capture text is the note's title; what it cannot hold stays in the body | `fileInbox`, `CaptureText` |
+/// | I4a/R-8 the project chip, including the project it creates | `makeAction`, `resolveProject` |
 /// | R-2 a Next item may be deferred; it just does not occupy a slot while hidden | `Rules` |
 /// | P3 only active projects put actions into Next; leaving `active` demotes | `normalize`, `updateProject` |
 /// | P4/P5 completion logs, ticks the step and asks "what's next?" | `settle` |
@@ -152,9 +155,15 @@ public enum Reducer {
         return Reduction(snapshot: next)
     }
 
-    /// I4 — the five destinations of a card. The capture file always leaves `Inbox/`:
-    /// the knowledge decision **moves** it (keeping its `created` frontmatter and its text),
-    /// every other decision trashes it after its content has become one or more new notes.
+    /// I4 — the four destinations of a card. **The capture file never disappears:** filing an
+    /// action, a Knowledge note or a list item *moves* it to where the note now belongs (so its
+    /// `created` stamp and anything the user put in its frontmatter survive the filing), and
+    /// Trash moves it to `GTD/Trash/` (I4c).
+    ///
+    /// R-4 — the note's title is the capture text: first line, sanitised, cut at a word boundary
+    /// to ≤ 60 characters (`CaptureText`). Whatever the title could not hold becomes the first
+    /// paragraph of the body, above `# Why?` or above the notes, so a long dictation is never
+    /// reduced to its first sixty characters.
     private static func fileInbox(
         _ s: VaultSnapshot, id: NoteID, decision: InboxDecision, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
@@ -162,69 +171,56 @@ public enum Reducer {
         var next = s
         let layout = s.config.layout
         var extraOps: [VaultFileOp] = []
-        var prompts: [AppPrompt] = []
+        var filedNotes: [FiledNote] = []
+        var renames = RenameMap.empty
+
+        // The capture text *is* the title (I2, D27) — the card's title field edits the capture
+        // itself (`editInboxText`), so there is only one text and it is this one.
+        let title = try captureTitle(item.text)
 
         switch decision {
         case let .action(draft):
-            let action = try makeAction(from: draft, in: next, env: env, created: item.created)
+            var filed = draft
+            filed.title = title
+            filed.preamble = CaptureText.body(capture: item.text, title: title, notes: "")
+            // I4a/R-8 — the `+ project` chip may name a project that does not exist yet;
+            // `makeAction` creates it, so filing the card stays one command and one commit.
+            let action = try makeAction(from: filed, in: &next, env: env, created: item.created)
             next.actions.append(action)
-            extraOps.append(.delete(path: item.id.path))
+            extraOps.append(.move(from: item.id.path, to: action.id.path))
+            renames.record(item.id, as: action.id)
 
-        case let .knowledge(folder, title):
-            let noteTitle = try requireTitle(title)
-            let target = layout.knowledgePath(folder: folder, title: noteTitle)
-            guard !pathExists(target, in: next) else { throw .titleCollision(title) }
-            guard target != item.id else { throw .invalid(Message.knowledgeTargetIsSource) }
-            // The capture *becomes* the knowledge note: nothing is rewritten, nothing is lost (I4).
-            extraOps.append(.move(from: item.id.path, to: target.path))
+        case let .knowledge(target, notes):
+            let noteID = try knowledgePath(target, title: title, in: next)
+            guard !pathExists(noteID, in: next) else { throw .titleCollision(title) }
+            guard noteID != item.id else { throw .invalid(Message.knowledgeTargetIsSource) }
+            // The capture *becomes* the knowledge note (I4): the file moves, and the notes panel
+            // — with the full capture text above it when the title had to cut it — is its body.
+            extraOps.append(.move(from: item.id.path, to: noteID.path))
+            filedNotes.append(FiledNote(
+                id: noteID,
+                body: CaptureText.body(capture: item.text, title: title, notes: notes),
+                created: item.created,
+                source: item.passthrough))
+            renames.record(item.id, as: noteID)
 
-        case let .list(name, title, notes):
+        case let .list(name, notes):
             guard let list = next.list(named: name) else { throw .invalid(Message.unknownList(name)) }
-            let itemTitle = try requireTitle(title)
-            let target = layout.listItemPath(list: list.name, title: itemTitle)
+            let target = layout.listItemPath(list: list.name, title: title)
             guard !pathExists(target, in: next) else { throw .titleCollision(title) }
             guard target != item.id else { throw .invalid(Message.knowledgeTargetIsSource) }
             // The capture *becomes* the list item — the file moves rather than being re-created,
             // so its `created` timestamp and anything the user put in the frontmatter survive.
-            //
-            // The notes panel is the item's body (I4b). When it is empty the capture's own text
-            // is kept as the body unless the title already says the same thing, so a capture the
-            // title could not hold in full is never dropped. (R-4, T04, refines this: it puts the
-            // full capture text above the notes whenever the title was truncated.)
-            let body = notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? (item.text == itemTitle ? "" : item.text)
-                : notes
             next.listItems.append(ListItem(
                 id: target,
                 list: list.name,
-                title: itemTitle,
+                title: title,
                 isFinished: false,
                 created: item.created,
-                notes: body,
+                notes: CaptureText.body(capture: item.text, title: title, notes: notes),
                 passthrough: item.passthrough))
             extraOps.append(.move(from: item.id.path, to: target.path))
-
-        case let .newProject(draft, firstActions):
-            let project = try addProject(draft, to: &next)
-            for actionDraft in firstActions {
-                var linked = actionDraft
-                linked.project = project.id
-                let action = try makeAction(from: linked, in: next, env: env, created: item.created)
-                next.actions.append(action)
-            }
-            if firstActions.isEmpty { prompts.append(.whatsNext(project: project.id)) }  // P4/P5
-            extraOps.append(.delete(path: item.id.path))
-
-        case let .existingProject(projectID, actions):
-            guard next.project(projectID) != nil else { throw .notFound(projectID) }
-            guard !actions.isEmpty else { throw .invalid(Message.projectNeedsAction) }
-            for actionDraft in actions {
-                var linked = actionDraft
-                linked.project = projectID
-                let action = try makeAction(from: linked, in: next, env: env, created: item.created)
-                next.actions.append(action)
-            }
-            extraOps.append(.delete(path: item.id.path))
+            renames.record(item.id, as: target)
 
         case .trash:
             extraOps.append(.delete(path: item.id.path))
@@ -232,7 +228,43 @@ public enum Reducer {
 
         next.inbox.removeAll { $0.id == id }
         try checkCap(old: s, new: next, today: env.today)
-        return Reduction(snapshot: next, prompts: prompts, extraOps: extraOps)
+        return Reduction(
+            snapshot: next, extraOps: extraOps, filedNotes: filedNotes, renames: renames)
+    }
+
+    /// R-4 — the title a capture is filed under, or a refusal when there is nothing to name it
+    /// with. Only whitespace is never filed as "Untitled" (§1 "no lying defaults").
+    private static func captureTitle(_ text: String) throws(GTDError) -> String {
+        guard let title = CaptureText.title(of: text) else { throw .invalid(Message.titleRequired) }
+        return title
+    }
+
+    /// I4b/D36 — where a Knowledge filing lands: a folder under `Knowledge/`, or the folder of
+    /// an **active** project (reference material for a project is filed through this branch).
+    private static func knowledgePath(
+        _ target: KnowledgeTarget, title: String, in s: VaultSnapshot
+    ) throws(GTDError) -> NoteID {
+        switch target {
+        case let .folder(folder):
+            return s.config.layout.knowledgePath(folder: folder, title: title)
+        case let .project(projectID):
+            guard let project = s.project(projectID) else { throw .notFound(projectID) }
+            guard project.status == .active else { throw .invalid(Message.projectNotActive) }
+            return NoteID(path: "\(project.id.folder)/\(VaultLayout.sanitize(title)).md")
+        }
+    }
+
+    /// I4a/R-8 — the project an action draft names: an existing one, or one created here from
+    /// `newProjectTitle` (name only, area-less — P1/D35). The **one** place a project is born
+    /// from an action draft, so T05's `Projects/no_area/` change lands in `addProject` alone.
+    private static func resolveProject(
+        for draft: ActionDraft, in s: inout VaultSnapshot
+    ) throws(GTDError) -> NoteID? {
+        guard let newTitle = draft.newProjectTitle,
+              !newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return draft.project }
+        guard draft.project == nil else { throw .invalid(Message.projectChoiceAmbiguous) }
+        return try addProject(ProjectDraft(title: newTitle), to: &s).id
     }
 
     // MARK: - Actions
@@ -241,7 +273,7 @@ public enum Reducer {
         _ s: VaultSnapshot, draft: ActionDraft, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
         var next = s
-        let action = try makeAction(from: draft, in: s, env: env)
+        let action = try makeAction(from: draft, in: &next, env: env)
         next.actions.append(action)
         try checkCap(old: s, new: next, today: env.today)
         return Reduction(snapshot: next)
@@ -463,7 +495,13 @@ public enum Reducer {
         if linked.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             linked.title = step.text      // the step's own wording is the honest default
         }
-        let action = try makeAction(from: linked, in: next, env: env)
+        // …and the step line *is* the next physical action, so it is the honest `What?` too.
+        // Without it R-3 would refuse even a Someday promotion, and P5's one-tap promotion
+        // (which asks for nothing else) could not exist.
+        if linked.what.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            linked.what = step.text
+        }
+        let action = try makeAction(from: linked, in: &next, env: env)
         next.actions.append(action)
         next.projects[projectIndex].steps[stepIndex].promotedTo = action.id
         try checkCap(old: s, new: next, today: env.today)
@@ -690,7 +728,7 @@ public enum Reducer {
         guard let item = s.listItem(id) else { throw .notFound(id) }
         var next = s
         let action = try makeAction(
-            from: draft, in: s, env: env, created: item.created, passthrough: item.passthrough)
+            from: draft, in: &next, env: env, created: item.created, passthrough: item.passthrough)
         next.listItems.removeAll { $0.id == id }
         next.actions.append(action)
         try checkCap(old: s, new: next, today: env.today)
@@ -815,15 +853,19 @@ public enum Reducer {
 
     // MARK: - Shared helpers
 
-    /// Builds the action a draft describes. Does **not** check the cap — callers do that once
-    /// on the finished snapshot, so one command never counts a slot twice.
+    /// Builds the action a draft describes, creating the project it names if that project is
+    /// being created in the same step (I4a/R-8) — which is why the snapshot comes in `inout`.
+    /// Does **not** check the cap: callers do that once on the finished snapshot, so one command
+    /// never counts a slot twice.
     private static func makeAction(
         from draft: ActionDraft,
-        in s: VaultSnapshot,
+        in s: inout VaultSnapshot,
         env: ReducerEnv,
         created: Date? = nil,
         passthrough: NotePassthrough = .empty
     ) throws(GTDError) -> Action {
+        var draft = draft
+        draft.project = try resolveProject(for: draft, in: &s)
         let title = try requireTitle(draft.title)
         let id = s.config.layout.actionPath(title: title)
         guard !pathExists(id, in: s) else { throw .titleCollision(title) }
@@ -838,6 +880,7 @@ public enum Reducer {
             deferDate: draft.deferDate,
             due: draft.due,
             created: created ?? env.now,
+            preamble: draft.preamble,
             why: draft.why,
             what: draft.what,
             // Set when the note already exists and is only *moving* into `Actions/` (L4): the
@@ -850,7 +893,9 @@ public enum Reducer {
 
     /// Everything that must be true of an action after any command touched it.
     ///
-    /// - W1 `waiting` needs who **and** follow-up; leaving `waiting` clears both.
+    /// - W1/D39 `waiting` needs a **follow-up date**; who is optional. Leaving `waiting` clears both.
+    /// - I4/D12/R-3 a *new* transition into a tier brings what that tier requires
+    ///   (`RequiredField.missing`), and a note already in its tier is never judged again.
     /// - P3 only an active project may hold an action in Next.
     /// - A4 contexts come from the configured closed list (values already in the file survive).
     /// - A5 a closed action carries a closing date; re-opening one clears it.
@@ -875,12 +920,12 @@ public enum Reducer {
         if let estimate = action.timeEstimate, estimate <= 0 { action.timeEstimate = nil }
 
         if action.status == .waiting {
+            // W1/D39 — the date is the commitment; who is optional, and an empty who writes no
+            // `waitingFor:` line at all rather than an empty one.
             let info = waiting ?? action.waiting
-            guard let info, !info.who.trimmingCharacters(in: .whitespaces).isEmpty else {
-                throw .waitingInfoRequired
-            }
-            action.waitingFor = info.who.trimmingCharacters(in: .whitespaces)
-            action.followUpDate = info.followUp
+            let who = (info?.who ?? "").trimmingCharacters(in: .whitespaces)
+            action.waitingFor = who.isEmpty ? nil : who
+            action.followUpDate = info?.followUp
         } else {
             action.waitingFor = nil
             action.followUpDate = nil
@@ -892,6 +937,19 @@ public enum Reducer {
                 throw .invalid(Message.projectNotActive)
             }
         }
+
+        // R-3 — validation before leaving (STYLEGUIDE §3.6). It runs after the rules about the
+        // *world* (a project must be active) and before the cap is counted, so a card that is
+        // missing a field hears about the field rather than about the cap it never reached.
+        let missing = RequiredField.missing(
+            status: action.status,
+            previous: previous?.status,
+            why: action.why,
+            what: action.what,
+            contexts: action.contexts,
+            timeEstimate: action.timeEstimate,
+            followUpDate: action.followUpDate)
+        guard missing.isEmpty else { throw .missingFields(missing) }
 
         // R-2 — a Next item may carry a future `defer`. It is hidden until its date and does not
         // occupy a slot while hidden (`Rules.countsTowardCap(_:today:)`); on its date it comes
@@ -964,6 +1022,7 @@ public enum Reducer {
             completedDate: action.completedDate,
             reviewReason: action.reviewReason,
             modified: action.modified,
+            preamble: action.preamble,
             why: action.why,
             what: action.what,
             passthrough: action.passthrough)
@@ -977,7 +1036,8 @@ public enum Reducer {
         static let reviewReasonRequired = "Defer to review needs a reason"
         static let projectNotActive = "Only active projects put actions into Next"
         static let trashIsNotAStatus = "Trash is not a status — trashing moves the note to GTD/Trash/"
-        static let projectNeedsAction = "Filing to a project needs at least one action"
+        static let projectChoiceAmbiguous =
+            "An action names either an existing project or a new one, not both"
         static let projectRenameUnsupported = "Renaming a project is not supported"
         static let projectMoveUnsupported = "Moving a project to another area is not supported"
         static let stepAlreadyPromoted = "This step is already promoted"

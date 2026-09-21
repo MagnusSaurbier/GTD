@@ -45,38 +45,56 @@ public final class WhatsNextModel {
         return Rules.isStalled(project, in: model.snapshot, today: model.today())
     }
 
-    /// One tap: promotes the step at `stepIndex` (an index into the project's full `steps`
-    /// array — see `openSteps`) straight into a Next action, no extra form (P5's "one-tap
-    /// promotion"; the small draft form with contexts/time belongs to the project detail view).
+    /// Promotes the step at `stepIndex` (an index into the project's full `steps` array — see
+    /// `openSteps`) into a **Next** action.
+    ///
+    /// R-3 — Next asks for `Why?`, a context and a time estimate, which a step line does not
+    /// carry: pass the `fields` the sheet collected, or take the `.missingFields` answer and
+    /// offer Someday (`promoteToSomeday`), which always works because the step line is the
+    /// `What?` (ARCHITECTURE §6, T04-1).
     @discardableResult
-    public func promote(stepIndex: Int) async throws -> PromotionOutcome {
+    public func promote(stepIndex: Int, fields: ActionDraft? = nil) async throws -> PromotionOutcome {
+        try await promote(stepIndex: stepIndex, status: .next, fields: fields)
+    }
+
+    @discardableResult
+    public func promoteToSomeday(stepIndex: Int, fields: ActionDraft? = nil) async throws -> PromotionOutcome {
+        try await promote(stepIndex: stepIndex, status: .someday, fields: fields)
+    }
+
+    private func promote(
+        stepIndex: Int, status: ActionStatus, fields: ActionDraft?
+    ) async throws -> PromotionOutcome {
         guard let project, project.steps.indices.contains(stepIndex) else { return .success }
-        let draft = ActionDraft(title: project.steps[stepIndex].text, status: .next)
+        var draft = fields ?? ActionDraft(title: project.steps[stepIndex].text)
+        draft.title = project.steps[stepIndex].text
+        draft.status = status
         return try await sendCapAware(model, .promoteStep(project: projectID, stepIndex: stepIndex, draft))
     }
 
+    /// Free-text new action, not tied to an existing step (P5). The typed line is both the
+    /// title and the `What?`; `fields` carries whatever else Next requires (R-3).
     @discardableResult
-    public func promoteToSomeday(stepIndex: Int) async throws -> PromotionOutcome {
-        guard let project, project.steps.indices.contains(stepIndex) else { return .success }
-        let draft = ActionDraft(title: project.steps[stepIndex].text, status: .someday)
-        return try await sendCapAware(model, .promoteStep(project: projectID, stepIndex: stepIndex, draft))
-    }
-
-    /// Free-text new action, not tied to an existing step (P5).
-    @discardableResult
-    public func createAction(title: String) async throws -> PromotionOutcome {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .success }
-        return try await sendCapAware(
-            model, .createAction(ActionDraft(title: trimmed, status: .next, project: projectID)))
+    public func createAction(title: String, fields: ActionDraft? = nil) async throws -> PromotionOutcome {
+        try await createAction(title: title, status: .next, fields: fields)
     }
 
     @discardableResult
-    public func createActionInSomeday(title: String) async throws -> PromotionOutcome {
+    public func createActionInSomeday(title: String, fields: ActionDraft? = nil) async throws -> PromotionOutcome {
+        try await createAction(title: title, status: .someday, fields: fields)
+    }
+
+    private func createAction(
+        title: String, status: ActionStatus, fields: ActionDraft?
+    ) async throws -> PromotionOutcome {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .success }
-        return try await sendCapAware(
-            model, .createAction(ActionDraft(title: trimmed, status: .someday, project: projectID)))
+        var draft = fields ?? ActionDraft(title: trimmed)
+        draft.title = trimmed
+        draft.status = status
+        draft.project = projectID
+        if draft.what.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { draft.what = trimmed }
+        return try await sendCapAware(model, .createAction(draft))
     }
 
     /// "Project is done" (P5).

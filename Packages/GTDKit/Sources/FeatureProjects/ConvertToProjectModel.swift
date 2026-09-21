@@ -46,11 +46,17 @@ public final class ConvertToProjectModel {
     /// promotes it in the same flow (the brief's "first step pre-selected for promotion").
     /// Cap handling is simplified from T20: the caller offers a single "Send to Someday instead".
     @discardableResult
-    public func convert(_ draft: ProjectDraft, promoteStepIndex: Int?) async throws -> PromotionOutcome {
+    public func convert(
+        _ draft: ProjectDraft, promoteStepIndex: Int?, fields: ActionDraft? = nil
+    ) async throws -> PromotionOutcome {
         try await model.send(.convertActionToProject(actionID, draft))
         guard let promoteStepIndex, draft.steps.indices.contains(promoteStepIndex) else { return .success }
         let newProject = projectID(for: draft)
-        let promoteDraft = ActionDraft(title: draft.steps[promoteStepIndex], status: .next)
+        // R-3 — the promoted step enters Next, so it brings what Next asks for; without
+        // `fields` the caller gets `.missingFields` and offers Someday instead.
+        var promoteDraft = fields ?? ActionDraft(title: draft.steps[promoteStepIndex])
+        promoteDraft.title = draft.steps[promoteStepIndex]
+        promoteDraft.status = .next
         return try await sendCapAware(
             model, .promoteStep(project: newProject, stepIndex: promoteStepIndex, promoteDraft))
     }

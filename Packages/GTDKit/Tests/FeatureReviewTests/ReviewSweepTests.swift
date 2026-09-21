@@ -34,7 +34,8 @@ struct ReviewSweepTests {
         guard case let .action(action)? = DeferredSweep.decision(target: .someday, draft: draft)
         else { Issue.record("expected an action decision"); return }
         #expect(action.status == .someday)
-        #expect(action.title == "Mail three chairs")
+        // R-4 — the capture text is the title; the reducer cuts and sanitises it.
+        #expect(action.title == "Decide on the thesis chair")
         #expect(action.contexts == ["mac"])
         #expect(action.timeEstimate == 30)
         #expect(action.what == "Mail three chairs")
@@ -45,7 +46,6 @@ struct ReviewSweepTests {
         let draft = InboxSession.Draft(text: "Something", what: "Do it")
         #expect(DeferredSweep.decision(target: .waiting, draft: draft) == nil)
         #expect(DeferredSweep.decision(target: .knowledge, draft: draft) == nil)
-        #expect(DeferredSweep.decision(target: .project, draft: draft) == nil)
         // Parking it in the review again would make the escape hatch a loop.
         #expect(DeferredSweep.decision(target: .deferToReview, draft: draft) == nil)
         #expect(!DeferredSweep.targets.contains(.deferToReview))
@@ -57,18 +57,28 @@ struct ReviewSweepTests {
         #expect(action.status == .waiting)
         #expect(action.waiting == waiting)
 
-        #expect(DeferredSweep.decision(target: .knowledge, draft: draft, knowledgeFolder: "Studium")
-            == .knowledge(folder: "Studium", title: "Do it"))
+        #expect(DeferredSweep.decision(
+            target: .knowledge, draft: draft, knowledgeFolder: "Studium", notes: "Notiz")
+            == .knowledge(.folder("Studium"), notes: "Notiz"))
     }
 
-    @Test func nextAndSomedayStillNeedAWhat() {
+    /// R-3 — the review asks for exactly what the inbox card asks for, because it is the same
+    /// filing: Next wants all four, Someday only `What?`, Knowledge and Trash nothing.
+    @Test func theDeckAsksForTheSameFieldsTheInboxCardDoes() {
         let empty = InboxSession.Draft(text: "Raw capture")
-        #expect(!DeferredSweep.isComplete(empty, for: .next))
-        #expect(!DeferredSweep.isComplete(empty, for: .someday))
+        #expect(DeferredSweep.missingFields(empty, for: .next)
+                == [.why, .what, .context, .timeEstimate])
+        #expect(DeferredSweep.missingFields(empty, for: .someday) == [.what])
         #expect(DeferredSweep.isComplete(empty, for: .knowledge))
         #expect(DeferredSweep.isComplete(empty, for: .trash))
+        #expect(DeferredSweep.isComplete(empty, for: .done))
 
-        let filled = InboxSession.Draft(text: "Raw capture", what: "Write it down")
+        var filled = InboxSession.Draft(text: "Raw capture", what: "Write it down")
+        #expect(DeferredSweep.isComplete(filled, for: .someday))
+        #expect(!DeferredSweep.isComplete(filled, for: .next))
+        filled.why = "It keeps coming back"
+        filled.contexts = ["mac"]
+        filled.timeBucket = .upTo30
         #expect(DeferredSweep.isComplete(filled, for: .next))
     }
 
@@ -232,7 +242,8 @@ struct ReviewSweepTests {
         // What `WhatsNextSheet` does: one `promoteStep`, issued by the sheet, not by the sweep.
         try await model.send(.promoteStep(
             project: project.id, stepIndex: stepIndex,
-            ActionDraft(title: "Ask the department for the form", status: .next)))
+            ActionDraft(title: "Ask the department for the form", status: .next,
+                        contexts: ["mac"], timeEstimate: 30, why: "The project is stalled.")))
 
         session.markStalledHandled(project)
         session.markStalledHandled(project)                 // idempotent

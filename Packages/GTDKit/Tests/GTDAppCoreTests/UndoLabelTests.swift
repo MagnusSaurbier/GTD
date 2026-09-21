@@ -30,6 +30,11 @@ struct UndoLabelTests {
             .fileInbox(id, .action(ActionDraft(title: "x", status: .next))), in: snapshot)
                 == "Filed to Next")
         #expect(UndoLabel.of(.fileInbox(id, .trash), in: snapshot) == "Moved to Trash")
+        #expect(UndoLabel.of(.fileInbox(id, .knowledge(.folder("Studium"), notes: "")), in: snapshot)
+                == "Filed to Knowledge")
+        // I4/D13 — the 2-minute rule: the card is done, and the toast says so (§6.3).
+        #expect(UndoLabel.of(
+            .fileInbox(id, .action(ActionDraft(title: "x", status: .done))), in: snapshot) == "Done")
     }
 
     /// I4c — trashing an action is its own command, and it says so.
@@ -42,10 +47,10 @@ struct UndoLabelTests {
     /// §6.3 spells the list toast with the list's own name: `Added to Read`.
     @Test func filingToAListNamesTheList() {
         #expect(UndoLabel.of(
-            .fileInbox(id, .list(name: "Read", title: "Sapiens", notes: "")), in: snapshot)
+            .fileInbox(id, .list(name: "Read", notes: "")), in: snapshot)
                 == "Added to Read")
         #expect(UndoLabel.of(
-            .fileInbox(id, .list(name: "Wish", title: "x", notes: "")), in: snapshot)
+            .fileInbox(id, .list(name: "Wish", notes: "")), in: snapshot)
                 == "Added to Wish")
     }
 

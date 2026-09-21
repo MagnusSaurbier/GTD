@@ -260,7 +260,7 @@ struct ReducerListTests {
         let result = try Reducer.reduce(
             vault(items: [item]),
             .promoteListItem(item.id, ActionDraft(
-                title: "Read Sapiens", status: .next, contexts: [], timeEstimate: 60,
+                title: "Read Sapiens", status: .next, contexts: ["deep-work"], timeEstimate: 60,
                 why: "Marie keeps asking", what: "Read the first 50 pages")),
             env: env)
 
@@ -280,12 +280,13 @@ struct ReducerListTests {
         let item = TestVault.listItem("Read", "Sapiens")
         full.listItems = [item]
 
-        #expect(TestVault.error(
-            full, .promoteListItem(item.id, ActionDraft(title: "Read Sapiens", status: .next)))
+        #expect(TestVault.error(full, .promoteListItem(item.id, ActionDraft(
+            title: "Read Sapiens", status: .next, contexts: ["deep-work"], timeEstimate: 60,
+            why: "Marie keeps asking", what: "Read it")))
             == .nextCapReached(cap: 15))
         // Someday is not a commitment, so the same item goes there without a fight.
-        #expect(TestVault.error(
-            full, .promoteListItem(item.id, ActionDraft(title: "Read Sapiens", status: .someday)))
+        #expect(TestVault.error(full, .promoteListItem(item.id, ActionDraft(
+            title: "Read Sapiens", status: .someday, what: "Read it")))
             == nil)
     }
 
@@ -294,7 +295,8 @@ struct ReducerListTests {
         let clash = TestVault.action("Read Sapiens", .next)
         #expect(TestVault.error(
             vault(items: [item], actions: [clash]),
-            .promoteListItem(item.id, ActionDraft(title: "Read Sapiens", status: .someday)))
+            .promoteListItem(item.id, ActionDraft(
+                title: "Read Sapiens", status: .someday, what: "Read it")))
             == .titleCollision("Read Sapiens"))
     }
 
@@ -314,8 +316,7 @@ struct ReducerListTests {
         let item = capture
         let result = try Reducer.reduce(
             vault(inbox: [item]),
-            .fileInbox(item.id, .list(
-                name: "Read", title: "Sapiens by Yuval Noah Harari", notes: "Marie's copy")),
+            .fileInbox(item.id, .list(name: "Read", notes: "Marie's copy")),
             env: env)
 
         let target = NoteID(path: "Lists/Read/Sapiens by Yuval Noah Harari.md")
@@ -328,48 +329,36 @@ struct ReducerListTests {
         #expect(result.extraOps == [.move(from: item.id.path, to: target.path)])
     }
 
-    /// Nothing the user dictated is dropped: with no notes and a title that says less than the
-    /// capture did, the capture text stays as the item's body.
-    @Test func aCaptureTheTitleCannotHoldInFullKeepsItsTextAsTheBody() throws {
-        let item = capture
-        let result = try Reducer.reduce(
-            vault(inbox: [item]),
-            .fileInbox(item.id, .list(name: "Read", title: "Sapiens", notes: "")),
-            env: env)
-        #expect(result.snapshot.listItems.first?.notes == "Sapiens by Yuval Noah Harari")
-    }
-
+    /// R-4 — nothing the user dictated is dropped: a capture the title cannot hold in full
+    /// keeps its whole text above the notes. Here the title holds it, so the body stays empty.
     @Test func aCaptureWhoseTitleSaysItAllGetsAnEmptyBody() throws {
         let item = capture
         let result = try Reducer.reduce(
-            vault(inbox: [item]),
-            .fileInbox(item.id, .list(
-                name: "Read", title: "Sapiens by Yuval Noah Harari", notes: "")),
-            env: env)
+            vault(inbox: [item]), .fileInbox(item.id, .list(name: "Read", notes: "")), env: env)
         #expect(result.snapshot.listItems.first?.notes == "")
     }
 
     @Test func filingToAnUnknownListIsRefused() {
         let item = capture
         #expect(TestVault.error(
-            vault(inbox: [item]), .fileInbox(item.id, .list(name: "Wish", title: "x", notes: "")))
+            vault(inbox: [item]), .fileInbox(item.id, .list(name: "Wish", notes: "")))
             == .invalid("Unknown list: Wish"))
     }
 
-    @Test func filingToAListWithNoTitleIsRefused() {
-        let item = capture
+    @Test func filingACaptureOfOnlyWhitespaceToAListIsRefused() {
+        let item = TestVault.inboxItem("2026-09-19 081204", "   ")
         #expect(TestVault.error(
-            vault(inbox: [item]), .fileInbox(item.id, .list(name: "Read", title: " ", notes: "")))
+            vault(inbox: [item]), .fileInbox(item.id, .list(name: "Read", notes: "")))
             == .invalid("A title is required"))
     }
 
     @Test func filingOntoAnExistingItemIsRefused() {
         let item = capture
-        let existing = TestVault.listItem("Read", "Sapiens")
+        let existing = TestVault.listItem("Read", "Sapiens by Yuval Noah Harari")
         #expect(TestVault.error(
             vault(items: [existing], inbox: [item]),
-            .fileInbox(item.id, .list(name: "Read", title: "Sapiens", notes: "")))
-            == .titleCollision("Sapiens"))
+            .fileInbox(item.id, .list(name: "Read", notes: "")))
+            == .titleCollision("Sapiens by Yuval Noah Harari"))
     }
 
     /// L1 — a list item is not a commitment, so filing one never runs into the Next cap.
@@ -378,8 +367,7 @@ struct ReducerListTests {
         full.lists = [GTDList(name: "Read")]
         let item = capture
         full.inbox = [item]
-        #expect(TestVault.error(
-            full, .fileInbox(item.id, .list(name: "Read", title: "Sapiens", notes: ""))) == nil)
+        #expect(TestVault.error(full, .fileInbox(item.id, .list(name: "Read", notes: ""))) == nil)
     }
 
     // MARK: - Undo (N6)
@@ -392,7 +380,7 @@ struct ReducerListTests {
         #expect(Rules.isUndoable(.completeListItem(id)))
         #expect(Rules.isUndoable(.trashListItem(id)))
         #expect(Rules.isUndoable(.promoteListItem(id, ActionDraft(title: "x"))))
-        #expect(Rules.isUndoable(.fileInbox(id, .list(name: "Read", title: "x", notes: ""))))
+        #expect(Rules.isUndoable(.fileInbox(id, .list(name: "Read", notes: ""))))
     }
 
     /// `createList` only makes an empty folder, and undoing it would mean removing a directory —

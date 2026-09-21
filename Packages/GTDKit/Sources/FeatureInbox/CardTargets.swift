@@ -10,8 +10,9 @@ import DesignSystem
 public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     case next
     case someday
+    /// I4/D13 — the 2-minute rule: "I just did it". Files the card as `done`, asking nothing.
+    case done
     case trash
-    case project
     case knowledge
     case waiting
     case deferToReview
@@ -23,7 +24,6 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
         switch self {
         case .next: .right
         case .someday: .left
-        case .trash: .down
         default: nil
         }
     }
@@ -33,8 +33,8 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
         switch self {
         case .next: "→"
         case .someday: "←"
-        case .trash: "↓"
-        case .project: "P"
+        case .done: "⌘↩"
+        case .trash: "X"
         case .knowledge: "K"
         case .waiting: "W"
         case .deferToReview: "R"
@@ -44,12 +44,16 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     /// Targets that file the card straight away; the rest open a sheet first.
     public var isDirect: Bool { swipe != nil }
 
-    /// The status a direct target files to.
+    /// The status a target files to — and, through `RequiredField.missing`, what it demands
+    /// before it may be reached (R-3).
     public var status: ActionStatus? {
         switch self {
         case .next: .next
         case .someday: .someday
-        // I4c — Trash is not a status: the card's note is moved to `GTD/Trash/`.
+        case .done: .done
+        case .waiting: .waiting
+        // I4c — Trash is not a status: the card's note is moved to `GTD/Trash/`. Knowledge and
+        // the lists are not actions at all.
         default: nil
         }
     }
@@ -59,8 +63,8 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
         switch self {
         case .next: Copy.next
         case .someday: Copy.someday
+        case .done: Copy.done
         case .trash: Copy.trash
-        case .project: Copy.project
         case .knowledge: Copy.knowledge
         case .waiting: Copy.waiting
         case .deferToReview: Copy.deferToReview
@@ -72,16 +76,24 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
         switch self {
         case .next: Symbols.next
         case .someday: Symbols.someday
+        case .done: Symbols.done
         case .trash: Symbols.trash
-        case .project: Symbols.projects
         case .knowledge: Symbols.knowledge
         case .waiting: Symbols.waiting
         case .deferToReview: Symbols.deferToReview
         }
     }
 
-    /// Only Next/Someday demand a decision about the *next physical action* (STYLEGUIDE §3.6).
-    public var requiresWhat: Bool { self == .next || self == .someday }
+    /// R-3 — what this target needs from `draft` before the card may leave through it. Empty
+    /// for Trash, Knowledge, the lists and `Done` (STYLEGUIDE §3.6 "Validation before leaving").
+    public func missingFields(
+        why: String, what: String, contexts: [String], timeEstimate: Int?, followUpDate: Day?
+    ) -> [RequiredField] {
+        guard let status else { return [] }
+        return RequiredField.missing(
+            status: status, previous: nil, why: why, what: what,
+            contexts: contexts, timeEstimate: timeEstimate, followUpDate: followUpDate)
+    }
 
     /// What the undo toast says after this card left: `Moved to Someday` (STYLEGUIDE §3.8, §6.3).
     public var undoToastLabel: String {
@@ -94,15 +106,17 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
         self == .deferToReview ? InboxCopy.reviewShort : title
     }
 
-    /// The four labelled buttons of the iPhone action bar — the targets that have no swipe.
-    public static let buttonTargets: [CardTarget] = [.project, .knowledge, .waiting, .deferToReview]
+    /// The labelled buttons of the iPhone action bar — the targets that have no swipe. The
+    /// project is not among them any anymore: it is a **chip on the card** (I4a, R-8).
+    public static let buttonTargets: [CardTarget] = [.knowledge, .waiting, .done, .deferToReview]
 
     /// What the `⋯` menu holds: the four swipe targets, so a card can be filed without a swipe
     /// (one-handed use, Switch Control). Same order as the legend.
     public static let menuTargets: [CardTarget] = directionalTargets
 
-    /// The directional targets, in legend order.
-    public static let directionalTargets: [CardTarget] = [.someday, .next, .trash]
+    /// The directional targets, in legend order. Trash is not among them: no swipe ever
+    /// trashes (STYLEGUIDE decision #12) — it is a step-1 button.
+    public static let directionalTargets: [CardTarget] = [.someday, .next]
 
     /// Drag tint of the Trash target: `signalOverdue` at 18 % (STYLEGUIDE §3.6). The other
     /// targets use a token colour as is (`accentWash`, `fillQuiet`).
@@ -128,19 +142,20 @@ public enum InboxSymbols {
     public static let more = "ellipsis"
 }
 
-/// The directions a card can be thrown in. There is no `up` any more: the tier it used to file
-/// to was merged into Someday (A3).
+/// The directions a card can be thrown in. There is no `up` any more (the two "not now" tiers
+/// merged into Someday, A3), and `down` no longer trashes: it collapses the opened card back to
+/// step 1 (D10, STYLEGUIDE decision #12), so it files nothing.
 public enum SwipeDirection: Sendable, Equatable, CaseIterable {
     case left, right, down
 
     public var isHorizontal: Bool { self == .left || self == .right }
 
-    /// The target this direction files to (STYLEGUIDE §3.6).
-    public var target: CardTarget {
+    /// The target this direction files to, or `nil` for `down`, which only collapses.
+    public var target: CardTarget? {
         switch self {
         case .right: .next
         case .left: .someday
-        case .down: .trash
+        case .down: nil
         }
     }
 }
@@ -155,13 +170,20 @@ public enum DragResolver {
         return dy < 0 ? nil : .down
     }
 
-    /// The target reached at this translation, or `nil` when the card springs back.
+    /// The target reached at this translation, or `nil` when the card springs back (and for a
+    /// downward drag, which collapses the card instead of filing it).
     public static func target(dx: CGFloat, dy: CGFloat, cardSize: CGSize) -> CardTarget? {
         guard let direction = direction(dx: dx, dy: dy) else { return nil }
         guard progress(dx: dx, dy: dy, cardSize: cardSize) >= threshold(for: direction) else {
             return nil
         }
         return direction.target
+    }
+
+    /// True when this drag collapses the opened card back to step 1 (D10).
+    public static func collapses(dx: CGFloat, dy: CGFloat, cardSize: CGSize) -> Bool {
+        guard direction(dx: dx, dy: dy) == .down else { return false }
+        return progress(dx: dx, dy: dy, cardSize: cardSize) >= threshold(for: .down)
     }
 
     /// How far the drag has come towards filing, as a fraction of the threshold (0…1+).
@@ -187,7 +209,7 @@ public enum DragResolver {
     private static func threshold(for direction: SwipeDirection) -> CGFloat {
         switch direction {
         case .left, .right: DragThresholds.horizontal
-        case .down: DragThresholds.trash
+        case .down: DragThresholds.vertical   // 25 % of card height collapses it (§3.6)
         }
     }
 }
@@ -215,7 +237,7 @@ public enum InboxKey: Sendable, Equatable {
 public enum KeyMap {
 
     /// Arrow keys mirror the swipe directions.
-    public static func target(for direction: SwipeDirection) -> CardTarget { direction.target }
+    public static func target(for direction: SwipeDirection) -> CardTarget? { direction.target }
 
     /// Resolves a character press. `shift` may be reported either through the modifier flag or
     /// through the shifted character itself (`!@#$`), depending on the keyboard layout — both work.

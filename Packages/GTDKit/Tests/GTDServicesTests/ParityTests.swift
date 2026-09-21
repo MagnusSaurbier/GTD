@@ -58,8 +58,13 @@ struct ParityTests {
         let before = try vault.files()
 
         // The sample vault sits at 14/15; two more Next actions are one too many.
-        let fill = GTDCommand.createAction(ActionDraft(title: "Fills the last slot", status: .next))
-        let overflow = GTDCommand.createAction(ActionDraft(title: "One too many", status: .next))
+        // R-3 — complete cards, so the refusal under test is the cap and nothing else.
+        let fill = GTDCommand.createAction(ActionDraft(
+            title: "Fills the last slot", status: .next, contexts: ["mac"], timeEstimate: 10,
+            why: "The last slot.", what: "Do it."))
+        let overflow = GTDCommand.createAction(ActionDraft(
+            title: "One too many", status: .next, contexts: ["mac"], timeEstimate: 10,
+            why: "One too many.", what: "Do it."))
 
         _ = try await memory.perform(fill)
         _ = try await vault.backend.perform(fill)

@@ -39,22 +39,18 @@ enum CommandScript {
         },
         Step(name: "file a card to Knowledge") { s in
             guard let item = capture("ask Marie", in: s) else { return nil }
-            return .fileInbox(item.id, .knowledge(folder: "Thesis", title: "Monitor handover"))
+            return .fileInbox(item.id, .knowledge(.folder("Thesis"), notes: "Marie has the cable."))
         },
-        Step(name: "file a card to a new project") { s in
+        // I4a/R-8 — a capture that is really a project stays an action and creates the project
+        // alongside it, in one command (D33).
+        Step(name: "file a card with a project chip that creates the project") { s in
             guard let item = capture("Steuererklärung", in: s) else { return nil }
-            return .fileInbox(item.id, .newProject(
-                ProjectDraft(
-                    title: "Steuererklärung",
-                    area: s.areas.first { $0.title == "Karriereplanung" }?.id,
-                    outcome: "Tax return for 2025 filed.",
-                    why: "The semester ticket may be deductible.",
-                    steps: ["Collect the receipts", "Fill in the forms"]),
-                firstActions: [ActionDraft(
-                    title: "Check whether the semester ticket is deductible",
-                    status: .someday,
-                    contexts: ["mac"],
-                    what: "Ask in the student forum.")]))
+            return .fileInbox(item.id, .action(ActionDraft(
+                title: "Steuererklärung",
+                status: .someday,
+                contexts: ["mac"],
+                newProjectTitle: "Steuererklärung",
+                what: "Ask in the student forum whether the semester ticket is deductible.")))
         },
         Step(name: "set a Next action to Waiting") { s in
             guard let action = s.actions.first(where: { $0.title == "Book the dentist appointment" })

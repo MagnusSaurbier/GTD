@@ -13,7 +13,7 @@ struct VaultBackendScenarioTests {
 
     // MARK: - Inbox processing (I4)
 
-    @Test func theFiveInboxDecisionsEachLandInTheRightFile() async throws {
+    @Test func theFourInboxDecisionsEachLandInTheRightFile() async throws {
         let vault = try TestVault.onDisk()
         defer { vault.cleanUp() }
         try await vault.backend.start()
@@ -25,59 +25,48 @@ struct VaultBackendScenarioTests {
         }
         let toAction = try capture("call the Hausverwaltung")
         let toKnowledge = try capture("ask Marie")
-        let toProject = try capture("Steuererklärung")
+        let toList = try capture("buy new running shoes")
         let toTrash = try capture("idea: a script")
-        let toExisting = try capture("buy new running shoes")
-        let knowledgeSource = try #require(try vault.text(toKnowledge.id.path))
 
-        // 1 — an action. The capture's `created` follows it into the note (A1, I4).
+        // 1 — an action. R-4: the note is named after the capture text, and the capture's
+        // `created` follows it into the note (A1, I4).
         _ = try await vault.backend.perform(.fileInbox(toAction.id, .action(ActionDraft(
-            title: "Mail the Hausverwaltung",
+            title: "ignored — the capture text is the title (R-4)",
             status: .next,
             contexts: ["mac"],
             timeEstimate: 10,
             why: "The handle has been broken for two weeks.",
             what: "Ask for a repair date."))))
 
-        let action = try #require(try vault.text("Actions/Mail the Hausverwaltung.md"))
+        let actionPath = "Actions/call the Hausverwaltung about the broken window handle.md"
+        let action = try #require(try vault.text(actionPath))
         #expect(action.contains("status: next"))
         #expect(action.contains("contexts: [mac]"))
         #expect(action.contains("timeEstimate: 10"))
         #expect(action.contains("# Why?"))
         #expect(action.contains("Ask for a repair date."))
-        let decoded = try NoteCodec.decodeAction(
-            id: NoteID(path: "Actions/Mail the Hausverwaltung.md"), text: action)
+        let decoded = try NoteCodec.decodeAction(id: NoteID(path: actionPath), text: action)
         #expect(decoded.created == toAction.created, "the capture time is kept (A1)")
+        #expect(decoded.preamble.isEmpty, "the title held the whole capture, so no lead paragraph")
         #expect(try vault.text(toAction.id.path) == nil, "the capture left Inbox/")
-        #expect(try vault.text("\(layout.trash)/\(toAction.id.title).md") != nil)
+        #expect(try vault.text("\(layout.trash)/\(toAction.id.title).md") == nil,
+                "R-4: the capture file *became* the action note, so nothing went to the trash")
 
-        // 2 — knowledge: the capture *becomes* the note, byte for byte.
+        // 2 — knowledge: the capture becomes the note, keeping its `created`, and the notes
+        // panel is its body (I4b).
         _ = try await vault.backend.perform(.fileInbox(
-            toKnowledge.id, .knowledge(folder: "Thesis", title: "Monitor handover")))
-        #expect(try vault.text("Knowledge/Thesis/Monitor handover.md") == knowledgeSource)
+            toKnowledge.id, .knowledge(.folder("Thesis"), notes: "She has the cable too.")))
+        let knowledge = try #require(try vault.text(
+            "Knowledge/Thesis/ask Marie whether she still needs the monitor.md"))
+        #expect(knowledge.contains("created: 2026-09-18T09:44:10+02:00"))
+        #expect(knowledge.contains("She has the cable too."))
         #expect(try vault.text(toKnowledge.id.path) == nil)
 
-        // 3 — a new project with a first action, in an existing area.
-        let area = try #require(start.areas.first { $0.title == "Karriereplanung" })
-        _ = try await vault.backend.perform(.fileInbox(toProject.id, .newProject(
-            ProjectDraft(
-                title: "Steuererklärung",
-                area: area.id,
-                outcome: "Tax return for 2025 filed.",
-                why: "The semester ticket may be deductible.",
-                steps: ["Collect the receipts", "Fill in the forms"]),
-            firstActions: [ActionDraft(
-                title: "Collect the tax receipts", status: .someday, contexts: ["home"])])))
-
-        let note = try #require(try vault.text(
-            "Projects/Karriereplanung/Steuererklärung/Steuererklärung.md"))
-        #expect(note.contains("kind: project"))
-        #expect(note.contains("status: active"))
-        #expect(note.contains("- [ ] Collect the receipts"))
-        #expect(note.contains("- [ ] Fill in the forms"))
-        let first = try #require(try vault.text("Actions/Collect the tax receipts.md"))
-        #expect(first.contains(
-            "project: \"[[Projects/Karriereplanung/Steuererklärung/Steuererklärung]]\""))
+        // 3 — a list item (§5a): the same move, no commitment attached.
+        _ = try await vault.backend.perform(.fileInbox(toList.id, .list(name: "Wish", notes: "")))
+        #expect(try vault.text(
+            "Lists/Wish/buy new running shoes before the knee gets worse.md") != nil)
+        #expect(try vault.text(toList.id.path) == nil)
 
         // 4 — trash: nothing is hard-deleted, the file is in GTD/Trash/.
         let trashedText = try #require(try vault.text(toTrash.id.path))
@@ -85,17 +74,55 @@ struct VaultBackendScenarioTests {
         #expect(try vault.text(toTrash.id.path) == nil)
         #expect(try vault.text("\(layout.trash)/\(toTrash.id.title).md") == trashedText)
 
-        // 5 — an existing project.
-        let daad = try #require(start.projects.first { $0.title == "DAAD" })
-        _ = try await vault.backend.perform(.fileInbox(toExisting.id, .existingProject(
-            daad.id, actions: [ActionDraft(title: "Buy running shoes", status: .someday)])))
-        let shoes = try #require(try vault.text("Actions/Buy running shoes.md"))
-        #expect(shoes.contains("project: \"[[Projects/Applications/DAAD/DAAD]]\""))
-
-        // The vault still reads cleanly, and the five captures are gone from the queue.
+        // The vault still reads cleanly, and the four captures are gone from the queue.
         let scanned = try vault.rescan()
         #expect(scanned.issues.isEmpty, "\(scanned.issues)")
-        #expect(scanned.inbox.count == start.inbox.count - 5)
+        #expect(scanned.inbox.count == start.inbox.count - 4)
+    }
+
+    /// R-8/I4a — the `+ project` chip creating its project: **one** command, one commit, and one
+    /// undo that puts every file back byte for byte (N6).
+    @Test func aProjectChipCreatesTheProjectLinksTheActionAndUndoesInOneStep() async throws {
+        let vault = try TestVault.onDisk()
+        defer { vault.cleanUp() }
+        try await vault.backend.start()
+        let before = try vault.filesOutsideTheTrash()
+        let start = await vault.backend.currentSnapshot()
+        let item = try #require(start.inbox.first { $0.text.hasPrefix("Steuererklärung") })
+        let captureText = try #require(try vault.text(item.id.path))
+
+        _ = try await vault.backend.perform(.fileInbox(item.id, .action(ActionDraft(
+            title: "",
+            status: .next,
+            contexts: ["mac"],
+            timeEstimate: 30,
+            newProjectTitle: "Steuererklärung 2025",
+            why: "The semester ticket may be deductible.",
+            what: "Ask in the student forum."))))
+
+        // The project note exists, area-less, and the action links to it with a wikilink.
+        let project = try #require(try vault.text(
+            "Projects/Steuererklärung 2025/Steuererklärung 2025.md"))
+        #expect(project.contains("kind: project"))
+        #expect(project.contains("status: active"))
+        let actionPath = "Actions/Steuererklärung — find out whether the semester ticket is.md"
+        let action = try #require(try vault.text(actionPath))
+        #expect(action.contains(
+            "project: \"[[Projects/Steuererklärung 2025/Steuererklärung 2025]]\""))
+        // R-4 — the title was cut at a word boundary, so the whole dictation stays in the note.
+        #expect(action.contains("Steuererklärung — find out whether the semester ticket is deductible"))
+        #expect(try vault.text(item.id.path) == nil, "the capture became the action note")
+
+        // N6 — one command, one undo: the capture is back, byte for byte, and the project is
+        // gone again.
+        try await vault.backend.undo()
+        #expect(try vault.text(item.id.path) == captureText)
+        #expect(try vault.text(actionPath) == nil)
+        #expect(try vault.filesOutsideTheTrash() == before)
+        // The project note the command created cannot be hard-deleted, so undoing it leaves its
+        // tombstone in `GTD/Trash/` (ARCHITECTURE §3) — and nothing else.
+        #expect(try vault.files().keys.filter { $0.hasPrefix("GTD/Trash/") }
+                == ["GTD/Trash/Steuererklärung 2025.md"])
     }
 
     /// I4/A3 — a refused command must not have written anything at all.
@@ -104,12 +131,16 @@ struct VaultBackendScenarioTests {
         defer { vault.cleanUp() }
         try await vault.backend.start()
         _ = try await vault.backend.perform(
-            .createAction(ActionDraft(title: "Fills the last slot", status: .next)))
+            .createAction(ActionDraft(
+                title: "Fills the last slot", status: .next, contexts: ["mac"], timeEstimate: 10,
+                why: "The last slot.", what: "Do it.")))
         let before = try vault.files()
 
         await #expect(throws: GTDError.nextCapReached(cap: 15)) {
             try await vault.backend.perform(
-                .createAction(ActionDraft(title: "One too many", status: .next)))
+                .createAction(ActionDraft(
+                    title: "One too many", status: .next, contexts: ["mac"], timeEstimate: 10,
+                    why: "One too many.", what: "Do it.")))
         }
         #expect(try vault.files() == before)
     }
@@ -308,7 +339,7 @@ struct VaultBackendScenarioTests {
         (vault.fileSystem as? InMemoryFileSystem)?
             .writeIgnoringFailures(text, to: "Actions/Collect DAAD transcripts.md")
 
-        _ = try await vault.backend.perform(.createAction(ActionDraft(title: "Anything")))
+        _ = try await vault.backend.perform(.createAction(ActionDraft(title: "Anything", what: "Do it.")))
         #expect(try vault.text("Actions/Collect DAAD transcripts.md") != nil,
                 "housekeeping already ran today")
     }
@@ -349,16 +380,17 @@ struct VaultBackendScenarioTests {
         let folder = root.appendingPathComponent("Knowledge/Thesis", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try "Older notes.\n".write(
-            to: folder.appendingPathComponent("Monitor handover.md"),
+            to: folder.appendingPathComponent("ask Marie whether she still needs the monitor.md"),
             atomically: true, encoding: .utf8)
         let before = try vault.files()
 
         let item = try #require(await vault.backend.currentSnapshot().inbox.first {
             $0.text.hasPrefix("ask Marie")
         })
-        await #expect(throws: GTDError.titleCollision("Monitor handover")) {
+        await #expect(throws: GTDError.titleCollision(
+            "ask Marie whether she still needs the monitor")) {
             try await vault.backend.perform(
-                .fileInbox(item.id, .knowledge(folder: "Thesis", title: "Monitor handover")))
+                .fileInbox(item.id, .knowledge(.folder("Thesis"), notes: "")))
         }
         #expect(try vault.files() == before)
     }

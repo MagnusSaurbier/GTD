@@ -518,6 +518,8 @@ private struct PromoteStepSheet: View {
                 dismiss()
             case .capReached:
                 capMessage = Copy.capSheetBody
+            case let .missingFields(fields):
+                capMessage = Copy.missingFields(fields)
             }
         } catch {
             capMessage = "\(error)"
@@ -594,6 +596,10 @@ public struct WhatsNextSheet: View {
             case .capReached:
                 pendingSomedayStepIndex = stepIndex
                 capMessage = Copy.capSheetBody
+            case let .missingFields(fields):
+                // R-3 — Someday is one tap away and always possible; Next needs the fields.
+                pendingSomedayStepIndex = stepIndex
+                capMessage = Copy.missingFields(fields)
             }
         } catch {
             capMessage = "\(error)"
@@ -616,6 +622,9 @@ public struct WhatsNextSheet: View {
             case .capReached:
                 pendingSomedayStepIndex = nil
                 capMessage = Copy.capSheetBody
+            case let .missingFields(fields):
+                pendingSomedayStepIndex = nil
+                capMessage = Copy.missingFields(fields)
             }
         } catch {
             capMessage = "\(error)"
@@ -698,6 +707,8 @@ public struct ConvertToProjectSheet: View {
             case .success: dismiss()
             case .capReached:
                 capMessage = Copy.capSheetBody
+            case let .missingFields(fields):
+                capMessage = Copy.missingFields(fields)
             }
         } catch {
             capMessage = "\(error)"

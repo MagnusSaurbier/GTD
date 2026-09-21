@@ -9,11 +9,17 @@ Foundation-only — every file here compiles and is tested on Linux.
   full initialiser taking `journal`, `stateDirectory` and `env` for tests. `start()` / `stop()`
   bracket its lifetime; `perform`, `undo`, `undoLabel`, `snapshots`, `currentSnapshot` are the
   protocol. `lastHousekeepingError` says why the last automatic archive did not run.
-- `SnapshotDiff.ops(from:to:extraOps:timeZone:)` — two snapshots and the reducer's `extraOps`
+- `SnapshotDiff.ops(from:to:extraOps:filedNotes:timeZone:)` — two snapshots, the reducer's
+  `extraOps` and its `filedNotes`
   into one ordered list of `VaultFileOp`. A `.moveFolder` in `extraOps` owns *both* ends of the
   tree it moves: no note under the old path is trashed for "leaving the snapshot", and a note
   under the new path is the same note, written again only if its content changed too.
   A `.createFolder` owns no path at all — an empty folder holds no note (§5a).
+  `Reduction.filedNotes` is the Knowledge note an inbox filing writes (I4b): it lives in no
+  snapshot collection, so the reducer says what it says and **this** target encodes it — the same
+  division as the weekly review note, because `GTDModel` never produces markdown. Its body
+  replaces whatever the file holds (never a stale copy of the capture), its own text rides along
+  so unknown frontmatter survives, and the put comes after the move that put the file there.
 - `UndoJournal` (actor) — device-local, persisted in Application Support, keeps 20 entries.
 - `ServiceError` — `.nothingToUndo`, `.undoStale(path:)`.
 

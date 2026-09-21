@@ -369,7 +369,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T01 | done | (this commit) | Opus | 1 | gate green, 920 tests, no target dropped; grep clean (only tolerant decode + its tests); both app builds green. `GTDCommand.trashAction` added; `SidebarItem.maybe` dropped; `Next is full` sheet for R-2 is only a `NextListModel` flag until T11; a stored pre-rework `DeckPhase` will not decode until T12 |
 | T02 | done | (this commit) | Opus | 1 | gate green, 945 tests (Vault 130, Services 63); no delete path added; `VaultStore.folderContents(_:)` added for the undo-stale guard; `scripts/check-docs.sh` now ignores `.claude/` (agent worktrees broke the gate); coordinated folder move never ran against a live iCloud vault |
 | T03 | done | (this commit) | Opus | 2 | gate green, 1040 tests (Model 191, Markdown 139, Vault 143, Services 67). Round 1 rejected: sample vault's empty `Lists/Wish/` would vanish in a git clone — Wish got an item + a clone-fidelity test. `createList`/`setFavouriteLists` are not undoable; `VaultFileOp.createFolder` added (no inverse); action encoder appends headings below a promoted item's notes |
-| T04 | | | | | |
+| T04 | done | (this commit) | Opus | 1 | gate green, 1073 tests (Model 215, Markdown 145, Inbox 55); both app builds green. `InboxDecision` = action / knowledge / list / trash; filing moves the capture file; `Reduction.filedNotes` carries the Knowledge note; promotion sheets outside the inbox still offer `Send to Someday instead` (T11 to check against STYLEGUIDE) |
 | T05 | | | | | |
 | T06 | | | | | |
 | T07 | | | | | |
@@ -393,5 +393,9 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 - 2026-09-21 · T03 · list names compare case-insensitively; a case-only rename is refused · case-insensitive file systems · ARCHITECTURE §6.
 - 2026-09-21 · T03 · `favouriteLists` is optional end to end: absent ⇒ derived default, `[]` is a real choice · ARCHITECTURE §6.
 - 2026-09-21 · T03 · promoting a list item keeps its notes above the action headings · never drop user text · ARCHITECTURE §6.
+- 2026-09-21 · T04 · step promotion obeys R-3; the step line fills an empty What?, so promoting into Someday always works and Next names the missing fields (`PromotionOutcome.missingFields`) · silently landing in Someday would rewrite the user's decision · ARCHITECTURE §6.
+- 2026-09-21 · T04 · demoting an existing note is never blocked by required fields · an over-cap vault must stay repairable · ARCHITECTURE §6.
+- 2026-09-21 · T04 · filing moves the capture file instead of delete + create; Knowledge notes travel as `Reduction.filedNotes` · keeps `created`/unknown keys, undo is one move · ARCHITECTURE §6.
+- 2026-09-21 · T04 · check order: project active → missing fields → cap; a punctuation-only capture becomes `Untitled` with the text kept in the body · ARCHITECTURE §6.
 
 _(one line each: date · task · decision · why — and the ARCHITECTURE §6 row it became)_

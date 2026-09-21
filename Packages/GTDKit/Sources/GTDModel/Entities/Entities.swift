@@ -48,6 +48,10 @@ public struct Action: Identifiable, Sendable, Equatable {
     /// File modification date. Read-only for everything except `GTDVault`, which fills it in
     /// from the file system; drives the staleness signals (STYLEGUIDE §2.2).
     public var modified: Date?
+    /// R-4 — the body text **above** `# Why?`: the full capture text of a note whose title could
+    /// not hold it, and anything a hand-written note carries before the first heading. Empty for
+    /// a note whose body starts with a heading.
+    public var preamble: String
     public var why: String
     public var what: String
     public var passthrough: NotePassthrough
@@ -67,6 +71,7 @@ public struct Action: Identifiable, Sendable, Equatable {
         completedDate: Date? = nil,
         reviewReason: String? = nil,
         modified: Date? = nil,
+        preamble: String = "",
         why: String = "",
         what: String = "",
         passthrough: NotePassthrough = .empty
@@ -85,6 +90,7 @@ public struct Action: Identifiable, Sendable, Equatable {
         self.completedDate = completedDate
         self.reviewReason = reviewReason
         self.modified = modified
+        self.preamble = preamble
         self.why = why
         self.what = what
         self.passthrough = passthrough
@@ -95,10 +101,12 @@ public struct Action: Identifiable, Sendable, Equatable {
 
     public var timeBucket: TimeBucket? { TimeBucket(minutes: timeEstimate) }
 
-    /// The `waiting` pair, present only when both halves are set (W1).
+    /// The waiting information, present as soon as the **follow-up date** is (W1, D39). `who` is
+    /// optional: a wait on a process has nobody to name.
     public var waiting: WaitingInfo? {
-        guard let waitingFor, let followUpDate, !waitingFor.isEmpty else { return nil }
-        return WaitingInfo(who: waitingFor, followUp: followUpDate)
+        guard let followUpDate else { return nil }
+        return WaitingInfo(
+            who: waitingFor.flatMap { $0.isEmpty ? nil : $0 }, followUp: followUpDate)
     }
 }
 

@@ -59,7 +59,8 @@ public enum Copy {
 
     public static let whyPlaceholder = "What do I gain?"
     public static let whatPlaceholder = "The next physical action"
-    public static let whoPlaceholder = "Who or what"
+    /// W1/D39 — who is optional, and the field says so (STYLEGUIDE §6.3).
+    public static let whoPlaceholder = "Who or what (optional)"
     public static let showAll = "Show all"
 
     /// `3 of 14 left`
@@ -69,6 +70,23 @@ public enum Copy {
 
     /// `Moved to Someday`
     public static func movedTo(_ destination: String) -> String { "Moved to \(destination)" }
+
+    /// R-3 — the name of a field a tier is still missing (STYLEGUIDE §3.6, §6.2 vocabulary).
+    public static func fieldName(_ field: RequiredField) -> String {
+        switch field {
+        case .why: why
+        case .what: what
+        case .context: "Context"
+        case .timeEstimate: "Time"
+        case .followUpDate: followUp
+        }
+    }
+
+    /// `Still missing: Why?, Context, Time` — what the shell's alert says when a flow other
+    /// than a card refuses (R-3; the cards mark their own fields instead).
+    public static func missingFields(_ fields: [RequiredField]) -> String {
+        "Still missing: " + fields.map(fieldName).joined(separator: ", ")
+    }
 
     public static let capSheetTitle = "Next is full"
     public static let capSheetBody = "Demote one to make room."

@@ -111,8 +111,10 @@ struct AppError: Identifiable, Equatable {
             self.message = Copy.capSheetTitle
         case let GTDError.titleCollision(title):
             self.message = "Another note is already called \"\(title)\"."
-        case GTDError.waitingInfoRequired:
-            self.message = "Waiting needs who you are waiting for and a follow-up date."
+        // R-3 — the shell's alert names the fields for every flow that is not a card
+        // (docs/KNOWN_ISSUES.md).
+        case let GTDError.missingFields(fields):
+            self.message = Copy.missingFields(fields)
         case let GTDError.notFound(id):
             self.message = "\(id.path) is no longer in the vault."
         default:

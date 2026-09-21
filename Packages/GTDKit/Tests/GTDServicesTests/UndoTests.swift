@@ -18,9 +18,11 @@ struct UndoTests {
         let item = try #require(start.inbox.first { $0.text.hasPrefix("call the Hausverwaltung") })
 
         _ = try await vault.backend.perform(.fileInbox(item.id, .action(ActionDraft(
-            title: "Mail the Hausverwaltung",
+            title: "ignored — R-4 names the note after the capture",
             status: .next,
             contexts: ["mac"],
+            timeEstimate: 10,
+            why: "The handle has been broken for two weeks.",
             what: "Ask for a repair date."))))
         #expect(try vault.filesOutsideTheTrash() != before)
         #expect(await vault.backend.undoLabel() == "Filed to Next")
@@ -28,8 +30,9 @@ struct UndoTests {
         try await vault.backend.undo()
 
         #expect(try vault.filesOutsideTheTrash() == before, "every file is back, byte for byte")
-        // The note the command created cannot be deleted, so its tombstone stays in the trash.
-        #expect(try vault.text("GTD/Trash/Mail the Hausverwaltung.md") != nil)
+        // R-4 — filing *moved* the capture into `Actions/`, so undoing it is a move back and
+        // leaves no tombstone behind at all.
+        #expect(try vault.files().keys.filter { $0.hasPrefix("GTD/Trash/") }.isEmpty)
         #expect(await vault.backend.undoLabel() == nil)
         #expect(SnapshotShape(try vault.rescan()) == SnapshotShape(start))
         // Visible immediately: `AppModel.undo()` reads `currentSnapshot()` right after.

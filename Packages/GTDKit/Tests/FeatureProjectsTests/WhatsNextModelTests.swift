@@ -38,28 +38,39 @@ struct WhatsNextModelTests {
         #expect(active.isStalled == false)
     }
 
-    @Test func promoteCreatesANextActionOneTap() async throws {
+    /// R-3 (ARCHITECTURE §6, T04-1) — a one-tap promotion into **Next** has no `Why?`, no
+    /// context and no time estimate, so the model answers with the fields instead of writing a
+    /// half-committed note. The step line is the `What?`, so that one is never missing, and
+    /// Someday is one tap away.
+    @Test func promotingIntoNextInOneTapAsksForTheFieldsNextNeeds() async throws {
         let model = makeModel()
         let next = WhatsNextModel(project: Fixtures.daadProject.id, model: model)
+
         let outcome = try await next.promote(stepIndex: 2)
-        #expect(outcome == .success)
+        #expect(outcome == .missingFields([.why, .context, .timeEstimate]))
+        #expect(model.snapshot.project(Fixtures.daadProject.id)?.steps[2].promotedTo == nil)
+
+        let fallback = try await next.promoteToSomeday(stepIndex: 2)
+        #expect(fallback == .success)
         let step = model.snapshot.project(Fixtures.daadProject.id)?.steps[2]
-        #expect(step?.promotedTo != nil)
         let created = try #require(model.snapshot.action(step!.promotedTo!))
         #expect(created.title == "Ask Prof. Weber for a reference")
-        #expect(created.status == .next)
+        #expect(created.what == "Ask Prof. Weber for a reference", "the step line is the What?")
+        #expect(created.status == .someday)
     }
 
-    /// The explicit cap-error path required by the brief, from the "What's next?" flow.
+    /// The explicit cap-error path required by the brief, from the "What's next?" flow — now
+    /// with the fields R-3 asks for, because that is the only way into Next.
     @Test func promoteReachesTheCapThenFallsBackToSomeday() async throws {
         let model = makeModel()
         let cap = model.snapshot.config.nextCap
         let next = WhatsNextModel(project: Fixtures.daadProject.id, model: model)
+        let fields = ActionDraft(title: "", status: .next, contexts: ["mac"], timeEstimate: 30, why: "The project needs it.")
 
-        #expect(try await next.promote(stepIndex: 2) == .success)
+        #expect(try await next.promote(stepIndex: 2, fields: fields) == .success)
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
 
-        let refused = try await next.promote(stepIndex: 3)
+        let refused = try await next.promote(stepIndex: 3, fields: fields)
         #expect(refused == .capReached(cap: cap))
         #expect(model.snapshot.project(Fixtures.daadProject.id)?.steps[3].promotedTo == nil)
 
@@ -73,7 +84,8 @@ struct WhatsNextModelTests {
     @Test func createActionAttachesTheFreeTextTitleToTheProject() async throws {
         let model = makeModel()
         let next = WhatsNextModel(project: Fixtures.daadProject.id, model: model)
-        let outcome = try await next.createAction(title: "Print the application form")
+        let outcome = try await next.createAction(
+            title: "Print the application form", fields: ActionDraft(title: "", status: .next, contexts: ["mac"], timeEstimate: 30, why: "The project needs it."))
         #expect(outcome == .success)
         let created = try #require(model.snapshot.actions.first { $0.title == "Print the application form" })
         #expect(created.project == Fixtures.daadProject.id)

@@ -124,8 +124,11 @@ struct ProjectDetailModelTests {
         let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
         // Steps 0 and 1 are already done/promoted in the fixture — 2 is the first open one.
 
+        // R-3 — the promote form collects what Next requires; the model refuses without it.
         let outcome = try await detail.promoteStep(
-            at: 2, draft: ActionDraft(title: "Ask Prof. Weber for a reference", status: .next))
+            at: 2, draft: ActionDraft(
+                title: "Ask Prof. Weber for a reference", status: .next,
+                contexts: ["mac"], timeEstimate: 30, why: "The application needs it."))
 
         #expect(outcome == .success)
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == model.snapshot.config.nextCap)
@@ -146,13 +149,17 @@ struct ProjectDetailModelTests {
         // First promotion fills the last Next slot (14 → 15). Steps 0 and 1 are already
         // done/promoted in the fixture, so 2 and 3 are the open ones.
         let first = try await detail.promoteStep(
-            at: 2, draft: ActionDraft(title: "Ask Prof. Weber for a reference", status: .next))
+            at: 2, draft: ActionDraft(
+                title: "Ask Prof. Weber for a reference", status: .next,
+                contexts: ["mac"], timeEstimate: 30, why: "The application needs it."))
         #expect(first == .success)
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
 
         // A second `.next` promotion is refused — never silently rerouted (I4, A3).
         let refused = try await detail.promoteStep(
-            at: 3, draft: ActionDraft(title: "Submit the online form", status: .next))
+            at: 3, draft: ActionDraft(
+                title: "Submit the online form", status: .next,
+                contexts: ["mac"], timeEstimate: 30, why: "The deadline is in October."))
         #expect(refused == .capReached(cap: cap))
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)          // vault untouched
         #expect(detail.steps[3].promotedTo == nil)                     // step still open

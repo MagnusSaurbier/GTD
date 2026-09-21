@@ -186,8 +186,8 @@ public enum ReviewCopy {
         switch error {
         case let .nextCapReached(cap):
             "\(Copy.capSheetTitle) (\(cap)). \(Copy.capSheetBody)"
-        case .waitingInfoRequired:
-            "Waiting needs who and a follow-up date."
+        case let .missingFields(fields):
+            Copy.missingFields(fields)
         case .notFound:
             "That note is no longer in the vault."
         case let .titleCollision(title):

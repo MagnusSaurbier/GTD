@@ -120,8 +120,9 @@ struct FeatureWaitingTests {
         let action = makeAction("A", status: .waiting, who: "Alice", followUp: today.adding(days: 3))
         #expect(list.waitingInfo(for: action) == WaitingInfo(who: "Alice", followUp: today.adding(days: 3)))
 
-        let incomplete = makeAction("B", status: .waiting, who: nil, followUp: today)
-        #expect(list.waitingInfo(for: incomplete) == nil)
+        // W1/D39 — who is optional: the follow-up date alone is a complete wait.
+        let anonymous = makeAction("B", status: .waiting, who: nil, followUp: today)
+        #expect(list.waitingInfo(for: anonymous) == WaitingInfo(who: nil, followUp: today))
     }
 
     @Test func bumpedKeepsWhoAndSetsTheNewFollowUpDate() {

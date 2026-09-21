@@ -25,9 +25,13 @@ Linux-compilable models (no SwiftUI — this is where the logic worth testing li
 - `StepReorder` — pure index maths for drag + `⌥↑↓` reorder (`move(from:to:)`,
   `moveUp`/`moveDown`, `move(fromOffsets:toOffset:)` — reimplemented by hand since
   `Array.move(fromOffsets:toOffset:)` is a SwiftUI extension, not available on Linux).
-- `PromotionOutcome` (`.success` / `.capReached(cap:)`) — every promotion path returns this
-  instead of throwing on `GTDError.nextCapReached`, so a view can offer "Send to Someday instead"
-  (a simplified version of the inbox's "Next is full" sheet) without re-deriving the cap by hand.
+- `PromotionOutcome` (`.success` / `.capReached(cap:)` / `.missingFields([RequiredField])`) —
+  every promotion path returns this instead of throwing, so a view can answer the two refusals a
+  promotion can *answer*: the Next cap, and the fields Next requires (R-3). Both offer the same
+  fallback, "Send to Someday instead" — which always works, because a promoted step's `What?` is
+  the step line itself. `promote`/`createAction` take an optional `fields: ActionDraft` for the
+  `Why?`, context and time estimate a sheet collected; without it, a one-tap promotion into Next
+  answers `.missingFields` rather than writing a half-committed note (ARCHITECTURE §6, T04-1).
 
 ## Platform guards (ARCHITECTURE §5)
 

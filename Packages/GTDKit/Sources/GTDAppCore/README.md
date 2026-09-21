@@ -56,7 +56,8 @@ observably identical: `GTDServicesTests/ParityTests` drives both through the sam
 compares the result, and the undo rule and its labels have one definition each
 (`Rules.isUndoable`, `UndoLabel`). `UndoLabel` is STYLEGUIDE §3.8/§6.3's wording verbatim,
 including the list toasts: `Added to <list>` when a capture is filed into one, `Done` when an
-item is checked off, and `Filed to Next`/`Filed to Someday` when one is made into an action.
+item is checked off (and when a card is filed by the 2-minute rule, I4/D13), and
+`Filed to Next`/`Filed to Someday` when one is made into an action.
 
 ## Testing
 

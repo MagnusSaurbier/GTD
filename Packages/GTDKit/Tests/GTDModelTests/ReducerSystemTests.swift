@@ -144,7 +144,9 @@ struct ReducerSystemTests {
         let result = try Reducer.reduce(vault, .updateConfig(config), env: env)
         #expect(Rules.capSignal(result.snapshot, today: env.today)?.step == .overdue)
         vault = result.snapshot
-        #expect(TestVault.error(vault, .createAction(ActionDraft(title: "Noch eins", status: .next)), env: env)
+        #expect(TestVault.error(vault, .createAction(ActionDraft(
+            title: "Noch eins", status: .next, contexts: ["mac"], timeEstimate: 10,
+            why: "Over the cap already.", what: "Do it.")), env: env)
                 == .nextCapReached(cap: 5))
     }
 
@@ -258,10 +260,13 @@ struct ReducerSystemTests {
         let commands: [GTDCommand] = [
             .editInboxText(inbox.id, "edited"),
             .fileInbox(inbox.id, .trash),
-            .fileInbox(inbox.id, .action(ActionDraft(title: "Frisch", status: .someday))),
-            .fileInbox(inbox.id, .knowledge(folder: "Studium", title: "Notiz")),
+            .fileInbox(inbox.id, .action(ActionDraft(
+                title: "Frisch", status: .someday, what: "Anrufen"))),
+            .fileInbox(inbox.id, .knowledge(.folder("Studium"), notes: "Notiz")),
+            .fileInbox(inbox.id, .list(name: "Read", notes: "")),
             .deferInboxToReview(inbox.id, reason: "needs thinking"),
-            .createAction(ActionDraft(title: "Brand new action", status: .someday)),
+            .createAction(ActionDraft(
+                title: "Brand new action", status: .someday, what: "Anfangen")),
             .updateAction(someday),
             .setStatus(someday.id, .next, waiting: nil),
             .trashAction(someday.id),

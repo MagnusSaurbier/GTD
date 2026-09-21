@@ -94,6 +94,7 @@ public actor VaultBackend: GTDBackend {
                 from: old,
                 to: reduction.snapshot,
                 extraOps: reduction.extraOps,
+                filedNotes: reduction.filedNotes,
                 timeZone: env.calendar.timeZone),
             layout: old.config.layout)
 

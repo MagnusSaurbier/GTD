@@ -35,7 +35,9 @@ struct AppModelAcceptanceTests {
         // 1. The first card fits: 14 → 15.
         try await model.send(.fileInbox(queue[0].id, .action(
             ActionDraft(title: "Call the Hausverwaltung", status: .next,
-                        contexts: ["calls"], what: "Call about the window handle"))))
+                        contexts: ["calls"], timeEstimate: 10,
+                        why: "The window does not close.",
+                        what: "Call about the window handle"))))
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
         #expect(model.snapshot.inboxItem(queue[0].id) == nil)
         #expect(model.undoLabel == "Filed to Next")
@@ -44,6 +46,8 @@ struct AppModelAcceptanceTests {
         await #expect(throws: GTDError.nextCapReached(cap: cap)) {
             try await model.send(.fileInbox(queue[1].id, .action(
                 ActionDraft(title: "Rename scanned pdfs", status: .next,
+                            contexts: ["mac"], timeEstimate: 60,
+                            why: "The scans are unfindable.",
                             what: "Write the rename script"))))
         }
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
@@ -68,10 +72,13 @@ struct AppModelAcceptanceTests {
         #expect(model.undoLabel == nil)
     }
 
-    @Test func waitingRequiresWhoAndFollowUp() async throws {
+    /// W1/D39 — the follow-up date is required, who is optional.
+    @Test func waitingRequiresAFollowUpDate() async throws {
         let (model, _) = makeModel()
-        let action = try #require(model.snapshot.actions.first { $0.status == .someday })
-        await #expect(throws: GTDError.waitingInfoRequired) {
+        let action = try #require(model.snapshot.actions.first {
+            $0.status == .someday && !$0.what.isEmpty
+        })
+        await #expect(throws: GTDError.missingFields([.followUpDate])) {
             try await model.send(.setStatus(action.id, .waiting, waiting: nil))
         }
         try await model.send(.setStatus(action.id, .waiting, waiting:

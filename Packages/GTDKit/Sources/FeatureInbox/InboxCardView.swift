@@ -206,7 +206,8 @@ struct InboxCardView: View {
         .id(CardField.what)
     }
 
-    /// The action note's title, derived from the first line of `What?` and editable before filing.
+    /// R-4 — the note's title *is* the capture text (editable in place): the field edits the
+    /// capture itself, and the reducer names the file after its first line.
     ///
     /// `axis: .vertical` keeps a long capture (a full sentence) fully visible instead of
     /// truncating with an ellipsis (O1); Return still submits — it never inserts a line break —
@@ -214,7 +215,7 @@ struct InboxCardView: View {
     /// `ActionDetailView`'s title field makes. `titleGeneration` forces the field to rebuild
     /// from the (newline-free) draft afterwards, or the typed line break stays on screen.
     @ViewBuilder private var titleRow: some View {
-        if !session.draft.effectiveTitle.isEmpty {
+        if !session.draft.text.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(InboxCopy.titleLabel)
                     .font(Typo.meta)
@@ -222,11 +223,10 @@ struct InboxCardView: View {
                 TextField(
                     "",
                     text: Binding(
-                        get: { session.draft.effectiveTitle },
+                        get: { session.draft.text },
                         set: { newValue in
                             let input = Self.titleInput(newValue)
-                            session.draft.title = input.text
-                            session.draft.titleWasEdited = true
+                            session.draft.text = input.text
                             if input.submitted {
                                 focus = nil
                                 titleGeneration += 1
@@ -275,8 +275,8 @@ struct InboxCardView: View {
                     today: session.today)
                 Chip(
                     projectChipTitle,
-                    state: session.draft.project == nil ? .unset : .confirmed,
-                    symbol: session.draft.project == nil ? "plus" : nil
+                    state: projectChipTitle == Copy.project ? .unset : .confirmed,
+                    symbol: projectChipTitle == Copy.project ? "plus" : nil
                 ) {
                     session.sheet = .project
                 }
@@ -287,8 +287,7 @@ struct InboxCardView: View {
     /// Unset: the `plus` symbol is the "+", so the title is the bare label (no `+ + Project`) —
     /// same wording and casing as `DateValueChip` next to it and as the action detail.
     private var projectChipTitle: String {
-        guard let id = session.draft.project else { return Copy.project }
-        return session.snapshot.project(id)?.title ?? id.title
+        session.projectChipTitle(in: session.snapshot) ?? Copy.project
     }
 
     // MARK: Drag feedback (STYLEGUIDE §3.6)

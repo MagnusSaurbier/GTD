@@ -38,10 +38,11 @@ import GTDVault
 
         try await model.send(.fileInbox(captured, .list(
             name: "Read",
-            title: "Der Report über Wohnungsmärkte",
             notes: "Marie hat ihn in der WhatsApp-Gruppe geteilt.")))
 
-        let itemPath = "Lists/Read/Der Report über Wohnungsmärkte.md"
+        // R-4 — the item is named after the capture text (it fits, so nothing is repeated in
+        // the body); the notes panel is the body.
+        let itemPath = "Lists/Read/Der Report über Wohnungsmärkte, den Marie empfohlen hat.md"
         let itemText = try #require(try vault.text(itemPath))
         #expect(try vault.text(captured.path) == nil, "the capture file left the inbox")
         #expect(itemText.contains("created: 2026-09-19T09:30:00+02:00"),
@@ -55,7 +56,7 @@ import GTDVault
         let itemID = NoteID(path: itemPath)
         let trashBefore = try vault.files().keys.filter { $0.hasPrefix("GTD/Trash/") }
         try await model.send(.completeListItem(itemID))
-        let donePath = "Lists/Read/Done/Der Report über Wohnungsmärkte.md"
+        let donePath = "Lists/Read/Done/Der Report über Wohnungsmärkte, den Marie empfohlen hat.md"
         #expect(try vault.text(itemPath) == nil)
         #expect(try vault.text(donePath) == itemText, "the note is kept as a log, byte for byte")
         // L3 is a *move*: the note is not re-created in `Done/` with the original swept away.
@@ -74,7 +75,12 @@ import GTDVault
         // ── 4. Make action at the cap: refused, and nothing is written (L4, I4/D14) ───────────
         // The sample vault sits at 14 of 15; one filing takes it to the cap exactly.
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 14)
-        let filler = try #require(model.snapshot.actions.first { $0.status == .someday })
+        // R-3 — promoting into Next needs Why?, What?, a context and a time estimate, so the
+        // filler is a note that already carries them.
+        let filler = try #require(model.snapshot.actions.first {
+            $0.status == .someday && !$0.why.isEmpty && !$0.what.isEmpty
+                && !$0.contexts.isEmpty && $0.timeEstimate != nil
+        })
         try await model.send(.setStatus(filler.id, .next, waiting: nil))
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 15)
 

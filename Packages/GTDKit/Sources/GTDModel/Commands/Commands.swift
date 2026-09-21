@@ -2,13 +2,16 @@ import Foundation
 
 // MARK: - Drafts
 
-/// Who we are waiting for and when to chase (W1). Created only once the user has confirmed
-/// both halves — the "+7 days" suggestion is UI state until then (STYLEGUIDE §3.1).
+/// When to chase, and optionally who we are waiting on (W1, D39). The **follow-up date is
+/// required**; `who` is free text and may be absent — plenty of waits are on a process, not a
+/// person. Created only once the user has confirmed the date: the "+7 days" suggestion is UI
+/// state until then (STYLEGUIDE §3.1).
 public struct WaitingInfo: Sendable, Equatable, Codable, Hashable {
-    public var who: String
+    /// Who or what the wait is on. `nil` (or blank) ⇒ no `waitingFor:` line is written at all.
+    public var who: String?
     public var followUp: Day
 
-    public init(who: String, followUp: Day) {
+    public init(who: String? = nil, followUp: Day) {
         self.who = who
         self.followUp = followUp
     }
@@ -24,11 +27,20 @@ public struct ActionDraft: Sendable, Equatable, Codable {
     public var contexts: [String]
     public var timeEstimate: Int?
     public var project: NoteID?
+    /// I4a/R-8 — set **instead of** `project` when the user is creating the project in the same
+    /// step (the `Create project "<text>"` row of the picker). Mirrors
+    /// `ProjectDraft.newAreaTitle`: one command creates the project, links the action to it and
+    /// files the card, so a crash can never leave a project without its first action.
+    /// The project is created with a name only and lands area-less (P1, D35).
+    public var newProjectTitle: String?
     public var deferDate: Day?
     public var due: Day?
     public var waiting: WaitingInfo?
     public var why: String
     public var what: String
+    /// R-4 — the full capture text, kept as the note's first paragraph above `# Why?` when the
+    /// title could not hold it (a long dictation, several lines). Empty otherwise.
+    public var preamble: String
 
     public init(
         title: String,
@@ -36,22 +48,26 @@ public struct ActionDraft: Sendable, Equatable, Codable {
         contexts: [String] = [],
         timeEstimate: Int? = nil,
         project: NoteID? = nil,
+        newProjectTitle: String? = nil,
         deferDate: Day? = nil,
         due: Day? = nil,
         waiting: WaitingInfo? = nil,
         why: String = "",
-        what: String = ""
+        what: String = "",
+        preamble: String = ""
     ) {
         self.title = title
         self.status = status
         self.contexts = contexts
         self.timeEstimate = timeEstimate
         self.project = project
+        self.newProjectTitle = newProjectTitle
         self.deferDate = deferDate
         self.due = due
         self.waiting = waiting
         self.why = why
         self.what = what
+        self.preamble = preamble
     }
 }
 
@@ -82,16 +98,32 @@ public struct ProjectDraft: Sendable, Equatable, Codable {
     }
 }
 
+/// Where a Knowledge filing puts the note (I4b, D36). Reference material for a project is filed
+/// through the Knowledge branch, so the folder picker offers the **active projects' folders**
+/// next to the tree under `Knowledge/`.
+public enum KnowledgeTarget: Sendable, Equatable, Codable, Hashable {
+    /// A folder below `Knowledge/`, "/"-separated and relative to it; `""` is `Knowledge/` itself.
+    case folder(String)
+    /// The folder of an active project, named by its project note (`Projects/…/<P>/<P>.md`).
+    case project(NoteID)
+}
+
 /// Where an inbox card goes when it leaves (I4).
+///
+/// **No decision carries a title** (R-4): the title of every filed note is the capture text
+/// itself — first line, sanitised, cut at a word boundary to ≤ 60 characters — and whatever the
+/// title could not hold stays in the note's body. Editing the title *is* editing the capture
+/// (`editInboxText`), so there is only ever one text to keep in sync.
 public enum InboxDecision: Sendable, Equatable, Codable {
-    /// next / someday / waiting / done — the status lives in the draft.
+    /// next / someday / waiting / done — the status lives in the draft, and so does the optional
+    /// project chip (I4a). There is no Project *target* any more (R-8): a capture that is really
+    /// a project stays an action and names the project it belongs to.
     case action(ActionDraft)
-    case knowledge(folder: String, title: String)
+    /// I4b — `notes` is the optional notes panel and becomes the note's body.
+    case knowledge(KnowledgeTarget, notes: String)
     /// I4b/§5a — the capture becomes one item of a list. `notes` is the optional notes panel and
     /// becomes the note's body; nothing about it is a commitment (L1).
-    case list(name: String, title: String, notes: String)
-    case newProject(ProjectDraft, firstActions: [ActionDraft])
-    case existingProject(NoteID, actions: [ActionDraft])
+    case list(name: String, notes: String)
     case trash
 }
 
@@ -147,14 +179,78 @@ public enum GTDCommand: Sendable, Equatable {
 
 // MARK: - Errors and prompts
 
+/// A field a tier demands before an action may enter it (I4, D12, R-3).
+///
+/// The cases are declared in the order the card shows them, and `GTDError.missingFields` keeps
+/// that order, so "the first missing field" is the same field in the reducer, in the shake
+/// animation and in the alert (STYLEGUIDE §3.6).
+public enum RequiredField: String, Sendable, Equatable, Codable, Hashable, CaseIterable {
+    case why
+    case what
+    case context
+    case timeEstimate
+    case followUpDate
+}
+
 public enum GTDError: Error, Sendable, Equatable {
     /// I4, A3 — the UI must offer "demote something" or cancel. Never automatic (D14).
     case nextCapReached(cap: Int)
-    /// W1 — `waiting` needs both who and follow-up date.
-    case waitingInfoRequired
+    /// I4/D12/R-3 — a **new** transition into a tier that demands more than the note carries:
+    /// Next needs `Why?`, `What?`, at least one context and a time estimate; Someday needs
+    /// `What?`; Waiting needs `What?` and a follow-up date. Done, lists, Knowledge and Trash
+    /// need nothing, and a note **already** in a tier is never judged again — the vault stays
+    /// repairable. Carries every missing field, in `RequiredField` order.
+    case missingFields([RequiredField])
     case notFound(NoteID)
     case titleCollision(String)
     case invalid(String)
+}
+
+extension RequiredField {
+
+    /// R-3 — what a transition into `status` is still missing. Pure, so the card can ask the
+    /// same question the reducer will answer (it is the reducer that refuses, STYLEGUIDE §3.6).
+    ///
+    /// - Parameter previous: the status the note has right now, or `nil` for a note that does
+    ///   not exist yet. A status that is not *entering* its tier is left alone: notes that are
+    ///   already in Next with gaps stay editable.
+    public static func missing(
+        status: ActionStatus,
+        previous: ActionStatus?,
+        why: String,
+        what: String,
+        contexts: [String],
+        timeEstimate: Int?,
+        followUpDate: Day?
+    ) -> [RequiredField] {
+        func blank(_ value: String) -> Bool {
+            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        var missing: [RequiredField] = []
+        switch status {
+        case .next, .inProgress:
+            // `in-progress` is part of Next (A3), so entering it from outside Next asks the same.
+            guard previous?.countsTowardCap != true else { return [] }
+            if blank(why) { missing.append(.why) }
+            if blank(what) { missing.append(.what) }
+            if contexts.filter({ !blank($0) }).isEmpty { missing.append(.context) }
+            if (timeEstimate ?? 0) <= 0 { missing.append(.timeEstimate) }
+        case .someday:
+            // Only a note that does not exist yet is asked for a `What?` here: a card being
+            // filed, a list item being promoted. **Demoting is never blocked** — it is how an
+            // over-cap or half-filled vault is repaired, and the review deck lives on it.
+            if previous == nil, blank(what) { missing.append(.what) }
+        case .waiting:
+            if previous == nil, blank(what) { missing.append(.what) }
+            // W1 — the follow-up date is the commitment, and it is required of every note.
+            if followUpDate == nil { missing.append(.followUpDate) }
+        case .done, .legacyTrashed:
+            // A5/I4 — "I just did it" asks for nothing, and the legacy closed state is not
+            // user-settable at all (R-1).
+            break
+        }
+        return missing
+    }
 }
 
 /// Something the reducer asks the app shell to present. Not an error, not a view concern.

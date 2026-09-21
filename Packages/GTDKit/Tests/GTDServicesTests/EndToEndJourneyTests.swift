@@ -50,7 +50,8 @@ import GTDVault
             what: "Pay at the Studierendenwerk counter."))))
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 15)
         #expect(try vault.text("Inbox/2026-09-19 093000.md") == nil, "the capture file left the inbox")
-        let filed = try #require(try vault.text("Actions/Renew the Semesterticket.md"))
+        // R-4 — the note is named after the capture text, not after the draft's title.
+        let filed = try #require(try vault.text("Actions/renew the Semesterticket.md"))
         #expect(filed.contains("status: next"))
         #expect(filed.contains("created: 2026-09-19T09:30:00+02:00"),
                 "the capture's own created stamp survives filing (I1)")
@@ -58,18 +59,26 @@ import GTDVault
 
         // ── 3. The cap refuses the next one, and changes nothing (I4/A3) ──────────────────────
         let bytesAtCap = try vault.filesOutsideTheTrash()
-        let second = try #require(model.snapshot.inbox.first { $0.reviewReason == nil })
+        let second = try #require(model.snapshot.inbox.first {
+            $0.reviewReason == nil && $0.text.hasPrefix("ask Marie")
+        })
         await #expect(throws: GTDError.nextCapReached(cap: 15)) {
-            try await model.send(.fileInbox(second.id, .action(
-                ActionDraft(title: "Should not exist", status: .next))))
+            try await model.send(.fileInbox(second.id, .action(ActionDraft(
+                title: "Should not exist",
+                status: .next,
+                contexts: ["mac"],
+                timeEstimate: 10,
+                why: "Because the cap must refuse a *complete* card too.",
+                what: "Ask her."))))
         }
         #expect(try vault.filesOutsideTheTrash() == bytesAtCap, "a refused command writes nothing")
         #expect(model.snapshot.inbox.contains { $0.id == second.id }, "the card stays in the queue")
 
         // Someday is the way out, and it is not capped.
-        try await model.send(.fileInbox(second.id, .action(
-            ActionDraft(title: "Ask Marie about the monitor", status: .someday))))
-        #expect(try vault.text("Actions/Ask Marie about the monitor.md") != nil)
+        try await model.send(.fileInbox(second.id, .action(ActionDraft(
+            title: "", status: .someday, what: "Ask her."))))
+        #expect(try vault.text(
+            "Actions/ask Marie whether she still needs the monitor.md") != nil)
 
         // ── 4. Promote a project step (P5) ────────────────────────────────────────────────────
         let daadBefore = try #require(try vault.text("Projects/Applications/DAAD/DAAD.md"))
@@ -84,7 +93,8 @@ import GTDVault
 
         // ── 5. Waiting needs who + follow-up (W1) ─────────────────────────────────────────────
         let promoted = NoteID(path: "Actions/Ask Prof. Weber for a reference.md")
-        await #expect(throws: GTDError.waitingInfoRequired) {
+        // W1/D39/R-3 — the follow-up date is what `waiting` requires; who is optional.
+        await #expect(throws: GTDError.missingFields([.followUpDate])) {
             try await model.send(.setStatus(promoted, .waiting, waiting: nil))
         }
         try await model.send(.setStatus(promoted, .waiting, waiting: WaitingInfo(
@@ -139,8 +149,11 @@ import GTDVault
         // ── 8. A cold re-scan agrees with the app ─────────────────────────────────────────────
         let rescanned = try vault.rescan()
         #expect(rescanned.lastReview?.systemFixNotes == decoded.systemFixNotes)
-        #expect(rescanned.actions.first { $0.title == "Renew the Semesterticket" }?.status == .next)
-        #expect(rescanned.actions.first { $0.title == "Ask Marie about the monitor" }?.status == .someday)
+        // R-4 — both notes are named after their capture text.
+        #expect(rescanned.actions.first { $0.title == "renew the Semesterticket" }?.status == .next)
+        #expect(rescanned.actions.first {
+            $0.title == "ask Marie whether she still needs the monitor"
+        }?.status == .someday)
         #expect(rescanned.issues.isEmpty, "the whole week left no unreadable file behind")
         #expect(Rules.countsTowardCap(rescanned, today: Fixtures.today) == 15)
     }
@@ -198,7 +211,7 @@ import GTDVault
             .setStatus(action.id, .someday, waiting: nil),
             .updateConfig(snapshot.config),                                   // not undoable
             .logRoutineStep(routine: routine.id, stepID: routine.steps[0].id, .done),  // not undoable
-            .createAction(ActionDraft(title: "A brand new action")),
+            .createAction(ActionDraft(title: "A brand new action", what: "Do it.")),
         ]
 
         for command in commands {

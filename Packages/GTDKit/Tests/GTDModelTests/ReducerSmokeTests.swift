@@ -20,7 +20,8 @@ struct ReducerSmokeTests {
             .editInboxText(inbox.id, "edited"),
             .fileInbox(inbox.id, .trash),
             .deferInboxToReview(inbox.id, reason: "needs thinking"),
-            .createAction(ActionDraft(title: "Brand new action", status: .someday)),
+            .createAction(ActionDraft(
+                title: "Brand new action", status: .someday, what: "Anfangen")),
             .setStatus(someday.id, .next, waiting: nil),
             .trashAction(someday.id),
             .createArea(title: "Gesundheit"),
@@ -37,7 +38,8 @@ struct ReducerSmokeTests {
     }
 
     @Test func reducerIsDeterministic() throws {
-        let command = GTDCommand.createAction(ActionDraft(title: "Deterministic", status: .someday))
+        let command = GTDCommand.createAction(ActionDraft(
+            title: "Deterministic", status: .someday, what: "Tun"))
         let a = try Reducer.reduce(snapshot, command, env: env)
         let b = try Reducer.reduce(snapshot, command, env: env)
         #expect(a.snapshot == b.snapshot)

@@ -35,6 +35,7 @@ public enum SnapshotDiff {
         from old: VaultSnapshot,
         to new: VaultSnapshot,
         extraOps: [VaultFileOp],
+        filedNotes: [FiledNote] = [],
         timeZone: TimeZone = .current
     ) throws -> [VaultFileOp] {
         let owned = Ownership(extraOps)
@@ -85,11 +86,34 @@ public enum SnapshotDiff {
         diff(old.projects, new.projects, id: \.id) { NoteCodec.encode($0) }
         diff(old.routines, new.routines, id: \.id) { NoteCodec.encode($0) }
 
+        appendFiledNotes(filedNotes, timeZone: timeZone, into: &puts)
         appendConfig(from: old, to: new, owned: owned, into: &puts)
         appendReview(from: old, to: new, owned: owned, timeZone: timeZone, into: &puts)
         appendRoutineLog(from: old, to: new, owned: owned, timeZone: timeZone, into: &puts)
 
         return extraOps + puts
+    }
+
+    /// The notes that live in no collection: the Knowledge note a capture becomes (I4b). The
+    /// reducer said what the note says, this is where it becomes markdown — the same division of
+    /// labour as the weekly review note (`GTDModel` never produces markdown, ARCHITECTURE §6).
+    ///
+    /// A filed note has the shape of a capture — an optional `created` and a free body — which
+    /// is exactly what it was a moment ago, so it is encoded as one. Its own text comes along as
+    /// the source, so unknown frontmatter keys survive; the **body is replaced outright**, so
+    /// what lands on disk is what the reducer decided and never a stale copy of the capture.
+    /// The put follows the `extraOps` move, so it patches the note where it now lives.
+    private static func appendFiledNotes(
+        _ notes: [FiledNote], timeZone: TimeZone, into puts: inout [VaultFileOp]
+    ) {
+        for note in notes {
+            let item = InboxItem(
+                id: note.id,
+                text: note.body,
+                created: note.created,
+                passthrough: note.source)
+            puts.append(.put(path: note.id.path, text: NoteCodec.encode(item, timeZone: timeZone)))
+        }
     }
 
     // MARK: - The three collections that are not `[Entity]`

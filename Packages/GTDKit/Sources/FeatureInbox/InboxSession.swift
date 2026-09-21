@@ -19,62 +19,49 @@ public final class InboxSession {
     /// What the user has decided about the card in front of them. Nothing here is written to the
     /// vault until the card is filed, and nothing is pre-filled (§1 "no lying defaults").
     public struct Draft: Sendable, Equatable {
-        /// The raw captured text, editable in place (I2).
+        /// The captured text, editable in place — and, since R-4, the **title** as well: the
+        /// note is named after its first line and keeps the whole text in its body.
         public var text: String
         public var why: String
         public var what: String
-        /// Only meaningful once `titleWasEdited` is true — otherwise the title is derived.
-        public var title: String
-        public var titleWasEdited: Bool
         public var contexts: [String]
         public var timeBucket: TimeBucket?
         public var deferDate: Day?
         public var due: Day?
+        /// I4a — the `+ project` chip: an existing project…
         public var project: NoteID?
+        /// …or one the picker is creating with this name (R-8). Never both.
+        public var newProjectTitle: String?
 
         public init(
             text: String = "",
             why: String = "",
             what: String = "",
-            title: String = "",
-            titleWasEdited: Bool = false,
             contexts: [String] = [],
             timeBucket: TimeBucket? = nil,
             deferDate: Day? = nil,
             due: Day? = nil,
-            project: NoteID? = nil
+            project: NoteID? = nil,
+            newProjectTitle: String? = nil
         ) {
             self.text = text
             self.why = why
             self.what = what
-            self.title = title
-            self.titleWasEdited = titleWasEdited
             self.contexts = contexts
             self.timeBucket = timeBucket
             self.deferDate = deferDate
             self.due = due
             self.project = project
+            self.newProjectTitle = newProjectTitle
         }
 
         public init(item: InboxItem) {
             self.init(text: item.text)
         }
 
-        /// The action note's title: first line of *What?*, falling back to the captured text,
-        /// unless the user typed one (T20 brief: "editable before filing").
-        public var effectiveTitle: String {
-            if titleWasEdited {
-                let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty { return trimmed }
-            }
-            return Draft.derivedTitle(what: what, text: text)
-        }
-
-        public static func derivedTitle(what: String, text: String) -> String {
-            let fromWhat = ChecklistText.firstContentLine(what)
-            let candidate = fromWhat.isEmpty ? ChecklistText.firstContentLine(text) : fromWhat
-            return String(candidate.prefix(titleLimit))
-        }
+        /// R-4 — the file name this card would get, for the card to show. `nil` while the
+        /// capture is only whitespace, which is the one thing that cannot be filed.
+        public var noteTitle: String? { CaptureText.title(of: text) }
 
         /// A2 — a second checkbox in *What?* offers "Turn into project".
         public var suggestsProject: Bool { Checkbox.scan(what).count >= 2 }
@@ -83,8 +70,6 @@ public final class InboxSession {
         public func isPristine(for item: InboxItem) -> Bool {
             self == Draft(item: item)
         }
-
-        static let titleLimit = 120
     }
 
     /// The five sub-flows and the cap choice, as the sheet the card is showing (I4).
@@ -105,8 +90,9 @@ public final class InboxSession {
     /// (STYLEGUIDE §3.6, §4.3). `nonce` changes on every refusal so a repeated one animates again.
     public struct Validation: Sendable, Equatable {
         public enum Issue: Sendable, Equatable {
-            /// Next and Someday need a non-empty *What?*.
-            case whatRequired
+            /// R-3/D12 — the tier the card is leaving to needs fields the draft does not have.
+            /// Every one of them is listed, in `RequiredField` order, so the card can mark each.
+            case missing([RequiredField])
             /// Defer to review needs a reason (I5).
             case reasonRequired
         }
@@ -223,6 +209,13 @@ public final class InboxSession {
 
     public var projectGroups: [ProjectGroup] { ProjectPicker.groups(model.snapshot) }
 
+    /// I4b/D36 — the active projects whose folders the Knowledge picker offers as targets.
+    public var activeProjects: [Project] {
+        model.snapshot.projects
+            .filter { $0.status == .active }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+
     // MARK: - Queue
 
     /// New captures that arrived mid-session go on top (LIFO, I7), and items that left the inbox
@@ -255,15 +248,13 @@ public final class InboxSession {
         guard current != nil else { return }
         guard validate(for: target) else { return }
         switch target {
-        case .next, .someday:
+        case .next, .someday, .done:
             guard let status = target.status else { return }
             await file(.action(actionDraft(status: status)), as: target)
         case .trash:
             await file(.trash, as: .trash)
         case .knowledge:
             sheet = .knowledge
-        case .project:
-            sheet = .project
         case .waiting:
             sheet = .waiting
         case .deferToReview:
@@ -271,39 +262,74 @@ public final class InboxSession {
         }
     }
 
-    /// Validation before leaving: Next/Someday require a non-empty *What?* (STYLEGUIDE §3.6).
-    /// Contexts and time may stay empty — undecided is a legal state.
+    /// Validation before leaving (STYLEGUIDE §3.6, R-3): Next needs `Why?`, `What?`, a context
+    /// and a time estimate, Someday needs `What?`, Waiting needs `What?` and the sheet's date,
+    /// and Done, Knowledge, lists and Trash need nothing. The reducer refuses anything that
+    /// slips through — this only saves the round trip and marks the fields.
     @discardableResult
-    public func validate(for target: CardTarget) -> Bool {
-        guard target.requiresWhat else { return true }
-        guard draft.what.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return true
-        }
-        fail(.whatRequired)
+    public func validate(for target: CardTarget, waiting: WaitingInfo? = nil) -> Bool {
+        guard let status = target.status else { return true }
+        let missing = RequiredField.missing(
+            status: status,
+            previous: nil,
+            why: draft.why,
+            what: draft.what,
+            contexts: draft.contexts,
+            timeEstimate: draft.timeBucket?.minutes,
+            followUpDate: waiting?.followUp)
+        guard !missing.isEmpty else { return true }
+        fail(.missing(missing))
         return false
     }
 
-    /// I4 — Knowledge: the capture file becomes the knowledge note. The folder is remembered on
-    /// this device so the next card can *suggest* it.
-    public func confirmKnowledge(folder: String, title: String) async {
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanTitle.isEmpty else { return }
-        defaults.setString(folder, forKey: InboxDefaultsKey.lastKnowledgeFolder)
-        await file(.knowledge(folder: folder, title: cleanTitle), as: .knowledge)
+    /// The fields the card must mark with an asterisk right now (STYLEGUIDE §3.6).
+    public var missingFields: [RequiredField] {
+        guard case let .missing(fields) = validation?.issue else { return [] }
+        return fields
     }
 
-    /// W1 — `WaitingInfo` exists only once the user confirmed both halves.
+    /// I4b — Knowledge: the capture file becomes the knowledge note, with the notes panel (and
+    /// the full capture text above it when the title had to cut it) as its body. The folder is
+    /// remembered on this device so the next card can *suggest* it.
+    public func confirmKnowledge(target: KnowledgeTarget, notes: String = "") async {
+        if case let .folder(folder) = target {
+            defaults.setString(folder, forKey: InboxDefaultsKey.lastKnowledgeFolder)
+        }
+        await file(.knowledge(target, notes: notes), as: .knowledge)
+    }
+
+    /// I4b/§5a — the capture becomes one item of a list. Not a commitment, so nothing is required.
+    public func confirmList(name: String, notes: String = "") async {
+        await file(.list(name: name, notes: notes), as: .knowledge)
+    }
+
+    /// W1/D39 — the follow-up date is required, who is optional; both arrive confirmed.
     public func confirmWaiting(_ info: WaitingInfo) async {
+        guard validate(for: .waiting, waiting: info) else { return }
         await file(.action(actionDraft(status: .waiting, waiting: info)), as: .waiting)
     }
 
-    /// I4 — Project: a new project (and optionally a new area) plus its first next action(s).
-    public func confirmNewProject(_ projectDraft: ProjectDraft, firstActions: [ActionDraft]) async {
-        await file(.newProject(projectDraft, firstActions: firstActions), as: .project)
+    /// I4a/R-8 — the `+ project` chip. The card **stays an action**: it names a project instead
+    /// of turning into one (D33). Nothing is written until the card is filed.
+    public func chooseProject(_ id: NoteID?) {
+        draft.project = id
+        draft.newProjectTitle = nil
     }
 
-    public func confirmExistingProject(_ id: NoteID, actions: [ActionDraft]) async {
-        await file(.existingProject(id, actions: actions), as: .project)
+    /// The picker's `Create project "<text>"` row: the project is created with a name only, in
+    /// the same command that files the card (R-8).
+    public func createProject(named title: String) {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        draft.project = nil
+        draft.newProjectTitle = clean
+    }
+
+    /// What the chip shows: the chosen project's title, the name being created, or `nil`.
+    public func projectChipTitle(in snapshot: VaultSnapshot) -> String? {
+        if let newProjectTitle = draft.newProjectTitle { return newProjectTitle }
+        guard let id = draft.project else { return nil }
+        return snapshot.project(id)?.title ?? id.title
     }
 
     /// I5 — the escape hatch. The reason is required; the item leaves the queue and shows up in
@@ -327,14 +353,6 @@ public final class InboxSession {
         }
     }
 
-    /// The first action(s) a project sub-flow offers, prefilled from the card but never persisted
-    /// until the user confirms the sheet.
-    public func firstActionDraft(for project: Project?) -> ActionDraft {
-        var action = actionDraft(status: ProjectPicker.statusForFirstAction(in: project))
-        action.project = project?.id
-        return action
-    }
-
     // MARK: - Cap (A3, I4)
 
     /// Demote one of the current Next items and file the card that was refused.
@@ -352,14 +370,6 @@ public final class InboxSession {
         self.pending = nil
         sheet = nil
         await file(pending.decision, as: pending.target)
-    }
-
-    /// The other half of the forced choice: send this card to Someday instead (never automatic).
-    public func sendToSomedayInstead() async {
-        guard let pending else { return }
-        self.pending = nil
-        sheet = nil
-        await file(Self.demoted(pending.decision), as: .someday)
     }
 
     /// Closes a sub-flow sheet without filing anything. The card and its draft stay.
@@ -403,11 +413,14 @@ public final class InboxSession {
     /// Builds the draft for a decision. Suggestions are never in here — only confirmed values.
     func actionDraft(status: ActionStatus, waiting: WaitingInfo? = nil) -> ActionDraft {
         ActionDraft(
-            title: draft.effectiveTitle,
+            // R-4 — the reducer names the note after the capture text; what travels here is the
+            // text the card shows, so the two can never disagree.
+            title: draft.text,
             status: status,
             contexts: draft.contexts,
             timeEstimate: draft.timeBucket?.minutes,
             project: draft.project,
+            newProjectTitle: draft.newProjectTitle,
             deferDate: draft.deferDate,
             due: draft.due,
             waiting: waiting,
@@ -455,10 +468,14 @@ public final class InboxSession {
         switch error {
         case .nextCapReached:
             // Forced choice, never automatic (ARCHITECTURE §6): the card springs back and the
-            // sheet lists the current Next items.
+            // sheet lists the current Next items to demote — or the user cancels. There is no
+            // "send to Someday instead" shortcut (STYLEGUIDE §3.6).
             pending = (decision, target)
             capCandidates = Rules.nextList(model.snapshot, today: today)
             sheet = .cap
+        case let .missingFields(fields):
+            // R-3 — the reducer is the authority; the card marks what it named.
+            fail(.missing(fields))
         default:
             lastError = error
         }
@@ -476,25 +493,4 @@ public final class InboxSession {
         validation = nil
     }
 
-    /// The Someday version of a refused decision (the cap sheet's second option).
-    static func demoted(_ decision: InboxDecision) -> InboxDecision {
-        switch decision {
-        case let .action(draft):
-            return .action(demoted(draft))
-        case let .newProject(project, firstActions):
-            return .newProject(project, firstActions: firstActions.map(demoted))
-        case let .existingProject(id, actions):
-            return .existingProject(id, actions: actions.map(demoted))
-        case .knowledge, .list, .trash:
-            // A list item is not a commitment (L1), so the cap never applies to it.
-            return decision
-        }
-    }
-
-    private static func demoted(_ draft: ActionDraft) -> ActionDraft {
-        guard draft.status.countsTowardCap else { return draft }
-        var copy = draft
-        copy.status = .someday
-        return copy
-    }
 }

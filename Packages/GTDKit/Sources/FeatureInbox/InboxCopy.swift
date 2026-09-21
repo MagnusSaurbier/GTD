@@ -14,7 +14,7 @@ public enum InboxCopy {
     // MARK: Card
 
     public static let titleLabel = "Title"
-    public static let titlePlaceholder = "Title of the action note"
+    public static let titlePlaceholder = "What was captured"
     public static let rawTextPlaceholder = "What was captured"
     public static let showAll = "Show all"
     public static let checklist = "Checklist"
@@ -34,30 +34,25 @@ public enum InboxCopy {
     // MARK: Hint overlay (first session only)
 
     public static let hintTitle = "Swipe to file"
-    public static let hintBody = "Right Next · left Someday · down Trash"
+    public static let hintBody = "Right Next · left Someday · down Back"
     public static let hintDismiss = "Got it"
 
     // MARK: Knowledge sheet
 
     public static let knowledgeFolderLabel = "Folder"
-    public static let knowledgeTitleLabel = "Note title"
+    /// I4b — the optional notes panel of the Knowledge / List card (STYLEGUIDE §6.3).
+    public static let notesLabel = "Notes"
+    public static let notesPlaceholder = "Notes (optional)"
     public static let newFolder = "New folder"
     public static let newFolderPlaceholder = "Folder name"
     public static let knowledgeRoot = "Knowledge"
 
-    // MARK: Project sheet
+    // MARK: Project picker (I4a)
 
     public static let pickProject = "Pick a project"
-    public static let newProject = "New project"
-    public static let existingProject = "Existing project"
-    public static let projectTitleLabel = "Project title"
-    public static let outcomeLabel = "Outcome"
-    public static let outcomePlaceholder = "Done when…"
-    public static let areaLabel = "Area"
-    public static let newArea = "New area"
-    public static let newAreaPlaceholder = "Area name"
-    public static let firstActionsLabel = "First next action"
-    public static let addAnotherAction = "Add another"
+    public static let clearProject = "No project"
+    /// STYLEGUIDE §6.3 — the picker's create row, word for word.
+    public static func createProject(_ name: String) -> String { "Create project \"\(name)\"" }
     public static let noProjectsYet = "No project yet"
     public static let noProjectsYetBody = "Create one for this item."
 

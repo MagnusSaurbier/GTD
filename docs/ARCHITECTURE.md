@@ -110,11 +110,19 @@ timeEstimate: 30
 project: "[[Projects/Applications/DAAD/DAAD]]"
 created: 2026-09-18T21:04:11+02:00
 ---
+the whole capture text, when the title could not hold it
+
 # Why?
 …
 # What?
 - [ ] …
 ```
+
+The paragraph **above** `# Why?` is `Action.preamble` (R-4): the full capture text of a note
+whose title had to be cut, and anything a hand-written note carries before its first heading. A
+note whose body has no heading at all is still read as one long `What?`, as before — a body is
+either a lead paragraph plus headings, or it is the `What?`, never both. `waitingFor:` is
+**optional** (W1/D39): an empty who writes no line at all.
 
 List item (L1, §5a) — the leanest note in the vault. The **file name is the title**, the folder
 is the list, `Done/` says it is finished, and the body is free notes (I4b). Nothing else:
@@ -163,9 +171,13 @@ together. Public signatures are **not** repeated here — read the source and th
 `AppPrompt`, `VaultFileOp`), `Reducer/` and `Rules/`.
 
 - **Every mutation in the app is one `GTDCommand`**, and `Reducer.reduce(snapshot, command, env)`
-  is the only place that interprets one. The cap, waiting validation, completion effects,
-  promotion, demotion when a project leaves `active`, archive eligibility and every refusal live
-  there — never in a view, a backend or a model object.
+  is the only place that interprets one. The cap, waiting validation, **the required fields of a
+  tier (R-3)**, completion effects, promotion, demotion when a project leaves `active`, archive
+  eligibility and every refusal live there — never in a view, a backend or a model object.
+- **`Reduction.filedNotes`** is the one channel for a note that lives in no snapshot collection:
+  the Knowledge note a capture becomes (I4b). The reducer says where it goes and what its body
+  says; `GTDServices` encodes it, because `GTDModel` never produces markdown (§6). The put runs
+  after `extraOps`, so it patches the note where the move has just put it.
 - `Rules` holds the derived queries (`nextList`, `onTheGoNextList`, `chaseItems`, `visibleActions`,
   `deferredList`, `waitingList`, `stalledProjects`, `projectRows`, `sidebarCounts`,
   `lists`, `listRows`, `listItems`, `openListItemCount`, `favouriteLists`,
@@ -259,7 +271,8 @@ onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
   taken destination is `GTDError.titleCollision`. Folder moves included: "remove list" is a
   `.moveFolder` into `GTD/Trash/`.
 - `SnapshotDiff` diffs `listItems` next to the other entity collections, so one list-item note is
-  one file exactly as one action note is.
+  one file exactly as one action note is, and writes `Reduction.filedNotes` (the Knowledge note of
+  an inbox filing) in the same commit, after the move that put the file there.
 
 ### GTDAppCore — what the UI sees
 
@@ -387,6 +400,14 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-21 | **`favouriteLists:` is written only once the user chooses (R-5).** `GTDConfig.favouriteLists` is `Optional`: absent from `GTD/Config.md` means "never chosen", and `Rules.favouriteLists` then derives the first four lists alphabetically. The derived default is never written back, `[]` is a real choice ("show none") that survives a round trip, and a stored favourite naming a list that no longer exists is skipped rather than shown as a ghost. |
 | 2026-09-21 | **"Make action" moves the note and keeps what was in it (L4).** `promoteListItem` moves `Lists/<n>/<Item>.md` into `Actions/` and hands the note's own text to the codec, so `created`, unknown frontmatter and the item's notes survive. The codec change that makes that safe: `encode(_ action:)` treats a headingless body as the `What?` **only** when the file really decodes as an action (or the body already says what the action says); otherwise the `# Why?`/`# What?` headings are appended *below* the existing body instead of replacing it. The promotion then goes through the same `makeAction` + `checkCap` as an inbox filing, so R-3's required fields (T04) and the cap apply to it without `promoteListItem` knowing about either. |
 | 2026-09-21 | **Filing a capture into a list never drops what was dictated.** The capture file is *moved* into the list (as the Knowledge branch does), so its `created` stamp and any key the user added survive. The notes panel becomes the body; when it is empty and the chosen title is not the whole capture text, the capture text stays as the body rather than being thrown away. R-4 (T04) refines this by putting the full text above the notes whenever the title was truncated. |
+| 2026-09-21 | **Required fields live in the reducer (R-3, I4/D12).** `GTDError.missingFields([RequiredField])` is thrown for every **new** transition into a tier: Next (from outside Next) needs `Why?`, `What?`, at least one context and a time estimate; a note being **created** in Someday or Waiting needs `What?`; Waiting always needs its follow-up date; Done, lists, Knowledge and Trash need nothing. A note already in its tier is never judged again, and **demoting is never blocked** — that is how an over-cap or half-filled vault is repaired. The check runs after the rules about the world (a project must be active) and before the cap, so a card hears about the field rather than about a cap it never reached. |
+| 2026-09-21 | **The capture text is the title, and nothing dictated is lost (R-4, I2/D27/D30).** `CaptureText` takes the first line, sanitises it and cuts it at a word boundary to ≤ 60 **characters**; `Reducer.fileInbox` renames the capture file to it. Whenever the trimmed capture text and the title are not the same string — cut, several lines, or changed by the sanitiser — the full text is written as the note's first paragraph (`Action.preamble`, above `# Why?`) or above the notes of a Knowledge note or list item. A capture of only whitespace is refused; the old "title derived from `What?`" logic is gone. |
+| 2026-09-21 | **Filing a card *moves* the capture file** (R-4). An action, a Knowledge note and a list item are all the capture note under a new name, so `created`, unknown frontmatter keys and the text survive, nothing lands in the trash, and one undo is one move back. Only Trash still emits a `.delete` (which is itself a move into `GTD/Trash/`). |
+| 2026-09-21 | **The project chip replaces the inbox's Project target (R-8, I4a/D33).** `ActionDraft.newProjectTitle` mirrors `ProjectDraft.newAreaTitle`: one command creates the project (name only, area-less, through `addProject` — the single place T05 has to change for `Projects/no_area/`), links the action and files the card. `InboxDecision.newProject`/`.existingProject` are gone; `convertActionToProject` (A2 "Turn into project") stays. Naming an existing *and* a new project is `.invalid`. |
+| 2026-09-21 | **Waiting keeps its date, not its person (W1/D39).** `WaitingInfo.who` is `String?`: `waiting` requires the follow-up date, and an empty who writes **no** `waitingFor:` line rather than an empty one. |
+| 2026-09-21 | **A Knowledge note is written through `Reduction.filedNotes`.** It lives in no snapshot collection, so the reducer names its path and its body and `GTDServices` encodes it (the `lastReview` precedent). The body is replaced outright, so what lands on disk is what the reducer decided and never a stale copy of the capture; the note's own text rides along so unknown frontmatter survives. Its target may be a folder under `Knowledge/` **or an active project's folder** (I4b/D36). |
+| 2026-09-21 · T04-1 | **A promoted step takes its `What?` from the step line, and the one-tap P5 promotion answers instead of guessing.** The step text is the next physical action, so `promoteStep` fills an empty `what` with it — which makes a one-tap promotion into **Someday** always possible. Next still needs `Why?`, a context and a time estimate (R-3), so `PromotionOutcome` gained `.missingFields([RequiredField])` next to `.capReached`: the "What's next?" sheet and the project detail name what is missing and offer Someday, exactly as they already do for the cap. The alternative — letting a promotion into Next quietly land in Someday — was rejected: it rewrites the user's decision, and it leaves the project stalled, which is the one thing P5 exists to fix. |
+| 2026-09-21 | **The cap's second option is `Cancel`, not "send to Someday instead" (D14, STYLEGUIDE §3.6).** `InboxSession.sendToSomedayInstead` and the demotion helper behind it are gone from the model layer; the user demotes a Next item or cancels and swipes ← themselves. The editor's own simplified fallback (`Copy.sendToSomedayInstead` in `ActionDetailView`, and the Someday retry of the promotion sheets) is a different flow and stays. |
 | 2026-09-21 | **The sample vault keeps one `status: trash` note** (`Actions/Look into that podcast app.md`). `GTDFixtures` is the only writer of that word, on purpose: it is what makes R-1 — hidden state, tolerant decode, archive-to-trash routing — testable end to end against a realistic pre-rework vault. |
 
 ## 7. Sync safety rules (N3) — apply to every change that writes

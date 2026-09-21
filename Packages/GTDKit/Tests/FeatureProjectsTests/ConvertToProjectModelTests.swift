@@ -72,7 +72,8 @@ struct ConvertToProjectModelTests {
         let convert = ConvertToProjectModel(action: multiStepAction.id, model: model)
         let draft = convert.makeDraft()
 
-        let outcome = try await convert.convert(draft, promoteStepIndex: 0)
+        let outcome = try await convert.convert(
+            draft, promoteStepIndex: 0, fields: ActionDraft(title: "", status: .next, contexts: ["mac"], timeEstimate: 30, why: "The project needs it."))
 
         #expect(outcome == .success)
         let projectID = convert.projectID(for: draft)
@@ -102,7 +103,8 @@ struct ConvertToProjectModelTests {
         let convertible = Action(
             id: layout.actionPath(title: "Two-step task"), title: "Two-step task", status: .someday,
             what: "- [ ] Step one\n- [ ] Step two")
-        let config = GTDConfig(contexts: [], onTheGoContexts: [], nextCap: 1, layout: layout)
+        // R-3 — Next needs a context, so the closed list has one.
+        let config = GTDConfig(contexts: ["mac"], onTheGoContexts: [], nextCap: 1, layout: layout)
         let snapshot = VaultSnapshot(actions: [filler, convertible], config: config)
         return (snapshot, convertible, filler)
     }
@@ -114,7 +116,10 @@ struct ConvertToProjectModelTests {
         let draft = convert.makeDraft()
         #expect(draft.steps == ["Step one", "Step two"])
 
-        let outcome = try await convert.convert(draft, promoteStepIndex: 0)
+        let outcome = try await convert.convert(
+            draft, promoteStepIndex: 0,
+            fields: ActionDraft(
+                title: "", status: .next, contexts: ["mac"], timeEstimate: 30, why: "It is next."))
 
         #expect(outcome == .capReached(cap: 1))
         #expect(model.snapshot.action(convertible.id) == nil)   // conversion itself still happened
@@ -128,7 +133,10 @@ struct ConvertToProjectModelTests {
         let convert = ConvertToProjectModel(action: convertible.id, model: model)
         let draft = convert.makeDraft()
 
-        let capped = try await convert.convert(draft, promoteStepIndex: 0)
+        let capped = try await convert.convert(
+            draft, promoteStepIndex: 0,
+            fields: ActionDraft(
+                title: "", status: .next, contexts: ["mac"], timeEstimate: 30, why: "It is next."))
         #expect(capped == .capReached(cap: 1))
 
         let fallback = try await convert.promoteConvertedStepToSomeday(draft, stepIndex: 0)

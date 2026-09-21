@@ -16,7 +16,11 @@ struct ErrorSurfacingTests {
         var snapshot = VaultSnapshot.empty
         snapshot.actions = (1...15).map {
             Action(id: NoteID(path: "Actions/Next \($0).md"), title: "Next \($0)", status: .next)
-        } + [Action(id: NoteID(path: "Actions/Spare.md"), title: "Spare", status: .someday)]
+        } + [Action(
+            id: NoteID(path: "Actions/Spare.md"), title: "Spare", status: .someday,
+            contexts: ["mac"], timeEstimate: 10,
+            // R-3 — complete, so the refusal under test is the cap and not a missing field.
+            why: "It is ready to be committed to.", what: "Do it.")]
         return AppModel(backend: InMemoryBackend(snapshot: snapshot), snapshot: snapshot)
     }
 
@@ -45,12 +49,13 @@ struct ErrorSurfacingTests {
         #expect(model.snapshot.action(victim.id)?.status == .done)
     }
 
-    @Test func waitingWithoutTheWhoIsReportedToo() async throws {
+    /// R-3 — a required field reaches the shell's alert the same way the cap does.
+    @Test func waitingWithoutTheFollowUpDateIsReportedToo() async throws {
         let model = modelAtCap()
         let victim = try #require(model.snapshot.action(spare))
         let ok = await model.perform(.setStatus(victim.id, .waiting, waiting: nil))
         #expect(ok == false)
-        #expect(model.lastError as? GTDError == .waitingInfoRequired)
+        #expect(model.lastError as? GTDError == .missingFields([.followUpDate]))
     }
 
     /// `report` is the same rule one level up, for a feature model's own throwing method.

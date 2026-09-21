@@ -18,7 +18,7 @@ public enum DeferredSweep {
     /// The targets the review offers for a deferred item. `deferToReview` is not among them —
     /// the item is already here, and parking it again would make the escape hatch a loop (I5).
     public static let targets: [CardTarget] = [
-        .next, .someday, .waiting, .project, .knowledge, .trash,
+        .next, .someday, .waiting, .done, .knowledge, .trash,
     ]
 
     /// An `ActionDraft` built from the card draft, exactly as inbox filing builds one.
@@ -26,11 +26,14 @@ public enum DeferredSweep {
         _ draft: InboxSession.Draft, status: ActionStatus, waiting: WaitingInfo? = nil
     ) -> ActionDraft {
         ActionDraft(
-            title: draft.effectiveTitle,
+            // R-4 — the reducer names the note after the capture text; the project chip
+            // (I4a) rides along in the draft, exactly as on the inbox card.
+            title: draft.text,
             status: status,
             contexts: draft.contexts,
             timeEstimate: draft.timeBucket?.minutes,
             project: draft.project,
+            newProjectTitle: draft.newProjectTitle,
             deferDate: draft.deferDate,
             due: draft.due,
             waiting: waiting,
@@ -46,10 +49,10 @@ public enum DeferredSweep {
         draft: InboxSession.Draft,
         waiting: WaitingInfo? = nil,
         knowledgeFolder: String? = nil,
-        project: NoteID? = nil
+        notes: String = ""
     ) -> InboxDecision? {
         switch target {
-        case .next, .someday:
+        case .next, .someday, .done:
             guard let status = target.status else { return nil }
             return .action(actionDraft(draft, status: status))
         case .trash:
@@ -58,21 +61,28 @@ public enum DeferredSweep {
             guard let waiting else { return nil }
             return .action(actionDraft(draft, status: .waiting, waiting: waiting))
         case .knowledge:
-            guard let folder = knowledgeFolder, !folder.isEmpty else { return nil }
-            return .knowledge(folder: folder, title: draft.effectiveTitle)
-        case .project:
-            guard let project else { return nil }
-            return .existingProject(project, actions: [actionDraft(draft, status: .next)])
+            guard let folder = knowledgeFolder else { return nil }
+            return .knowledge(.folder(folder), notes: notes)
         case .deferToReview:
             return nil
         }
     }
 
-    /// Next and Someday need a decision about the next physical action, same as the inbox card
-    /// (STYLEGUIDE §3.6). Everything else may leave `What?` empty.
+    /// R-3 — the same required fields as the inbox card, because it is the same filing
+    /// (STYLEGUIDE §3.6 "Validation before leaving"). Empty means the target is reachable.
+    public static func missingFields(
+        _ draft: InboxSession.Draft, for target: CardTarget, waiting: WaitingInfo? = nil
+    ) -> [RequiredField] {
+        target.missingFields(
+            why: draft.why,
+            what: draft.what,
+            contexts: draft.contexts,
+            timeEstimate: draft.timeBucket?.minutes,
+            followUpDate: waiting?.followUp)
+    }
+
     public static func isComplete(_ draft: InboxSession.Draft, for target: CardTarget) -> Bool {
-        guard target.requiresWhat else { return true }
-        return !draft.what.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        missingFields(draft, for: target).isEmpty
     }
 }
 
@@ -131,15 +141,17 @@ public enum WaitingSweep {
         }
     }
 
-    /// The command, or `nil` when a chase/bump has no confirmed date yet, or the item has no
-    /// "who" to keep waiting on (W1 — the pair is required, so the review cannot half-write it).
+    /// The command, or `nil` when a chase/bump has no confirmed date yet (W1/D39 — the date is
+    /// the commitment; who is optional and simply travels along).
     public static func command(_ choice: Choice, action: Action, followUp: Day?) -> GTDCommand? {
         switch choice {
         case .resolve:
             return .setStatus(action.id, .someday, waiting: nil)
         case .chase, .bump:
-            guard let followUp, let who = action.waitingFor, !who.isEmpty else { return nil }
-            return .setStatus(action.id, .waiting, waiting: WaitingInfo(who: who, followUp: followUp))
+            // W1/D39 — only the date is required; a wait with nobody named keeps waiting.
+            guard let followUp else { return nil }
+            return .setStatus(
+                action.id, .waiting, waiting: WaitingInfo(who: action.waitingFor, followUp: followUp))
         }
     }
 }

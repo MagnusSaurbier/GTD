@@ -112,19 +112,26 @@ struct ReviewDeckTests {
 
     @Test func promotingIntoAFullNextIsRefusedAndTheCardStays() async throws {
         // Fixtures sit at 14/15; one promotion fits, the next one hits the cap.
+        // R-3 — only a card that already carries Why?, What?, a context and a time estimate can
+        // be promoted at all; the deck reports the missing fields for the others (T12).
         let session = ReviewTest.session(ReviewTest.inboxZero)
-        let cards = session.deckCards(for: .someday)
+        func isComplete(_ card: DeckCard) -> Bool {
+            guard let action = card.action else { return false }
+            return !action.why.isEmpty && !action.what.isEmpty
+                && !action.contexts.isEmpty && action.timeEstimate != nil
+        }
+        let cards = session.deckCards(for: .someday).filter(isComplete)
         let first = try #require(cards.first)
         await session.apply(.promote, to: first)
         #expect(session.nextCount == session.cap)
         #expect(session.lastError == nil)
 
-        let second = try #require(session.deckCards(for: .someday).first)
+        let second = try #require(session.deckCards(for: .someday).filter(isComplete).first)
         await session.apply(.promote, to: second)
         #expect(session.lastError == .nextCapReached(cap: session.cap))
         #expect(session.snapshot.action(second.id)?.status != .next)
         // Refused, so the card is still on the deck — never a silent skip.
-        #expect(session.deckCards(for: .someday).first?.id == second.id)
+        #expect(session.deckCards(for: .someday).filter(isComplete).first?.id == second.id)
         #expect(session.state.changes.promoted == 1)
     }
 

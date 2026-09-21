@@ -92,6 +92,12 @@ public enum NoteCodec {
         let sections = BodySections(lines: doc.bodyLines, terminator: doc.terminator)
         let why = sections.text(of: "Why?")
         let what = sections.text(of: "What?")
+        // R-4 — the paragraph above `# Why?`: the full capture text of a note whose title could
+        // not hold it. Only a note that really has the action headings has one; a headingless
+        // body is the `What?` (below), and reading it as both would duplicate it.
+        let preamble = (why == nil && what == nil)
+            ? ""
+            : RawText.text(RawText.trimTrailingBlanks(sections.prefix).kept)
 
         return Action(
             id: id,
@@ -109,6 +115,7 @@ public enum NoteCodec {
             completedDate: doc.timestamp("completedDate", defaultTimeZone: timeZone),
             reviewReason: doc.scalar("reviewReason"),
             modified: nil,
+            preamble: preamble,
             why: why ?? "",
             // A note without either heading is all "What?" — hand-written notes and notes made
             // outside the app still show their text instead of looking empty.
@@ -172,6 +179,15 @@ public enum NoteCodec {
             } else {
                 sections.setText("What?", action.what, canonicalOrder: Headings.action)
             }
+        }
+        // R-4 — the paragraph above the headings, written last so it sits above whatever the
+        // two lines before it just inserted. Never touched while the body *is* the `What?`.
+        if !bodyIsWhat, (reference?.preamble ?? "") != action.preamble {
+            var lead = RawText.block(action.preamble, terminator: doc.terminator)
+            if !lead.isEmpty, !sections.sections.isEmpty {
+                lead.append(RawLine(content: "", terminator: doc.terminator))
+            }
+            sections.prefix = lead
         }
         doc.setBody(sections.lines)
         return doc.text

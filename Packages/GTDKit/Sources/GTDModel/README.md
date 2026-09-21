@@ -7,13 +7,18 @@ Compiles and tests on Linux.
 ## Public API
 
 - `Core/` — `NoteID`, `Day` + `DayTime` (integer civil calendar), `VaultLayout` (folder defaults
-  and every path builder), `RenameMap` (old id → new id, `resolve`/`merging`).
+  and every path builder), `RenameMap` (old id → new id, `resolve`/`merging`), `CaptureText`
+  (R-4: the title a capture is filed under, and the body that keeps what the title could not).
 - `Entities/` — `InboxItem`, `Action`, `GTDList`, `ListItem`, `Area`, `Project`, `ProjectStep`, `LogEntry`, `Routine`,
   `RoutineStep`, `RoutineLogEntry`, `GTDConfig`, `VaultIssue`, `WeeklyReview`, `VaultSnapshot`,
   `NotePassthrough`, `Checkbox`, `ActionStatus`, `ProjectStatus`, `TimeBucket`, `RoutineStepResult`.
-- `Commands/` — `ActionDraft`, `ProjectDraft`, `WaitingInfo`, `InboxDecision`, `GTDCommand`,
-  `GTDError`, `AppPrompt`, `VaultFileOp`.
-- `Reducer/` — `ReducerEnv`, `Reduction`, `Reducer.reduce(_:_:env:) throws(GTDError)`.
+- `Commands/` — `ActionDraft` (incl. `newProjectTitle`, R-8, and `preamble`, R-4),
+  `ProjectDraft`, `WaitingInfo` (`who` optional, W1/D39), `KnowledgeTarget`, `InboxDecision`,
+  `GTDCommand`, `RequiredField` (+ `RequiredField.missing`, R-3), `GTDError`, `AppPrompt`,
+  `VaultFileOp`.
+- `Reducer/` — `ReducerEnv`, `Reduction` (incl. `filedNotes`: notes that live in no collection —
+  today the Knowledge note an inbox filing writes), `FiledNote`,
+  `Reducer.reduce(_:_:env:) throws(GTDError)`.
 - `Rules/` — `Rules` (queries incl. `isUndoable`, `openActions`, `closedDay`, `waitingSince`,
   and the list queries `lists`, `listRows`, `listItems`, `openListItemCount`, `favouriteLists`),
   `Signal`/`SignalKind`/`SignalStep`, `StalenessPolicy`. The list queries are linear in the
@@ -29,9 +34,23 @@ Compiles and tests on Linux.
 - **A rename is reported, not inferred.** Renaming an action moves its file (A1), so the old
   `NoteID` leaves the snapshot exactly as a deletion would. `Reduction.renames` says which ids
   moved where, so navigation can follow the note instead of concluding it is gone.
-- Waiting needs who **and** follow-up; leaving `waiting` clears both. Closed actions always carry
-  a closing date; re-opening clears it. Contexts come from `GTDConfig` (values already in a note
-  survive an edit).
+- Waiting needs a **follow-up date**; who is optional and, when empty, writes no `waitingFor:`
+  line at all (W1/D39). Leaving `waiting` clears both. Closed actions always carry a closing
+  date; re-opening clears it. Contexts come from `GTDConfig` (values already in a note survive
+  an edit).
+- **Required fields are a reducer rule (R-3).** `RequiredField.missing` answers what a tier is
+  still missing, and `normalize` throws `.missingFields` on every *new* transition into one:
+  Next asks for `Why?` + `What?` + a context + a time estimate, a newly created Someday or
+  Waiting note for `What?`, Waiting always for its follow-up date, and Done/lists/Knowledge/Trash
+  for nothing. A note already in its tier is left alone and **demoting is never refused** — the
+  vault has to stay repairable.
+- **The capture text is the title (R-4).** Filing renames the capture file to
+  `CaptureText.title(of:)` (first line, sanitised, cut at a word boundary to ≤ 60 characters) and
+  *moves* it; whatever the title could not hold becomes the note's first paragraph
+  (`Action.preamble`) or the head of a Knowledge/list note's body. Only whitespace is refused.
+- **The project chip is a draft field (R-8).** `ActionDraft.newProjectTitle` creates the project
+  it links, area-less and in the same command; naming an existing one as well is `.invalid`.
+  There is no inbox Project *target* any more.
 - Only active projects put actions into Next; leaving `active` demotes them to Someday.
 - **A Next item may carry a future `defer`** (R-2). It is hidden until its date and holds no cap
   slot while hidden; on its date it returns with the `back` badge, even if that puts Next over

@@ -10,6 +10,17 @@ import GTDFixtures
 @MainActor
 struct InboxSessionTests {
 
+    /// R-4 — every card filed from the head of the sample queue is named after its capture text.
+    private let filedTitle = "call the Hausverwaltung about the broken window handle"
+
+    /// R-3 — everything Next demands, so a cap test is about the cap and not about a field.
+    private func fillForNext(_ session: InboxSession, what: String) {
+        session.draft.why = "It has been open for two weeks."
+        session.draft.what = what
+        session.draft.contexts = ["calls"]
+        session.draft.timeBucket = .upTo10
+    }
+
     // MARK: - Queue (I1, I5)
 
     @Test func queueIsLIFOAndExcludesItemsDeferredToReview() {
@@ -93,20 +104,19 @@ struct InboxSessionTests {
         #expect(session.draft.isPristine(for: item))
     }
 
-    @Test func titleIsDerivedFromWhatAndStaysEditable() {
+    /// R-4 — the capture text *is* the title, and editing the title edits the capture. The
+    /// note's file name follows from it (cut at a word boundary to ≤ 60 characters).
+    @Test func theCaptureTextIsTheTitleAndStaysEditable() {
         let (session, _, _) = InboxTestSupport.makeSession()
         let item = try! #require(session.current)
-
-        // Empty What? falls back to the captured text.
-        #expect(session.draft.effectiveTitle == item.text)
+        #expect(session.draft.noteTitle == item.text)
 
         session.draft.what = "- [ ] Ring the Hausverwaltung\n- [ ] Note the case number"
-        #expect(session.draft.effectiveTitle == "Ring the Hausverwaltung")
+        #expect(session.draft.noteTitle == item.text, "What? never renames the note any more")
         #expect(session.draft.suggestsProject)   // A2: two checkboxes
 
-        session.draft.title = "Window handle"
-        session.draft.titleWasEdited = true
-        #expect(session.draft.effectiveTitle == "Window handle")
+        session.draft.text = "Window handle: ask Frau Meier"
+        #expect(session.draft.noteTitle == "Window handle ask Frau Meier")
     }
 
     @Test func filingWritesExactlyWhatTheDraftHolds() async {
@@ -119,7 +129,7 @@ struct InboxSessionTests {
 
         await session.choose(.someday)
 
-        let action = try! #require(model.snapshot.actions.first { $0.title == "Ring the Hausverwaltung" })
+        let action = try! #require(model.snapshot.actions.first { $0.title == filedTitle })
         #expect(action.status == .someday)
         #expect(action.why == "The window does not close.")
         #expect(action.contexts == ["calls", "home"])
@@ -146,21 +156,42 @@ struct InboxSessionTests {
 
     // MARK: - Validation (STYLEGUIDE §3.6)
 
-    @Test func nextAndSomedayRequireAWhat() async {
+    /// R-3/D12 — Next asks for all four, Someday only for `What?`, and every missing field is
+    /// named so the card can mark it (STYLEGUIDE §3.6).
+    @Test func nextAndSomedayAskForTheirRequiredFields() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let item = try! #require(session.current)
         let actionsBefore = model.snapshot.actions.count
 
         await session.choose(.next)
-        #expect(session.validation?.issue == .whatRequired)
+        #expect(session.validation?.issue == .missing([.why, .what, .context, .timeEstimate]))
+        #expect(session.missingFields == [.why, .what, .context, .timeEstimate])
         #expect(session.current?.id == item.id)
         #expect(model.snapshot.actions.count == actionsBefore)
 
         let firstNonce = try! #require(session.validation?.nonce)
         await session.choose(.someday)
-        #expect(session.validation?.issue == .whatRequired)
+        #expect(session.validation?.issue == .missing([.what]))
         #expect(session.validation?.nonce == firstNonce + 1)   // shakes again
         #expect(model.snapshot.actions.count == actionsBefore)
+
+        // Filling them in lets the same card leave.
+        session.draft.why = "The window does not close."
+        session.draft.what = "Ring the Hausverwaltung"
+        session.draft.contexts = ["calls"]
+        session.draft.timeBucket = .upTo10
+        await session.choose(.next)
+        #expect(model.snapshot.actions.count == actionsBefore + 1)
+    }
+
+    /// I4/D13 — the 2-minute rule asks for nothing at all.
+    @Test func doneFilesTheCardWithoutAskingForAnything() async {
+        let (session, model, _) = InboxTestSupport.makeSession()
+        await session.choose(.done)
+        #expect(session.validation == nil)
+        let action = try! #require(model.snapshot.actions.first { $0.title == filedTitle })
+        #expect(action.status == .done)
+        #expect(action.completedDate != nil)
     }
 
     /// Knowledge and Trash carry no commitment, so they never demand a *What?*.
@@ -180,12 +211,12 @@ struct InboxSessionTests {
         #expect(model.snapshot.actions.count == before)   // trash creates no action
     }
 
-    @Test func contextsAndTimeMayStayEmpty() async {
+    @Test func contextsAndTimeMayStayEmptyForSomeday() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         session.draft.what = "Ring the Hausverwaltung"
         await session.choose(.someday)
 
-        let action = try! #require(model.snapshot.actions.first { $0.title == "Ring the Hausverwaltung" })
+        let action = try! #require(model.snapshot.actions.first { $0.title == filedTitle })
         #expect(action.contexts.isEmpty)
         #expect(action.timeEstimate == nil)   // never 0 (§1)
     }
@@ -198,14 +229,14 @@ struct InboxSessionTests {
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap - 1)
 
         // One slot left: the first card fits.
-        session.draft.what = "Ring the Hausverwaltung"
+        fillForNext(session, what: "Ring the Hausverwaltung")
         await session.choose(.next)
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
         #expect(session.sheet == nil)
 
         // The next one is refused — the card stays, with everything the user typed.
         let refused = try! #require(session.current)
-        session.draft.what = "Write the rename script"
+        fillForNext(session, what: "Write the rename script")
         session.draft.contexts = ["mac"]
         await session.choose(.next)
 
@@ -221,9 +252,10 @@ struct InboxSessionTests {
     @Test func demotingOneNextItemFilesTheCardThatWasRefused() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let cap = model.snapshot.config.nextCap
-        session.draft.what = "Ring the Hausverwaltung"
+        fillForNext(session, what: "Ring the Hausverwaltung")
         await session.choose(.next)
-        session.draft.what = "Write the rename script"
+        let second = try! #require(session.current)
+        fillForNext(session, what: "Write the rename script")
         await session.choose(.next)
         #expect(session.sheet == .cap)
 
@@ -232,36 +264,46 @@ struct InboxSessionTests {
 
         #expect(session.sheet == nil)
         #expect(model.snapshot.action(victim.id)?.status == .someday)
-        let filed = try! #require(model.snapshot.actions.first { $0.title == "Write the rename script" })
+        let filed = try! #require(model.snapshot.actions.first {
+            $0.title == CaptureText.title(of: second.text)
+        })
         #expect(filed.status == .next)
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
         #expect(session.processed == 2)
     }
 
-    @Test func sendToSomedayInsteadIsTheOtherHalfOfTheChoice() async {
+    /// The other half of the forced choice is **Cancel**, not a shortcut: there is no
+    /// "send to Someday instead" any more (STYLEGUIDE §3.6, D14). Cancelling keeps the card and
+    /// its draft, and the user swipes ← themselves.
+    @Test func theOtherHalfOfTheForcedChoiceIsCancelThenSomeday() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let cap = model.snapshot.config.nextCap
-        session.draft.what = "Ring the Hausverwaltung"
+        fillForNext(session, what: "Ring the Hausverwaltung")
         await session.choose(.next)
-        session.draft.what = "Write the rename script"
+        let refused = try! #require(session.current)
+        fillForNext(session, what: "Write the rename script")
         await session.choose(.next)
         #expect(session.sheet == .cap)
 
-        await session.sendToSomedayInstead()
+        session.cancelSheet()
+        await session.choose(.someday)
 
         #expect(session.sheet == nil)
-        let filed = try! #require(model.snapshot.actions.first { $0.title == "Write the rename script" })
+        let filed = try! #require(model.snapshot.actions.first {
+            $0.title == CaptureText.title(of: refused.text)
+        })
         #expect(filed.status == .someday)
-        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)   // nothing was demoted behind the user's back
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap,
+                "nothing was demoted behind the user's back")
         #expect(session.processed == 2)
     }
 
     @Test func cancellingTheCapSheetLeavesTheCardWhereItIs() async {
         let (session, model, _) = InboxTestSupport.makeSession()
-        session.draft.what = "Ring the Hausverwaltung"
+        fillForNext(session, what: "Ring the Hausverwaltung")
         await session.choose(.next)
         let refused = try! #require(session.current)
-        session.draft.what = "Write the rename script"
+        fillForNext(session, what: "Write the rename script")
         await session.choose(.next)
 
         session.cancelSheet()
@@ -272,20 +314,25 @@ struct InboxSessionTests {
         #expect(model.snapshot.inboxItem(refused.id) != nil)
     }
 
-    /// The cap also guards the project sub-flow, and "Someday instead" demotes the first actions.
-    @Test func capAppliesToProjectFirstActionsToo() async {
+    /// The cap guards a card that carries a project chip exactly as it guards any other card —
+    /// the card is an action either way (D33).
+    @Test func capAppliesToACardWithAProjectChipToo() async {
         let (session, model, _) = InboxTestSupport.makeSession()
-        session.draft.what = "Ring the Hausverwaltung"
+        fillForNext(session, what: "Ring the Hausverwaltung")
         await session.choose(.next)   // now at the cap
 
         let project = try! #require(model.snapshot.projects.first { $0.status == .active })
-        await session.confirmExistingProject(
-            project.id,
-            actions: [ActionDraft(title: "Collect the forms", status: .next, what: "Collect the forms")])
+        let refused = try! #require(session.current)
+        fillForNext(session, what: "Collect the forms")
+        session.chooseProject(project.id)
+        await session.choose(.next)
         #expect(session.sheet == .cap)
 
-        await session.sendToSomedayInstead()
-        let filed = try! #require(model.snapshot.actions.first { $0.title == "Collect the forms" })
+        session.cancelSheet()
+        await session.choose(.someday)
+        let filed = try! #require(model.snapshot.actions.first {
+            $0.title == CaptureText.title(of: refused.text)
+        })
         #expect(filed.status == .someday)
         #expect(filed.project == project.id)
     }
@@ -297,7 +344,7 @@ struct InboxSessionTests {
         let item = try! #require(session.current)
         #expect(session.suggestedKnowledgeFolder == nil)   // nothing is suggested on a fresh device
 
-        await session.confirmKnowledge(folder: "Studium/Thesis", title: "Window handle notes")
+        await session.confirmKnowledge(target: .folder("Studium/Thesis"), notes: "Frau Meier")
 
         #expect(model.snapshot.inboxItem(item.id) == nil)
         #expect(session.suggestedKnowledgeFolder == "Studium/Thesis")
@@ -310,79 +357,89 @@ struct InboxSessionTests {
         #expect(session.suggestedKnowledgeFolder == "Technik")
     }
 
-    @Test func knowledgeNeedsATitle() async {
+    /// I4b/D36 — reference material for a project goes through the Knowledge branch.
+    @Test func knowledgeCanFileIntoAnActiveProjectsFolder() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let item = try! #require(session.current)
-        await session.confirmKnowledge(folder: "Technik", title: "   ")
-        #expect(model.snapshot.inboxItem(item.id) != nil)
-        #expect(session.processed == 0)
+        let project = try! #require(session.activeProjects.first)
+
+        await session.confirmKnowledge(target: .project(project.id))
+
+        #expect(model.snapshot.inboxItem(item.id) == nil)
+        #expect(session.processed == 1)
+        #expect(session.suggestedKnowledgeFolder == nil, "a project folder is not a Knowledge folder")
     }
 
-    @Test func waitingNeedsWhoAndFollowUpAndWritesBoth() async {
+    /// §5a — a list button files the card at once; nothing about it is a commitment (L1).
+    @Test func aListFilesTheCardAtOnce() async {
         let (session, model, _) = InboxTestSupport.makeSession()
-        session.draft.what = "Monitor for Marie"
+        let item = try! #require(session.current)
+        await session.confirmList(name: "Read", notes: "Marie empfiehlt es.")
+        #expect(model.snapshot.inboxItem(item.id) == nil)
+        #expect(model.snapshot.listItems.contains { $0.list == "Read" && $0.title == filedTitle })
+    }
+
+    /// W1/D39 — the follow-up date is required, who is optional, and `What?` is still asked for.
+    @Test func waitingNeedsWhatAndAFollowUpDateButNotWho() async {
+        let (session, model, _) = InboxTestSupport.makeSession()
         let followUp = WaitingInfo.suggestedFollowUp(from: Fixtures.today)
 
         await session.confirmWaiting(WaitingInfo(who: "Marie", followUp: followUp))
+        #expect(session.validation?.issue == .missing([.what]))
+        #expect(session.processed == 0)
 
-        let action = try! #require(model.snapshot.actions.first { $0.title == "Monitor for Marie" })
+        session.draft.what = "Monitor for Marie"
+        await session.confirmWaiting(WaitingInfo(followUp: followUp))
+
+        let action = try! #require(model.snapshot.actions.first { $0.title == filedTitle })
         #expect(action.status == .waiting)
-        #expect(action.waitingFor == "Marie")
+        #expect(action.waitingFor == nil, "an empty who writes no line at all (D39)")
         #expect(action.followUpDate == followUp)
         #expect(followUp == Fixtures.today.adding(days: 7))   // W1's +7 d, confirmed by the user
     }
 
-    @Test func newProjectCreatesProjectAreaAndFirstActions() async {
-        let (session, model, _) = InboxTestSupport.makeSession()
-        let areasBefore = model.snapshot.areas.count
-
-        await session.confirmNewProject(
-            ProjectDraft(
-                title: "Fix the flat",
-                newAreaTitle: "Haushalt",
-                outcome: "Everything in the flat works again",
-                why: "Living with broken things costs energy"),
-            firstActions: [
-                ActionDraft(title: "Ring the Hausverwaltung", status: .next,
-                            contexts: ["calls"], what: "Ring the Hausverwaltung"),
-            ])
-
-        #expect(model.snapshot.areas.count == areasBefore + 1)
-        let project = try! #require(model.snapshot.projects.first { $0.title == "Fix the flat" })
-        #expect(project.outcome == "Everything in the flat works again")
-        let action = try! #require(model.snapshot.actions.first { $0.title == "Ring the Hausverwaltung" })
-        #expect(action.project == project.id)
-        #expect(action.status == .next)
-        #expect(session.processed == 1)
-    }
-
-    @Test func existingProjectLinksTheActionToIt() async {
+    /// R-8/I4a — the project chip. The card stays an action and names an existing project…
+    @Test func theProjectChipLinksAnExistingProject() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let project = try! #require(model.snapshot.projects.first { $0.title == "DAAD" })
 
-        await session.confirmExistingProject(
-            project.id,
-            actions: [ActionDraft(title: "Collect the forms", status: .someday, what: "Collect the forms")])
+        session.chooseProject(project.id)
+        #expect(session.projectChipTitle(in: model.snapshot) == "DAAD")
+        session.draft.what = "Collect the forms"
+        await session.choose(.someday)
 
-        let action = try! #require(model.snapshot.actions.first { $0.title == "Collect the forms" })
+        let action = try! #require(model.snapshot.actions.first { $0.title == filedTitle })
         #expect(action.project == project.id)
         #expect(session.processed == 1)
     }
 
-    /// P3 — a first action for a project that is not active goes to Someday, not Next.
-    @Test func firstActionStatusFollowsTheProjectStatus() {
+    /// …or one the picker creates with a name only, in the same command (D35).
+    @Test func theProjectChipCanCreateTheProjectItLinks() async {
         let (session, model, _) = InboxTestSupport.makeSession()
-        let active = try! #require(model.snapshot.projects.first { $0.status == .active })
-        let onHold = try! #require(model.snapshot.projects.first { $0.status != .active })
+        let projectsBefore = model.snapshot.projects.count
 
-        #expect(ProjectPicker.statusForFirstAction(in: active) == .next)
-        #expect(ProjectPicker.statusForFirstAction(in: onHold) == .someday)
-        #expect(ProjectPicker.statusForFirstAction(in: nil) == .someday)
+        session.createProject(named: "Fix the flat")
+        #expect(session.projectChipTitle(in: model.snapshot) == "Fix the flat")
+        #expect(session.draft.project == nil, "never both (R-8)")
+        session.draft.what = "Ring the Hausverwaltung"
+        await session.choose(.someday)
 
-        session.draft.what = "Collect the forms"
-        #expect(session.firstActionDraft(for: active).project == active.id)
-        #expect(session.firstActionDraft(for: active).status == .next)
-        #expect(session.firstActionDraft(for: onHold).status == .someday)
+        #expect(model.snapshot.projects.count == projectsBefore + 1)
+        let project = try! #require(model.snapshot.projects.first { $0.title == "Fix the flat" })
+        #expect(project.area == nil)
+        let action = try! #require(model.snapshot.actions.first { $0.title == filedTitle })
+        #expect(action.project == project.id)
+        #expect(session.processed == 1)
+    }
+
+    @Test func choosingAProjectClearsAPendingNewOne() {
+        let (session, model, _) = InboxTestSupport.makeSession()
+        let project = try! #require(model.snapshot.projects.first { $0.title == "DAAD" })
+        session.createProject(named: "Fix the flat")
+        session.chooseProject(project.id)
+        #expect(session.draft.newProjectTitle == nil)
+        session.chooseProject(nil)
+        #expect(session.projectChipTitle(in: model.snapshot) == nil)
     }
 
     @Test func deferToReviewNeedsAReasonAndLeavesTheQueue() async {
@@ -425,7 +482,7 @@ struct InboxSessionTests {
         #expect(session.draft == filed)
         #expect(session.processed == 0)
         #expect(model.snapshot.inboxItem(item.id) != nil)
-        #expect(!model.snapshot.actions.contains { $0.title == "Ring the Hausverwaltung" })
+        #expect(!model.snapshot.actions.contains { $0.title == filedTitle })
         #expect(session.summaryCounts.allSatisfy { $0.count == 0 })
     }
 
@@ -526,15 +583,18 @@ struct InboxSessionTests {
         let defaults = EphemeralInboxDefaults(didShowSwipeHint: false)
         let (session, _, _) = InboxTestSupport.makeSession(defaults: defaults)
 
-        // A refused swipe (no What?) taught nothing; a sheet target is not a swipe.
+        // A refused swipe (missing fields) taught nothing; a sheet target is not a swipe, and
+        // Trash is a step-1 button rather than a gesture (STYLEGUIDE decision #12).
         await session.choose(.next)
         await session.choose(.waiting)
         session.cancelSheet()
+        await session.choose(.trash)
         #expect(session.isSwipeHintVisible)
 
-        await session.choose(.trash)
+        session.draft.what = "Ring the Hausverwaltung"
+        await session.choose(.someday)
 
-        #expect(session.processed == 1)
+        #expect(session.processed == 2)
         #expect(!session.isSwipeHintVisible)
         #expect(defaults.flag(forKey: InboxDefaultsKey.didShowSwipeHint))
     }

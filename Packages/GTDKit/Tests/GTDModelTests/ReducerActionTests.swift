@@ -32,9 +32,11 @@ struct ReducerActionTests {
     ])
     func theCapBlocksOnlyNewNextSlots(testCase: CapCase) {
         let vault = TestVault.nextOccupied(testCase.occupied, cap: testCase.cap)
+        // R-3 — a complete card, so the table is about the cap and nothing else.
         let draft = ActionDraft(
-            title: "One more", status: testCase.status,
-            waiting: WaitingInfo(who: "Lena", followUp: TestVault.day(7)))
+            title: "One more", status: testCase.status, contexts: ["mac"], timeEstimate: 10,
+            waiting: WaitingInfo(who: "Lena", followUp: TestVault.day(7)),
+            why: "It is the last slot.", what: "Do it.")
         let error = TestVault.error(vault, .createAction(draft), env: env)
         #expect((error == .nextCapReached(cap: testCase.cap)) == testCase.refused, "\(testCase)")
     }
@@ -49,20 +51,22 @@ struct ReducerActionTests {
 
     @Test func promotingFromSomedayAtTheCapIsRefused() {
         var vault = TestVault.nextOccupied(15)
-        vault.actions.append(TestVault.action("Später", .someday))
+        vault.actions.append(TestVault.action(
+            "Später", .someday, contexts: ["mac"], timeEstimate: 10,
+            why: "It matters.", what: "Do it."))
         let error = TestVault.error(vault, .setStatus(TestVault.actionID("Später"), .next, waiting: nil), env: env)
         #expect(error == .nextCapReached(cap: 15))
     }
 
-    // MARK: - W1: waiting needs who and follow-up
+    // MARK: - W1/D39: waiting needs a follow-up date; who is optional
 
-    @Test func settingWaitingRequiresBothHalves() throws {
-        let vault = TestVault.snapshot(actions: [TestVault.action("Deposit refund")])
+    @Test func settingWaitingRequiresTheFollowUpDate() throws {
+        let vault = TestVault.snapshot(
+            actions: [TestVault.action("Deposit refund", what: "Nachfragen")])
         let id = TestVault.actionID("Deposit refund")
 
-        #expect(TestVault.error(vault, .setStatus(id, .waiting, waiting: nil), env: env) == .waitingInfoRequired)
-        #expect(TestVault.error(vault, .setStatus(id, .waiting, waiting:
-            WaitingInfo(who: "   ", followUp: TestVault.day(7))), env: env) == .waitingInfoRequired)
+        #expect(TestVault.error(vault, .setStatus(id, .waiting, waiting: nil), env: env)
+                == .missingFields([.followUpDate]))
 
         let result = try Reducer.reduce(vault, .setStatus(id, .waiting, waiting:
             WaitingInfo(who: " Herr Kramer ", followUp: TestVault.day(7))), env: env)
@@ -71,11 +75,25 @@ struct ReducerActionTests {
         #expect(action.followUpDate == TestVault.day(7))
     }
 
+    /// D39 — a wait on a process has nobody to name, and the note says so by staying silent.
+    @Test func waitingWithoutAWhoIsAllowed() throws {
+        let vault = TestVault.snapshot(
+            actions: [TestVault.action("Deposit refund", what: "Nachfragen")])
+        let id = TestVault.actionID("Deposit refund")
+        let result = try Reducer.reduce(vault, .setStatus(id, .waiting, waiting:
+            WaitingInfo(who: "  ", followUp: TestVault.day(7))), env: env)
+        let action = try #require(result.snapshot.action(id))
+        #expect(action.waitingFor == nil)
+        #expect(action.waiting == WaitingInfo(who: nil, followUp: TestVault.day(7)))
+    }
+
     @Test(arguments: [ActionStatus.next, .someday, .done])
     func leavingWaitingClearsBothHalves(status: ActionStatus) throws {
+        // R-3 — the move into Next needs what Next requires, so the note carries it.
         let waiting = TestVault.action(
-            "Reference letter", .waiting,
-            waiting: WaitingInfo(who: "Prof. Weber", followUp: TestVault.day(-9)))
+            "Reference letter", .waiting, contexts: ["mac"], timeEstimate: 10,
+            waiting: WaitingInfo(who: "Prof. Weber", followUp: TestVault.day(-9)),
+            why: "The application needs it.", what: "Remind him.")
         let vault = TestVault.snapshot(actions: [waiting])
         let result = try Reducer.reduce(vault, .setStatus(waiting.id, status, waiting: nil), env: env)
         let action = try #require(result.snapshot.action(waiting.id))
@@ -88,7 +106,9 @@ struct ReducerActionTests {
     /// R-2 (reverses the 2026-09-19 refusal): a Next item may carry a future `defer`. It is
     /// hidden until its date and does not occupy a slot while hidden.
     @Test func aDeferredActionMayOccupyANextSlotAndIsHiddenUntilItsDate() throws {
-        let vault = TestVault.snapshot(actions: [TestVault.action("Plan the timetable", .someday)])
+        let vault = TestVault.snapshot(actions: [TestVault.action(
+            "Plan the timetable", .someday, contexts: ["mac"], timeEstimate: 30,
+            why: "The semester starts.", what: "Draw it up.")])
         let id = TestVault.actionID("Plan the timetable")
         var deferred = try #require(vault.action(id))
         deferred.deferDate = TestVault.day(10)
@@ -113,7 +133,8 @@ struct ReducerActionTests {
     @Test func aDeferredNextItemDoesNotConsumeASlotUntilItReturns() throws {
         let vault = TestVault.nextOccupied(15)
         let result = try Reducer.reduce(vault, .createAction(ActionDraft(
-            title: "Später", status: .next, deferDate: TestVault.day(3))), env: env)
+            title: "Später", status: .next, contexts: ["mac"], timeEstimate: 10,
+            deferDate: TestVault.day(3), why: "Later, but committed.", what: "Do it.")), env: env)
         #expect(Rules.countsTowardCap(result.snapshot, today: env.today) == 15)
         #expect(Rules.capSignal(result.snapshot, today: env.today)?.step == .attention)
 
@@ -129,7 +150,8 @@ struct ReducerActionTests {
         let vault = TestVault.snapshot()
         for offset in [-1, 0] {
             let result = try Reducer.reduce(vault, .createAction(ActionDraft(
-                title: "Zurück \(offset)", status: .next, deferDate: TestVault.day(offset))), env: env)
+                title: "Zurück \(offset)", status: .next, contexts: ["mac"], timeEstimate: 10,
+                deferDate: TestVault.day(offset), why: "Committed.", what: "Do it.")), env: env)
             #expect(result.snapshot.actions.count == 1)
         }
     }
@@ -137,10 +159,11 @@ struct ReducerActionTests {
     /// A vault edited by hand into the contradiction stays editable — the rule refuses only the
     /// *new* contradiction.
     @Test func anExistingDeferredNextActionCanStillBeEdited() throws {
+        // R-3 — a note already in Next with gaps stays editable; that is the point here.
         let stray = TestVault.action("Hand-edited", .next, deferDate: TestVault.day(10))
         let vault = TestVault.snapshot(actions: [stray])
         var edited = stray
-        edited.why = "Repaired in the app"
+        edited.why = "Repaired in the app"   // …even though it still has no What? (R-3)
         let result = try Reducer.reduce(vault, .updateAction(edited), env: env)
         #expect(result.snapshot.action(stray.id)?.why == "Repaired in the app")
         // …and demoting it works.
@@ -153,11 +176,11 @@ struct ReducerActionTests {
     @Test func unknownContextsAreRefusedAndDuplicatesCollapse() throws {
         let vault = TestVault.snapshot()
         #expect(TestVault.error(vault, .createAction(ActionDraft(
-            title: "Mit Kontext", contexts: ["mac", "urgent"])), env: env)
+            title: "Mit Kontext", contexts: ["mac", "urgent"], what: "Tun")), env: env)
                 == .invalid("Unknown context: urgent"))
 
         let result = try Reducer.reduce(vault, .createAction(ActionDraft(
-            title: "Mit Kontext", contexts: ["mac", "mac", " phone "])), env: env)
+            title: "Mit Kontext", contexts: ["mac", "mac", " phone "], what: "Tun")), env: env)
         #expect(result.snapshot.actions.first?.contexts == ["mac", "phone"])
     }
 
@@ -176,11 +199,12 @@ struct ReducerActionTests {
     @Test func titlesAreSanitisedAndNeverEmpty() throws {
         let result = try Reducer.reduce(
             TestVault.snapshot(),
-            .createAction(ActionDraft(title: "Steuer/Erklärung: 2026?")), env: env)
+            .createAction(ActionDraft(title: "Steuer/Erklärung: 2026?", what: "Anfangen")), env: env)
         let action = try #require(result.snapshot.actions.first)
         #expect(action.title == "Steuer Erklärung 2026")
         #expect(action.id.path == "Actions/Steuer Erklärung 2026.md")
-        #expect(TestVault.error(TestVault.snapshot(), .createAction(ActionDraft(title: " \n ")), env: env)
+        #expect(TestVault.error(
+            TestVault.snapshot(), .createAction(ActionDraft(title: " \n ", what: "Tun")), env: env)
                 == .invalid("A title is required"))
     }
 
@@ -241,7 +265,8 @@ struct ReducerActionTests {
     func aTimeEstimateOfZeroIsNeverStored(estimate: Int) throws {
         let result = try Reducer.reduce(
             TestVault.snapshot(),
-            .createAction(ActionDraft(title: "Ohne Schätzung", timeEstimate: estimate)), env: env)
+            .createAction(ActionDraft(
+                title: "Ohne Schätzung", timeEstimate: estimate, what: "Tun")), env: env)
         #expect(result.snapshot.actions.first?.timeEstimate == nil)
     }
 
@@ -341,7 +366,9 @@ struct ReducerActionTests {
     /// R-1 — `status: trash` is a legacy state only. It can be read, it hides the note, and it
     /// can be repaired; nothing may move *into* it.
     @Test func theLegacyTrashStatusIsHiddenAndNotUserSettable() throws {
-        let legacy = TestVault.action("Podcast app", .legacyTrashed, completed: -30)
+        let legacy = TestVault.action(
+            "Podcast app", .legacyTrashed, contexts: ["mac"], timeEstimate: 10, completed: -30,
+            why: "Legacy", what: "Legacy")
         let vault = TestVault.snapshot(actions: [legacy])
         #expect(!Rules.visibleActions(vault, today: env.today).contains { $0.id == legacy.id })
         #expect(!ActionStatus.allCases.contains(.legacyTrashed))
@@ -406,12 +433,15 @@ struct ReducerActionTests {
         #expect(Rules.countsTowardCap(vault, today: env.today) == vault.config.nextCap - 1)
 
         let filled = try Reducer.reduce(
-            vault, .createAction(ActionDraft(title: "Fifteenth", status: .next)), env: env)
+            vault, .createAction(ActionDraft(
+                title: "Fifteenth", status: .next, contexts: ["mac"], timeEstimate: 10,
+                why: "The last slot.", what: "Do it.")), env: env)
         #expect(Rules.countsTowardCap(filled.snapshot, today: env.today) == vault.config.nextCap)
         #expect(Rules.capSignal(filled.snapshot, today: env.today)?.step == .attention)
 
-        #expect(TestVault.error(filled.snapshot,
-                                .createAction(ActionDraft(title: "Sixteenth", status: .next)), env: env)
+        #expect(TestVault.error(filled.snapshot, .createAction(ActionDraft(
+            title: "Sixteenth", status: .next, contexts: ["mac"], timeEstimate: 10,
+            why: "One too many.", what: "Do it.")), env: env)
                 == .nextCapReached(cap: 15))
     }
 }

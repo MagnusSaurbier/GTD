@@ -15,9 +15,11 @@ struct CardTargetsTests {
         #expect(DragResolver.target(dx: -200, dy: 10, cardSize: size) == .someday)
         // Up files nothing since the tiers merged into Someday (A3): the card springs back.
         #expect(DragResolver.target(dx: 10, dy: -200, cardSize: size) == nil)
-        // Trash needs 40 % of the height, so 25 % is not enough.
-        #expect(DragResolver.target(dx: 10, dy: 160, cardSize: size) == nil)
-        #expect(DragResolver.target(dx: 10, dy: 260, cardSize: size) == .trash)
+        // No swipe ever trashes (STYLEGUIDE decision #12): down collapses the card to step 1,
+        // past 25 % of its height, and files nothing.
+        #expect(DragResolver.target(dx: 10, dy: 260, cardSize: size) == nil)
+        #expect(!DragResolver.collapses(dx: 10, dy: 100, cardSize: size))
+        #expect(DragResolver.collapses(dx: 10, dy: 200, cardSize: size))
     }
 
     @Test func dragLocksOntoTheDominantAxis() {
@@ -36,47 +38,61 @@ struct CardTargetsTests {
         // 35 % of 400 = 140 pt.
         #expect(DragResolver.commitment(dx: 140, dy: 0, cardSize: size) == 1)
         #expect(DragResolver.commitment(dx: 70, dy: 0, cardSize: size) == 0.5)
-        // Trash: 40 % of 600 = 240 pt.
-        #expect(DragResolver.commitment(dx: 0, dy: 240, cardSize: size) == 1)
+        // Collapse: 25 % of 600 = 150 pt.
+        #expect(DragResolver.commitment(dx: 0, dy: 150, cardSize: size) == 1)
         #expect(DragResolver.commitment(dx: 0, dy: 0, cardSize: size) == 0)
     }
 
-    @Test func everyTargetHasAKeyANameateSymbolAndThreeAreDirect() {
+    @Test func everyTargetHasAKeyANameASymbolAndTwoAreDirect() {
         #expect(CardTarget.allCases.count == 7)
         #expect(CardTarget.allCases.allSatisfy { !$0.key.isEmpty })
         #expect(CardTarget.allCases.allSatisfy { !$0.title.isEmpty })
         #expect(CardTarget.allCases.allSatisfy { !$0.symbol.isEmpty })
-        #expect(CardTarget.allCases.count { $0.isDirect } == 3)
-        #expect(CardTarget.allCases.filter(\.requiresWhat) == [.next, .someday])
+        // Only the commitment axis is a swipe now (STYLEGUIDE decision #12).
+        #expect(CardTarget.allCases.count { $0.isDirect } == 2)
+        // R-3 — what each target demands before the card may leave through it.
+        let empty = CardTarget.allCases.filter {
+            !$0.missingFields(why: "", what: "", contexts: [], timeEstimate: nil, followUpDate: nil)
+                .isEmpty
+        }
+        #expect(empty == [.next, .someday, .waiting])
+        #expect(CardTarget.next.missingFields(
+            why: "", what: "", contexts: [], timeEstimate: nil, followUpDate: nil)
+            == [.why, .what, .context, .timeEstimate])
+        #expect(CardTarget.done.missingFields(
+            why: "", what: "", contexts: [], timeEstimate: nil, followUpDate: nil).isEmpty)
     }
 
     @Test func swipeMapMatchesTheCommitmentAxis() {
         #expect(CardTarget.next.swipe == .right)
         #expect(CardTarget.someday.swipe == .left)
-        #expect(CardTarget.trash.swipe == .down)
+        #expect(CardTarget.trash.swipe == nil)
+        #expect(SwipeDirection.down.target == nil, "down collapses, it does not file")
         for direction in SwipeDirection.allCases {
-            #expect(KeyMap.target(for: direction).swipe == direction)
+            #expect(KeyMap.target(for: direction)?.swipe == direction || direction == .down)
         }
     }
 
     @Test func macLegendReadsAsTheStyleGuideSpellsIt() {
         #expect(CardTarget.keyLegend
-            == "← Someday  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review")
+            == "← Someday  → Next    ⌘↩ Done · X Trash · K Knowledge · W Waiting · R Review")
     }
 
     /// Every target is reachable without a swipe: four labelled buttons, three menu entries.
     @Test func theActionBarCoversEveryTargetExactlyOnce() {
-        #expect(CardTarget.buttonTargets == [.project, .knowledge, .waiting, .deferToReview])
+        #expect(CardTarget.buttonTargets == [.knowledge, .waiting, .done, .deferToReview])
         #expect(CardTarget.buttonTargets.allSatisfy { !$0.isDirect })
-        #expect(CardTarget.menuTargets == [.someday, .next, .trash])
-        #expect(Set(CardTarget.buttonTargets + CardTarget.menuTargets) == Set(CardTarget.allCases))
+        #expect(CardTarget.menuTargets == [.someday, .next])
+        // Trash is a step-1 button, not a swipe and not part of the opened card's bar (R-8/§3.6).
+        #expect(Set(CardTarget.buttonTargets + CardTarget.menuTargets + [.trash])
+                == Set(CardTarget.allCases))
         #expect(CardTarget.deferToReview.shortTitle == "Review")
         #expect(CardTarget.waiting.shortTitle == CardTarget.waiting.title)
     }
 
     @Test func letterKeysOpenTheSubFlows() {
-        #expect(KeyMap.resolve("p") == .target(.project))
-        #expect(KeyMap.resolve("P") == .target(.project))
+        #expect(KeyMap.resolve("x") == .target(.trash))
+        #expect(KeyMap.resolve("X") == .target(.trash))
         #expect(KeyMap.resolve("k") == .target(.knowledge))
         #expect(KeyMap.resolve("w") == .target(.waiting))
         #expect(KeyMap.resolve("r") == .target(.deferToReview))
@@ -99,7 +115,7 @@ struct CardTargetsTests {
         #expect(KeyMap.resolve("z", command: true) == .undo)
         #expect(KeyMap.resolve("Z", command: true) == .undo)
         #expect(KeyMap.resolve("z") != .undo)
-        #expect(KeyMap.resolve("x", command: true) == nil)
+        #expect(KeyMap.resolve("q", command: true) == nil)
         #expect(KeyMap.resolve("\u{1B}") == .quit)
     }
 }
@@ -178,12 +194,13 @@ struct InboxPickerTests {
         #expect(ChecklistText.autoFormat("a\n- b") == "a\n- [ ] b")
     }
 
-    @Test func titleComesFromTheFirstContentLine() {
+    /// R-4 replaced "the title is derived from What?" with "the capture text is the title";
+    /// `CaptureText` (GTDModel) owns that rule now and is tested there. What is left here is the
+    /// checklist helper the card still uses.
+    @Test func checklistLinesReportTheirFirstContentLine() {
         #expect(ChecklistText.firstContentLine("- [ ] Ring them\n- [ ] Note it") == "Ring them")
         #expect(ChecklistText.firstContentLine("\n\n  Ring them") == "Ring them")
-        #expect(ChecklistText.firstContentLine("- Ring them") == "Ring them")
         #expect(ChecklistText.firstContentLine("") == "")
-        #expect(ChecklistText.firstContentLine("- [ ]    \nNote it") == "Note it")
     }
 
     @Test func captureStampShowsTheOnlyTimeOfDayInTheApp() {

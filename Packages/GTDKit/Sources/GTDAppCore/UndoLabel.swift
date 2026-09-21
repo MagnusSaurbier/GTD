@@ -18,11 +18,12 @@ public enum UndoLabel {
         switch command {
         case let .fileInbox(_, decision):
             switch decision {
-            case let .action(draft): "Filed to \(tier(draft.status))"
+            // I4/D13 — the 2-minute rule files the card as done; `Done` is the word
+            // STYLEGUIDE §6.3 uses for something that is finished, with or without a title.
+            case let .action(draft): draft.status == .done ? "Done" : "Filed to \(tier(draft.status))"
             case .knowledge: "Filed to Knowledge"
             // STYLEGUIDE §6.3 spells this one with the list's name: `Added to Read`.
-            case let .list(name, _, _): "Added to \(name)"
-            case .newProject, .existingProject: "Filed to Project"
+            case let .list(name, _): "Added to \(name)"
             case .trash: "Moved to Trash"
             }
         case let .setStatus(_, status, _):

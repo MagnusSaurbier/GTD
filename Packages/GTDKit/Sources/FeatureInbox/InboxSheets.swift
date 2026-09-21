@@ -17,7 +17,9 @@ struct KnowledgeSheet: View {
 
     @State private var folders: [String] = []
     @State private var selection: String = ""
-    @State private var title: String = ""
+    /// I4b — an active project's folder, chosen instead of a `Knowledge/` folder.
+    @State private var projectTarget: NoteID?
+    @State private var notes: String = ""
     @State private var newFolder: String = ""
     @State private var isAddingFolder = false
 
@@ -33,6 +35,7 @@ struct KnowledgeSheet: View {
                 Section(InboxCopy.knowledgeFolderLabel) {
                     Button {
                         selection = ""
+                        projectTarget = nil
                     } label: {
                         folderRow(name: InboxCopy.knowledgeRoot, path: "")
                     }
@@ -41,6 +44,7 @@ struct KnowledgeSheet: View {
                     OutlineGroup(KnowledgeTree.build(folders), children: \.childNodes) { node in
                         Button {
                             selection = node.path
+                            projectTarget = nil
                         } label: {
                             folderRow(name: node.name, path: node.path)
                         }
@@ -65,8 +69,30 @@ struct KnowledgeSheet: View {
                     }
                 }
 
-                Section(InboxCopy.knowledgeTitleLabel) {
-                    TextField(InboxCopy.knowledgeTitleLabel, text: $title)
+                // I4b/D36 — project reference material is filed through this branch, so the
+                // active projects' folders are targets next to the `Knowledge/` tree.
+                Section(Copy.project) {
+                    ForEach(session.activeProjects) { project in
+                        Button {
+                            projectTarget = project.id
+                        } label: {
+                            HStack {
+                                Label(project.title, systemImage: Symbols.projects)
+                                    .font(Typo.body)
+                                    .foregroundStyle(Color.ink)
+                                Spacer(minLength: 0)
+                                if projectTarget == project.id {
+                                    Image(systemName: Symbols.done).foregroundStyle(Color.gtdAccent)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Section(InboxCopy.notesLabel) {
+                    TextField(InboxCopy.notesPlaceholder, text: $notes, axis: .vertical)
                         .textFieldStyle(.plain)
                 }
             }
@@ -76,15 +102,12 @@ struct KnowledgeSheet: View {
                     Button(InboxCopy.cancel) { cancel() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
+                    // R-4 — nothing to type: the note is named after the capture text.
                     Button(Copy.done) { save() }
-                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
         }
-        .onAppear {
-            folders = session.knowledgeFolders
-            if title.isEmpty { title = session.draft.effectiveTitle }
-        }
+        .onAppear { folders = session.knowledgeFolders }
     }
 
     private func folderRow(name: String, path: String) -> some View {
@@ -93,7 +116,7 @@ struct KnowledgeSheet: View {
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
             Spacer(minLength: 0)
-            if selection == path {
+            if projectTarget == nil, selection == path {
                 Image(systemName: Symbols.done).foregroundStyle(Color.gtdAccent)
             }
         }
@@ -101,6 +124,7 @@ struct KnowledgeSheet: View {
     }
 
     private func addFolder() {
+        projectTarget = nil
         folders = KnowledgeTree.adding(newFolder, under: selection, to: folders)
         let name = newFolder.trimmingCharacters(in: .whitespacesAndNewlines)
         selection = selection.isEmpty ? name : selection + "/" + name
@@ -109,10 +133,10 @@ struct KnowledgeSheet: View {
     }
 
     private func save() {
-        let folder = selection
-        let noteTitle = title
+        let target: KnowledgeTarget = projectTarget.map(KnowledgeTarget.project) ?? .folder(selection)
+        let body = notes
         dismiss()
-        Task { await session.confirmKnowledge(folder: folder, title: noteTitle) }
+        Task { await session.confirmKnowledge(target: target, notes: body) }
     }
 
     private func cancel() {
@@ -121,62 +145,50 @@ struct KnowledgeSheet: View {
     }
 }
 
-// MARK: - Project (I4)
+// MARK: - Project chip (I4a, R-8)
 
-/// Pick an existing project (grouped by area) or create a new one — with a new area if needed —
-/// and define the first next action(s).
+/// The `+ project` chip's picker: find a project in the area tree or by typing, or create one
+/// **with a name only** (D35). The card stays an action either way — there is no "turn this
+/// capture into a project" path here any more (D33).
 struct ProjectSheet: View {
     @Bindable var session: InboxSession
     @Environment(\.dismiss) private var dismiss
 
-    private enum Mode: String, CaseIterable, Identifiable {
-        case existing
-        case new
-        var id: String { rawValue }
-        var title: String {
-            self == .existing ? InboxCopy.existingProject : InboxCopy.newProject
-        }
-    }
-
-    @State private var mode: Mode = .existing
-    @State private var selected: NoteID?
-    @State private var projectTitle = ""
-    @State private var outcome = ""
-    @State private var why = ""
-    @State private var areaID: NoteID?
-    @State private var newAreaTitle = ""
-    @State private var firstActions: [String] = [""]
+    @State private var search = ""
 
     var body: some View {
         NavigationStack {
             Form {
-                // The segmented control is its own surface: no grey form-row capsule around it.
                 Section {
-                    Picker(InboxCopy.pickProject, selection: $mode) {
-                        ForEach(Mode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                    TextField(InboxCopy.pickProject, text: $search)
+                        .textFieldStyle(.plain)
+                }
+                if session.draft.project != nil || session.draft.newProjectTitle != nil {
+                    Section {
+                        Button(InboxCopy.clearProject) { choose(nil) }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color.gtdAccent)
+                    }
+                }
+                // Ungrouped projects come first and carry no section header (ARCHITECTURE §6).
+                ForEach(groups) { group in
+                    if let title = group.title {
+                        Section(title) { rows(of: group) }
+                    } else {
+                        Section { rows(of: group) }
+                    }
+                }
+                if let name = creatableName {
+                    Section {
+                        Button {
+                            session.createProject(named: name)
+                            dismiss()
+                        } label: {
+                            Label(InboxCopy.createProject(name), systemImage: "plus")
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-
-                if mode == .existing {
-                    existingSection
-                } else {
-                    newSection
-                }
-
-                Section(InboxCopy.firstActionsLabel) {
-                    ForEach(firstActions.indices, id: \.self) { index in
-                        TextField(Copy.whatPlaceholder, text: binding(for: index))
-                            .textFieldStyle(.plain)
-                    }
-                    Button(InboxCopy.addAnotherAction) { firstActions.append("") }
                         .buttonStyle(.plain)
                         .foregroundStyle(Color.gtdAccent)
+                    }
                 }
             }
             .navigationTitle(Copy.project)
@@ -184,50 +196,41 @@ struct ProjectSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(InboxCopy.cancel) { cancel() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(Copy.done) { save() }.disabled(!isComplete)
-                }
             }
-        }
-        .onAppear {
-            if firstActions == [""] {
-                let derived = session.draft.effectiveTitle
-                firstActions = [derived]
-                if projectTitle.isEmpty { projectTitle = derived }
-            }
-            if session.projectGroups.isEmpty { mode = .new }
         }
     }
 
-    @ViewBuilder private var existingSection: some View {
-        if session.projectGroups.isEmpty {
-            ContentUnavailableView(
-                InboxCopy.noProjectsYet,
-                systemImage: Symbols.projects,
-                description: Text(InboxCopy.noProjectsYetBody))
-        } else {
-            // Ungrouped projects come first and carry no section header (ARCHITECTURE §6).
-            ForEach(session.projectGroups) { group in
-                if let title = group.title {
-                    Section(title) { rows(of: group) }
-                } else {
-                    Section { rows(of: group) }
-                }
-            }
+    /// The tree, filtered by what has been typed.
+    private var groups: [ProjectGroup] {
+        let term = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !term.isEmpty else { return session.projectGroups }
+        return session.projectGroups.compactMap { group in
+            let matches = group.projects.filter { $0.title.lowercased().contains(term) }
+            return matches.isEmpty ? nil : ProjectGroup(area: group.area, projects: matches)
         }
+    }
+
+    /// `Create project "<text>"` — offered only when nothing matches exactly (STYLEGUIDE §3.6).
+    private var creatableName: String? {
+        let term = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return nil }
+        let exact = session.projectGroups.contains {
+            $0.projects.contains { $0.title.lowercased() == term.lowercased() }
+        }
+        return exact ? nil : term
     }
 
     private func rows(of group: ProjectGroup) -> some View {
         ForEach(group.projects) { project in
             Button {
-                selected = project.id
+                choose(project.id)
             } label: {
                 HStack {
                     Text(project.title)
                         .font(Typo.body)
                         .foregroundStyle(Color.ink)
                     Spacer(minLength: 0)
-                    if selected == project.id {
+                    if session.draft.project == project.id {
                         Image(systemName: Symbols.done)
                             .foregroundStyle(Color.gtdAccent)
                     }
@@ -238,93 +241,9 @@ struct ProjectSheet: View {
         }
     }
 
-    @ViewBuilder private var newSection: some View {
-        Section(InboxCopy.projectTitleLabel) {
-            TextField(InboxCopy.projectTitleLabel, text: $projectTitle)
-                .textFieldStyle(.plain)
-        }
-        Section(InboxCopy.outcomeLabel) {
-            TextField(InboxCopy.outcomePlaceholder, text: $outcome, axis: .vertical)
-                .textFieldStyle(.plain)
-        }
-        Section(Copy.why) {
-            TextField(Copy.whyPlaceholder, text: $why, axis: .vertical)
-                .textFieldStyle(.plain)
-        }
-        Section(InboxCopy.areaLabel) {
-            ForEach(session.snapshot.areas) { area in
-                Button {
-                    areaID = area.id
-                    newAreaTitle = ""
-                } label: {
-                    HStack {
-                        Label(area.title, systemImage: Symbols.area)
-                            .font(Typo.body)
-                            .foregroundStyle(Color.ink)
-                        Spacer(minLength: 0)
-                        if areaID == area.id {
-                            Image(systemName: Symbols.done).foregroundStyle(Color.gtdAccent)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            TextField(InboxCopy.newAreaPlaceholder, text: $newAreaTitle)
-                .textFieldStyle(.plain)
-                .onChange(of: newAreaTitle) { _, newValue in
-                    if !newValue.isEmpty { areaID = nil }
-                }
-        }
-    }
-
-    private func binding(for index: Int) -> Binding<String> {
-        Binding(
-            get: { index < firstActions.count ? firstActions[index] : "" },
-            set: { if index < firstActions.count { firstActions[index] = $0 } })
-    }
-
-    private var isComplete: Bool {
-        let hasAction = firstActions.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        switch mode {
-        case .existing: return selected != nil && hasAction
-        case .new: return !projectTitle.trimmingCharacters(in: .whitespaces).isEmpty && hasAction
-        }
-    }
-
-    private func drafts(for project: Project?) -> [ActionDraft] {
-        firstActions
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .map { line in
-                var draft = session.firstActionDraft(for: project)
-                draft.title = line
-                draft.what = line
-                return draft
-            }
-    }
-
-    private func save() {
-        switch mode {
-        case .existing:
-            guard let id = selected else { return }
-            let project = session.snapshot.project(id)
-            let actions = drafts(for: project)
-            dismiss()
-            Task { await session.confirmExistingProject(id, actions: actions) }
-        case .new:
-            // A new project is created `active`, so its first actions may go to Next (P3).
-            let actions = drafts(for: Project(id: NoteID(path: "new"), title: projectTitle, status: .active))
-            let draft = ProjectDraft(
-                title: projectTitle,
-                area: newAreaTitle.trimmingCharacters(in: .whitespaces).isEmpty ? areaID : nil,
-                newAreaTitle: newAreaTitle.trimmingCharacters(in: .whitespaces).isEmpty
-                    ? nil : newAreaTitle,
-                outcome: outcome,
-                why: why.isEmpty ? session.draft.why : why)
-            dismiss()
-            Task { await session.confirmNewProject(draft, firstActions: actions) }
-        }
+    private func choose(_ id: NoteID?) {
+        session.chooseProject(id)
+        dismiss()
     }
 
     private func cancel() {
@@ -393,8 +312,8 @@ struct DeferToReviewSheet: View {
 
 // MARK: - Next is full (A3, I4)
 
-/// The forced choice: demote one of the current Next items, or send this card to Someday.
-/// Never an automatic re-route (ARCHITECTURE §6).
+/// The forced choice: demote one of the current Next items, or cancel and decide differently.
+/// Never an automatic re-route, and no "send to Someday instead" shortcut (STYLEGUIDE §3.6).
 struct CapSheet: View {
     @Bindable var session: InboxSession
     @Environment(\.dismiss) private var dismiss
@@ -417,10 +336,6 @@ struct CapSheet: View {
                             .buttonStyle(.bordered)
                     }
                 }
-                Section {
-                    Button(Copy.sendToSomedayInstead) { sendToSomeday() }
-                        .buttonStyle(.borderedProminent)
-                }
             }
             .navigationTitle(Copy.capSheetTitle)
             .toolbar {
@@ -434,11 +349,6 @@ struct CapSheet: View {
     private func demote(_ id: NoteID) {
         dismiss()
         Task { await session.demoteAndRetry(id) }
-    }
-
-    private func sendToSomeday() {
-        dismiss()
-        Task { await session.sendToSomedayInstead() }
     }
 
     private func cancel() {
