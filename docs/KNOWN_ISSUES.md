@@ -123,6 +123,9 @@ of the same fact.
   the Keyboard pane's *rendering* (row grouping, key legends) was confirmed by a screenshot on
   fixtures. The Lists section, the remove `confirmationDialog`, the favourites `Menu` and the
   key-recorder's actual capture are compiled, unit-tested and code-reviewed only.
+- **The Mac Settings window's scrolling fix has not been seen on screen.** The form is now
+  `.formStyle(.grouped)` (which scrolls on macOS) in a resizable window; the app builds and
+  launches on fixtures, but `⌘,` was not opened on that build (MANUAL_TEST §3.5, first line).
   `docs/TRACEABILITY.md` N7/L2 say the same per requirement; `docs/MANUAL_TEST.md` §3.5 is the
   script for driving them.
 - **"Open in Obsidian" has not been clicked against a real vault since its URL was fixed.**

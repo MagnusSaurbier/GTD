@@ -52,7 +52,11 @@ struct MacSettingsScene: View {
                 get: { composition.deviceSettings },
                 set: { composition.deviceSettings = $0 }),
             onChangeVault: { Task { await composition.changeVault() } })
-            .frame(width: 520, height: 560)
+            // A range, not a fixed size: the form scrolls, so the window may be shorter than its
+            // content (small screens) or taller (fewer scrolls). `GTDApp` makes the scene resizable.
+            .frame(
+                minWidth: 480, idealWidth: 520, maxWidth: 720,
+                minHeight: 320, idealHeight: 560, maxHeight: .infinity)
     }
 }
 #endif

@@ -224,6 +224,10 @@ Unplug the mouse for this one.
 
 ### 3.5 Settings (L2/R-5, N7)
 
+- [ ] **Mac, `⌘,`: the Settings window scrolls.** At its default size (520×560) scroll from
+      Contexts down to About — every section (Lists, Favourites, Next cap, Routines,
+      Notifications, Keyboard, Vault, About) is reachable. Drag the window shorter (down to
+      320 pt) and taller: it resizes, and the form still scrolls to the last row.
 - [ ] **Lists section:** add a list (it appears at once, and `Lists/<name>/` exists as an empty
       folder), rename one (the folder moves, items included, `Done/` too), remove one — that
       asks with a `confirmationDialog` naming the list **and its item count**, then moves the

@@ -199,6 +199,10 @@ public struct SettingsView: View {
             vaultSection
             aboutSection
         }
+        // macOS' default form style (`.columns`) lays every row out at full height and never
+        // scrolls, so anything below the window's edge is unreachable. `.grouped` scrolls on
+        // both platforms and is what STYLEGUIDE §4.4 asks for ("stock `Form` (grouped)").
+        .formStyle(.grouped)
         #if os(iOS)
         .scrollDismissesKeyboard(.interactively)
         .toolbar {

@@ -59,6 +59,10 @@ This target must **not** import `GTDVault`: folder picking returns a plain `URL`
 
 ## Design notes
 
+- `SettingsView`'s `Form` is `.formStyle(.grouped)` on both platforms (STYLEGUIDE §4.4). On macOS
+  that is load-bearing: the default `.columns` style does not scroll, so a form taller than the
+  `Settings` window cuts its lower sections off. The shell (`App/MacShell.swift`) gives the window
+  a min/ideal/max frame rather than a fixed size; never wrap the form in a fixed height.
 - Removing/renaming a context only edits `GTDConfig`; it never rewrites existing action
   frontmatter. `affectedActionCount` is shown so the user knows what stays behind (no lying
   defaults — nothing is silently fixed up).

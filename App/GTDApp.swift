@@ -46,6 +46,8 @@ struct GTDApp: App {
                 // in Vault issues needs the root).
                 .environment(\.vaultRootPath, composition.vaultRootPath)
         }
+        // Follows `MacSettingsScene`'s min/max frame, so the scrolling form can be resized.
+        .windowResizability(.contentSize)
         #else
         WindowGroup {
             RootView(composition: composition, router: router, notifications: notifications)
