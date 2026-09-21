@@ -57,8 +57,11 @@ struct KnowledgeSheet: View {
 
                     if isAddingFolder {
                         HStack {
-                            TextField(InboxCopy.newFolderPlaceholder, text: $newFolder)
+                            TextField(
+                                InboxCopy.newFolderPlaceholder, text: $newFolder,
+                                prompt: Text(InboxCopy.newFolderPlaceholder))
                                 .textFieldStyle(.plain)
+                                .labelsHidden()
                             Button(Copy.done) { addFolder() }
                                 .disabled(newFolder.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
@@ -96,10 +99,14 @@ struct KnowledgeSheet: View {
                 }
 
                 Section(InboxCopy.notesLabel) {
-                    TextField(InboxCopy.notesPlaceholder, text: $notes, axis: .vertical)
+                    TextField(
+                        InboxCopy.notesPlaceholder, text: $notes,
+                        prompt: Text(InboxCopy.notesPlaceholder), axis: .vertical)
                         .textFieldStyle(.plain)
+                        .labelsHidden()
                 }
             }
+            .sheetFormStyle()
             .navigationTitle(Copy.knowledge)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -168,9 +175,12 @@ struct ProjectSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // An explicit prompt and a hidden label: a Mac form otherwise draws the title as
+                // a leading label and leaves the field itself empty.
                 Section {
-                    TextField(InboxCopy.pickProject, text: $search)
+                    TextField(InboxCopy.pickProject, text: $search, prompt: Text(InboxCopy.pickProject))
                         .textFieldStyle(.plain)
+                        .labelsHidden()
                 }
                 if session.draft.project != nil || session.draft.newProjectTitle != nil {
                     Section {
@@ -200,6 +210,7 @@ struct ProjectSheet: View {
                     }
                 }
             }
+            .sheetFormStyle()
             .navigationTitle(Copy.project)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -268,12 +279,16 @@ struct DeferToReviewSheet: View {
         NavigationStack {
             Form {
                 Section(InboxCopy.deferReasonLabel) {
-                    TextField(Copy.deferToReviewPrompt, text: $reason, axis: .vertical)
+                    TextField(
+                        Copy.deferToReviewPrompt, text: $reason,
+                        prompt: Text(Copy.deferToReviewPrompt), axis: .vertical)
                         .textFieldStyle(.plain)
+                        .labelsHidden()
                         .font(Typo.body)
                         .focused($isReasonFocused)
                 }
             }
+            .sheetFormStyle()
             #if os(iOS)
             .scrollDismissesKeyboard(.interactively)
             #endif
@@ -335,6 +350,7 @@ struct CapSheet: View {
                     }
                 }
             }
+            .scrollingSheetFrame()
             .navigationTitle(Copy.capSheetTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -397,6 +413,7 @@ struct MoreListsSheet: View {
                     }
                 }
             }
+            .scrollingSheetFrame()
             .navigationTitle(Copy.lists)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

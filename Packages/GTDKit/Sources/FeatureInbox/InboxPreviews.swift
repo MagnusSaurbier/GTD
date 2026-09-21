@@ -92,6 +92,30 @@ enum InboxPreviewData {
         return snapshot
     }
 
+    /// Forty projects over four areas plus some area-less ones, and a deep knowledge tree — far
+    /// more rows than a sheet is tall, to check that the pickers scroll (the fixtures have too
+    /// few projects to show an overflow).
+    static var crowdedSnapshot: VaultSnapshot {
+        var snapshot = self.snapshot
+        let areas = ["Applications", "Home", "Studies", "Work"].map {
+            Area(id: NoteID(path: "Projects/\($0)/\($0).md"), title: $0)
+        }
+        snapshot.areas = areas
+        snapshot.projects = (1...40).map { index in
+            let area = index % 5 == 0 ? nil : areas[index % areas.count]
+            let folder = area.map { "Projects/\($0.title)" } ?? "Projects"
+            return Project(
+                id: NoteID(path: "\(folder)/Project \(index)/Project \(index).md"),
+                title: "Project \(index)",
+                area: area?.id,
+                status: .active,
+                outcome: "Outcome \(index)",
+                steps: [])
+        }
+        snapshot.knowledgeFolders = (1...30).map { "Folder \($0)" }
+        return snapshot
+    }
+
     @MainActor
     static func model(_ snapshot: VaultSnapshot = InboxPreviewData.snapshot) -> AppModel {
         AppModel(
@@ -211,6 +235,14 @@ enum InboxPreviewData {
 
 #Preview("Project") {
     ProjectSheet(session: InboxPreviewData.session(what: "Collect the transcripts"))
+}
+
+#Preview("Project — 40 projects, must scroll") {
+    ProjectSheet(session: InboxPreviewData.session(InboxPreviewData.crowdedSnapshot))
+}
+
+#Preview("Knowledge — crowded, must scroll") {
+    KnowledgeSheet(session: InboxPreviewData.session(InboxPreviewData.crowdedSnapshot))
 }
 
 #Preview("Waiting") {

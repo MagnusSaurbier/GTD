@@ -36,6 +36,13 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   asterisk (§3.6: leading `asterisk` in `signalAttention`, VoiceOver says "required"),
   `WaitingInfoSheet(initial:suggestedWho:today:onSave:)` — follow-up date **required** (+7 d is a
   suggested chip until confirmed), who optional, `Set waiting` disabled until a date is confirmed.
+- Sheets that scroll (`Components/SheetScrolling.swift`, sizes in `SheetMetrics`):
+  `View.sheetFormStyle()` for every `Form` in a sheet — `.formStyle(.grouped)` plus the Mac sheet
+  frame; macOS' default `.columns` never scrolls and draws a text field's title as a left-column
+  label. `View.scrollingSheetFrame()` for a `List` in a sheet — min/ideal size on macOS, a no-op
+  on iOS (detents size the sheet there). `OverflowScroll { rows }` for an unbounded `ForEach`
+  inside a content-sized `VStack` sheet: inline while it fits, scrolling past
+  `SheetMetrics.inlineRowsMaxHeight`. Never pin a sheet to a fixed height.
 - `GlassActionBar` (the generic capsule) and its three STYLEGUIDE §3.6 variants:
   `StepOneBar` (three equal, neutral, symbol-over-text buttons — none accent-filled),
   `ActionCardBar` (`Waiting`/`Done` buttons + `⋯` "File to" menu → Next/Someday; swaps to a single

@@ -12,7 +12,7 @@ and `AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the m
 iOS-simulator app built, all package tests and the app's own test bundles passed, and the app
 launched on fixtures on both platforms.
 
-The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 295 package
+The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 297 package
 tests pass and both scratch app builds are warning-free — and parts of it have been driven on
 screen: the two-step card's step 1, the opened action card with its asterisk refusal, a swipe to
 Next, Trash with its toast, the project picker, the keep card's navbar, the Mac per-step key
@@ -129,6 +129,15 @@ of the same fact.
   launches on fixtures, but `⌘,` was not opened on that build (MANUAL_TEST §3.5, first line).
   `docs/TRACEABILITY.md` N7/L2 say the same per requirement; `docs/MANUAL_TEST.md` §3.5 is the
   script for driving them.
+- **The Mac sheet-scrolling fix has not been seen on screen.** The inbox sheets (`Project`,
+  `Knowledge`, `Defer to review`) and `Make action`'s project sheet were `Form`s with macOS'
+  default `.columns` style, which never scrolls — with many projects the lower ones were
+  unreachable (user report, real vault). They are now `DesignSystem`'s `sheetFormStyle()`
+  (grouped + a min/ideal sheet frame); the `List` sheets (`Next is full` ×4, `More…`) got the
+  same frame, and `WhatsNextSheet`/`ConvertToProjectSheet` scroll a long step list
+  (`OverflowScroll`). Compiled for macOS and the iOS Simulator, never opened: MANUAL_TEST §1.3
+  and §3.4 are the checks. `OverflowScroll` (`ViewThatFits` + a capped frame) is the part most
+  likely to need a tweak once seen.
 - **"Open in Obsidian" has not been clicked against a real vault since its URL was fixed.**
   `GTDAppCore.ObsidianLink` builds `path=<absolute path>` on the Mac and
   `vault=<folder name>&file=<relative path>` on iOS, unit-tested against Obsidian's documented

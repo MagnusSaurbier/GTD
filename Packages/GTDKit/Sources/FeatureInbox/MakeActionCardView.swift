@@ -454,8 +454,9 @@ private struct MakeActionProjectSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(InboxCopy.pickProject, text: $search)
+                    TextField(InboxCopy.pickProject, text: $search, prompt: Text(InboxCopy.pickProject))
                         .textFieldStyle(.plain)
+                        .labelsHidden()
                 }
                 if model.draft.project != nil || model.draft.newProjectTitle != nil {
                     Section {
@@ -484,6 +485,7 @@ private struct MakeActionProjectSheet: View {
                     }
                 }
             }
+            .sheetFormStyle()
             .navigationTitle(Copy.project)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -547,6 +549,7 @@ private struct MakeActionCapSheet: View {
                     }
                 }
             }
+            .scrollingSheetFrame()
             .navigationTitle(Copy.capSheetTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

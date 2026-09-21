@@ -86,6 +86,17 @@ swipes, Mac with keys. Open it with the `Process inbox` button, `⌘I`, or `gtd:
       action and names its project.
 - [ ] `+ project` opens the picker: a search field on top, then projects **without an area
       first and without any header** (never a "No area" label), then areas with their projects.
+- [ ] **Mac, with more projects than the sheet is tall (15+; the fixtures have too few — use a
+      vault copy, or the Xcode preview `Project — 40 projects, must scroll` in
+      `FeatureInbox/InboxPreviews.swift`):** the sheet is a grouped form — the search field is a
+      full-width row whose placeholder reads `Pick a project`, **not** a label in a left column —
+      and it scrolls to the last project and to the `Create project` row. Scroll down, type: the
+      field still takes the text and the list filters. `Esc` closes the sheet and leaves the card
+      and its draft as they were; a second `Esc` is the card's own ladder.
+- [ ] Same check for the other inbox sheets on the Mac: `Knowledge` (long folder tree + the
+      `Project` section + notes reachable by scrolling), `Defer to review`, `Next is full`,
+      `More…` — each opens at a sensible size (about 440×520), none is a tiny strip, none clips.
+      And `Make action` on a list item › `+ project` (the same picker over a list item).
 - [ ] Type a name no project has: the last row reads `Create project "<text>"`. Tap it — the chip
       confirms with that name.
 - [ ] File the card. In the vault copy, `Projects/no_area/<name>/<name>.md` exists with
@@ -238,6 +249,11 @@ Unplug the mouse for this one.
 - [ ] Pick an area that already has a project of that name: refused **inline** in the picker
       (a name collision), and nothing moves.
 - [ ] Renaming a project is still refused — the folder is the project's identity.
+
+- [ ] **Mac, a project with 15+ open steps:** complete its last open action — the `What's next?`
+      sheet scrolls the steps inside the sheet and its three buttons stay visible. With two or
+      three steps there is no scroll view and no gap under them. Same for an action with many
+      checkboxes › `Turn into project`.
 
 ### 3.5 Settings (L2/R-5, N7)
 

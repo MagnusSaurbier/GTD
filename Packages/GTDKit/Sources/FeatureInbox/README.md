@@ -114,6 +114,20 @@ swallows it: one press, one rung, whatever has focus. A nested sheet is another 
 takes key focus back (`hasKeyFocus`), so the single keys and the next `Esc` still land.
 `InboxSessionView` and `MakeActionCardView` both use it.
 
+## Sheets on the Mac (gotcha)
+
+Every `Form` in `InboxSheets.swift` and `MakeActionProjectSheet` ends in
+`DesignSystem.sheetFormStyle()`, every `List` sheet in `scrollingSheetFrame()`. Without the first,
+macOS picks the `.columns` form style: it does not scroll (projects past the sheet's bottom edge
+were unreachable on a real vault) and it draws `TextField("Pick a project", …)` as a label in a
+left column. For the same reason the text fields in these forms pass their placeholder as an
+explicit `prompt:` and are `.labelsHidden()` — in a Mac form the title alone becomes a row label,
+not a placeholder. The search field is the form's first row: it scrolls with the list, and typing
+filters the list back to the top. The sheets have no arrow-key/Return selection; `Esc` and
+`Cancel` are the stock sheet behaviour (a nested sheet is its own window, so `onEscapeKey` of the
+session underneath ignores it). `InboxPreviews.swift` has `Project — 40 projects, must scroll`
+and a crowded `Knowledge` preview, because the fixtures have too few projects to overflow.
+
 ## Platform guards (ARCHITECTURE §5)
 
 `EscapeKeyMonitor.swift` is wrapped in `#if canImport(SwiftUI) && os(macOS)`.

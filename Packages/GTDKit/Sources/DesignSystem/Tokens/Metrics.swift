@@ -39,6 +39,19 @@ public enum Spacing {
     public static let cardMaxWidth: CGFloat = 560
 }
 
+/// Size of a Mac sheet whose content scrolls (a grouped `Form` or a `List`). Such content has no
+/// intrinsic height, so the sheet needs an ideal size to open at and a minimum to stay usable;
+/// never a fixed height, which is what clips long pickers. iOS sizes sheets by detent instead.
+public enum SheetMetrics {
+    public static let minWidth: CGFloat = 380
+    public static let idealWidth: CGFloat = 440
+    public static let minHeight: CGFloat = 320
+    public static let idealHeight: CGFloat = 520
+    /// Tallest an inline run of rows may grow inside a content-sized sheet before it scrolls
+    /// (`OverflowScroll`).
+    public static let inlineRowsMaxHeight: CGFloat = 280
+}
+
 /// Corner radii. `Radius.chipShape` (a `Capsule`) lives in the SwiftUI half.
 public enum Radius {
     public static let card: CGFloat = 24
