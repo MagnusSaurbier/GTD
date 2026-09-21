@@ -81,6 +81,7 @@ public final class ReviewSession {
     public func continueStale() {
         guard let staleState else { return }
         self.staleState = nil
+        clearDeckIssues()
         write(staleState)
     }
 
@@ -145,12 +146,14 @@ public final class ReviewSession {
     public func advance() {
         guard canContinue, let next = state.page.next, next != .summary else { return }
         lastError = nil
+        clearDeckIssues()
         mutate { $0.page = next }
     }
 
     public func back() {
         guard let previous = state.page.previous else { return }
         lastError = nil
+        clearDeckIssues()
         mutate { $0.page = previous }
     }
 
@@ -159,6 +162,7 @@ public final class ReviewSession {
     public func go(to stage: ReviewStage) {
         guard state.page.stage != nil, stage.firstPage.index < state.page.index else { return }
         lastError = nil
+        clearDeckIssues()
         mutate { $0.page = stage.firstPage }
     }
 
@@ -270,7 +274,7 @@ public final class ReviewSession {
     /// The cards of `phase` that still need a decision.
     public func deckCards(for phase: DeckPhase) -> [DeckCard] {
         let handled = Set(state.handledDeckCards)
-        return ReviewDeck.cards(for: phase, in: model.snapshot, today: today)
+        return ReviewDeck.cards(for: phase, in: model.snapshot, today: today, calendar: calendar)
             .filter { !handled.contains($0.id.path) }
     }
 
@@ -284,24 +288,123 @@ public final class ReviewSession {
     /// `4 of 17` — how far through this phase the user is, or `nil` when the phase is empty.
     public var deckCounter: String? {
         guard let phase = deckPhase else { return nil }
-        let all = ReviewDeck.cards(for: phase, in: model.snapshot, today: today)
+        let all = ReviewDeck.cards(for: phase, in: model.snapshot, today: today, calendar: calendar)
         guard !all.isEmpty else { return nil }
         let handled = Set(state.handledDeckCards)
         return ReviewCopy.deckCounter(
             done: all.count { handled.contains($0.id.path) }, total: all.count)
     }
 
-    /// Applies a deck choice. A refused command (the cap, most likely) leaves the card on the
-    /// deck so the user can choose again — never a silent skip.
+    /// STYLEGUIDE §3.10's Someday header: how many Someday actions in the whole snapshot have
+    /// gone untouched past the 30-day threshold (§2.2) — a stat about the pile, not about how far
+    /// the deck has gotten through it.
+    public var somedayUntouchedOver30DaysCount: Int {
+        ReviewDeck.untouchedOver30DaysCount(in: model.snapshot, today: today, calendar: calendar)
+    }
+
+    /// A promote the cap refused (A3, D14): the choice and card to retry once a Next item is
+    /// demoted. `nil` when nothing is pending. The forced choice is `Demote` (retry) or `Cancel`
+    /// — never an automatic "send to Someday instead".
+    public private(set) var capChoice: DeckChoice?
+    public private(set) var capCard: DeckCard?
+
+    /// The Next items the cap sheet offers to demote — the same list the inbox's cap sheet uses
+    /// (`Rules.nextList`), read live so a demotion elsewhere while the sheet is up still shows.
+    public var capCandidates: [Action] { Rules.nextList(model.snapshot, today: today) }
+
+    /// A promote the reducer refused for missing required fields (R-3): the fields, in
+    /// `RequiredField` order, for the **current** card. The card names them inline and offers
+    /// `Edit` (the caller opens the action) or `Keep` — never a silent skip, never an alert.
+    public private(set) var missingFieldsIssue: [RequiredField]?
+
+    /// Applies a deck choice. A refused command leaves the card on the deck so the user can
+    /// choose again — never a silent skip. `nextCapReached` and `missingFields` are handled here
+    /// rather than falling through to `lastError`, because STYLEGUIDE §3.10/§3.6 shows both
+    /// inline on the card (a forced choice, or the named fields) instead of the shell's alert.
     public func apply(_ choice: DeckChoice, to card: DeckCard) async {
         guard card.choices.contains(choice) else { return }
-        if let command = ReviewDeck.command(for: choice, card: card) {
-            guard await send(command) else { return }
+        guard let command = ReviewDeck.command(for: choice, card: card) else {
+            recordDeckDecision(choice, card: card)
+            return
         }
+        do {
+            try await model.send(command)
+        } catch let error as GTDError {
+            handleDeckError(error, choice: choice, card: card)
+            return
+        } catch {
+            lastError = .invalid("\(error)")
+            return
+        }
+        lastError = nil
+        recordDeckDecision(choice, card: card)
+    }
+
+    private func handleDeckError(_ error: GTDError, choice: DeckChoice, card: DeckCard) {
+        switch error {
+        case .nextCapReached:
+            capChoice = choice
+            capCard = card
+            lastError = nil
+        case let .missingFields(fields):
+            missingFieldsIssue = fields
+            lastError = nil
+        default:
+            lastError = error
+        }
+    }
+
+    private func recordDeckDecision(_ choice: DeckChoice, card: DeckCard) {
         mutate { state in
             state.handledDeckCards.append(card.id.path)
             state.changes.record(choice)
         }
+    }
+
+    /// `Demote` on the cap sheet (D14): demotes `id`, then retries the promote that was refused.
+    /// Leaves the pending state in place on a further refusal — never a silent drop.
+    public func demoteAndRetryDeckCard(_ id: NoteID) async {
+        guard let choice = capChoice, let card = capCard else { return }
+        do {
+            try await model.send(.setStatus(id, .someday, waiting: nil))
+        } catch let error as GTDError {
+            lastError = error
+            return
+        } catch {
+            lastError = .invalid("\(error)")
+            return
+        }
+        capChoice = nil
+        capCard = nil
+        await apply(choice, to: card)
+    }
+
+    /// `Cancel` on the cap sheet (D14) — no "send to Someday instead". The card is left
+    /// undecided; the user demotes something themselves or swipes ← on it later.
+    public func cancelCapChoice() {
+        capChoice = nil
+        capCard = nil
+    }
+
+    /// `Keep` on a missing-fields card (R-3, STYLEGUIDE §3.10): the card stays exactly where it
+    /// is, recorded as `keep` so it is not dealt again this review.
+    public func keepDespiteMissingFields(_ card: DeckCard) {
+        missingFieldsIssue = nil
+        recordDeckDecision(.keep, card: card)
+    }
+
+    /// `Edit` on a missing-fields card: clears the inline notice so the caller can open the
+    /// action for editing (STYLEGUIDE §3.10 "offers to open the action for editing or keep it").
+    /// The card itself is left undecided, so it is dealt again if the user returns without fixing
+    /// it — never a silent skip.
+    public func dismissMissingFieldsForEditing() {
+        missingFieldsIssue = nil
+    }
+
+    private func clearDeckIssues() {
+        capChoice = nil
+        capCard = nil
+        missingFieldsIssue = nil
     }
 
     /// Mac keys of STYLEGUIDE §3.10: `K` keep · `D` demote · `P` promote · `T` trash — rebindable

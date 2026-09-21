@@ -10,17 +10,35 @@ import DesignSystem
 public struct WeeklyReviewView: View {
     private let onFinished: () -> Void
     private let store: any ReviewStateStore
+    private let bindings: KeyBindings
+    private let onEditAction: (NoteID) -> Void
     @Environment(AppModel.self) private var model
     @State private var session: ReviewSession?
 
-    public init(onFinished: @escaping () -> Void) {
-        self.init(store: FileReviewStateStore(), onFinished: onFinished)
+    public init(
+        bindings: KeyBindings = .defaults,
+        onEditAction: @escaping (NoteID) -> Void = { _ in },
+        onFinished: @escaping () -> Void
+    ) {
+        self.init(
+            store: FileReviewStateStore(), bindings: bindings, onEditAction: onEditAction,
+            onFinished: onFinished)
     }
 
     /// Same view with an injected store — used by previews, tests and the app shell when the
-    /// wizard state should not go to the default Application Support file.
-    public init(store: any ReviewStateStore, onFinished: @escaping () -> Void) {
+    /// wizard state should not go to the default Application Support file. `bindings` is the
+    /// device's stored key table (R-10, N7); `onEditAction` is what STYLEGUIDE §3.10's "offers to
+    /// open the action for editing" calls when a card is missing required fields (R-3) — the
+    /// shell supplies real navigation, `FeatureReview` itself never depends on an editor view.
+    public init(
+        store: any ReviewStateStore,
+        bindings: KeyBindings = .defaults,
+        onEditAction: @escaping (NoteID) -> Void = { _ in },
+        onFinished: @escaping () -> Void
+    ) {
         self.store = store
+        self.bindings = bindings
+        self.onEditAction = onEditAction
         self.onFinished = onFinished
     }
 
@@ -28,7 +46,9 @@ public struct WeeklyReviewView: View {
         ZStack {
             Color.surfaceGrouped.ignoresSafeArea()
             if let session {
-                ReviewWizardView(session: session, onFinished: onFinished)
+                ReviewWizardView(
+                    session: session, bindings: bindings, onEditAction: onEditAction,
+                    onFinished: onFinished)
             }
         }
         .task {
@@ -75,6 +95,8 @@ public struct ReviewResumeBanner: View {
 
 struct ReviewWizardView: View {
     @Bindable var session: ReviewSession
+    var bindings: KeyBindings = .defaults
+    var onEditAction: (NoteID) -> Void = { _ in }
     let onFinished: () -> Void
 
     @State private var isShowingStale = false
@@ -137,7 +159,8 @@ struct ReviewWizardView: View {
         case .sweepDeferred: SweepDeferredStep(session: session)
         case .sweepWaiting: SweepWaitingStep(session: session)
         case .sweepStalled: SweepStalledStep(session: session)
-        case .deckNext, .deckSomeday, .deckProjects: ReviewDeckStep(session: session)
+        case .deckNext, .deckSomeday, .deckProjects:
+            ReviewDeckStep(session: session, bindings: bindings, onEditAction: onEditAction)
         case .systemsCheck: SystemsCheckStep(session: session)
         case .reflection: ReflectionStep(session: session)
         case .summary: ReviewSummaryStep(session: session, onFinished: onFinished)

@@ -236,9 +236,13 @@ public struct ReviewSessionState: Codable, Equatable, Sendable {
 
     public func isFor(year: Int, week: Int) -> Bool { self.year == year && self.week == week }
 
-    /// A state written by an older build may decode with a `page` this build no longer has;
-    /// `Codable` already rejects that, and the store treats a failed decode as "no session"
-    /// rather than guessing a half-restored wizard.
+    /// A state written by an older build may carry a `page` this build no longer has — the
+    /// pre-rework deck had one merged "not now" phase, `deckBacklogMaybe`, where this build has
+    /// `deckSomeday` (T12). That one rename is unambiguous (same position, same phase), so it is
+    /// migrated rather than discarded: `migratedPage(fromRaw:)` maps it, and maps anything else
+    /// unrecognised to the start of the deck stage — never a crash, and the sweep's own progress
+    /// (`handledDeferred`/`handledWaiting`/`handledStalled`, all unaffected by the rename) is
+    /// never lost over a `page` value alone.
     ///
     /// Everything else is additive with a default, so a state written before a field existed
     /// still decodes.
@@ -248,11 +252,33 @@ public struct ReviewSessionState: Codable, Equatable, Sendable {
         case inboxAtStart, changes, isSaved
     }
 
+    /// Maps a stored `page` raw value to a `ReviewPage` this build has, tolerating the one
+    /// pre-rework case the migration guide calls out (T12) plus any other value a future build
+    /// might no longer recognise.
+    ///
+    /// - A value this build still has decodes straight through.
+    /// - `deckBacklogMaybe` (the pre-rework merged Next↔Backlog/Maybe deck phase) is an
+    ///   unambiguous rename to `deckSomeday` — same position in the same three-phase deck, so the
+    ///   review resumes exactly where it was rather than restarting.
+    /// - Anything else unrecognised restarts at the top of the deck stage (`deckNext`) instead of
+    ///   discarding the whole state: only the deck's own phases changed shape in this rework, so
+    ///   the sweep the user already finished is never re-asked, and re-dealing the deck from its
+    ///   first phase can never lose a note (`ReviewDeck.cards` is a pure function of the vault).
+    static func migratedPage(fromRaw raw: String) -> ReviewPage {
+        if let page = ReviewPage(rawValue: raw) { return page }
+        if raw == "deckBacklogMaybe" { return .deckSomeday }
+        return .deckNext
+    }
+
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         year = try c.decode(Int.self, forKey: .year)
         week = try c.decode(Int.self, forKey: .week)
-        page = try c.decodeIfPresent(ReviewPage.self, forKey: .page) ?? .sweepInbox
+        if let rawPage = try c.decodeIfPresent(String.self, forKey: .page) {
+            page = ReviewSessionState.migratedPage(fromRaw: rawPage)
+        } else {
+            page = .sweepInbox
+        }
         review = try c.decodeIfPresent(WeeklyReviewAnswers.self, forKey: .review) ?? WeeklyReviewAnswers()
         systemsCheck = try c.decodeIfPresent(SystemsCheckAnswers.self, forKey: .systemsCheck) ?? SystemsCheckAnswers()
         systemFixNotes = try c.decodeIfPresent([String].self, forKey: .systemFixNotes) ?? []

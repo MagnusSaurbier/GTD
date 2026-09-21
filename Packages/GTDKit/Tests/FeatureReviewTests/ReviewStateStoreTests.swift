@@ -72,6 +72,73 @@ struct ReviewStateStoreTests {
         #expect(!state.isSaved)
     }
 
+    /// T12 — a state written by the **pre-rework** build (before `feature/inbox-rework`'s deck
+    /// merged Backlog and Maybe into one Someday phase) carried `page: "deckBacklogMaybe"`, which
+    /// no longer exists on `ReviewPage`. Reconstructed from `git show 8fa4105:…ReviewSessionState.swift`
+    /// — that build's fields are otherwise identical to today's, so this is a literal, faithful
+    /// stored state, not an invented shape. It must not crash, and since the rename is
+    /// unambiguous (the merged phase sat in the same position the new `deckSomeday` does), the
+    /// review resumes exactly there rather than restarting the whole wizard — the sweep progress
+    /// (`handledDeferred`) survives untouched.
+    @Test func aPreReworkStoredStateMigratesTheRemovedDeckPhase() throws {
+        let json = """
+        {
+          "year": 2026, "week": 37, "page": "deckBacklogMaybe",
+          "review": {
+            "wantedToAchieve": "", "achieved": "", "behaviorToChange": "", "whatToStop": "",
+            "howIGrew": "", "howToGrowFurther": "", "whatToTry": "", "goalForNextWeek": ""
+          },
+          "systemsCheck": { "trust": "", "workload": "", "routines": "" },
+          "systemFixNotes": [], "startedAt": 0,
+          "handledDeferred": ["Inbox/2026-09-10 090000.md"],
+          "handledWaiting": [], "handledStalled": [],
+          "handledDeckCards": ["Actions/Already decided.md"],
+          "inboxAtStart": 3,
+          "changes": {
+            "deferredHandled": 1, "waitingHandled": 0, "demoted": 0, "promoted": 0,
+            "trashed": 0, "kept": 0, "projectsTouched": 0
+          },
+          "isSaved": false
+        }
+        """
+        let state = try JSONDecoder().decode(ReviewSessionState.self, from: Data(json.utf8))
+        #expect(state.page == .deckSomeday)                 // unambiguous rename, same position
+        #expect(state.stage == .deck)
+        // Never lost: the sweep's own progress from before the rework.
+        #expect(state.handledDeferred == ["Inbox/2026-09-10 090000.md"])
+        #expect(state.handledDeckCards == ["Actions/Already decided.md"])
+        #expect(state.changes.deferredHandled == 1)
+        #expect(state.year == 2026)
+        #expect(state.week == 37)
+    }
+
+    /// Any other page value this build has never had (a hypothetical future removal, or a
+    /// corrupted field) restarts the deck stage rather than crashing or discarding the whole
+    /// state — the sweep progress still survives.
+    @Test func anUnrecognisedPageRestartsTheDeckStageWithoutLosingSweepProgress() throws {
+        let json = """
+        {"year":2026,"week":37,"page":"deckSomethingThatNeverExisted","startedAt":0,
+         "handledWaiting":["Actions/Chase this.md"]}
+        """
+        let state = try JSONDecoder().decode(ReviewSessionState.self, from: Data(json.utf8))
+        #expect(state.page == .deckNext)
+        #expect(state.handledWaiting == ["Actions/Chase this.md"])
+    }
+
+    /// The store's own `load()` never crashes or throws on a pre-rework file either — it is
+    /// resumed, exactly as `aPreReworkStoredStateMigratesTheRemovedDeckPhase` decodes it.
+    @Test func theFileStoreResumesAPreReworkStateInsteadOfDiscardingIt() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent(FileReviewStateStore.defaultFileName)
+        try Data("""
+        {"year":2026,"week":37,"page":"deckBacklogMaybe","startedAt":0}
+        """.utf8).write(to: url)
+
+        let loaded = try #require(FileReviewStateStore(directory: directory).load())
+        #expect(loaded.page == .deckSomeday)
+    }
+
     @Test func theStageInitialiserLandsOnThatStagesFirstPage() {
         let state = ReviewSessionState(
             year: 2026, week: 38, stage: .deck, startedAt: Date(timeIntervalSince1970: 0))

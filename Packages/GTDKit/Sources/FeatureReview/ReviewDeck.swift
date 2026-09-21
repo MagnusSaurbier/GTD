@@ -135,10 +135,12 @@ public enum ReviewDeck {
     ///
     /// - `.next` reuses `Rules.nextList` so the deck order matches the Next view the user knows
     ///   (`in-progress` first, then nearest `due`, then oldest capture).
-    /// - `.someday` deals the Someday tier oldest capture first, so the things that have sat
-    ///   longest get decided first.
+    /// - `.someday` deals the Someday tier **stalest first, project-linked before unlinked**
+    ///   (§10.2, STYLEGUIDE §3.10) — a total order, see `stalestFirst`.
     /// - `.projects` deals on-hold before someday, by title.
-    public static func cards(for phase: DeckPhase, in s: VaultSnapshot, today: Day) -> [DeckCard] {
+    public static func cards(
+        for phase: DeckPhase, in s: VaultSnapshot, today: Day, calendar: Calendar = .current
+    ) -> [DeckCard] {
         switch phase {
         case .next:
             return Rules.nextList(s, today: today)
@@ -146,7 +148,7 @@ public enum ReviewDeck {
         case .someday:
             return s.actions
                 .filter { $0.status == .someday }
-                .sorted(by: oldestFirst)
+                .sorted { stalestFirst($0, $1, today: today, calendar: calendar) }
                 .map { DeckCard(subject: .action($0), choices: [.promote, .keep, .trash]) }
         case .projects:
             let byStatus: [ProjectStatus] = [.onHold, .someday]
@@ -198,11 +200,47 @@ public enum ReviewDeck {
         return .updateProject(updated)
     }
 
-    /// Oldest capture first; a note without `created` sorts last rather than pretending to be new.
-    static func oldestFirst(_ lhs: Action, _ rhs: Action) -> Bool {
-        let l = lhs.created ?? .distantFuture
-        let r = rhs.created ?? .distantFuture
-        if l != r { return l < r }
+    // MARK: - Staleness (§10.2, STYLEGUIDE §2.2/§3.10)
+
+    /// Days since `action` was last touched — STYLEGUIDE §2.2's "file modification date or last
+    /// status change, whichever is later". `GTDVault` fills `Action.modified` in from the file's
+    /// mtime on every scan, and the reducer's `normalize` sets it to `env.now` on every mutation
+    /// (`Reducer.swift`), so the one field already **is** the later of the two — no second query
+    /// exists to combine them, and this is what `Rules.signals(for:today:)` reads for the same
+    /// badge. A note that has never been touched by either (no `modified` at all) is treated as
+    /// the most stale of all: claiming it is recent would be exactly the lying default §1 forbids.
+    static func untouchedDays(_ action: Action, today: Day, calendar: Calendar) -> Int {
+        guard let modified = action.modified else { return .max }
+        return today.days(since: Day(modified, calendar: calendar))
+    }
+
+    /// Someday order (§10.2, STYLEGUIDE §3.10): stalest first, then project-linked before
+    /// unlinked, then by path. A total order — nothing here relies on `sorted`'s stability, so
+    /// two cards that tie on every criterion above the path still compare unequal until the path
+    /// itself breaks the tie.
+    static func stalestFirst(_ lhs: Action, _ rhs: Action, today: Day, calendar: Calendar) -> Bool {
+        let l = untouchedDays(lhs, today: today, calendar: calendar)
+        let r = untouchedDays(rhs, today: today, calendar: calendar)
+        if l != r { return l > r }                          // more days untouched sorts first
+
+        let lLinked = lhs.project != nil
+        let rLinked = rhs.project != nil
+        if lLinked != rLinked { return lLinked && !rLinked } // project-linked before unlinked
+
         return lhs.id.path < rhs.id.path
+    }
+
+    /// The Someday header's `untouched > 30 days` count (STYLEGUIDE §3.10) — over every Someday
+    /// action in the snapshot, not just the cards still left to decide: it describes the size of
+    /// the pile, not progress through it, so it does not shrink as cards get handled.
+    public static func untouchedOver30DaysCount(
+        in s: VaultSnapshot,
+        today: Day,
+        policy: StalenessPolicy = .default,
+        calendar: Calendar = .current
+    ) -> Int {
+        s.actions.count {
+            $0.status == .someday && untouchedDays($0, today: today, calendar: calendar) > policy.actionAttentionDays
+        }
     }
 }

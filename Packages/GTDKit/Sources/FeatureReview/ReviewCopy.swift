@@ -102,6 +102,17 @@ public enum ReviewCopy {
     public static let deckDoneTitle = "Deck clear"
     public static let deckDoneBody = "Every card in this phase has a decision."
 
+    /// R-3 — a promote the reducer refused for missing fields (STYLEGUIDE §3.10): the card names
+    /// them (`Copy.missingFields`) and offers to open the action or keep it as is.
+    public static let editAction = "Edit"
+    public static let keepDespiteMissingFields = keep
+
+    /// The cap sheet's list header when a promote from the deck is what triggered it (D14) — the
+    /// body and title themselves are `Copy.capSheetTitle`/`Copy.capSheetBody`, shared with the
+    /// inbox's own cap sheet.
+    public static let capSheetDemote = Copy.demote
+    public static let capSheetCancel = "Cancel"
+
     // MARK: Systems check (§10.3 prompts)
 
     public static let promptTrust = "Trust in inbox, Next and triggers — did anything slip?"
