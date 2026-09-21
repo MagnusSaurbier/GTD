@@ -373,8 +373,8 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T05 | done | d804276 | Opus | 1 | worktree, merged clean; gate green (1136 tests; Model 223, Vault 152, Services 71, Projects 67); both app builds green. `ProjectDetailModel.setArea(_:)` has no caller until T11; legacy top-level projects are never moved automatically (MANUAL_TEST §9 line added) |
 | T06 | done | 38f8797 | Sonnet | 1 | worktree, merged clean; gate green (1113 tests, DesignSystem 46); both app builds green. New: `StepOneBar`, `ActionCardBar`, `KnowledgeListNavbar`, `NavbarLayout`, `SectionLabel`, `ListItemRow`, `shake(trigger:)`. Left for T09: `ItemCard`/`CollapsibleText` still truncates with `Show all` (§3.5 says the step-1 card scrolls instead) |
 | T07 | done | e1616bc | Sonnet | 1 | worktree; merge conflicts with T04 in `CardTargets`/`InboxProcessingView` resolved by the manager (`P` opens the project sheet); gate green. `KeyBindings` lives in `GTDAppCore` (all three consumers depend on it; no Package.swift change). Legacy single-card letters still resolve via `CardTarget.key` until T08/T09 |
-| T08 | **in progress** (started 2026-09-21, worktree, ∥ T05 — disjoint paths) | | Opus | 1 | |
-| T09 | | | | | |
+| T08 | done | b7a59d2 | Opus | 1 | worktree; merge conflicts only in docs (manager resolved); gate green (1199 tests, Inbox 107); both app builds green. `InboxStep`/`InboxExit`/`take(_:)`, `ActionCardEngine` shared with `MakeActionModel` (L4); old README invariants consciously replaced (table in `FeatureInbox/README.md`); views only adapted mechanically — T09 |
+| T09 | **in progress** (started 2026-09-21, worktree, ∥ T11) | | Sonnet | 1 | |
 | T10 | | | | | |
 | T11 | **in progress** (started 2026-09-21, worktree, ∥ T08/T12) | | Sonnet | 1 | |
 | T12 | done | a88bb96 | Sonnet | 1 | worktree, merged clean; gate green (1148 tests, Review 91); both app builds green. Open wiring for T13: the deck's `onEditAction` hook and the stored `KeyBindings` are not yet passed in by the shell; nobody has driven the deck on screen yet (T15) |
@@ -402,3 +402,4 @@ _(one line each: date · task · decision · why — and the ARCHITECTURE §6 ro
 - 2026-09-21 · T07 · `KeyBindings` is a `GTDAppCore` type, persisted through `DeviceSettings` · FeatureInbox/Review/Settings all need it and may not depend on each other · ARCHITECTURE §6.
 - 2026-09-21 · T05 · a stale `area:` key inside `Projects/no_area/` is reported as a `VaultIssue`, not corrected; `Projects/no_area/` is not a required folder (created by the first area-less project) · never rewrite a note unasked · ARCHITECTURE §6.
 - 2026-09-21 · T12 · Someday deck order uses `Action.modified` as "untouched" (never-touched = stalest); the deck has its own `Next is full` sheet; a stored pre-rework `deckBacklogMaybe` page resumes at the Someday deck · ARCHITECTURE §6.
+- 2026-09-21 · T08 · a wrong-step exit is a refusal, not a no-op; undo restores the step (R-9); an asterisk follows the draft, not the refusal; a mid-session capture never displaces an *opened* card; `escape()` reports blur/collapsed/quit and the view owns focus · ARCHITECTURE §6.
