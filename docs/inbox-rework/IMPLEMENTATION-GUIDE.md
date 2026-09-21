@@ -376,7 +376,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T08 | **in progress** (started 2026-09-21, worktree, ∥ T05 — disjoint paths) | | Opus | 1 | |
 | T09 | | | | | |
 | T10 | | | | | |
-| T11 | | | | | |
+| T11 | **in progress** (started 2026-09-21, worktree, ∥ T08/T12) | | Sonnet | 1 | |
 | T12 | **in progress** (started 2026-09-21, worktree, ∥ T05/T08 — its needs T06/T07 are in) | | Sonnet | 1 | |
 | T13 | | | | | |
 | T14 | done | 828b678 | Sonnet | 1 | worktree; 42 pytest green from a scratch venv (manager re-ran); script never writes `reading`/`backlog`/`maybe` |
