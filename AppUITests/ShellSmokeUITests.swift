@@ -28,18 +28,35 @@ final class ShellSmokeUITests: XCTestCase {
     }
 
     #if os(iOS)
-    /// N5 / STYLEGUIDE §4.2 — exactly three tabs, in the order Inbox · Next · Routines, and the
-    /// app still opens on Next (E1).
-    func testTheThreeTabsAreThere() {
+    /// N5 / STYLEGUIDE §4.2 — exactly four tabs, in the order Inbox · Next · Lists · Routines,
+    /// and the app still opens on Next (E1).
+    func testTheFourTabsAreThere() {
         let app = launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
         let tabs = app.tabBars.buttons
         XCTAssertTrue(tabs["Next"].waitForExistence(timeout: 10))
         XCTAssertTrue(tabs["Inbox"].exists)
+        XCTAssertTrue(tabs["Lists"].exists)
         XCTAssertTrue(tabs["Routines"].exists)
         XCTAssertLessThan(tabs["Inbox"].frame.minX, tabs["Next"].frame.minX)
-        XCTAssertLessThan(tabs["Next"].frame.minX, tabs["Routines"].frame.minX)
+        XCTAssertLessThan(tabs["Next"].frame.minX, tabs["Lists"].frame.minX)
+        XCTAssertLessThan(tabs["Lists"].frame.minX, tabs["Routines"].frame.minX)
         XCTAssertTrue(tabs["Next"].isSelected)
+    }
+
+    /// L5 — the Lists tab: a list with counts, pushing to a list's items. The row is a
+    /// `NavigationLink` over a `Label`, not a plain `Text` row (unlike the Next list's
+    /// `ActionRow`), so this asserts on the pushed navigation title rather than the row's own
+    /// accessibility element, which is less certain to resolve to a single `staticTexts` match.
+    func testListsTabPushesToAListsItems() {
+        let app = launch()
+        XCTAssertTrue(app.tabBars.buttons["Lists"].waitForExistence(timeout: 20))
+        app.tabBars.buttons["Lists"].tap()
+        XCTAssertTrue(app.navigationBars["Lists"].waitForExistence(timeout: 10))
+        let readRow = app.cells.containing(.staticText, identifier: "Read").firstMatch
+        XCTAssertTrue(readRow.waitForExistence(timeout: 10))
+        readRow.tap()
+        XCTAssertTrue(app.navigationBars["Read"].waitForExistence(timeout: 10))
     }
 
     /// I1 — the inbox tab's only way into the queue is the primary button.

@@ -4,11 +4,13 @@ import GTDModel
 import GTDAppCore
 import GTDIntents
 import FeatureOverview
+import FeatureLists
 
-/// The iPhone's three tabs (N5, STYLEGUIDE §4.2).
+/// The iPhone's four tabs (N5, STYLEGUIDE §4.2).
 enum AppTab: Hashable, CaseIterable {
     case next
     case inbox
+    case lists
     case routines
 }
 
@@ -24,6 +26,8 @@ final class AppRouter {
     var tab: AppTab = .next
     /// Pushed action details in the Next tab.
     var nextPath: [NoteID] = []
+    /// The Lists tab's push stack: lists home → one list's items → the item editor (L5).
+    var listsPath: [ListsRoute] = []
 
     // Mac
     let overview = OverviewNavigation()
@@ -102,11 +106,32 @@ final class AppRouter {
     /// unit-tested on Linux.
     func apply(snapshot: VaultSnapshot, renames: RenameMap = .empty) {
         nextPath = NavigationRemap.path(nextPath, renames: renames, in: snapshot)
+        listsPath = AppRouter.remap(listsPath, renames: renames, snapshot: snapshot)
         routineRun = NavigationRemap
             .selection(routineRun?.note, renames: renames) { id in
                 snapshot.routines.contains { $0.id == id }
             }
             .map { NoteTarget($0) }
         overview.apply(snapshot: snapshot, renames: renames)
+    }
+
+    /// `NavigationRemap.path` is generic over `[NoteID]`; the Lists tab's stack mixes list names
+    /// (`.list`, untouched by a rename) with item ids (`.item`, which follow one exactly like an
+    /// action's pushed detail does).
+    private static func remap(
+        _ path: [ListsRoute], renames: RenameMap, snapshot: VaultSnapshot
+    ) -> [ListsRoute] {
+        var result: [ListsRoute] = []
+        for route in path {
+            switch route {
+            case .list:
+                result.append(route)
+            case let .item(id):
+                let current = renames.resolve(id)
+                guard snapshot.listItem(current) != nil else { continue }
+                result.append(.item(current))
+            }
+        }
+        return result
     }
 }

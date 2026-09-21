@@ -10,6 +10,7 @@ import FeatureWaiting
 import FeatureRoutines
 import FeatureSettings
 import FeatureReview
+import FeatureLists
 import GTDFixtures
 
 /// The Mac shell (E3, STYLEGUIDE §4.1): sidebar with live counts · list · note editor. The
@@ -137,6 +138,8 @@ public struct OverviewView: View {
             ActionDetailView(action: id)
         case let .project(id):
             ProjectDetailView(project: id, onOpenAction: { nav.open(action: $0) })
+        case let .listItem(id):
+            ListItemEditorView(item: id)
         case nil:
             ContentUnavailableView(
                 OverviewCopy.noSelectionTitle,
@@ -241,6 +244,10 @@ private struct ContentColumn: View {
             WaitingView(
                 selection: navigation.openAction,
                 onOpen: { navigation.open(action: $0) })
+        case .lists:
+            ListsSectionsView(
+                selection: navigation.openListItem,
+                onOpen: { navigation.open(listItem: $0) })
         case .deferred:
             DeferredView(
                 selection: navigation.openAction,

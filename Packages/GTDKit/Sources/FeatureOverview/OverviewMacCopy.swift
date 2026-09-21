@@ -8,6 +8,8 @@ enum OverviewMacCopy {
     // Empty detail column, per section (`SidebarItem.emptyDetailBody`).
     static let pickAnAction = "Pick an action from the list."
     static let pickAProject = "Pick a project from the list."
+    /// T10 — the `Lists` sidebar row's detail column, before anything is selected.
+    static let pickAnItem = "Pick an item from one of the lists."
     static let inboxIsProcessed = "Inbox items are processed in order, not opened one by one."
 
     static let overdue = "Overdue"

@@ -8,11 +8,13 @@ import FeatureNext
 import FeatureOverview
 import FeatureRoutines
 import FeatureSettings
+import FeatureLists
 
-/// The iPhone (N5, E2, STYLEGUIDE §4.2): three tabs — **Inbox** (count + `Process inbox`),
-/// **Next** (on-the-go; the tab the app opens on, E1 — `AppRouter.tab` starts at `.next`),
-/// **Routines**. No full task overview, no settings tab: settings live behind the gear on Next,
-/// and inbox processing and routines run full-screen.
+/// The iPhone (N5, E2, STYLEGUIDE §4.2): four tabs, in order — **Inbox** (count +
+/// `Process inbox`), **Next** (on-the-go; the tab the app opens on, E1 — `AppRouter.tab` starts
+/// at `.next`), **Lists** (L5: lists with counts → items → item editor), **Routines**. No full
+/// task overview, no settings tab: settings live behind the gear on Next, and inbox processing
+/// and routines run full-screen.
 struct PhoneShell: View {
     let composition: AppComposition
     @Bindable var router: AppRouter
@@ -28,6 +30,10 @@ struct PhoneShell: View {
             nextTab
                 .tabItem { Label(Copy.next, systemImage: Symbols.next) }
                 .tag(AppTab.next)
+
+            listsTab
+                .tabItem { Label(Copy.lists, systemImage: Symbols.listBullet) }
+                .tag(AppTab.lists)
 
             routinesTab
                 .tabItem { Label(AppCopy.routines, systemImage: Symbols.routineGeneric) }
@@ -86,6 +92,25 @@ struct PhoneShell: View {
                         // P7 — the detail's own bottom bar (Done / Trash) takes the tab bar's
                         // place, so nothing floats over the last row of the form.
                         .toolbar(.hidden, for: .tabBar)
+                }
+        }
+    }
+
+    // MARK: - Lists (L5)
+
+    private var listsTab: some View {
+        NavigationStack(path: $router.listsPath) {
+            ListsHomeView()
+                .navigationDestination(for: ListsRoute.self) { route in
+                    switch route {
+                    case let .list(name):
+                        ListItemsView(list: name)
+                    case let .item(id):
+                        ListItemEditorView(item: id)
+                            // P7 — same as the Next tab's pushed detail: the item editor's own
+                            // toolbar takes the tab bar's place.
+                            .toolbar(.hidden, for: .tabBar)
+                    }
                 }
         }
     }

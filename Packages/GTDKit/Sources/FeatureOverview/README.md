@@ -20,6 +20,12 @@ action editor no other feature target owns.
   first two and `navigation.openProject` to Projects.
 - `OverviewLayout` — column and window minimum sizes; `App/MacShell.swift` sizes the window from it.
 - `ActionDetailView(action:onRename:)` — the autosaving note editor (also the iPhone detail).
+- `SidebarItem.lists` (T10) — the single `Lists` sidebar row (count = open items across every
+  list, `Rules.SidebarCounts.lists`); the content column is `FeatureLists.ListsSectionsView`
+  (one section per list) and the detail column is `FeatureLists.ListItemEditorView` for
+  `OverviewDetail.listItem(_:)`, wired the same way `.action`/`.project` already are (`onOpen` →
+  `navigation.open(listItem:)`, `OverviewNavigation.apply` follows a rename through
+  `NavigationRemap`). `⌘1…7` now covers all seven counted sections in STYLEGUIDE §4.1 order.
 - `SidebarItem`, `OverviewNavigation`, `OverviewDetail`, `ActionListModel`, `ActionGroup`,
   `ActionEditModel`, `ActionField`, `ObsidianLink`, `EnvironmentValues.vaultRootPath`.
 

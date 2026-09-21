@@ -7,11 +7,14 @@ import GTDAppCore
 public enum OverviewDetail: Hashable, Sendable {
     case action(NoteID)
     case project(NoteID)
+    /// T10 — the `Lists` sidebar row's detail column: one list item's title + notes editor.
+    case listItem(NoteID)
 
     public var noteID: NoteID {
         switch self {
         case let .action(id): id
         case let .project(id): id
+        case let .listItem(id): id
         }
     }
 }
@@ -82,15 +85,24 @@ public final class OverviewNavigation {
         return nil
     }
 
+    /// The list item in the detail column — what a `ListsSectionsView` section highlights (T10).
+    public var openListItem: NoteID? {
+        if case let .listItem(id) = detail { return id }
+        return nil
+    }
+
     public func open(action id: NoteID) { detail = .action(id) }
 
     public func open(project id: NoteID) { detail = .project(id) }
+
+    public func open(listItem id: NoteID) { detail = .listItem(id) }
 
     /// Follows a rename: the note keeps its place in the detail column under its new `NoteID`.
     public func replace(_ old: NoteID, with new: NoteID) {
         switch detail {
         case let .action(id) where id == old: detail = .action(new)
         case let .project(id) where id == old: detail = .project(new)
+        case let .listItem(id) where id == old: detail = .listItem(new)
         default: break
         }
     }
@@ -111,6 +123,10 @@ public final class OverviewNavigation {
             detail = NavigationRemap
                 .selection(id, renames: renames) { snapshot.project($0) != nil }
                 .map(OverviewDetail.project)
+        case let .listItem(id):
+            detail = NavigationRemap
+                .selection(id, renames: renames) { snapshot.listItem($0) != nil }
+                .map(OverviewDetail.listItem)
         case nil:
             break
         }

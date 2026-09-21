@@ -10,15 +10,16 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     case next
     case someday
     case waiting
+    case lists
     case projects
     case deferred
     case review
     case routines
 
     /// The counted sections, in the order of STYLEGUIDE §4.1 — they form the first sidebar group
-    /// and own `⌘1…⌘6` (Lists joins them in T10).
+    /// and own `⌘1…⌘7`.
     public static let counted: [SidebarItem] = [
-        .inbox, .next, .someday, .waiting, .projects, .deferred,
+        .inbox, .next, .someday, .waiting, .lists, .projects, .deferred,
     ]
 
     /// The second sidebar group: the two guided flows.
@@ -30,6 +31,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         case .next: Copy.next
         case .someday: Copy.someday
         case .waiting: Copy.waiting
+        case .lists: Copy.lists
         case .projects: OverviewCopy.projects
         case .deferred: OverviewCopy.deferred
         case .review: Copy.weeklyReview
@@ -43,6 +45,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         case .next: Symbols.next
         case .someday: Symbols.someday
         case .waiting: Symbols.waiting
+        case .lists: Symbols.listBullet
         case .projects: Symbols.projects
         case .deferred: Symbols.deferred
         case .review: Symbols.weeklyReview
@@ -94,18 +97,21 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     public var emptyDetailBody: String? {
         switch self {
         case .next, .someday, .waiting, .deferred: OverviewMacCopy.pickAnAction
+        case .lists: OverviewMacCopy.pickAnItem
         case .projects: OverviewMacCopy.pickAProject
         case .inbox: OverviewMacCopy.inboxIsProcessed
         case .review, .routines: nil
         }
     }
 
+    /// L5 — the single `Lists` sidebar row counts open items across **every** list.
     public func count(_ counts: Rules.SidebarCounts) -> Int? {
         switch self {
         case .inbox: counts.inbox
         case .next: counts.next
         case .someday: counts.someday
         case .waiting: counts.waiting
+        case .lists: counts.lists
         case .projects: counts.projects
         case .deferred: counts.deferred
         default: nil

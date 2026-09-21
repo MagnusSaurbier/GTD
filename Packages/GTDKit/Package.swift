@@ -1,5 +1,5 @@
 // swift-tools-version: 6.2
-// The 18 source targets and their dependency direction (docs/ARCHITECTURE.md §2).
+// The 19 source targets and their dependency direction (docs/ARCHITECTURE.md §2).
 // Adding a target: docs/CONTRIBUTING-AGENTS.md "Add a target".
 import PackageDescription
 
@@ -28,6 +28,7 @@ let package = Package(
             "GTDModel", "GTDMarkdown", "GTDVault", "GTDServices", "GTDAppCore", "GTDFixtures",
             "DesignSystem", "GTDNotifications", "GTDStats",
             "FeatureInbox", "FeatureNext", "FeatureProjects", "FeatureWaiting", "FeatureRoutines",
+            "FeatureLists",
             "FeatureOverview", "FeatureSettings", "FeatureReview", "GTDIntents",
         ]),
     ],
@@ -78,11 +79,20 @@ let package = Package(
             exclude: excluded,
             resources: uiResources,
             swiftSettings: swiftSettings),
+        // T10 — Lists home + item editor + Make action; depends on FeatureInbox for
+        // `MakeActionModel` (L4), the same way FeatureReview depends on it for `InboxSession`
+        // (ARCHITECTURE §2).
+        .target(
+            name: "FeatureLists",
+            dependencies: featureDeps + ["FeatureInbox"],
+            exclude: excluded,
+            resources: uiResources,
+            swiftSettings: swiftSettings),
         .target(
             name: "FeatureOverview",
             dependencies: featureDeps + [
                 "FeatureInbox", "FeatureNext", "FeatureProjects", "FeatureWaiting",
-                "FeatureRoutines", "FeatureSettings", "FeatureReview",
+                "FeatureRoutines", "FeatureSettings", "FeatureReview", "FeatureLists",
             ],
             exclude: excluded,
             resources: uiResources,
@@ -108,6 +118,7 @@ let package = Package(
         .testTarget(name: "FeatureOverviewTests", dependencies: ["FeatureOverview", "GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "FeatureSettingsTests", dependencies: ["FeatureSettings", "GTDFixtures"], swiftSettings: swiftSettings),
         .testTarget(name: "FeatureReviewTests", dependencies: ["FeatureReview", "GTDFixtures"], swiftSettings: swiftSettings),
+        .testTarget(name: "FeatureListsTests", dependencies: ["FeatureLists", "GTDFixtures"], swiftSettings: swiftSettings),
         // GTDVault and GTDMarkdown added (T30, test-only): GTDIntentsTests exercises
         // `CaptureRequest` against `InboxWriter` + `InMemoryFileSystem` (the "fake writer" the
         // brief asks for — both are GTDVault, already a production dependency of GTDIntents, but

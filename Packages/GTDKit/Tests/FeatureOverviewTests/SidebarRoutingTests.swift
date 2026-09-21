@@ -12,24 +12,26 @@ struct SidebarRoutingTests {
         #expect(SidebarItem.allCases.allSatisfy { !$0.title.isEmpty && !$0.symbol.isEmpty })
     }
 
-    /// STYLEGUIDE §4.1: Inbox · Next · Someday · Waiting · Projects · Deferred, then Review
-    /// and Routines. (Lists joins the counted group in T10.)
+    /// STYLEGUIDE §4.1: Inbox · Next · Someday · Waiting · Lists · Projects · Deferred, then
+    /// Review and Routines.
     @Test func countedSectionsAreTheOnesOfTheStyleGuide() {
-        #expect(SidebarItem.counted == [.inbox, .next, .someday, .waiting, .projects, .deferred])
+        #expect(SidebarItem.counted == [
+            .inbox, .next, .someday, .waiting, .lists, .projects, .deferred,
+        ])
         #expect(SidebarItem.flows == [.review, .routines])
         #expect(Set(SidebarItem.counted).union(SidebarItem.flows) == Set(SidebarItem.allCases))
     }
 
-    /// `⌘1…⌘6` (STYLEGUIDE §4.5) — and the mapping round-trips.
+    /// `⌘1…⌘7` (STYLEGUIDE §4.5) — and the mapping round-trips.
     @Test func shortcutNumbersCoverTheCountedSections() {
-        #expect(SidebarItem.counted.compactMap(\.shortcutNumber) == Array(1...6))
+        #expect(SidebarItem.counted.compactMap(\.shortcutNumber) == Array(1...7))
         #expect(SidebarItem.review.shortcutNumber == nil)
         #expect(SidebarItem.routines.shortcutNumber == nil)
-        for number in 1...6 {
+        for number in 1...7 {
             #expect(SidebarItem(shortcutNumber: number)?.shortcutNumber == number)
         }
         #expect(SidebarItem(shortcutNumber: 0) == nil)
-        #expect(SidebarItem(shortcutNumber: 7) == nil)
+        #expect(SidebarItem(shortcutNumber: 8) == nil)
     }
 
     @Test func everyCountedSectionReadsItsCountAndTheOthersDoNot() {
@@ -118,6 +120,20 @@ struct SidebarRoutingTests {
         #expect(nav.openProject == nil)
     }
 
+    /// T10 — the single `Lists` row: counted, no calendar strip, has a detail column and reads
+    /// `SidebarCounts.lists` (open items across every list, not any one list's count).
+    @Test func listsIsACountedSectionWithNoCalendarStripAndItsOwnCount() {
+        #expect(SidebarItem.counted.contains(.lists))
+        #expect(SidebarItem.lists.showsCalendarStrip == false)
+        #expect(SidebarItem.lists.spansDetailColumn == false)
+        #expect(SidebarItem.lists.listedStatus == nil)
+        #expect(SidebarItem.lists.emptyDetailBody != nil)
+
+        let counts = Rules.sidebarCounts(Fixtures.sampleSnapshot, today: Fixtures.today)
+        #expect(SidebarItem.lists.count(counts) == counts.lists)
+        #expect(counts.lists == Rules.openListItemCount(Fixtures.sampleSnapshot))
+    }
+
     /// The Deferred section is named "Deferred" in the sidebar; `FeatureWaiting.DeferredView`
     /// titles its screen with the same word rather than with `Copy.deferLabel` ("Defer"), the
     /// date chip's field label (walkthrough 2026-09-19).
@@ -170,6 +186,37 @@ struct SidebarRoutingTests {
         nav.open(project: old)
         nav.replace(old, with: new)
         #expect(nav.detail == .project(new))
+
+        nav.open(listItem: old)
+        nav.replace(old, with: new)
+        #expect(nav.detail == .listItem(new))
+    }
+
+    /// T10 — the list column highlights the item the detail column shows, nothing else, exactly
+    /// as `openAction`/`openProject` already do.
+    @Test func openListItemFollowsTheDetailColumn() {
+        let nav = OverviewNavigation()
+        #expect(nav.openListItem == nil)
+        let item = Fixtures.sampleSnapshot.listItems[0].id
+        nav.open(listItem: item)
+        #expect(nav.openListItem == item)
+        nav.open(action: Fixtures.sampleSnapshot.actions[0].id)
+        #expect(nav.openListItem == nil)
+    }
+
+    /// A renamed list item's old id is as absent from the snapshot as a deleted one's — `apply`
+    /// must follow the rename, not prune it (same rule `applyingAnUpdateKeepsTheDetailOfARenamedNote`
+    /// proves for an action).
+    @Test func applyingAnUpdateKeepsTheDetailOfARenamedListItem() {
+        let nav = OverviewNavigation()
+        let snapshot = Fixtures.sampleSnapshot
+        let old = NoteID(path: "Lists/Read/Gone by any other name.md")
+        let new = snapshot.listItems[0].id
+        nav.open(listItem: old)
+
+        nav.apply(snapshot: snapshot, renames: RenameMap(from: old, to: new))
+
+        #expect(nav.detail == .listItem(new))
     }
 
     @Test func applyingAnUpdateDropsANoteThatLeftTheVault() {
