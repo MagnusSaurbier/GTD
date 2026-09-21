@@ -383,6 +383,11 @@ public actor VaultBackend: GTDBackend {
         guard let snapshot = await storeSnapshot() else { return }
         guard generation == issuedAt, pending.isEmpty else { return }
         guard !(onlyIfMoved && snapshot == lastFromStore) else { return }
+        // Every publish re-renders the app; one that says what the app already shows is noise.
+        guard snapshot != latest else {
+            lastFromStore = snapshot
+            return
+        }
         // `.empty` is what a store publishes before its first scan; it must never erase a
         // snapshot we already have.
         guard !(snapshot.isEmptyVault && !latest.isEmptyVault) else { return }

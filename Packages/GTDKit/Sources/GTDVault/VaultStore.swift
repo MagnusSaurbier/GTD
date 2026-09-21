@@ -115,6 +115,10 @@ public actor FileVaultStore: VaultStore {
     private let debounce: DebounceState
     private let clock: any VaultClock
     private var isWatching = false
+    private var hasPublished = false
+    private var publishedDay: Day?
+    /// What the watchers reported since the last re-index; `nil` when nothing is pending.
+    private var pendingChange: VaultChange?
 
     /// The contract initialiser (ARCHITECTURE §4): a vault at `root`, the platform's coordinated
     /// file system and change watcher, `GTDMarkdown.NoteCodec` for parsing.
@@ -163,12 +167,28 @@ public actor FileVaultStore: VaultStore {
     ///
     /// The re-index happens after a successful commit only: a failed commit has been rolled back,
     /// so the last published snapshot is still the truth.
+    ///
+    /// The store knows exactly which files it just touched, so it re-reads those instead of
+    /// walking the vault (the inverse ops name the trash paths a `.delete` picked). A folder op
+    /// falls back to the walk inside `refresh(hint:)`.
     public func commit(_ ops: [VaultFileOp]) async throws -> [VaultFileOp] {
         guard !ops.isEmpty else { return [] }
         let transaction = VaultTransaction(fileSystem: fileSystem, layout: layout)
         let inverse = try transaction.commit(ops)
-        _ = try? refresh()
+        _ = try? refresh(hint: Self.touched(by: ops + inverse))
         return inverse
+    }
+
+    private static func touched(by ops: [VaultFileOp]) -> VaultChange {
+        var paths: Set<String> = []
+        for op in ops {
+            switch op {
+            case let .put(path, _), let .delete(path): paths.insert(path)
+            case let .move(from, to): paths.formUnion([from, to])
+            case .moveFolder, .createFolder: return .unknown
+            }
+        }
+        return .paths(paths)
     }
 
     // MARK: Scanning
@@ -195,18 +215,32 @@ public actor FileVaultStore: VaultStore {
     /// The `VaultIssue`s of the last scan, for the settings screen.
     public var issues: [VaultIssue] { hub.current.issues }
 
+    /// `hint` = `.paths` re-reads only those files when the index can answer that honestly
+    /// (`VaultIndex.refresh(paths:using:)`), and walks the vault otherwise.
+    ///
+    /// A refresh that found nothing new publishes nothing: every published snapshot re-renders
+    /// the app, and the watchers overlap on purpose (our own writes echo, the poll re-checks).
     @discardableResult
-    private func refresh() throws -> VaultSnapshot {
-        try index.refresh(using: fileSystem)
-        let snapshot = index.snapshot(today: today())
+    private func refresh(hint: VaultChange = .unknown) throws -> VaultSnapshot {
+        var report: VaultIndex.RefreshReport?
+        if case let .paths(paths) = hint {
+            report = try index.refresh(paths: paths, using: fileSystem)
+        }
+        let resolved = try report ?? index.refresh(using: fileSystem)
+        let day = today()
+        guard resolved.changed || !hasPublished || day != publishedDay else { return hub.current }
+        let snapshot = index.snapshot(today: day)
+        hasPublished = true
+        publishedDay = day
         hub.publish(snapshot)
         return snapshot
     }
 
     // MARK: Watching
 
-    /// Starts the change watcher. Every burst of file events is debounced (300 ms by default)
-    /// into one re-index, so a sync landing 200 files produces one snapshot, not 200.
+    /// Starts the change watcher. Every burst of file events is debounced (50 ms of quiet, at
+    /// most 500 ms — `DebounceState`) into one re-index, so a sync landing 200 files produces a
+    /// few snapshots, not 200, while a single external write is on screen at once.
     public func startWatching() {
         guard !isWatching else { return }
         isWatching = true
@@ -217,8 +251,11 @@ public actor FileVaultStore: VaultStore {
             await self?.handleExternalChange()
         }
         self.debouncer = debouncer
-        watcher.start {
-            Task { await debouncer.signal() }
+        watcher.start { [weak self] (change: VaultChange) in
+            Task {
+                await self?.note(change)
+                await debouncer.signal()
+            }
         }
     }
 
@@ -237,8 +274,14 @@ public actor FileVaultStore: VaultStore {
         hub.finish()
     }
 
+    private func note(_ change: VaultChange) {
+        pendingChange = pendingChange?.merging(change) ?? change
+    }
+
     private func handleExternalChange() {
-        _ = try? refresh()
+        let change = pendingChange ?? .unknown
+        pendingChange = nil
+        _ = try? refresh(hint: change)
     }
 
     /// For tests: pretends the watcher fired and waits for the debounced re-index.

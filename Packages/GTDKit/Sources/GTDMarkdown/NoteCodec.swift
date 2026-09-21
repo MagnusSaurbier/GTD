@@ -34,11 +34,18 @@ public enum NoteCodec {
 
     // MARK: - Inbox
 
+    ///
+    /// `fileDate` is for a capture the app did not write — a note typed in Obsidian, a script's
+    /// `echo > Inbox/x.md`: it has no `created`, and the honest answer to "when was this
+    /// captured?" is then the file's own date. A `created` that is present but unreadable is
+    /// still an error; the fallback never papers over a broken value. The file is not touched:
+    /// `created` is written the first time the app has a reason to write the note.
     public static func decodeInboxItem(
-        id: NoteID, text: String, timeZone: TimeZone = .current
+        id: NoteID, text: String, timeZone: TimeZone = .current, fileDate: Date? = nil
     ) throws -> InboxItem {
         let doc = try FrontmatterDocument(text: text, path: id.path)
-        guard let created = doc.timestamp("created", defaultTimeZone: timeZone) else {
+        let stated = doc.timestamp("created", defaultTimeZone: timeZone)
+        guard let created = stated ?? (doc.hasKey("created") ? nil : fileDate) else {
             throw NoteCodecError.unreadable(
                 path: id.path,
                 reason: doc.hasKey("created")

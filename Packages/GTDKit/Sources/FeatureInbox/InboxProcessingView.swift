@@ -36,8 +36,10 @@ public struct InboxProcessingView: View {
         .onChange(of: keyBindings) { _, bindings in
             session?.keyBindings = bindings
         }
-        // A capture made on another device (or by the Shortcut) joins the queue (I7).
-        .onChange(of: model.snapshot.inbox.count) { _, _ in
+        // A capture made on another device, by the Shortcut or by anything that writes a file
+        // into `Inbox/` joins the queue (I7). Keyed on the ids, not the count: one capture
+        // arriving while another leaves is a change too.
+        .onChange(of: model.snapshot.inbox.map(\.id)) { _, _ in
             session?.refresh()
         }
     }
