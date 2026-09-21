@@ -43,7 +43,9 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
   Nothing is swallowed.
 - **Queued writes:** the vault is written behind the UI, and only when the person acts on an
   item — the shell triggers no write of its own (no archive on launch or foreground; the backend
-  queues it behind the first change of the day). `AppComposition.flushWrites()` sends the
+  queues it behind the first change of the day). The one exception: launch runs
+  `AppModel.pruneFavouriteLists()`, which writes `GTD/Config.md` only when a favourite names a
+  list folder that is gone. `AppComposition.flushWrites()` sends the
   editors' held text (`AppModel.flushHeldEdits()`) and then waits for the queue, where the app is about to stop running: iOS backgrounding (background assertion) and
   ⌘Q on the Mac (`ShellAppDelegate`); `teardown()` flushes through `VaultBackend.stop()`.
   In-app capture (`AppComposition.capture`) writes its one file off the main actor for the

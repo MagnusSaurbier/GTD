@@ -262,6 +262,17 @@ struct InboxSessionTests {
         #expect(session.step == .step1, "quitting is the view's business")
     }
 
+    /// R-5 — opening the Knowledge / List card first drops favourites whose folder is gone.
+    @Test func openingTheKeepCardPrunesStaleFavourites() async {
+        var snapshot = Fixtures.sampleSnapshot
+        snapshot.config.favouriteLists = ["Watch", "Gone", "Wish"]
+        let (session, model, _) = InboxTestSupport.makeSession(snapshot: snapshot)
+        await session.take(.openKeep)
+        #expect(session.step == .keepCard)
+        #expect(model.snapshot.config.favouriteLists == ["Watch", "Wish"])
+        #expect(session.favouriteListNames == ["Watch", "Wish"])
+    }
+
     @Test func escapeCollapsesTheKeepCardToo() async {
         let (session, _, _) = InboxTestSupport.makeSession()
         await session.take(.openKeep)

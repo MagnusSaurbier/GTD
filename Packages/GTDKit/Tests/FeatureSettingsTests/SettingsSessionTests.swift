@@ -10,9 +10,9 @@ import GTDAppCore
 /// `GTDCommand`, not just the pure `ContextsEditing` helpers.
 @MainActor
 struct SettingsSessionTests {
-    private func makeSession() -> SettingsSession {
-        let backend = InMemoryBackend(snapshot: Fixtures.sampleSnapshot, deviceID: "test")
-        let model = AppModel(backend: backend, snapshot: Fixtures.sampleSnapshot, today: { Fixtures.today })
+    private func makeSession(_ snapshot: VaultSnapshot = Fixtures.sampleSnapshot) -> SettingsSession {
+        let backend = InMemoryBackend(snapshot: snapshot, deviceID: "test")
+        let model = AppModel(backend: backend, snapshot: snapshot, today: { Fixtures.today })
         return SettingsSession(model: model)
     }
 
@@ -144,6 +144,31 @@ struct SettingsSessionTests {
         #expect(session.favouriteListNames.contains("Wish"))
         try await session.removeList("Wish")
         #expect(!session.favouriteListNames.contains("Wish"))
+    }
+
+    @Test func renameListRenamesItsFavourite() async throws {
+        let session = makeSession()
+        try await session.toggleFavourite("Read") // explicit choice: [Watch, Wish]
+        try await session.renameList("Wish", to: "Gifts")
+        #expect(session.favouriteListNames == ["Watch", "Gifts"])
+        #expect(session.config.favouriteLists == ["Watch", "Gifts"])
+    }
+
+    /// A folder removed or renamed outside the app (Finder, Obsidian) leaves a stale name in
+    /// `favouriteLists`. It is not shown, and the next favourites edit drops it from the file
+    /// instead of being refused as an unknown list.
+    @Test func aFavouriteWhoseFolderIsGoneIsDroppedAndDoesNotBlockEdits() async throws {
+        var snapshot = Fixtures.sampleSnapshot
+        snapshot.config.favouriteLists = ["Watch", "Gone", "Wish"]
+        let session = makeSession(snapshot)
+        #expect(session.favouriteListNames == ["Watch", "Wish"])
+        #expect(!session.listsAvailableToFavourite.contains("Gone"))
+
+        try await session.reorderFavourites(from: IndexSet(integer: 1), to: 0)
+        #expect(session.config.favouriteLists == ["Wish", "Watch"])
+
+        try await session.toggleFavourite("Read")
+        #expect(session.config.favouriteLists == ["Wish", "Watch", "Read"])
     }
 
     @Test func itemCountMatchesOpenPlusFinished() {

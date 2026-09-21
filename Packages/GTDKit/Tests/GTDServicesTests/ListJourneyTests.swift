@@ -255,6 +255,32 @@ import GTDVault
         #expect(try vault.text(other.path) != nil, "the refused rename left the note alone")
     }
 
+    // MARK: - Favourites cleanup (R-5)
+
+    /// A list folder renamed or removed outside the app leaves its name in `favouriteLists`.
+    /// The launch / list-card cleanup rewrites `GTD/Config.md` without it — and does not touch
+    /// a single file when there is nothing stale.
+    @Test func pruningFavouritesRewritesConfigOnlyWhenOneIsStale() async throws {
+        var files = SampleVault.files
+        let config = try #require(files["GTD/Config.md"])
+        files["GTD/Config.md"] = config.replacingOccurrences(
+            of: "nextCap: 15\n", with: "nextCap: 15\nfavouriteLists: [Watch, Gone, Wish]\n")
+        let vault = TestVault.inMemory(files: files)
+        try await vault.backend.start()
+        let model = AppModel(backend: vault.backend, today: { Fixtures.today })
+        defer { model.stop() }
+
+        // Straight after launch: this model has not received a snapshot yet.
+        await model.pruneFavouriteLists()
+        #expect(model.lastError == nil)
+        let pruned = try #require(try vault.text("GTD/Config.md"))
+        #expect(pruned.contains("favouriteLists: [Watch, Wish]"))
+
+        let before = try vault.files()
+        await model.pruneFavouriteLists()
+        #expect(try vault.files() == before, "nothing stale, nothing written")
+    }
+
     // MARK: - Helpers
 
     /// Same poll as `EndToEndJourneyTests`: a store change reaches `AppModel` over three hops,

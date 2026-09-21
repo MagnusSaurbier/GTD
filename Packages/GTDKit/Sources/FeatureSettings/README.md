@@ -49,7 +49,8 @@ Linux-compilable (unit-tested, no SwiftUI):
 - `SettingsSession` (`@MainActor @Observable`, wraps `AppModel`) — sends every synced edit as
   `GTDCommand.updateConfig`/`.setRoutineTime`/`.createList`/`.renameList`/`.removeList`/
   `.setFavouriteLists`. Same shape as `RoutineRun`/`WaitingListModel`. `favouriteListNames` reads
-  the stored choice or the derived default (`Rules.favouriteLists`) without ever writing it —
+  the stored choice or the derived default through `Rules.favouriteLists` — so a name whose
+  folder is gone is neither shown nor sent back — without ever writing it —
   only `toggleFavourite`/`reorderFavourites` write (R-5's "never written until the user changes
   something").
 - `DayTime.asDate` / `DayTime.init(_:calendar:)` — bridges to `Date` for `DatePicker`.
