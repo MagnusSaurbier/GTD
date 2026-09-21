@@ -25,6 +25,8 @@ public struct MakeActionCardView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focus: CardField?
+    /// Mac: key focus of the card area, taken back when a field is blurred (single-key shortcuts).
+    @FocusState private var hasKeyFocus: Bool
     @State private var translation: CGSize = .zero
     @State private var dragTarget: InboxExit?
     @State private var cardSize: CGSize = .zero
@@ -76,11 +78,14 @@ public struct MakeActionCardView: View {
             .sensoryFeedback(.impact(weight: .medium), trigger: dragTarget)
             #if os(macOS)
             .focusable()
+            .focused($hasKeyFocus)
             .focusEffectDisabled()
             .onKeyPress(.leftArrow) { press(.arrowLeft) }
             .onKeyPress(.rightArrow) { press(.arrowRight) }
-            .onKeyPress(.escape) { escape() }
             .onKeyPress(characters: Self.keyCharacters, phases: .down) { handle($0) }
+            // Not `.onKeyPress(.escape)`: a focused field never lets it fire (see `onEscapeKey`).
+            .onEscapeKey { escape() }
+            .interactiveDismissDisabled()
             #endif
     }
 
@@ -224,15 +229,15 @@ public struct MakeActionCardView: View {
         return .handled
     }
 
-    private func escape() -> KeyPress.Result {
+    private func escape() {
         model.isFieldFocused = focus != nil
         if focus != nil {
             focus = nil
+            hasKeyFocus = true
         } else {
             Task { await model.handle(.escape) }
             onFinished()
         }
-        return .handled
     }
 
     private func handle(_ keyPress: KeyPress) -> KeyPress.Result {
