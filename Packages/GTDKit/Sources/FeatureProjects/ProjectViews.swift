@@ -179,6 +179,7 @@ public struct ProjectDetailView: View {
     private let projectID: NoteID
     private let onOpenAction: (NoteID) -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.vaultRootPath) private var vaultRootPath
     @State private var detailModel: ProjectDetailModel?
     @State private var newStepText = ""
     @State private var promptingStepIndex: Int?
@@ -329,7 +330,7 @@ public struct ProjectDetailView: View {
     @ViewBuilder
     private func referenceFilesSection(_ detail: ProjectDetailModel) -> some View {
         ForEach(detail.referenceFiles, id: \.self) { path in
-            if let url = URL(string: "obsidian://open?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path)") {
+            if let url = ObsidianLink.url(forVaultPath: path, vaultRoot: vaultRootPath) {
                 Link(destination: url) {
                     Label(path, systemImage: Symbols.knowledge)
                 }

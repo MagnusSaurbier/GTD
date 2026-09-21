@@ -12,7 +12,7 @@ and `AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the m
 iOS-simulator app built, all package tests and the app's own test bundles passed, and the app
 launched on fixtures on both platforms.
 
-The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 283 package
+The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 289 package
 tests pass and both scratch app builds are warning-free — and parts of it have been driven on
 screen: the two-step card's step 1, the opened action card with its asterisk refusal, a swipe to
 Next, Trash with its toast, the project picker, the keep card's navbar, the Mac per-step key
@@ -125,8 +125,12 @@ of the same fact.
   key-recorder's actual capture are compiled, unit-tested and code-reviewed only.
   `docs/TRACEABILITY.md` N7/L2 say the same per requirement; `docs/MANUAL_TEST.md` §3.5 is the
   script for driving them.
-- **`VaultIssuesView`'s "Open in Obsidian"** builds `obsidian://open?path=<vault-relative path>`.
-  That probably needs the vault name or root, which the target cannot resolve by contract.
+- **"Open in Obsidian" has not been clicked against a real vault since its URL was fixed.**
+  `GTDAppCore.ObsidianLink` builds `path=<absolute path>` on the Mac and
+  `vault=<folder name>&file=<relative path>` on iOS, unit-tested against Obsidian's documented
+  URI scheme only. The iOS form assumes Obsidian's vault name is the picked folder's name — wrong
+  if the picked folder is a subfolder of a larger vault. `docs/MANUAL_TEST.md` §4 has the check.
+- **`VaultIssuesView`'s "Reveal"** still passes a vault-relative path to `NSWorkspace`.
 - **`FeatureProjects`' views materialise their model in `.task` on first appearance.** A tap
   between the first render and that task would mutate a throwaway instance. Should be unreachable
   in practice; watch for it once the app runs.

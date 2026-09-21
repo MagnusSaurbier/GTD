@@ -287,6 +287,11 @@ Run **without** `-useFixtures`.
 - [ ] Rename an action in the detail editor: the file moves and the project note's step link
       follows it, in one go.
 - [ ] Trash a card, an action and a list item: all three files are in `GTD/Trash/`, none deleted.
+- [ ] **Open in Obsidian** (the copy must be a vault Obsidian knows — open the folder as a vault
+      once): from an action's detail, from a project's reference file, and from
+      `Settings → Vault issues`, Obsidian opens that very file — no "Vault not found". Try a file
+      whose name has a space, an `&` and an umlaut. Do it on the Mac (`path=`) **and** on the
+      iPhone (`vault=&file=`). On fixtures the button is absent.
 - [ ] `Settings → Change vault…` then pick the copy again: everything still works.
 
 ## 5. Two devices (Mac + iPhone, same iCloud vault copy)
