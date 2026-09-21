@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
     "%lld action%@ still use \"%@\". They keep the text; it just won't show as a chip." : {
       "localizations" : {
         "en" : {
@@ -73,6 +83,9 @@
     "Down" : {
 
     },
+    "Each list is a folder. Removing one asks first — it takes its items with it." : {
+
+    },
     "Inbox is empty" : {
 
     },
@@ -131,6 +144,9 @@
 
     },
     "Reveal" : {
+
+    },
+    "Save" : {
 
     },
     "Start" : {
