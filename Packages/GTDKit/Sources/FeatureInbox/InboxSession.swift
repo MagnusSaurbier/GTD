@@ -422,7 +422,7 @@ public final class InboxSession {
                 try await self.persistTextEdit(for: item.id)
                 try await self.model.send(.fileInbox(item.id, .action(payload)))
             })
-        card = result.state
+        adopt(result.state, for: item)
         switch result.outcome {
         case .filed:
             finish(item: item, card: filedCard, step: filedStep, target: target,
@@ -558,7 +558,7 @@ public final class InboxSession {
                 try await self.model.send(.fileInbox(item.id, .action(payload)))
             })
         else { return }
-        card = result.state
+        adopt(result.state, for: item)
         switch result.outcome {
         case let .filed(payload):
             sheet = nil
@@ -803,6 +803,15 @@ public final class InboxSession {
         if target == .next || target == .someday { dismissSwipeHint() }
         step = .step1
         syncDraft()
+    }
+
+    /// Takes the engine's state back after an awaited filing — unless the session has moved on.
+    /// The view calls `refresh()` whenever the inbox changes, also *during* that await; by then
+    /// `card` already belongs to the next item, and the filed card's state must never reach it
+    /// (it would show, and file, the previous capture's text).
+    private func adopt(_ state: ActionCardState, for item: InboxItem) {
+        guard draftItemID == item.id else { return }
+        card = state
     }
 
     private func present(_ reason: InboxRefusal) {

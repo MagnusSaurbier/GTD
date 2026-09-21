@@ -150,4 +150,4 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (107 tests).
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (108 tests).

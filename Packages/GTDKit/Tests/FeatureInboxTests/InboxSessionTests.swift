@@ -478,6 +478,36 @@ struct InboxSessionTests {
         #expect(model.snapshot.inboxItem(refused.id) != nil)
     }
 
+    /// Walkthrough 2026-09-21: the view calls `refresh()` whenever the inbox changes — also while
+    /// a filing is still awaited. The fresh card `refresh()` attached to the next item was then
+    /// overwritten with the filed card's state, so the next card showed (and would have filed)
+    /// the previous capture's text.
+    @Test func aRefreshDuringAFilingNeverLeaksTheFiledCardIntoTheNextOne() async {
+        let (session, model, _) = await InboxTestSupport.openedActionCard()
+        let first = try! #require(session.current)
+        fillForNext(session, what: "Ring the Hausverwaltung")
+
+        let watcher = Task { @MainActor in
+            var count = model.snapshot.inbox.count
+            while !Task.isCancelled {
+                if model.snapshot.inbox.count != count {
+                    count = model.snapshot.inbox.count
+                    session.refresh()
+                }
+                await Task.yield()
+            }
+        }
+        await session.take(.next)
+        watcher.cancel()
+
+        let next = try! #require(session.current)
+        #expect(next.id != first.id)
+        #expect(session.step == .step1)
+        #expect(session.draft.text == next.text)
+        #expect(session.draft.why.isEmpty)
+        #expect(session.draft.isPristine(for: next))
+    }
+
     @Test func demotingOneNextItemFilesTheCardThatWasRefused() async {
         let (session, model, _) = await InboxTestSupport.openedActionCard()
         let cap = model.snapshot.config.nextCap
