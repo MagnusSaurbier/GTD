@@ -10,14 +10,14 @@ enum CardField: Hashable {
     case text
     case why
     case what
-    case title
+    case notes
 }
 
-/// The inbox card (STYLEGUIDE §3.5): meta line, raw captured text, `Why?`, `What?`, chips.
-/// Beyond six lines the raw text collapses behind `Show all`. The card itself never scrolls; on
-/// iPhone `InboxSessionView` puts it in a `ScrollView` so the software keyboard cannot squeeze
-/// it — which is also why every text field is `fixedSize` vertically (it may never collapse)
-/// and carries its `CardField` as `id` (the scroll view brings the focused one into view).
+/// The inbox card (STYLEGUIDE §3.5): same view in both steps, expanding **in place**. Step 1 is
+/// the meta line plus the full, editable capture text and nothing else; step 2a adds `Why?`,
+/// `What?` and the chips; step 2b adds the `Notes` field. The card never truncates the capture
+/// text — beyond the available height it scrolls **inside the card** (the only place a card
+/// scrolls internally); there is no `Show all` any more (§3.5).
 struct InboxCardView: View {
     @Bindable var session: InboxSession
     @FocusState.Binding var focus: CardField?
@@ -27,9 +27,9 @@ struct InboxCardView: View {
     let shake: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Bumped when Return submits the title (O1): a wrapping field keeps the typed line break
-    /// on screen unless it is rebuilt from the (single-line) draft.
-    @State private var titleGeneration = 0
+    /// Caps how tall the raw-text field may grow before it scrolls internally (§3.5). Scales with
+    /// Dynamic Type rather than a fixed pixel count (STYLEGUIDE §2.3).
+    @ScaledMetric(relativeTo: .title3) private var rawTextMaxHeight: CGFloat = 260
 
     private var rotation: Double {
         guard !reduceMotion else { return 0 }
@@ -41,15 +41,23 @@ struct InboxCardView: View {
         ItemCard {
             metaLine
             rawText
-            field(
-                label: Copy.why,
-                placeholder: Copy.whyPlaceholder,
-                text: $session.draft.why,
-                field: .why)
-            whatSection
-            titleRow
-            chips
+            switch session.step {
+            case .step1:
+                EmptyView()
+            case .actionCard:
+                actionFields
+            case .keepCard:
+                notesSection
+            }
         }
+        // Forces a fresh `TextField` per card: a programmatic draft reset when the head of the
+        // queue advances (`InboxSession.syncDraft()`) does not reliably reach an unfocused
+        // multi-line `TextField` bound two-way without an identity change — seen live on device
+        // (the raw-text field kept the filed card's text one card into the next). The meta line,
+        // which reads `session.current` directly rather than through a bound field, always had
+        // the right card; only the bound text lagged.
+        .id(session.current?.id)
+        .animation(reduceMotion ? Motion.reduced : Motion.standard, value: session.step)
         .offset(x: translation.width, y: translation.height)
         .rotationEffect(.degrees(rotation))
         .modifier(ShakeEffect(travel: shake))
@@ -87,10 +95,13 @@ struct InboxCardView: View {
         }
     }
 
-    // MARK: 2. Raw captured text
+    // MARK: 2. Raw captured text / title (R-4)
 
+    /// R-4 — the note's title *is* the capture text: this field edits the capture itself, and the
+    /// reducer names the file after its first line. It is the **only** text field for the
+    /// captured text — step 2a's "title still editable on tap" is this same field, not a copy.
     @ViewBuilder private var rawText: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
+        ScrollView {
             TextField(
                 "",
                 text: $session.draft.text,
@@ -99,38 +110,38 @@ struct InboxCardView: View {
                 .textFieldStyle(.plain)
                 .font(Typo.cardText)
                 .foregroundStyle(Color.ink)
-                .lineLimit(focus == .text ? nil : 6)
                 // Never compressed: without this the last line loses its descenders.
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: .text)
                 .accessibilityLabel(InboxCopy.rawTextPlaceholder)
-            if isRawTextLong, focus != .text {
-                Button(InboxCopy.showAll) { session.sheet = .fullText }
-                    .font(Typo.meta)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.gtdAccent)
-            }
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxHeight: rawTextMaxHeight)
         .id(CardField.text)
     }
 
-    private var isRawTextLong: Bool {
-        session.draft.text.components(separatedBy: "\n").count > 6
-            || session.draft.text.count > 320
-    }
+    // MARK: Step 2a — Why? / What? / chips
 
-    // MARK: 3./4. Why? and What?
+    @ViewBuilder private var actionFields: some View {
+        field(
+            label: Copy.why,
+            isMissing: session.isMissing(.why),
+            placeholder: Copy.whyPlaceholder,
+            text: $session.draft.why,
+            field: .why)
+        whatSection
+        chips
+    }
 
     private func field(
         label: String,
+        isMissing: Bool,
         placeholder: String,
         text: Binding<String>,
         field: CardField
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(label)
-                .font(Typo.sectionHeader)
-                .foregroundStyle(Color.ink)
+            SectionLabel(label, isMissing: isMissing)
             TextField("", text: text, prompt: Self.prompt(placeholder), axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typo.body)
@@ -149,23 +160,10 @@ struct InboxCardView: View {
         Text(placeholder).foregroundStyle(Color.textTertiary)
     }
 
-    /// Folds typed or pasted line breaks out of the title: a Return submits, pasted lines join
-    /// with one space. Text without a line break passes through untouched (no trimming while
-    /// the person is still typing) — mirrors `ActionEditModel.titleInput`.
-    private static func titleInput(_ raw: String) -> (text: String, submitted: Bool) {
-        guard raw.contains(where: \.isNewline) else { return (raw, false) }
-        let lines = raw.split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        return (lines.joined(separator: " "), true)
-    }
-
     private var whatSection: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack {
-                Text(Copy.what)
-                    .font(Typo.sectionHeader)
-                    .foregroundStyle(Color.ink)
+                SectionLabel(Copy.what, isMissing: session.isMissing(.what))
                 Spacer(minLength: 0)
                 // A text button: `⋯`-style list icons are not in the icon map (STYLEGUIDE §7),
                 // and the guide forbids inventing symbols.
@@ -209,62 +207,20 @@ struct InboxCardView: View {
         .id(CardField.what)
     }
 
-    /// R-4 — the note's title *is* the capture text (editable in place): the field edits the
-    /// capture itself, and the reducer names the file after its first line.
-    ///
-    /// `axis: .vertical` keeps a long capture (a full sentence) fully visible instead of
-    /// truncating with an ellipsis (O1); Return still submits — it never inserts a line break —
-    /// by folding a typed/pasted newline out of the text and dropping focus, the same move
-    /// `ActionDetailView`'s title field makes. `titleGeneration` forces the field to rebuild
-    /// from the (newline-free) draft afterwards, or the typed line break stays on screen.
-    @ViewBuilder private var titleRow: some View {
-        if !session.draft.text.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(InboxCopy.titleLabel)
-                    .font(Typo.meta)
-                    .foregroundStyle(Color.textSecondary)
-                TextField(
-                    "",
-                    text: Binding(
-                        get: { session.draft.text },
-                        set: { newValue in
-                            let input = Self.titleInput(newValue)
-                            session.draft.text = input.text
-                            if input.submitted {
-                                focus = nil
-                                titleGeneration += 1
-                            }
-                        }),
-                    prompt: Self.prompt(InboxCopy.titlePlaceholder),
-                    axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(Typo.body)
-                    .foregroundStyle(Color.ink)
-                    .lineLimit(1...3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .focused($focus, equals: .title)
-                    .submitLabel(.done)
-                    .id(titleGeneration)
-                    .accessibilityLabel(InboxCopy.titleLabel)
-            }
-            .id(CardField.title)
-        }
-    }
-
-    // MARK: 5. Chips
+    // MARK: Step 2a — chips
 
     private var chips: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(InboxCopy.contextGroupLabel)
-                    .font(Typo.meta)
-                    .foregroundStyle(Color.textSecondary)
+                SectionLabel(
+                    InboxCopy.contextGroupLabel, isMissing: session.isMissing(.context),
+                    font: Typo.meta, foreground: .textSecondary)
                 ContextChipGroup(contexts: session.contexts, selection: $session.draft.contexts)
             }
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(InboxCopy.timeGroupLabel)
-                    .font(Typo.meta)
-                    .foregroundStyle(Color.textSecondary)
+                SectionLabel(
+                    InboxCopy.timeGroupLabel, isMissing: session.isMissing(.timeEstimate),
+                    font: Typo.meta, foreground: .textSecondary)
                 TimeBucketChipGroup(selection: $session.draft.timeBucket)
             }
             FlowLayout {
@@ -291,6 +247,26 @@ struct InboxCardView: View {
     /// same wording and casing as `DateValueChip` next to it and as the action detail.
     private var projectChipTitle: String {
         session.projectChipTitle(in: session.snapshot) ?? Copy.project
+    }
+
+    // MARK: Step 2b — Notes
+
+    private var notesSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            SectionLabel(InboxCopy.notesLabel)
+            TextField(
+                "",
+                text: $session.draft.notes,
+                prompt: Self.prompt(InboxCopy.notesPlaceholder),
+                axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(Typo.body)
+                .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .focused($focus, equals: .notes)
+                .accessibilityLabel(InboxCopy.notesLabel)
+        }
+        .id(CardField.notes)
     }
 
     // MARK: Drag feedback (STYLEGUIDE §3.6)
@@ -322,12 +298,12 @@ struct InboxCardView: View {
     }
 
     /// STYLEGUIDE §3.6's tint column: `accentWash` for Next, `fillQuiet` for Someday, **none**
-    /// for the downward drag, which only collapses the card.
+    /// for the downward drag, which only collapses the card. No swipe ever trashes, so there is
+    /// no trash tint to compute here.
     private func tint(for exit: InboxExit) -> Color {
         switch exit {
         case .next: Color.accentWash
         case .collapse: Color.clear
-        case .trash: Color.signalOverdue.opacity(CardTarget.trashTintOpacity)
         default: Color.fillQuiet
         }
     }

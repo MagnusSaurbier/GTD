@@ -117,6 +117,12 @@ struct InboxSessionView: View {
             .onChange(of: focus) { _, field in
                 session.isFieldFocused = field != nil
             }
+            // "focus goes to `Why?` on the action card, stays unfocused on the keep card"
+            // (STYLEGUIDE §3.6) — only when *opening* from step 1, not on every step change (a
+            // collapse-and-reopen keeps whatever the user was doing).
+            .onChange(of: session.step) { old, new in
+                if old == .step1, new == .actionCard { focus = .why }
+            }
             .sensoryFeedback(.error, trigger: session.shakeTrigger)
             .sensoryFeedback(.impact(weight: .medium), trigger: dragTarget)
     }
@@ -220,6 +226,9 @@ struct InboxSessionView: View {
                 .font(Typo.counter)
                 .foregroundStyle(Color.textSecondary)
             card
+            // Mac also gets a row of stock buttons under the card (STYLEGUIDE §3.6) — the
+            // keyboard is the primary path, but every action stays reachable with the mouse.
+            actionBar
             // The legend always renders the current bindings, per step (STYLEGUIDE §3.6, R-10).
             Text(session.legendString)
                 .font(Typo.counter)
@@ -315,6 +324,7 @@ struct InboxSessionView: View {
                 }
             }
     }
+    #endif
 
     /// The card flies out in the exit's direction, then the next one springs up. A refusal
     /// (missing fields, the cap) springs it back — the session has already marked the card.
@@ -344,105 +354,79 @@ struct InboxSessionView: View {
         }
     }
 
-    /// The bottom bar of the current step (STYLEGUIDE §3.6). The three bars are
-    /// `DesignSystem`'s (`StepOneBar` / `ActionCardBar` / `KnowledgeListNavbar`); this is the
-    /// minimal wiring T08 left for T09 to dress — every exit still comes from `session.exits`.
+    /// The bottom bar of the current step (STYLEGUIDE §3.6, decision #12) — `DesignSystem`'s
+    /// three real bars, wired straight to `session.take(_:)`; the view invents no labels, icons
+    /// or ordering of its own. The bar cross-fades between steps (STYLEGUIDE §3.6 "the bar swaps
+    /// with a cross-fade").
     @ViewBuilder private var actionBar: some View {
-        switch session.step {
-        case .step1: stepOneBar
-        case .actionCard: openedActionBar
-        case .keepCard: keepNavbar
+        Group {
+            switch session.step {
+            case .step1: stepOneBar
+            case .actionCard: openedActionBar
+            case .keepCard: keepNavbar
+            }
         }
+        .id(session.step)
+        .transition(.opacity)
+        .animation(reduceMotion ? Motion.reduced : Motion.standard, value: session.step)
     }
 
     /// Three equal, neutral buttons — none accent-filled, because the app does not know the
-    /// right answer (§1.2) — with `Defer to review` as a quiet text button above them.
+    /// right answer (§1.2). `Defer to review` sits as a quiet text button: centred between card
+    /// and bar on iPhone, beside the three buttons on Mac (STYLEGUIDE §3.6).
     private var stepOneBar: some View {
+        #if os(macOS)
+        HStack(spacing: Spacing.m) {
+            StepOneBar(
+                onAction: { Task { await session.take(.openAction) } },
+                onKnowledgeOrList: { Task { await session.take(.openKeep) } },
+                onTrash: { Task { await session.take(.trash) } })
+            deferToReviewButton
+        }
+        #else
         VStack(spacing: Spacing.s) {
-            Button(Copy.deferToReview) { Task { await session.take(.deferToReview) } }
-                .buttonStyle(.plain)
-                .font(Typo.meta)
-                .foregroundStyle(Color.textSecondary)
-            GlassActionBar {
-                ForEach(InboxExit.stepOneButtons, id: \.self) { exit in
-                    Button {
-                        Task { await session.take(exit) }
-                    } label: {
-                        barLabel(exit.title, symbol: exit.symbol)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.ink)
-                    .accessibilityLabel(exit.title)
-                }
-            }
+            deferToReviewButton
+            StepOneBar(
+                onAction: { Task { await session.take(.openAction) } },
+                onKnowledgeOrList: { Task { await session.take(.openKeep) } },
+                onTrash: { Task { await session.take(.trash) } })
         }
         .padding(.bottom, Spacing.s)
+        #endif
+    }
+
+    private var deferToReviewButton: some View {
+        Button(Copy.deferToReview) { Task { await session.take(.deferToReview) } }
+            .buttonStyle(.plain)
+            .font(Typo.meta)
+            .foregroundStyle(Color.textSecondary)
     }
 
     /// `Waiting` and `Done` as labelled buttons, `⋯` ("File to") repeating the two swipe exits
-    /// so a card taller than the screen can still be filed.
+    /// so a card taller than the screen can still be filed; a `Done` bar while a field has the
+    /// keyboard (STYLEGUIDE §3.6).
     private var openedActionBar: some View {
-        GlassActionBar {
-            ForEach([InboxExit.waiting, .done], id: \.self) { exit in
-                Button {
-                    Task { await session.take(exit) }
-                } label: {
-                    barLabel(exit.title, symbol: exit.symbol)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.ink)
-                .accessibilityLabel(exit.title)
-            }
-            Menu {
-                ForEach([InboxExit.someday, .next], id: \.self) { exit in
-                    Button {
-                        fly(to: exit)
-                    } label: {
-                        Label(exit.title, systemImage: exit.symbol)
-                    }
-                }
-            } label: {
-                barLabel(InboxCopy.fileMenuLabel, symbol: InboxSymbols.more)
-            }
-            .foregroundStyle(Color.ink)
-            .accessibilityLabel(InboxCopy.fileMenuLabel)
-        }
-        .padding(.bottom, Spacing.s)
+        ActionCardBar(
+            isFieldFocused: focus != nil,
+            onWaiting: { Task { await session.take(.waiting) } },
+            onDone: { Task { await session.take(.done) } },
+            onFileToNext: { fly(to: .next) },
+            onFileToSomeday: { fly(to: .someday) },
+            onDismissKeyboard: { focus = nil })
+            .padding(.bottom, Spacing.s)
     }
 
-    /// The fixed-slot navbar: `Knowledge`, the favourite lists in the order Settings fixes, then
-    /// `More…`. A list button files the card at once (I4b).
+    /// The fixed-slot navbar: `Knowledge`, the favourite lists in Settings order, then `More…`.
+    /// A list button files the card at once (I4b).
     private var keepNavbar: some View {
-        GlassActionBar {
-            ForEach(session.exits.filter { $0 != .collapse }, id: \.self) { exit in
-                Button {
-                    Task { await session.take(exit) }
-                } label: {
-                    barLabel(exit.title, symbol: exit.symbol)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.ink)
-                .accessibilityLabel(exit.title)
-            }
-        }
-        .padding(.bottom, Spacing.s)
+        KnowledgeListNavbar(
+            favourites: session.favouriteListNames,
+            platform: session.platform,
+            onKnowledge: { Task { await session.take(.knowledge) } },
+            onList: { name in Task { await session.take(.list(name)) } },
+            onMore: { Task { await session.take(.more) } })
+            .padding(.bottom, Spacing.s)
     }
-
-    /// Symbols differ in height; a fixed icon box keeps every caption on one baseline.
-    private func barLabel(_ title: String, symbol: String) -> some View {
-        VStack(spacing: Spacing.xs) {
-            Image(systemName: symbol)
-                .symbolRenderingMode(.hierarchical)
-                .frame(height: Spacing.xl)
-            Text(title)
-                .font(Typo.counter)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, minHeight: Spacing.minHitTarget)
-        .contentShape(Rectangle())
-    }
-    #endif
 
     // MARK: Keyboard (STYLEGUIDE §3.6, Mac)
 
@@ -454,11 +438,23 @@ struct InboxSessionView: View {
 
     private func press(_ stroke: KeyStroke) -> KeyPress.Result {
         guard focus == nil else { return .ignored }
-        Task {
-            let handled = await session.handle(stroke: stroke)
-            _ = handled
-        }
+        guard let key = KeyMap.resolve(stroke: stroke, step: session.step, bindings: session.keyBindings)
+        else { return .ignored }
+        perform(key)
         return .handled
+    }
+
+    /// Filing animates the card out in the key's direction (STYLEGUIDE §3.6, Mac): `Next`/
+    /// `Someday` fly the same way a swipe would, whichever key they are bound to; everything
+    /// else — Waiting, Done, Trash, Knowledge, a list slot — has no direction and just runs.
+    private func perform(_ key: InboxKey) {
+        if case let .command(command) = key, command == .cardNext {
+            fly(to: .next)
+        } else if case let .command(command) = key, command == .cardSomeday {
+            fly(to: .someday)
+        } else {
+            Task { await session.handle(key) }
+        }
     }
 
     /// `Esc` is a ladder (STYLEGUIDE §3.6): focused field → blur; opened card → collapse;
@@ -476,19 +472,14 @@ struct InboxSessionView: View {
     private func handle(_ keyPress: KeyPress) -> KeyPress.Result {
         guard focus == nil, let character = keyPress.characters.first else { return .ignored }
         // Everything rebindable resolves through `KeyBindings` for the **current step** (R-10).
-        guard KeyMap.resolve(
+        guard let key = KeyMap.resolve(
             character,
             shift: keyPress.modifiers.contains(.shift),
             command: keyPress.modifiers.contains(.command),
             step: session.step,
-            bindings: session.keyBindings) != nil
+            bindings: session.keyBindings)
         else { return .ignored }
-        Task {
-            await session.handle(
-                character: character,
-                shift: keyPress.modifiers.contains(.shift),
-                command: keyPress.modifiers.contains(.command))
-        }
+        perform(key)
         return .handled
     }
     #endif
@@ -536,8 +527,6 @@ struct InboxSessionView: View {
             CapSheet(session: session)
         case .more:
             MoreListsSheet(session: session)
-        case .fullText:
-            FullTextSheet(session: session)
         }
     }
 

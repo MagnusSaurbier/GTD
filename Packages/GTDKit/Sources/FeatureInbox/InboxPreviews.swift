@@ -117,16 +117,16 @@ enum InboxPreviewData {
     }
 }
 
-// MARK: - Card
+// MARK: - Step 1 (small card, buttons only)
 
-#Preview("Card — iPhone") {
+#Preview("Step 1 — iPhone") {
     NavigationStack {
         InboxProcessingView(onFinished: {})
             .environment(InboxPreviewData.model())
     }
 }
 
-#Preview("Card — dark") {
+#Preview("Step 1 — dark") {
     NavigationStack {
         InboxProcessingView(onFinished: {})
             .environment(InboxPreviewData.model())
@@ -134,7 +134,7 @@ enum InboxPreviewData {
     .preferredColorScheme(.dark)
 }
 
-#Preview("Card — AX1") {
+#Preview("Step 1 — AX1") {
     NavigationStack {
         InboxProcessingView(onFinished: {})
             .environment(InboxPreviewData.model())
@@ -142,13 +142,65 @@ enum InboxPreviewData {
     .environment(\.dynamicTypeSize, .accessibility1)
 }
 
-#Preview("Card — filled in, two checkboxes") {
-    NavigationStack {
-        InboxSessionView(
-            session: InboxPreviewData.session(
-                what: "- [ ] Ring the Hausverwaltung\n- [ ] Note the case number"),
-            onFinished: {})
-    }
+#Preview("Step 1 — Mac") {
+    InboxSessionView(session: InboxPreviewData.session(), onFinished: {})
+        .frame(width: 900, height: 600)
+}
+
+// MARK: - Step 2a (opened action card)
+
+#Preview("Action card — iPhone") {
+    let session = InboxPreviewData.session(
+        what: "- [ ] Ring the Hausverwaltung\n- [ ] Note the case number")
+    return InboxSessionView(session: session, onFinished: {})
+        .task { await session.take(.openAction) }
+}
+
+#Preview("Action card — dark") {
+    let session = InboxPreviewData.session()
+    return InboxSessionView(session: session, onFinished: {})
+        .task { await session.take(.openAction) }
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Action card — AX1") {
+    let session = InboxPreviewData.session()
+    return InboxSessionView(session: session, onFinished: {})
+        .task { await session.take(.openAction) }
+        .environment(\.dynamicTypeSize, .accessibility1)
+}
+
+#Preview("Action card — Mac") {
+    let session = InboxPreviewData.session()
+    return InboxSessionView(session: session, onFinished: {})
+        .task { await session.take(.openAction) }
+        .frame(width: 900, height: 700)
+}
+
+/// Refusal state (STYLEGUIDE §3.6 "Validation before leaving"): every missing field/chip group
+/// carries its asterisk, no alert, no red border.
+#Preview("Action card — refused, asterisks") {
+    let session = InboxPreviewData.session()
+    return InboxSessionView(session: session, onFinished: {})
+        .task {
+            await session.take(.openAction)
+            await session.take(.next)
+        }
+}
+
+// MARK: - Step 2b (opened Knowledge / List card)
+
+#Preview("Keep card — iPhone") {
+    let session = InboxPreviewData.session()
+    return InboxSessionView(session: session, onFinished: {})
+        .task { await session.take(.openKeep) }
+}
+
+#Preview("Keep card — Mac") {
+    let session = InboxPreviewData.session()
+    return InboxSessionView(session: session, onFinished: {})
+        .task { await session.take(.openKeep) }
+        .frame(width: 900, height: 600)
 }
 
 // MARK: - Sub-flows
@@ -173,10 +225,6 @@ enum InboxPreviewData {
     CapSheet(session: InboxPreviewData.session(InboxPreviewData.atCapSnapshot))
 }
 
-#Preview("Full text") {
-    FullTextSheet(session: InboxPreviewData.session())
-}
-
 // MARK: - Empty state
 
 #Preview("Inbox zero") {
@@ -190,5 +238,37 @@ enum InboxPreviewData {
 #Preview("Start button") {
     InboxStartButton(action: {})
         .environment(InboxPreviewData.model())
+}
+
+// MARK: - Make action (L4, T10's reusable card)
+
+#Preview("Make action — iPhone") {
+    NavigationStack {
+        MakeActionCardView(
+            model: MakeActionModel(
+                model: InboxPreviewData.model(),
+                item: ListItem(
+                    id: NoteID(path: "Lists/Read/Some article.md"),
+                    list: "Read",
+                    title: "Some article about deep work",
+                    created: InboxPreviewData.date(InboxPreviewData.today, 9, 0),
+                    notes: "Recommended by a friend")),
+            onFinished: {})
+    }
+}
+
+#Preview("Make action — Mac") {
+    NavigationStack {
+        MakeActionCardView(
+            model: MakeActionModel(
+                model: InboxPreviewData.model(),
+                item: ListItem(
+                    id: NoteID(path: "Lists/Read/Some article.md"),
+                    list: "Read",
+                    title: "Some article about deep work",
+                    created: InboxPreviewData.date(InboxPreviewData.today, 9, 0))),
+            onFinished: {})
+    }
+    .frame(width: 900, height: 700)
 }
 #endif

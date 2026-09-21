@@ -34,9 +34,6 @@ public final class InboxSession {
         case cap
         /// `More…` — every list, for the navbar's last slot.
         case more
-        /// The raw captured text in full (only reachable while the step-1 card still collapses
-        /// long text; STYLEGUIDE §3.5 wants it to scroll instead — T09).
-        case fullText
 
         public var id: String { rawValue }
     }
@@ -231,6 +228,11 @@ public final class InboxSession {
 
     /// Every list, for the `More…` sheet (§5a).
     public var allLists: [GTDList] { Rules.lists(model.snapshot) }
+
+    /// The favourite lists' names, in the user's order — what the navbar's fixed slots are
+    /// built from (`DesignSystem.KnowledgeListNavbar`/`NavbarLayout`). Kept here so the view
+    /// asks the session for data rather than calling `Rules` itself.
+    public var favouriteListNames: [String] { Rules.favouriteLists(model.snapshot).map(\.name) }
 
     // MARK: - Validation flags (STYLEGUIDE §3.6)
 

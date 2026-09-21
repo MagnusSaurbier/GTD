@@ -378,34 +378,4 @@ struct MoreListsSheet: View {
         }
     }
 }
-
-// MARK: - Full raw text
-
-/// The whole captured text when the card had to collapse it (STYLEGUIDE §3.5).
-struct FullTextSheet: View {
-    @Bindable var session: InboxSession
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                TextField(InboxCopy.rawTextPlaceholder, text: $session.draft.text, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(Typo.body)
-                    .foregroundStyle(Color.ink)
-                    .padding(Spacing.screenMargin)
-            }
-            .background(Color.surface)
-            .navigationTitle(Copy.inbox)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(Copy.done) {
-                        dismiss()
-                        session.cancelSheet()
-                    }
-                }
-            }
-        }
-    }
-}
 #endif

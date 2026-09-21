@@ -7,7 +7,25 @@ Inbox processing: one card at a time, LIFO, forced order, exit only by quitting 
 
 - `InboxProcessingView(showsChrome:onFinished:)` — the whole session. `FeatureReview` embeds it (§10.1) with `showsChrome: false`, which drops the counter and `Close` from the toolbar.
 - `InboxStartButton(action:)` — home-screen entry point with the live queue count.
-- `MakeActionModel(model:item:bindings:)` — **Make action** (L4), for `FeatureLists`: see below.
+- `MakeActionModel(model:item:bindings:)` — **Make action** (L4)'s state, for `FeatureLists`: see below.
+- `MakeActionCardView(model:onFinished:)` — **Make action**'s view: the opened action card alone
+  (STYLEGUIDE §3.5 step 2a), the same field layout and `ActionCardBar` the inbox uses for its own
+  action card, over a `MakeActionModel`. `FeatureLists` (T10) presents it as a sheet:
+  ```swift
+  .sheet(item: $listItemToPromote) { item in
+      MakeActionCardView(
+          model: MakeActionModel(model: appModel, item: item, bindings: keyBindings)
+      ) {
+          listItemToPromote = nil
+      }
+  }
+  ```
+  `onFinished` fires once the card is filed (`model.isFiled == true`) or cancelled (`Close` /
+  `Esc` with no field focused and no step-1 to collapse to); the host owns dismissing the sheet.
+  It carries its own `.toolbar` (`Close`, no counter — there is no queue here) and, on Mac, its
+  own key handling and legend, exactly mirroring `InboxProcessingView`'s action-card step. Swipe
+  → files Next, ← files Someday, `Waiting`/`Done` are bar buttons, `+ project` opens the same
+  `ProjectPickerModel`-backed sheet as the inbox, the cap sheet is the same forced choice.
 
 Linux-compilable (this is where all the logic lives, and all of it is unit-tested):
 
@@ -80,11 +98,28 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 
 ## Platform guards (ARCHITECTURE §5)
 
-`InboxProcessingView.swift`, `InboxCardView.swift`, `InboxSheets.swift` and `InboxPreviews.swift`
-are wrapped entirely in `#if canImport(SwiftUI)`. T08 adapted them **mechanically** to the state
-machine (per-step bar, per-step keys, per-step legend, the collapse gesture, the `More…` sheet)
-so the package keeps building; **T09 owns their design** — STYLEGUIDE §3.5/§3.6's three bars,
-asterisks, expand-in-place motion, previews and the VoiceOver pass.
+`InboxProcessingView.swift`, `InboxCardView.swift`, `InboxSheets.swift`, `InboxPreviews.swift` and
+`MakeActionCardView.swift` are wrapped entirely in `#if canImport(SwiftUI)`. T08 adapted the views
+**mechanically** to the state machine (per-step bar, per-step keys, per-step legend, the collapse
+gesture, the `More…` sheet) so the package kept building; **T09 designed them** per STYLEGUIDE
+§3.5/§3.6: `InboxCardView.body` is step-aware (step 1 is the meta line + the full, scrolling,
+editable capture text and nothing else; step 2a adds `Why?`/`What?`/chips; step 2b adds `Notes`),
+the three real bars (`DesignSystem.StepOneBar`/`ActionCardBar`/`KnowledgeListNavbar`) are wired in
+place of the ad hoc `GlassActionBar` reconstructions T08 left, the bar cross-fades between steps
+and the card expands with `Motion.standard`, every `Why?`/`What?`/`Context`/`Time` label carries
+`SectionLabel(isMissing:)`'s asterisk, focus goes to `Why?` when the action card opens, and
+`InboxSession.Sheet.fullText`/`FullTextSheet`/`Show all` are gone — the raw-text field scrolls
+inside the card past a `@ScaledMetric` height cap instead. `MakeActionCardView` reuses the same
+field-rendering code so the inbox and "Make action" (L4) never draw two different cards. Verified
+live on an iPhone 18 Pro simulator (fixtures): step 1, the opened action card (typed `Why?`/
+`What?`, toggled a context and a time chip, filed with a right swipe, saw the "Moved to Next"
+toast), the refusal state (asterisks on all four labels after an empty-draft filing attempt), the
+keep card with its navbar, the project picker (area-less project first, no header, then
+`Applications`), and Trash with its undo toast. Verified live on a Mac walkthrough build: the
+step-1 sheet (bordered `Action`/`Knowledge / List`/`Trash` + `Defer to review` beside them) and
+the opened action card with its per-step key legend. Not confirmed by an on-screen tap in this
+session: a Knowledge/List navbar slot, the Waiting sheet, the cap sheet, and the full Mac keyboard
+path — see `docs/KNOWN_ISSUES.md`.
 
 `InboxProcessingView` carries its own `.toolbar` (card counter, `⌘Z` undo, `Close`) but **does
 not** wrap itself in a `NavigationStack`: the review wizard embeds it inline, where a second
