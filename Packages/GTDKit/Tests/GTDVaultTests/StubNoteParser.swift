@@ -53,6 +53,17 @@ struct StubNoteParser: VaultNoteParser {
             what: body(text))
     }
 
+    func listItem(id: NoteID, text: String, layout: VaultLayout) throws -> ListItem {
+        try check(id)
+        return ListItem(
+            id: id,
+            list: layout.listName(of: id) ?? "",
+            title: id.title,
+            isFinished: layout.isFinishedListItem(id),
+            created: Self.date(Frontmatter.scalar("created", in: text)),
+            notes: body(text))
+    }
+
     func area(id: NoteID, text: String) throws -> Area {
         try check(id)
         return Area(id: id, title: id.title)

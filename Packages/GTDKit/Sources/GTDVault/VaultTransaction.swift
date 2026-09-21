@@ -76,6 +76,18 @@ struct VaultTransaction {
             try fileSystem.moveFolder(source, to: destination)
             return [.moveFolder(from: destination, to: source)]
 
+        case let .createFolder(path):
+            let folder = VaultPath.normalize(path)
+            guard !fileSystem.folderExists(folder) else { return [] }
+            guard !fileSystem.exists(folder) else {
+                throw VaultError.destinationExists(path: folder)
+            }
+            try fileSystem.createFolder(folder)
+            // **No inverse.** Removing a directory would be the hard delete this vault never
+            // does, so an undo — and a rollback — leaves the empty folder behind. Nothing is
+            // lost by it; `Rules.isUndoable` therefore does not offer `createList` as an undo.
+            return []
+
         case let .delete(path):
             let source = VaultPath.normalize(path)
             // Idempotent: a file an external edit already removed is not an error.
@@ -107,6 +119,10 @@ struct VaultTransaction {
                 throw VaultError.destinationExists(path: destination)
             }
             try fileSystem.moveFolder(source, to: destination)
+        case let .createFolder(path):
+            let folder = VaultPath.normalize(path)
+            guard !fileSystem.folderExists(folder), !fileSystem.exists(folder) else { return }
+            try fileSystem.createFolder(folder)
         case let .delete(path):
             let source = VaultPath.normalize(path)
             guard fileSystem.exists(source) else { return }

@@ -9,6 +9,8 @@ public struct VaultLayout: Sendable, Equatable, Codable {
     public var archive: String
     public var projects: String
     public var knowledge: String
+    /// Root of the lists (L2). Every **direct** subfolder of it is one list.
+    public var lists: String
     public var routines: String
     public var routineLog: String
     public var reviews: String
@@ -21,6 +23,7 @@ public struct VaultLayout: Sendable, Equatable, Codable {
         archive: String = "Archive",
         projects: String = "Projects",
         knowledge: String = "Knowledge",
+        lists: String = "Lists",
         routines: String = "GTD/Routines",
         routineLog: String = "GTD/RoutineLog",
         reviews: String = "GTD/Reviews",
@@ -32,6 +35,7 @@ public struct VaultLayout: Sendable, Equatable, Codable {
         self.archive = archive
         self.projects = projects
         self.knowledge = knowledge
+        self.lists = lists
         self.routines = routines
         self.routineLog = routineLog
         self.reviews = reviews
@@ -43,7 +47,7 @@ public struct VaultLayout: Sendable, Equatable, Codable {
 
     /// Folders that must exist before the app writes (T16 housekeeping).
     public var requiredFolders: [String] {
-        [inbox, actions, projects, knowledge, routines, routineLog, reviews, trash]
+        [inbox, actions, projects, knowledge, lists, routines, routineLog, reviews, trash]
     }
 
     // MARK: Path builders
@@ -94,6 +98,57 @@ public struct VaultLayout: Sendable, Equatable, Codable {
     /// `GTD/Trash/<file>` — the app never hard-deletes (ARCHITECTURE §3).
     public func trashPath(for id: NoteID) -> NoteID {
         NoteID(path: "\(trash)/\(id.components.last ?? id.path)")
+    }
+
+    // MARK: Lists (§5a)
+
+    /// `Lists/<name>` — the folder that *is* the list (L2).
+    public func listFolder(_ name: String) -> String {
+        "\(lists)/\(VaultLayout.sanitize(name))"
+    }
+
+    /// `Lists/<name>/Done` — the finished-items log (L3). Reserved: it is never a list itself.
+    public func listDoneFolder(_ name: String) -> String {
+        "\(listFolder(name))/\(VaultLayout.doneFolderName)"
+    }
+
+    /// `Lists/<name>/<Title>.md` (L2) or, when `finished`, `Lists/<name>/Done/<Title>.md` (L3).
+    public func listItemPath(list: String, title: String, finished: Bool = false) -> NoteID {
+        let base = finished ? listDoneFolder(list) : listFolder(list)
+        return NoteID(path: "\(base)/\(VaultLayout.sanitize(title)).md")
+    }
+
+    /// The name of the folder inside a list that holds its finished items (L3, D38).
+    /// Reserved: `createList`/`renameList` refuse it, and the classifier never reads it as a list.
+    public static let doneFolderName = "Done"
+
+    /// True when `name` is the reserved `Done` folder (compared the way a macOS file system
+    /// compares names — case-insensitively).
+    public static func isReservedListName(_ name: String) -> Bool {
+        sanitize(name).lowercased() == doneFolderName.lowercased()
+    }
+
+    /// Which list a note belongs to, from its path alone: `Lists/Read/X.md` and
+    /// `Lists/Read/Done/X.md` both answer `Read`. `nil` for anything that is not a list item —
+    /// a note directly in `Lists/`, one nested deeper than `Done/`, or a note outside `Lists/`.
+    public func listName(of id: NoteID) -> String? {
+        let parts = id.components
+        let root = lists.split(separator: "/").map(String.init)
+        guard parts.count >= root.count + 2, Array(parts.prefix(root.count)) == root else { return nil }
+        let name = parts[root.count]
+        guard !VaultLayout.isReservedListName(name) else { return nil }
+        let depth = parts.count - root.count
+        if depth == 2 { return name }                                   // Lists/<n>/<file>
+        if depth == 3, parts[root.count + 1] == VaultLayout.doneFolderName { return name }
+        return nil
+    }
+
+    /// True for a note in `Lists/<n>/Done/` — the finished-items log (L3).
+    public func isFinishedListItem(_ id: NoteID) -> Bool {
+        let parts = id.components
+        let root = lists.split(separator: "/").map(String.init)
+        guard parts.count == root.count + 3, Array(parts.prefix(root.count)) == root else { return false }
+        return parts[root.count + 1] == VaultLayout.doneFolderName
     }
 
     /// `Knowledge/<folder>/<Title>.md` (I4).

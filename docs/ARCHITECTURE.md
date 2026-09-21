@@ -87,7 +87,9 @@ Defaults live in `VaultLayout` and are overridable in `GTD/Config.md`.
 | `Projects/<Area>/<Area>.md` | area note, frontmatter `kind: area` |
 | `Projects/[<Area>/]<Project>/<Project>.md` | project note, frontmatter `kind: project`, `status` |
 | `Knowledge/**` | free folder tree (I4) |
-| `GTD/Config.md` | synced settings in frontmatter (contexts, on-the-go set, cap, routine times) |
+| `Lists/<List>/<Item>.md` | one note per list item (§5a). **Every direct subfolder of `Lists/` is a list**, empty ones included; there is no list note. |
+| `Lists/<List>/Done/<Item>.md` | the list's finished items, kept as a log (L3). `Done` is reserved: it is never a list, and no list may be called that. |
+| `GTD/Config.md` | synced settings in frontmatter (contexts, on-the-go set, cap, favourite lists, routine times) |
 | `GTD/Routines/<Name>.md` | routine templates (R1) |
 | `GTD/RoutineLog/<yyyy-MM-dd>--<deviceID>.md` | routine log, one file per day **per device** (R5, N3) |
 | `GTD/Reviews/<yyyy>/KW <ww>.md` | weekly review notes (§10.4) |
@@ -113,6 +115,20 @@ created: 2026-09-18T21:04:11+02:00
 # What?
 - [ ] …
 ```
+
+List item (L1, §5a) — the leanest note in the vault. The **file name is the title**, the folder
+is the list, `Done/` says it is finished, and the body is free notes (I4b). Nothing else:
+
+```markdown
+---
+created: 2026-09-01T09:30:00+02:00
+---
+Marie said the second half is the interesting one.
+```
+
+Frontmatter is optional in full — a note somebody typed in Obsidian with no `---` block at all is
+a valid item. A note directly in `Lists/`, or nested deeper than a list's `Done/`, is in no list:
+it is ignored and reported as a `VaultIssue`, never moved and never guessed at.
 
 Project note (P2): frontmatter `kind: project`, `status`; body sections `# Outcome`, `# Why?`,
 `# Steps` (checkbox list; a promoted step becomes `- [ ] text → [[Action title]]`),
@@ -142,8 +158,8 @@ together. Public signatures are **not** repeated here — read the source and th
 ### GTDModel — the domain, and all GTD semantics
 
 `Core/` (`NoteID`, `Day`, `DayTime`, `VaultLayout`), `Entities/` (`Action`, `Project`, `Area`,
-`InboxItem`, `Routine`, `RoutineLogEntry`, `GTDConfig`, `WeeklyReview`, `VaultSnapshot`,
-`NotePassthrough`), `Commands/` (`GTDCommand`, the drafts, `InboxDecision`, `GTDError`,
+`InboxItem`, `GTDList`, `ListItem`, `Routine`, `RoutineLogEntry`, `GTDConfig`, `WeeklyReview`,
+`VaultSnapshot`, `NotePassthrough`), `Commands/` (`GTDCommand`, the drafts, `InboxDecision`, `GTDError`,
 `AppPrompt`, `VaultFileOp`), `Reducer/` and `Rules/`.
 
 - **Every mutation in the app is one `GTDCommand`**, and `Reducer.reduce(snapshot, command, env)`
@@ -152,6 +168,7 @@ together. Public signatures are **not** repeated here — read the source and th
   there — never in a view, a backend or a model object.
 - `Rules` holds the derived queries (`nextList`, `onTheGoNextList`, `chaseItems`, `visibleActions`,
   `deferredList`, `waitingList`, `stalledProjects`, `projectRows`, `sidebarCounts`,
+  `lists`, `listRows`, `listItems`, `openListItemCount`, `favouriteLists`,
   `signals(for:today:)`, `archiveCandidates`, `timeline`, `suggestsProject`, `isUndoable` …).
   They are pure, total-ordered (no reliance on sort stability) and each names its requirement ID.
 - `Signal`/`SignalKind`/`SignalStep`/`StalenessPolicy` are semantics, not styling: the thresholds
@@ -178,8 +195,9 @@ patches only the lines whose decoded value differs. Consequences: `encode(decode
 byte for byte, and changing one field changes exactly one line. Entities with an empty
 passthrough render from `NoteTemplates` and are then patched the same way.
 
-`NoteCodec` is the entry point (one `decode*`/`encode` pair per entity, `noteKind(text:)` for
-dispatch, `unknownContexts(in:known:)`, `routineLogName`). The pieces it is built from —
+`NoteCodec` is the entry point (one `decode*`/`encode` pair per entity — `decodeListItem` takes
+the layout, because a list item's list and its finished flag come from the path alone (§5a) —
+`noteKind(text:)` for dispatch, `unknownContexts(in:known:)`, `routineLogName`). The pieces it is built from —
 `FrontmatterDocument`, `BodySections`, `CheckboxList`, `Wikilink`, `RawText`, `YAMLScalar` — are
 public and separately tested. Everything that touches a timestamp takes `timeZone:
 TimeZone = .current`.
@@ -192,7 +210,10 @@ green.** They are the only thing standing between a bug and the user's notes.
 `VaultStore` (protocol) / `FileVaultStore` (actor) own scanning, watching and committing;
 `VaultFileSystem` abstracts I/O (`CoordinatedFileSystem` on Apple platforms via
 `NSFileCoordinator`, `PlainFileSystem` and `InMemoryFileSystem` for tests and Linux);
-`VaultIndex` + `VaultClassifier` + `VaultNoteParser` turn a folder tree into a `VaultSnapshot`;
+`VaultIndex` + `VaultClassifier` + `VaultNoteParser` turn a folder tree into a `VaultSnapshot`
+(including the lists: the classifier answers `listFolderName(of:)` for a folder and
+`.listItem`/`.listMisplaced` for a note, and the index folds the folder listing and the indexed
+items into `snapshot.lists` so an **empty** list folder is a list too);
 `VaultBookmark` persists the security-scoped bookmark; `InboxWriter` writes a capture **without
 loading the vault** (C1); `Platform/` holds the Apple-only implementations and the portable
 stand-in they fall back to off Apple platforms.
@@ -209,8 +230,12 @@ stand-in they fall back to off Apple platforms.
   takes part in the all-or-nothing rollback. `VaultStore.folderContents(_:)` (T02-1) says which
   files are below a folder, which is what `GTDServices` hashes and what it asks before picking a
   free name in an app-owned folder.
-- **Nothing here can hard-delete**: `VaultFileSystem` has no delete member, and a folder move is
-  a rename. Keep it that way.
+- **`.createFolder` (§5a)** creates a directory — what `createList` needs, because a list *is*
+  its folder and an empty folder is not expressible as a file. Idempotent, refused only when a
+  file already sits on the name, and it has **no inverse**: removing a directory would be a hard
+  delete, so an undo or a rollback leaves the empty folder behind.
+- **Nothing here can hard-delete**: `VaultFileSystem` has no delete member, a folder move is
+  a rename, and `.createFolder` has no opposite. Keep it that way.
 - `activate()` creates `VaultLayout.requiredFolders`, scans once and starts watching.
 - Decode failures never lose a note: they become `VaultIssue`s. Use `VaultNoteParser`, not
   `NoteCodec` directly.
@@ -233,6 +258,8 @@ onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
 - Collisions in `Archive/` and `GTD/Trash/` get a free name (app-owned folders); anywhere else a
   taken destination is `GTDError.titleCollision`. Folder moves included: "remove list" is a
   `.moveFolder` into `GTD/Trash/`.
+- `SnapshotDiff` diffs `listItems` next to the other entity collections, so one list-item note is
+  one file exactly as one action note is.
 
 ### GTDAppCore — what the UI sees
 
@@ -260,7 +287,7 @@ Nothing is swallowed with `try?`.
 
 | Target | What it owns |
 | --- | --- |
-| `GTDFixtures` | `Fixtures.sampleSnapshot` and `Resources/SampleVault` — 55 markdown files **generated from that snapshot** and committed. A test fails when they drift; regenerate with the command in `CLAUDE.md`. |
+| `GTDFixtures` | `Fixtures.sampleSnapshot` and `Resources/SampleVault` — 62 markdown files **generated from that snapshot** and committed. A test fails when they drift; regenerate with the command in `CLAUDE.md`. |
 | `GTDNotifications` | `NotificationPlanner` (pure, fully tested: what should be scheduled for a snapshot and a settings value) and `NotificationScheduler` over `NotificationCenterPort`; `SystemNotificationCenter` is the `UserNotifications` implementation. Routes are `gtd://` URLs (`NotificationRoute`). |
 | `GTDStats` | `WeeklyStats`, `RoutineAudit`, `ISOWeek`. Numbers are relative to the **end of the requested week**, not "now". |
 | `DesignSystem` | Tokens (`Spacing`, `Radius`, `Typo`, `Motion`, `Elevation`, `DragThresholds`, colours), components (`Chip`, `Badge`, `ActionRow`, `ProjectRow`, `ItemCard`, `UndoToast`, `GlassActionBar`, `WaitingInfoSheet`, `RoutineHeatmap`, `StatTile`, `RewardMoment`, `ReviewWizardRail`), the drag physics, `Copy`/`DateText` (§6.3 wording), `Symbols` (§7 icon map) and `SignalPresentation`/`BadgeContent` (§2.2). Feature code contains **no** literal colour, size, duration, symbol name or user-facing string. |
@@ -354,6 +381,12 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-21 | **A legacy-trashed note stays an archive *candidate*, not an immediate move.** `archiveCompleted` keeps the same 30-day threshold for it and only changes the destination (`GTD/Trash/`). Moving such notes at once would touch files the user has not asked about on the first launch after the rework; the requirements are silent, and this is the option that cannot surprise anyone. |
 | 2026-09-21 | **One new vault primitive, `VaultFileOp.moveFolder` (R-5).** Renaming a list, removing one and re-assigning a project's area all move a directory, so `GTDVault` gained exactly one op rather than a loop of file moves: one coordinated directory move (`.forMoving` + `item(at:didMoveTo:)`), never overwriting, inverse in undo order, part of the all-or-nothing rollback. It is **not** a delete — `VaultFileSystem` still has no delete member. `VaultStore` gained `folderContents(_:)` (contract change T02-1) because a folder is invisible to `read(path:)` and the undo journal has to hash the files inside it. |
 | 2026-09-21 | **A folder move away from a path that the same commit writes into again cannot be undone.** The old path is then a folder again, and the move back is refused (`destinationExists`) rather than removing it — removing it would be the hard delete this vault never does. No reducer emits such a pair; `TransactionFuzzTests` asserts the refusal changes nothing and loses nothing. |
+| 2026-09-21 | **A list is a folder, and nothing else (R-5, L2).** `Lists/<name>/` *is* the list — there is no list note and no `status` on an item; `Done/` inside it is the finished-items log and is reserved, so no list may be called `Done` and the classifier never reads one as a list. An empty folder is a list (the user just made it). A markdown note directly in `Lists/` or nested deeper than `Done/` is in **no** list: ignored and reported as a `VaultIssue`, never moved — the app does not guess which list somebody meant. |
+| 2026-09-21 | **`VaultFileOp.createFolder` has no inverse, so `createList` is not undoable.** A list is its folder, so creating one has to create a directory, and the only inverse would be removing it — the hard delete this vault never does. An undo (or a rollback of a failed commit) therefore leaves the empty folder behind, which loses nothing, and `Rules.isUndoable(.createList)` is `false` rather than offering a ⌘Z that would only half work. |
+| 2026-09-21 | **List names are compared case-insensitively, and a case-only rename is refused.** macOS and iOS file systems are case-insensitive, so `Read` and `read` cannot both exist: `createList` refuses the duplicate (naming the list that is already there) and `Rules`/`snapshot.list(named:)` look names up the same way. Renaming `Read` to `read` would ask the file system to move a folder onto itself, so it is `.invalid` instead of attempted. |
+| 2026-09-21 | **`favouriteLists:` is written only once the user chooses (R-5).** `GTDConfig.favouriteLists` is `Optional`: absent from `GTD/Config.md` means "never chosen", and `Rules.favouriteLists` then derives the first four lists alphabetically. The derived default is never written back, `[]` is a real choice ("show none") that survives a round trip, and a stored favourite naming a list that no longer exists is skipped rather than shown as a ghost. |
+| 2026-09-21 | **"Make action" moves the note and keeps what was in it (L4).** `promoteListItem` moves `Lists/<n>/<Item>.md` into `Actions/` and hands the note's own text to the codec, so `created`, unknown frontmatter and the item's notes survive. The codec change that makes that safe: `encode(_ action:)` treats a headingless body as the `What?` **only** when the file really decodes as an action (or the body already says what the action says); otherwise the `# Why?`/`# What?` headings are appended *below* the existing body instead of replacing it. The promotion then goes through the same `makeAction` + `checkCap` as an inbox filing, so R-3's required fields (T04) and the cap apply to it without `promoteListItem` knowing about either. |
+| 2026-09-21 | **Filing a capture into a list never drops what was dictated.** The capture file is *moved* into the list (as the Knowledge branch does), so its `created` stamp and any key the user added survive. The notes panel becomes the body; when it is empty and the chosen title is not the whole capture text, the capture text stays as the body rather than being thrown away. R-4 (T04) refines this by putting the full text above the notes whenever the title was truncated. |
 | 2026-09-21 | **The sample vault keeps one `status: trash` note** (`Actions/Look into that podcast app.md`). `GTDFixtures` is the only writer of that word, on purpose: it is what makes R-1 — hidden state, tolerant decode, archive-to-trash routing — testable end to end against a realistic pre-rework vault. |
 
 ## 7. Sync safety rules (N3) — apply to every change that writes

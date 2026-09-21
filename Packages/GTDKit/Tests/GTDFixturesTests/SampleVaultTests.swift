@@ -23,6 +23,18 @@ struct SampleVaultTests {
         #expect(s.actions.allSatisfy { ($0.timeEstimate ?? 1) > 0 })
         // Every project link points at a project that exists.
         #expect(s.actions.allSatisfy { $0.project == nil || s.project($0.project!) != nil })
+
+        // §5a — the three initial lists (L1), one of them empty, and one finished item (L3).
+        #expect(s.lists.map(\.name) == ["Read", "Watch", "Wish"])
+        #expect(s.listItems.count == 7)
+        #expect(s.listItems.count { $0.isFinished } == 1)
+        // Every list folder holds a file, or git could not carry it (see `Fixtures.lists`).
+        #expect(Rules.listRows(s).allSatisfy { $0.openCount + $0.finishedCount > 0 })
+        #expect(s.listItems.allSatisfy { $0.id.isInside(s.config.layout.lists) })
+        #expect(Set(s.listItems.map(\.id)).count == s.listItems.count)
+        // R-5 — the fixture leaves the choice unmade, so the derived default is exercised.
+        #expect(s.config.favouriteLists == nil)
+        #expect(Rules.favouriteLists(s).map(\.name) == ["Read", "Watch", "Wish"])
     }
 
     @Test func everyEntityIsRendered() {
@@ -33,6 +45,7 @@ struct SampleVaultTests {
         for area in s.areas { #expect(files[area.id.path] != nil) }
         for routine in s.routines { #expect(files[routine.id.path] != nil) }
         for item in s.inbox { #expect(files[item.id.path] != nil) }
+        for item in s.listItems { #expect(files[item.id.path] != nil) }
         #expect(files[s.config.layout.configFile] != nil)
         #expect(files["GTD/Reviews/2026/KW 37.md"] != nil)
         #expect(files.values.allSatisfy { $0.hasSuffix("\n") })

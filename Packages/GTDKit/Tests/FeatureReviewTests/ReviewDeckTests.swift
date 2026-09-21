@@ -169,3 +169,27 @@ struct ReviewDeckTests {
         #expect(session.deckCounter == ReviewCopy.deckCounter(done: 1, total: total))
     }
 }
+
+/// L6 — "Lists never appear in the weekly review": no deck phase deals a list item, and the
+/// deck a vault with lists produces is the deck the same vault without them produces.
+@MainActor
+struct ListItemsNeverEnterTheDeckTests {
+
+    @Test(arguments: [DeckPhase.next, .someday, .projects])
+    func noPhaseDealsAListItem(phase: DeckPhase) {
+        var withoutLists = Fixtures.sampleSnapshot
+        withoutLists.lists = []
+        withoutLists.listItems = []
+
+        #expect(!Fixtures.sampleSnapshot.listItems.isEmpty, "the fixture has list items to hide")
+        let withLists = ReviewDeck.cards(for: phase, in: Fixtures.sampleSnapshot, today: Fixtures.today)
+        #expect(withLists.map(\.id)
+            == ReviewDeck.cards(for: phase, in: withoutLists, today: Fixtures.today).map(\.id))
+        // Every card is an action or a project — a deck card cannot even hold a list item.
+        #expect(withLists.allSatisfy { $0.action != nil || $0.project != nil })
+        #expect(withLists.allSatisfy { card in
+            guard let action = card.action else { return true }
+            return !action.id.isInside(VaultLayout.default.lists)
+        })
+    }
+}

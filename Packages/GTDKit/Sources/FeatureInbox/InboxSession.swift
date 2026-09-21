@@ -485,7 +485,8 @@ public final class InboxSession {
             return .newProject(project, firstActions: firstActions.map(demoted))
         case let .existingProject(id, actions):
             return .existingProject(id, actions: actions.map(demoted))
-        case .knowledge, .trash:
+        case .knowledge, .list, .trash:
+            // A list item is not a commitment (L1), so the cap never applies to it.
             return decision
         }
     }

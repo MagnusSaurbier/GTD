@@ -342,3 +342,26 @@ struct NotificationPlannerTests {
         #expect(utcComponents.minute == 30)
     }
 }
+
+/// L6/L1 — a list item has no `defer`, no `due` and no follow-up: nothing about it can be
+/// scheduled, and adding a list to a vault changes no notification.
+struct ListItemsAreInvisibleToNotificationsTests {
+
+    @Test func listItemsSchedulesNothing() {
+        let calendar = Support.calendar(timeZone: Fixtures.calendar.timeZone)
+        var withoutLists = Fixtures.sampleSnapshot
+        withoutLists.lists = []
+        withoutLists.listItems = []
+
+        func plan(_ snapshot: VaultSnapshot) -> [PlannedNotification] {
+            NotificationPlanner.plan(
+                snapshot: snapshot,
+                now: Fixtures.date(Fixtures.today, 6, 0),
+                calendar: calendar,
+                settings: .default)
+        }
+
+        #expect(!Fixtures.sampleSnapshot.listItems.isEmpty, "the fixture has list items to hide")
+        #expect(plan(Fixtures.sampleSnapshot) == plan(withoutLists))
+    }
+}

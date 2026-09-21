@@ -36,4 +36,42 @@ struct UndoLabelTests {
     @Test func trashingAnActionSaysMovedToTrash() {
         #expect(UndoLabel.of(.trashAction(id), in: snapshot) == "Moved to Trash")
     }
+
+    // MARK: - Lists (§5a, STYLEGUIDE §6.3)
+
+    /// §6.3 spells the list toast with the list's own name: `Added to Read`.
+    @Test func filingToAListNamesTheList() {
+        #expect(UndoLabel.of(
+            .fileInbox(id, .list(name: "Read", title: "Sapiens", notes: "")), in: snapshot)
+                == "Added to Read")
+        #expect(UndoLabel.of(
+            .fileInbox(id, .list(name: "Wish", title: "x", notes: "")), in: snapshot)
+                == "Added to Wish")
+    }
+
+    /// §6.3 — a finished list item is just `Done`.
+    @Test func finishingAListItemSaysDone() {
+        let item = NoteID(path: "Lists/Read/Sapiens.md")
+        #expect(UndoLabel.of(.completeListItem(item), in: snapshot) == "Done")
+        #expect(UndoLabel.of(.trashListItem(item), in: snapshot) == "Moved to Trash")
+    }
+
+    /// L4 — "Make action" is a filing like any other, and reads like one.
+    @Test func promotingAListItemReadsLikeAFiling() {
+        let item = NoteID(path: "Lists/Read/Sapiens.md")
+        #expect(UndoLabel.of(
+            .promoteListItem(item, ActionDraft(title: "Read Sapiens", status: .next)), in: snapshot)
+                == "Filed to Next")
+        #expect(UndoLabel.of(
+            .promoteListItem(item, ActionDraft(title: "Read Sapiens", status: .someday)), in: snapshot)
+                == "Filed to Someday")
+    }
+
+    @Test func theFolderCommandsSayWhatTheyDid() {
+        #expect(UndoLabel.of(.renameList(from: "Read", to: "Reading"), in: snapshot) == "Renamed list")
+        #expect(UndoLabel.of(.removeList(name: "Read"), in: snapshot) == "Removed list")
+        #expect(UndoLabel.of(
+            .updateListItem(NoteID(path: "Lists/Read/Sapiens.md"), title: "x", notes: ""),
+            in: snapshot) == "Edited")
+    }
 }

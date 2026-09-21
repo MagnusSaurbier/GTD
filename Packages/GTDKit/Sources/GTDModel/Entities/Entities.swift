@@ -102,6 +102,66 @@ public struct Action: Identifiable, Sendable, Equatable {
     }
 }
 
+// MARK: - Lists (§5a)
+
+/// One list — a **direct subfolder** of `VaultLayout.lists` (L2). The folder is the only marker:
+/// there is no list note and no `status`, so the name *is* the identity.
+///
+/// `Done/` inside a list is reserved (it holds the finished items, L3) and is never a list.
+public struct GTDList: Identifiable, Sendable, Equatable, Hashable {
+    /// Folder name directly under `Lists/`, e.g. `Read`. Also the display name.
+    public let name: String
+
+    public var id: String { name }
+
+    public init(name: String) {
+        self.name = name
+    }
+
+    /// Two lists are the same list when their names differ only in case — macOS and iOS file
+    /// systems are case-insensitive, so `Read` and `read` cannot both exist (L2).
+    public static func sameName(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.lowercased() == rhs.lowercased()
+    }
+}
+
+/// One item of a list — one note in `Lists/<name>/` (L1, D17).
+///
+/// A list item is **not a commitment**: no Why?/What?, no context, no time estimate, no `status`,
+/// no cap and no staleness. Its title is the file name, its body is free notes, and the only
+/// frontmatter it carries is the optional `created` timestamp.
+public struct ListItem: Identifiable, Sendable, Equatable {
+    public let id: NoteID
+    /// The list it lives in — the folder name, not a path.
+    public var list: String
+    /// File name stem. Changing it renames the file (`updateListItem`).
+    public var title: String
+    /// True for an item in `Lists/<name>/Done/` — read / watched / bought (L3).
+    public var isFinished: Bool
+    public var created: Date?
+    /// The note's body (I4b: the optional notes panel writes here).
+    public var notes: String
+    public var passthrough: NotePassthrough
+
+    public init(
+        id: NoteID,
+        list: String,
+        title: String,
+        isFinished: Bool = false,
+        created: Date? = nil,
+        notes: String = "",
+        passthrough: NotePassthrough = .empty
+    ) {
+        self.id = id
+        self.list = list
+        self.title = title
+        self.isFinished = isFinished
+        self.created = created
+        self.notes = notes
+        self.passthrough = passthrough
+    }
+}
+
 // MARK: - Areas and projects
 
 /// An ongoing area of responsibility — a folder under `Projects/` with `kind: area` (P1).
@@ -274,6 +334,13 @@ public struct GTDConfig: Sendable, Equatable {
     public var contexts: [String]
     public var onTheGoContexts: [String]
     public var nextCap: Int
+    /// The lists shown in the inbox navbar, in the user's order (I4b, L2, R-5).
+    ///
+    /// **`nil` means "the user has never chosen"** — `Rules.favouriteLists` then derives the
+    /// first four lists alphabetically. That default is never written to `GTD/Config.md`: the
+    /// key appears in the file only once the user has picked favourites (`setFavouriteLists`),
+    /// so a vault that has not been to the settings screen keeps its config untouched.
+    public var favouriteLists: [String]?
     public var layout: VaultLayout
     public var passthrough: NotePassthrough
 
@@ -281,12 +348,14 @@ public struct GTDConfig: Sendable, Equatable {
         contexts: [String],
         onTheGoContexts: [String],
         nextCap: Int,
+        favouriteLists: [String]? = nil,
         layout: VaultLayout = .default,
         passthrough: NotePassthrough = .empty
     ) {
         self.contexts = contexts
         self.onTheGoContexts = onTheGoContexts
         self.nextCap = nextCap
+        self.favouriteLists = favouriteLists
         self.layout = layout
         self.passthrough = passthrough
     }
@@ -380,6 +449,11 @@ public struct VaultSnapshot: Sendable, Equatable {
     public var actions: [Action]
     public var areas: [Area]
     public var projects: [Project]
+    /// Every direct subfolder of `Lists/` (L2) — including the empty ones, which are lists too.
+    public var lists: [GTDList]
+    /// Every note in `Lists/<name>/` and `Lists/<name>/Done/` (L1, L3). Kept flat, next to the
+    /// other entity collections, so one file is one entity for the snapshot diff.
+    public var listItems: [ListItem]
     public var routines: [Routine]
     /// Last 14 days, merged across devices.
     public var routineLog: [RoutineLogEntry]
@@ -395,6 +469,8 @@ public struct VaultSnapshot: Sendable, Equatable {
         actions: [Action] = [],
         areas: [Area] = [],
         projects: [Project] = [],
+        lists: [GTDList] = [],
+        listItems: [ListItem] = [],
         routines: [Routine] = [],
         routineLog: [RoutineLogEntry] = [],
         knowledgeFolders: [String] = [],
@@ -406,6 +482,8 @@ public struct VaultSnapshot: Sendable, Equatable {
         self.actions = actions
         self.areas = areas
         self.projects = projects
+        self.lists = lists
+        self.listItems = listItems
         self.routines = routines
         self.routineLog = routineLog
         self.knowledgeFolders = knowledgeFolders
@@ -424,4 +502,11 @@ public struct VaultSnapshot: Sendable, Equatable {
     public func area(_ id: NoteID) -> Area? { areas.first { $0.id == id } }
     public func routine(_ id: NoteID) -> Routine? { routines.first { $0.id == id } }
     public func inboxItem(_ id: NoteID) -> InboxItem? { inbox.first { $0.id == id } }
+    public func listItem(_ id: NoteID) -> ListItem? { listItems.first { $0.id == id } }
+
+    /// The list called `name`, compared case-insensitively — a case-insensitive file system
+    /// cannot hold `Read` and `read` side by side, so neither can a lookup pretend it could (L2).
+    public func list(named name: String) -> GTDList? {
+        lists.first { GTDList.sameName($0.name, name) }
+    }
 }

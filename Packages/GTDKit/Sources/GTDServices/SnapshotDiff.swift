@@ -80,6 +80,7 @@ public enum SnapshotDiff {
 
         diff(old.inbox, new.inbox, id: \.id) { NoteCodec.encode($0, timeZone: timeZone) }
         diff(old.actions, new.actions, id: \.id) { NoteCodec.encode($0, timeZone: timeZone) }
+        diff(old.listItems, new.listItems, id: \.id) { NoteCodec.encode($0, timeZone: timeZone) }
         diff(old.areas, new.areas, id: \.id) { NoteCodec.encode($0) }
         diff(old.projects, new.projects, id: \.id) { NoteCodec.encode($0) }
         diff(old.routines, new.routines, id: \.id) { NoteCodec.encode($0) }
@@ -177,6 +178,9 @@ public enum SnapshotDiff {
                     renamed[to] = from
                 case let .moveFolder(from, to):
                     folders.append((from: NoteID(path: from).path, to: NoteID(path: to).path))
+                case .createFolder:
+                    // An empty folder holds no note, so it speaks for no path.
+                    continue
                 case let .delete(path):
                     paths.insert(path)
                 }
@@ -208,7 +212,7 @@ public enum SnapshotDiff {
             switch op {
             case let .put(path, _): paths.insert(path)
             case let .move(from, to): paths.insert(from); paths.insert(to)
-            case .moveFolder: continue
+            case .moveFolder, .createFolder: continue
             case let .delete(path): paths.insert(path)
             }
         }

@@ -278,7 +278,9 @@ public actor VaultBackend: GTDBackend {
                 resolved.append(.moveFolder(
                     from: from,
                     to: try await freeDestination(to, isFolder: true, layout: layout, taken: &taken)))
-            case .put, .delete:
+            case .put, .delete, .createFolder:
+                // `createFolder` is idempotent and creates nothing that could collide: a list
+                // whose folder is already there is simply already there.
                 resolved.append(op)
             }
         }

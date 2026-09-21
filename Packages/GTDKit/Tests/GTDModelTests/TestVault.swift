@@ -91,6 +91,23 @@ enum TestVault {
             reviewReason: reviewReason)
     }
 
+    /// §5a — one list item. `list` is the folder name; the path follows from it.
+    static func listItem(
+        _ list: String,
+        _ title: String,
+        finished: Bool = false,
+        created: Int = -1,
+        notes: String = ""
+    ) -> ListItem {
+        ListItem(
+            id: layout.listItemPath(list: list, title: title, finished: finished),
+            list: list,
+            title: title,
+            isFinished: finished,
+            created: date(created, hour: 8),
+            notes: notes)
+    }
+
     static func routine(_ title: String, steps: [String]) -> Routine {
         Routine(
             id: NoteID(path: "\(layout.routines)/\(title).md"),
@@ -104,6 +121,8 @@ enum TestVault {
         actions: [Action] = [],
         areas: [Area] = [],
         projects: [Project] = [],
+        lists: [GTDList] = [],
+        listItems: [ListItem] = [],
         routines: [Routine] = [],
         routineLog: [RoutineLogEntry] = [],
         config: GTDConfig = .default
@@ -113,6 +132,8 @@ enum TestVault {
             actions: actions,
             areas: areas,
             projects: projects,
+            lists: lists,
+            listItems: listItems,
             routines: routines,
             routineLog: routineLog,
             config: config)

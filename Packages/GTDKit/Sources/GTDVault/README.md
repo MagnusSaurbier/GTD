@@ -14,11 +14,13 @@ The only module that touches the file system.
   Also `scan()`, `currentSnapshot`, `startWatching()`, `stopWatching()`, `close()`.
 - `VaultBookmark` + `BookmarkStore` / `PathBookmarkStore` — durable folder access.
 - `InboxWriter` — standalone capture (C1/C3); needs only the bookmark, no index, no codec.
-- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (`moveFolder(_:to:)` and
+- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (`moveFolder(_:to:)`,
+  `createFolder(_:)` and
   `folderExists(_:)` alongside the file operations; `listEntries()` returns a
   `VaultListing` — files **and** folders from one walk; the index calls it on every refresh, and
   the two-walk default is only for a conformer that does not override it), `VaultIndex`, `VaultClassifier`,
-  `VaultNoteParser` / `NoteCodecParser`, `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
+  `VaultNoteParser` / `NoteCodecParser` (its `listItem(id:text:layout:)` is the seam for §5a),
+  `VaultClassifier.listFolderName(of:)` / `misplacedListReason(of:)`, `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
   `DebounceState` / `ChangeDebouncer`, `VaultClock`, `VaultError`.
 
 ## Invariants
@@ -40,10 +42,17 @@ The only module that touches the file system.
    moves a folder away *and* writes a file back into the old path: the old path is then a folder
    again, and the move back is refused rather than removing it (`TransactionFuzzTests` covers
    this branch). No reducer emits such a pair.
-6. Decode failures, evicted iCloud items and conflict copies become `VaultIssue`s. Conflict
+6. **`.createFolder` creates a directory and has no inverse** — a list *is* its folder (§5a), and
+   removing a directory would be the hard delete of invariant 1. It is idempotent, refused only
+   when a file already sits on the name, and an undo or a rollback leaves the empty folder behind.
+7. **`Lists/` is read from the folder tree, not from a note** (§5a): every *direct* subfolder is
+   a list, `Done/` is reserved (a list's finished log, never a list), an **empty** folder is a
+   list all the same, and a markdown note directly in `Lists/` or nested deeper becomes a
+   `VaultIssue` — ignored, never moved, never guessed at.
+8. Decode failures, evicted iCloud items and conflict copies become `VaultIssue`s. Conflict
    copies are reported, never resolved, and are still indexed so nothing disappears.
-7. `Action.modified` is the file mtime — the only field the codec cannot supply.
-8. `GTDMarkdown.NoteCodec` is reached only through `VaultNoteParser`.
+9. `Action.modified` is the file mtime — the only field the codec cannot supply.
+10. `GTDMarkdown.NoteCodec` is reached only through `VaultNoteParser`.
 
 ## Platform split (ARCHITECTURE §5)
 
@@ -71,7 +80,7 @@ watch: it coordinates the *directory* with `.forMoving` and then announces the m
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDVaultTests` (130 tests, never the real vault).
+`cd Packages/GTDKit && swift test --filter GTDVaultTests` (142 tests, never the real vault).
 `TransactionFuzzTests` throws 900 random op sequences at `VaultTransaction` — puts, file moves,
 folder moves and deletes — half of them against an injected write or move failure, and asserts
 the three rules the vault depends on: a refused commit changes nothing outside `GTD/Trash/`, a

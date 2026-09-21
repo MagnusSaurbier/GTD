@@ -19,6 +19,8 @@ and then patched the same way.
 ## Public API
 
 - `NoteCodec.decode*` / `encode(_:)` per entity + `encodeRoutineLog`, `noteKind(text:)`,
+  `decodeListItem(id:text:layout:timeZone:)` — a list item's list and its finished flag come
+  from the path (§5a), so it takes the layout rather than reading a key that does not exist —
   `routineLogName`, `unknownContexts(in:known:)`, `Keys`, `Headings`.
   `decode*`/`encode` take an optional `timeZone:` (default `.current`) for timestamps.
 - `FrontmatterDocument` — split, read (`scalar`/`list`/`int`/`day`/`timestamp`/`mappings`),
@@ -44,6 +46,11 @@ and then patched the same way.
   Unknown *contexts* are kept as written — nothing is lost, so they are reported, not refused.
 - `Action.modified`, `Project.referenceFiles` and note titles come from the file system, not the
   file text; the codec never writes them.
+- **A list item is allowed to have no frontmatter at all** (§5a): `created` is optional and
+  nothing else is written, so a note typed in Obsidian is a valid item. Only a path that is not
+  `<lists>/<list>/[Done/]<note>.md` is refused.
+- `GTDConfig.favouriteLists` is `Optional` in the file too (R-5): the key is absent until the
+  user chooses, `[]` is a real choice, and the derived default is never written.
 
 ## Gotchas
 
@@ -52,12 +59,17 @@ and then patched the same way.
 - `encodeRoutineLog` regenerates the file (entries sorted by `at`) — it is the one encoder that
   does not patch, because `[RoutineLogEntry]` has no passthrough. It writes `at` in the given
   time zone, so pass the same one when comparing output.
+- `encode(_ action:)` replaces the whole body with the `What?` **only** when the file decodes as
+  an action (a headingless action note *is* its `What?`) or when the body already says what the
+  action says. Otherwise — a note being moved into `Actions/`, e.g. a promoted list item (L4) —
+  the `# Why?`/`# What?` headings are appended *below* the existing body, so the notes somebody
+  wrote about the item are never written over.
 - A key hidden inside a multi-line quoted scalar confuses the line scanner. Reading is still
   correct, and nothing breaks because only the schema's own keys are ever patched.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDMarkdownTests` (108 tests, Linux-clean).
+`cd Packages/GTDKit && swift test --filter GTDMarkdownTests` (139 tests, Linux-clean).
 `RoundTripTests` covers every `GTDFixtures.SampleVault` file plus ~40 hand-written nasty cases;
 `FidelityTests` covers the other direction (what is written reads back unchanged);
 `FuzzRoundTripTests` generates ~1 800 notes from a seeded PRNG — shuffled key order, block

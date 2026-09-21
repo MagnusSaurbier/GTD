@@ -32,6 +32,7 @@ public struct VaultIndex: Sendable {
     enum Payload {
         case inbox(InboxItem)
         case action(Action)
+        case listItem(ListItem)
         case area(Area)
         case project(Project)
         case routine(Routine)
@@ -107,7 +108,10 @@ public struct VaultIndex: Sendable {
             return entry(.reference)
         case .knowledge, .archive, .trash, .other:
             return entry(.ignored)
-        case .inbox, .action, .projectNote, .routine, .routineLog, .review, .config:
+        case .listMisplaced:
+            // §5a — the app never guesses which list a stray note belongs to and never moves it.
+            return entry(.failed(classifier.misplacedListReason(of: info.path)))
+        case .inbox, .action, .listItem, .projectNote, .routine, .routineLog, .review, .config:
             break
         }
 
@@ -142,6 +146,8 @@ public struct VaultIndex: Sendable {
                 // signals (STYLEGUIDE §2.2, ARCHITECTURE §5).
                 action.modified = info.modified
                 return entry(.action(action))
+            case .listItem:
+                return entry(.listItem(try parser.listItem(id: id, text: text, layout: layout)))
             case .projectNote:
                 if Frontmatter.scalar("kind", in: text) == "area" {
                     return entry(.area(try parser.area(id: id, text: text)))
@@ -155,12 +161,30 @@ public struct VaultIndex: Sendable {
                 return entry(.review(try parser.weeklyReview(id: id, text: text)))
             case .config:
                 return entry(.config(try parser.config(id: id, text: text)))
-            case .reference, .knowledge, .archive, .trash, .other:
+            case .reference, .knowledge, .archive, .trash, .listMisplaced, .other:
                 return entry(.ignored)
             }
         } catch {
             return entry(.failed(Self.reason(error)))
         }
+    }
+
+    /// Every list of the vault (§5a, L2): one per **direct** subfolder of `Lists/`, `Done/`
+    /// excluded because it is the finished-items log of a list, not a list.
+    ///
+    /// Empty folders count — a list the user just created has no items yet. The names of the
+    /// indexed items are folded in as well, so a list can never go missing because a folder
+    /// listing came back short.
+    private func listFolders(holding items: [ListItem]) -> [GTDList] {
+        var names: [String: String] = [:]      // lowercased → the name as the folder spells it
+        for folder in folders {
+            guard let name = classifier.listFolderName(of: folder) else { continue }
+            names[name.lowercased()] = name
+        }
+        for item in items where names[item.list.lowercased()] == nil {
+            names[item.list.lowercased()] = item.list
+        }
+        return names.values.sorted().map { GTDList(name: $0) }
     }
 
     private static func reason(_ error: any Error) -> String {
@@ -192,6 +216,7 @@ public struct VaultIndex: Sendable {
     public func snapshot(today: Day) -> VaultSnapshot {
         var inbox: [InboxItem] = []
         var actions: [Action] = []
+        var listItems: [ListItem] = []
         var areas: [Area] = []
         var projects: [Project] = []
         var routines: [Routine] = []
@@ -205,6 +230,7 @@ public struct VaultIndex: Sendable {
             switch entry.payload {
             case let .inbox(item): inbox.append(item)
             case let .action(action): actions.append(action)
+            case let .listItem(item): listItems.append(item)
             case let .area(area): areas.append(area)
             case let .project(project): projects.append(project)
             case let .routine(routine): routines.append(routine)
@@ -247,6 +273,8 @@ public struct VaultIndex: Sendable {
             actions: actions.sorted { $0.id < $1.id },
             areas: areas.sorted { $0.id < $1.id },
             projects: projects.sorted { $0.id < $1.id },
+            lists: listFolders(holding: listItems),
+            listItems: listItems.sorted { $0.id < $1.id },
             routines: routines.sorted { $0.id < $1.id },
             routineLog: routineLog.sorted {
                 ($0.at, $0.routine, $0.step) < ($1.at, $1.routine, $1.step)

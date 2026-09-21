@@ -1,7 +1,7 @@
 # Traceability — every requirement to the code that implements it
 
 Covers `docs/REQUIREMENTS.md` v1 in full: every ID (N1–N6, C1–C4, I1–I7, A1–A5,
-P1–P7, W1–W2, D1–D3, E1–E4, R1–R6, §10's four steps, M1–M6) and §12's out-of-scope list.
+P1–P7, L1–L6, W1–W2, D1–D3, E1–E4, R1–R6, §10's four steps, M1–M6) and §12's out-of-scope list.
 
 Paths are relative to the repo root; `GTDKit/…` is short for
 `Packages/GTDKit/Sources/…` and test names are suites under `Packages/GTDKit/Tests/`.
@@ -64,6 +64,21 @@ consequence of the app being written on Linux without an Apple SDK (`CLAUDE.md`)
 | A4 | Closed context list (no `reading`), chip picker, editable in settings; on-the-go subset | `GTDConfig.contexts`/`onTheGoContexts`, `FeatureSettings/ContextsEditing`, `GTDMarkdown.unknownContexts` | `FeatureSettingsTests/ContextsEditingTests`, `GTDModelTests/RulesTests` | **done** |
 | A5 | Done vanishes immediately; files older than 30 days go to `Archive/YYYY/MM/` | `Rules.isVisible`/`archiveCandidates`/`closedDay`, `Reducer.archiveCompleted`, `GTDServices/Housekeeping` (once per day per device) | `GTDModelTests/RulesTests`, `GTDServicesTests/VaultBackendScenarioTests` (incl. a failed archive being retried at the next launch) | **done** |
 | — | Dropped fields: `priority`, `type`, `tags`, `scheduled`, `Ressources` | — | a grep of `GTDModel` + `GTDMarkdown` finds none of them; unknown keys survive as passthrough instead (N2) | **out of scope** |
+
+## §5a Lists
+
+The domain landed with T03 (`GTDModel`/`GTDMarkdown`/`GTDVault`/`GTDServices`/`GTDFixtures`);
+the views are T10 (Lists tab + Mac sidebar row) and T13 (settings: add / rename / remove /
+favourites), so every row below says **domain done, UI pending**.
+
+| ID | Requirement | Implemented in | Tested by | Status |
+| --- | --- | --- | --- | --- |
+| L1 | Lists hold items that are not commitments: no Why?/What?, no time, no cap, no `status` | `GTDModel.ListItem` (title, optional `created`, notes — nothing else), `GTDMarkdown.NoteCodec.decodeListItem`/`encode` | `GTDModelTests/ReducerListTests`, `GTDMarkdownTests/ListItemCodecTests`, `GTDModelTests/RulesListTests` (no action query, count or signal sees one) | **done** for the domain; rows and editor are **missing** → T10 |
+| L2 | **Folders are the lists**: every subfolder of `Lists/` is one; settings add / rename / remove and choose favourites | `VaultLayout.lists`/`listFolder`/`listItemPath`, `GTDList`, `GTDCommand.createList`/`renameList`/`removeList`/`setFavouriteLists`, `GTDVault/VaultClassifier` + `VaultIndex` (empty folder = list; deeper nesting = `VaultIssue`), `GTDConfig.favouriteLists` + `Rules.favouriteLists` (R-5) | `GTDModelTests/ReducerListTests`, `RulesListTests`, `GTDVaultTests/ListsIndexTests`, `GTDServicesTests/ListJourneyTests` (folders on disk), `GTDMarkdownTests/ConfigFavouriteListsTests` | **done** for the domain; the settings section is **missing** → T13 |
+| L3 | Finishing an item moves the note to `Lists/<name>/Done/` and keeps it as a log | `GTDCommand.completeListItem`, `VaultLayout.doneFolderName` (reserved), `ListItem.isFinished` from the path | `GTDModelTests/ReducerListTests`, `GTDVaultTests/ListsIndexTests`, `GTDServicesTests/ListJourneyTests` (a move, never a copy + trash) | **done** for the domain; the swipe and `Show done` are **missing** → T10 |
+| L4 | "Make action" moves the note to `Actions/` and opens the normal action card (required fields, cap) | `GTDCommand.promoteListItem` — the note is moved and then goes through the *same* `makeAction` + `checkCap` as an inbox filing; `NoteCodec.encode(_ action:)` keeps the item's notes above `# Why?` | `GTDModelTests/ReducerListTests` (incl. the cap refusal), `GTDMarkdownTests/ListItemCodecTests`, `GTDServicesTests/ListJourneyTests` (cap → demote → Next) | **done** for the domain; the card entry point is **missing** → T10 |
+| L5 | Lists fully available on iPhone (browse, finish, promote, edit) | `Rules.listRows`/`listItems`/`openListItemCount`, `GTDCommand.updateListItem`/`completeListItem`/`trashListItem`/`promoteListItem` — all platform-free | `GTDModelTests/RulesListTests`, `ReducerListTests` | **done** for the domain; the fourth tab is **missing** → T10 |
+| L6 | Lists **never** appear in the weekly review | structural: `ReviewDeck.cards` deals `snapshot.actions` and `snapshot.projects`, and a list item is neither | `FeatureReviewTests/ListItemsNeverEnterTheDeckTests`, `GTDStatsTests/ListItemsAreInvisibleToStatsTests`, `GTDNotificationsTests/ListItemsAreInvisibleToNotificationsTests`, `GTDModelTests/RulesListTests` | **done** |
 
 ## §6 Areas and projects
 

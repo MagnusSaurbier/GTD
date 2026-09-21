@@ -278,6 +278,83 @@ public enum Rules {
     /// the views show the inline "Turn into project" button when this is true.
     public static func suggestsProject(_ action: Action) -> Bool { action.checkboxes.count >= 2 }
 
+    // MARK: - Lists (§5a)
+
+    /// Every list, alphabetically (case-insensitively, then by name so the order is total).
+    /// Includes the empty ones — a list exists because its folder does (L2).
+    public static func lists(_ s: VaultSnapshot) -> [GTDList] {
+        s.lists.sorted { lhs, rhs in
+            let l = lhs.name.lowercased()
+            let r = rhs.name.lowercased()
+            if l != r { return l < r }
+            return lhs.name < rhs.name
+        }
+    }
+
+    /// One row of the Lists home / the Mac sidebar section (L2, L5).
+    public struct ListRow: Sendable, Equatable {
+        public var list: GTDList
+        /// Items still to read / watch / buy.
+        public var openCount: Int
+        /// Items in `Lists/<name>/Done/` (L3).
+        public var finishedCount: Int
+
+        public init(list: GTDList, openCount: Int, finishedCount: Int) {
+            self.list = list
+            self.openCount = openCount
+            self.finishedCount = finishedCount
+        }
+    }
+
+    /// The lists with their counts, in `lists(_:)` order (L2).
+    public static func listRows(_ s: VaultSnapshot) -> [ListRow] {
+        var open: [String: Int] = [:]
+        var finished: [String: Int] = [:]
+        for item in s.listItems {
+            if item.isFinished { finished[item.list, default: 0] += 1 }
+            else { open[item.list, default: 0] += 1 }
+        }
+        return lists(s).map {
+            ListRow(
+                list: $0,
+                openCount: open[$0.name] ?? 0,
+                finishedCount: finished[$0.name] ?? 0)
+        }
+    }
+
+    /// The items of one list (L1). `finished: false` is the list itself, `true` its `Done/` log
+    /// (L3). Newest capture first, then by path — a list item has no staleness, so age is not a
+    /// signal, only an order.
+    public static func listItems(
+        _ s: VaultSnapshot, in list: String, finished: Bool = false
+    ) -> [ListItem] {
+        s.listItems
+            .filter { GTDList.sameName($0.list, list) && $0.isFinished == finished }
+            .sorted { lhs, rhs in
+                let l = lhs.created ?? .distantPast
+                let r = rhs.created ?? .distantPast
+                if l != r { return l > r }
+                return lhs.id.path < rhs.id.path
+            }
+    }
+
+    /// Open items across all lists — the single Mac sidebar row's count and the iPhone tab's
+    /// badge (E3, L5). Finished items are a log, not a to-do.
+    public static func openListItemCount(_ s: VaultSnapshot) -> Int {
+        s.listItems.count { !$0.isFinished }
+    }
+
+    /// I4b/R-5 — the lists the inbox navbar offers, in the user's order.
+    ///
+    /// `GTDConfig.favouriteLists` is `nil` until the user has chosen: the default is then the
+    /// **first four lists alphabetically**, derived here and never written to the vault. A stored
+    /// choice that names a list which no longer exists is skipped rather than shown as a ghost.
+    public static func favouriteLists(_ s: VaultSnapshot) -> [GTDList] {
+        let all = lists(s)
+        guard let chosen = s.config.favouriteLists else { return Array(all.prefix(4)) }
+        return chosen.compactMap { name in all.first { GTDList.sameName($0.name, name) } }
+    }
+
     // MARK: - Sidebar
 
     /// Live counts for the Mac sidebar (E3). Every count matches the list the row opens, so
@@ -287,14 +364,25 @@ public enum Rules {
         public var next: Int
         public var someday: Int
         public var waiting: Int
+        /// Open items across every list — one sidebar row for all lists (E3, §5a).
+        public var lists: Int
         public var projects: Int
         public var deferred: Int
 
-        public init(inbox: Int, next: Int, someday: Int, waiting: Int, projects: Int, deferred: Int) {
+        public init(
+            inbox: Int,
+            next: Int,
+            someday: Int,
+            waiting: Int,
+            lists: Int,
+            projects: Int,
+            deferred: Int
+        ) {
             self.inbox = inbox
             self.next = next
             self.someday = someday
             self.waiting = waiting
+            self.lists = lists
             self.projects = projects
             self.deferred = deferred
         }
@@ -308,6 +396,7 @@ public enum Rules {
             next: visible.count { $0.status.countsTowardCap },
             someday: visible.count { $0.status == .someday },
             waiting: visible.count { $0.status == .waiting },
+            lists: openListItemCount(s),
             projects: s.projects.count { $0.status == .active },
             deferred: deferredList(s, today: today).count)
     }
@@ -514,11 +603,19 @@ public enum Rules {
     /// Both backends (`InMemoryBackend`, `GTDServices.VaultBackend`) use this one definition.
     public static func isUndoable(_ command: GTDCommand) -> Bool {
         switch command {
-        case .updateConfig, .logRoutineStep, .setRoutineTime, .saveWeeklyReview, .archiveCompleted:
+        case .updateConfig, .logRoutineStep, .setRoutineTime, .saveWeeklyReview, .archiveCompleted,
+             .setFavouriteLists:
+            false
+        // `createList` only creates a folder, and undoing it would mean removing a directory —
+        // the hard delete this app never does (ARCHITECTURE §6). Nothing is lost by leaving an
+        // empty folder, so it is not offered as an undo at all.
+        case .createList:
             false
         case .editInboxText, .fileInbox, .deferInboxToReview, .createAction, .updateAction,
              .setStatus, .trashAction, .complete, .toggleCheckbox, .convertActionToProject,
-             .createArea, .createProject, .updateProject, .promoteStep:
+             .createArea, .createProject, .updateProject, .promoteStep,
+             .renameList, .removeList, .updateListItem, .completeListItem, .trashListItem,
+             .promoteListItem:
             true
         }
     }

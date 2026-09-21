@@ -278,6 +278,34 @@ public enum Fixtures {
                what: "Not a real commitment."),
     ]
 
+    // MARK: - Lists (§5a)
+
+    /// The three initial lists of L1. Every one of them holds at least one item, because git
+    /// cannot track an empty directory: a list whose folder held no file would simply be missing
+    /// from a fresh clone of `Resources/SampleVault`. "An empty folder is still a list" (L2) is
+    /// proved where it can be — against a temp directory, in `GTDVaultTests/ListsIndexTests` and
+    /// `GTDServicesTests/ListJourneyTests`.
+    public static let lists: [GTDList] = [
+        GTDList(name: "Read"), GTDList(name: "Watch"), GTDList(name: "Wish"),
+    ]
+
+    /// Seven items — six open across the three lists, one finished in `Lists/Read/Done/` (L3).
+    /// `Fixtures.config` leaves `favouriteLists` unset, so the sample vault also exercises R-5's
+    /// derived default (the first four lists alphabetically: Read, Watch, Wish).
+    public static let listItems: [ListItem] = [
+        listItem("Read", "Thinking Fast and Slow", created: -22,
+                 notes: "Kahneman. Marie said the second half is the interesting one."),
+        listItem("Read", "The DAAD funding guidelines PDF", created: -12),
+        listItem("Read", "Why we sleep", created: -3, notes: ""),
+        listItem("Read", "Designing Data-Intensive Applications", created: -40,
+                 finished: true, notes: "Done in August. Chapter 5 was worth the whole book."),
+        listItem("Watch", "Arrival", created: -19),
+        listItem("Watch", "The lecture recording on distributed systems", created: -6,
+                 notes: "Second half of the term, the one about consensus."),
+        listItem("Wish", "A second monitor arm", created: -8,
+                 notes: "The clamp kind, not the one with the base."),
+    ]
+
     // MARK: - Inbox
 
     public static let inbox: [InboxItem] = [
@@ -398,6 +426,8 @@ public enum Fixtures {
         actions: actions,
         areas: areas,
         projects: projects,
+        lists: lists,
+        listItems: listItems,
         routines: routines,
         routineLog: routineLog,
         knowledgeFolders: knowledgeFolders,
@@ -438,6 +468,22 @@ public enum Fixtures {
             modified: date(day(modified), 12, 0),
             why: why,
             what: what)
+    }
+
+    private static func listItem(
+        _ list: String,
+        _ title: String,
+        created: Int,
+        finished: Bool = false,
+        notes: String = ""
+    ) -> ListItem {
+        ListItem(
+            id: layout.listItemPath(list: list, title: title, finished: finished),
+            list: list,
+            title: title,
+            isFinished: finished,
+            created: date(day(created), 9, 30),
+            notes: notes)
     }
 
     /// `stamp` is the capture file name, `yyyy-MM-dd HHmmss` — `created` is derived from it so

@@ -63,6 +63,24 @@ same fact.
 
 ## 4. Smaller things worth knowing
 
+- **Lists have a domain but no UI yet (§5a).** T03 built the whole Lists domain — the folder
+  layout, the item note, the classifier, the eight commands and the `Rules` queries — and the
+  views come with T10 (the iPhone tab and the Mac sidebar row) and T13 (settings: add, rename,
+  remove, favourites). Until then nothing in the app can create a list, file a capture into one
+  or check an item off, and a user who makes `Lists/Read/` by hand in Obsidian gets a vault the
+  app reads correctly and cannot yet show. `docs/TRACEABILITY.md` §5a says the same per ID.
+- **`createList` is not undoable, on purpose.** A list is a folder, and the only inverse of
+  creating one would be removing a directory — the hard delete this vault never does. ⌘Z after
+  creating a list therefore undoes the command *before* it. Same for choosing favourites, which
+  is a settings change like any other. An empty folder left behind by a rolled-back commit is
+  the same trade (ARCHITECTURE §6).
+- **Renaming a list only by capitalisation is refused** (`Read` → `read`). macOS and iOS file
+  systems are case-insensitive, so that move would ask the file system to rename a folder onto
+  itself. Refusing is the option that cannot lose a note; if it ever matters, the way through is
+  two renames.
+- **A `.moveFolder` on a real iCloud vault has still never run** (T02's note, unchanged by T03):
+  removing and renaming a list are the first two commands that emit one, and both are covered
+  only by `PlainFileSystem` and `InMemoryFileSystem` tests here.
 - **`InboxSessionView` still implements its own card drag geometry and fly-out** instead of
   `DesignSystem`'s `CardFilingController` + `.cardSwipeFiling`. The GTD semantics
   (`CardTarget`, `KeyMap`, `DragResolver`) are unit-tested and stay in `FeatureInbox` either way;

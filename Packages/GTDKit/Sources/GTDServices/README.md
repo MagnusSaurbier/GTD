@@ -13,6 +13,7 @@ Foundation-only — every file here compiles and is tested on Linux.
   into one ordered list of `VaultFileOp`. A `.moveFolder` in `extraOps` owns *both* ends of the
   tree it moves: no note under the old path is trashed for "leaving the snapshot", and a note
   under the new path is the same note, written again only if its content changed too.
+  A `.createFolder` owns no path at all — an empty folder holds no note (§5a).
 - `UndoJournal` (actor) — device-local, persisted in Application Support, keeps 20 entries.
 - `ServiceError` — `.nothingToUndo`, `.undoStale(path:)`.
 
@@ -53,8 +54,10 @@ Foundation-only — every file here compiles and is tested on Linux.
 commands through `InMemoryBackend` and `VaultBackend` and compares a fresh scan of the vault with
 the in-memory snapshot after every step; `SnapshotShape` says which fields are compared and why.
 `FolderMoveTests` is the one suite here that uses `@testable`: the collision policy is a private
-step of `perform`, and no command emits a `.moveFolder` until T03/T05 — its undo half still goes
-through the real backend, with a store that smuggles the move into the next commit.
+step of `perform`. `ListJourneyTests` is the §5a counterpart end to end on a temp copy of the
+sample vault — capture → filed into a list → finished → undone → "Make action" refused at the cap
+→ demote → Next, plus create / rename / remove of the folders themselves — and every assertion is
+about the **files**, not about the snapshot the backend happens to hold.
 `SyncScenarioTests` runs the situations that need two writers on one folder — two devices
 logging the same routine, an undo refused after someone else wrote, a conflict copy, an evicted
 file, and a rename while another view holds the old `NoteID`. `PerformanceTests` generates

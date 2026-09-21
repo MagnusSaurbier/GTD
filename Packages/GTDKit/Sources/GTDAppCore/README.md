@@ -54,7 +54,9 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
 `GTDServices.VaultBackend` is the second implementation of `GTDBackend`, and the two must stay
 observably identical: `GTDServicesTests/ParityTests` drives both through the same commands and
 compares the result, and the undo rule and its labels have one definition each
-(`Rules.isUndoable`, `UndoLabel`).
+(`Rules.isUndoable`, `UndoLabel`). `UndoLabel` is STYLEGUIDE §3.8/§6.3's wording verbatim,
+including the list toasts: `Added to <list>` when a capture is filed into one, `Done` when an
+item is checked off, and `Filed to Next`/`Filed to Someday` when one is made into an action.
 
 ## Testing
 

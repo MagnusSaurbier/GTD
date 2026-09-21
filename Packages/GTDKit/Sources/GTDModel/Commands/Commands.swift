@@ -87,6 +87,9 @@ public enum InboxDecision: Sendable, Equatable, Codable {
     /// next / someday / waiting / done — the status lives in the draft.
     case action(ActionDraft)
     case knowledge(folder: String, title: String)
+    /// I4b/§5a — the capture becomes one item of a list. `notes` is the optional notes panel and
+    /// becomes the note's body; nothing about it is a commitment (L1).
+    case list(name: String, title: String, notes: String)
     case newProject(ProjectDraft, firstActions: [ActionDraft])
     case existingProject(NoteID, actions: [ActionDraft])
     case trash
@@ -113,6 +116,28 @@ public enum GTDCommand: Sendable, Equatable {
     case createProject(ProjectDraft)
     case updateProject(Project)
     case promoteStep(project: NoteID, stepIndex: Int, ActionDraft)
+
+    // MARK: Lists (§5a)
+
+    /// L2 — creates `Lists/<name>/`. The folder *is* the list, so this is the one command whose
+    /// only effect is a folder.
+    case createList(name: String)
+    /// L2 — renames the folder, carrying every item with it (`VaultFileOp.moveFolder`, R-5).
+    case renameList(from: String, to: String)
+    /// L2/R-5 — moves the whole list folder into `GTD/Trash/`, items included. Never a delete,
+    /// always undoable.
+    case removeList(name: String)
+    /// I4b — the lists shown in the inbox navbar, in the user's order (R-5).
+    case setFavouriteLists([String])
+    /// Editing one item: a changed title renames its file, `notes` is the body.
+    case updateListItem(NoteID, title: String, notes: String)
+    /// L3 — checked off: the note moves to `Lists/<name>/Done/` and is kept as a log.
+    case completeListItem(NoteID)
+    /// I4c — the note moves to `GTD/Trash/`, like every other thing thrown away.
+    case trashListItem(NoteID)
+    /// L4 "Make action" — the note moves to `Actions/` and then obeys exactly the rules of an
+    /// inbox action filing (required fields, the cap).
+    case promoteListItem(NoteID, ActionDraft)
     case saveWeeklyReview(WeeklyReview)
     case logRoutineStep(routine: NoteID, stepID: String, RoutineStepResult)
     case setRoutineTime(routine: NoteID, DayTime?)
@@ -152,5 +177,12 @@ public enum VaultFileOp: Sendable, Equatable {
     /// `VaultError.destinationExists` — and its inverse is the move back, so it undoes and rolls
     /// back like every other op.
     case moveFolder(from: String, to: String)
+    /// Creates an (empty) directory, intermediate folders included — what `createList` needs,
+    /// because a list *is* its folder (L2) and an empty folder is not expressible as a file.
+    ///
+    /// It is idempotent, and its **inverse is nothing**: removing a directory would be the hard
+    /// delete this vault never does, so an undo (or a rollback) leaves the empty folder behind.
+    /// That is why `createList` is not undoable (`Rules.isUndoable`) — see ARCHITECTURE §6.
+    case createFolder(path: String)
     case delete(path: String)
 }

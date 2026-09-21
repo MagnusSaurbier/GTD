@@ -194,6 +194,10 @@ final class PassiveStore: VaultStore, @unchecked Sendable {
                     files[path] = nil
                 }
                 inverse.append(.moveFolder(from: to, to: from))
+            case .createFolder:
+                // This fake store models files only; an empty folder leaves no trace, and the
+                // op has no inverse anyway (ARCHITECTURE §6).
+                continue
             case let .delete(path):
                 guard let text = files[path] else { continue }
                 let trashed = VaultLayout.default.trashPath(for: NoteID(path: path)).path

@@ -85,6 +85,7 @@ public enum SampleVault {
 
         for item in s.inbox { files[item.id.path] = renderInbox(item) }
         for action in s.actions { files[action.id.path] = renderAction(action) }
+        for item in s.listItems { files[item.id.path] = renderListItem(item) }
         for area in s.areas { files[area.id.path] = renderArea(area) }
         for project in s.projects { files[project.id.path] = renderProject(project) }
         for routine in s.routines { files[routine.id.path] = renderRoutine(routine) }
@@ -127,6 +128,12 @@ public enum SampleVault {
         var body = "# Why?\n\(action.why)\n"
         body += "\n# What?\n\(action.what)\n"
         return document(frontmatter: frontmatter, body: body)
+    }
+
+    /// §5a — the leanest note in the vault: an optional `created`, and the notes as the body.
+    static func renderListItem(_ item: ListItem) -> String {
+        let frontmatter = item.created.map { ["created: \(iso($0))"] } ?? []
+        return document(frontmatter: frontmatter, body: item.notes.isEmpty ? "" : item.notes + "\n")
     }
 
     static func renderArea(_ area: Area) -> String {

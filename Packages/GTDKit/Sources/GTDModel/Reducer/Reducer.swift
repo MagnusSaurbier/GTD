@@ -82,6 +82,30 @@ public enum Reducer {
         case let .promoteStep(projectID, stepIndex, draft):
             return try promoteStep(s, projectID: projectID, stepIndex: stepIndex, draft: draft, env: env)
 
+        case let .createList(name):
+            return try createList(s, name: name)
+
+        case let .renameList(from, to):
+            return try renameList(s, from: from, to: to)
+
+        case let .removeList(name):
+            return try removeList(s, name: name)
+
+        case let .setFavouriteLists(names):
+            return try setFavouriteLists(s, names: names)
+
+        case let .updateListItem(id, title, notes):
+            return try updateListItem(s, id: id, title: title, notes: notes)
+
+        case let .completeListItem(id):
+            return try completeListItem(s, id: id)
+
+        case let .trashListItem(id):
+            return try trashListItem(s, id: id)
+
+        case let .promoteListItem(id, draft):
+            return try promoteListItem(s, id: id, draft: draft, env: env)
+
         case let .saveWeeklyReview(review):
             return try saveWeeklyReview(s, review: review, env: env)
 
@@ -152,6 +176,32 @@ public enum Reducer {
             guard !pathExists(target, in: next) else { throw .titleCollision(title) }
             guard target != item.id else { throw .invalid(Message.knowledgeTargetIsSource) }
             // The capture *becomes* the knowledge note: nothing is rewritten, nothing is lost (I4).
+            extraOps.append(.move(from: item.id.path, to: target.path))
+
+        case let .list(name, title, notes):
+            guard let list = next.list(named: name) else { throw .invalid(Message.unknownList(name)) }
+            let itemTitle = try requireTitle(title)
+            let target = layout.listItemPath(list: list.name, title: itemTitle)
+            guard !pathExists(target, in: next) else { throw .titleCollision(title) }
+            guard target != item.id else { throw .invalid(Message.knowledgeTargetIsSource) }
+            // The capture *becomes* the list item — the file moves rather than being re-created,
+            // so its `created` timestamp and anything the user put in the frontmatter survive.
+            //
+            // The notes panel is the item's body (I4b). When it is empty the capture's own text
+            // is kept as the body unless the title already says the same thing, so a capture the
+            // title could not hold in full is never dropped. (R-4, T04, refines this: it puts the
+            // full capture text above the notes whenever the title was truncated.)
+            let body = notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? (item.text == itemTitle ? "" : item.text)
+                : notes
+            next.listItems.append(ListItem(
+                id: target,
+                list: list.name,
+                title: itemTitle,
+                isFinished: false,
+                created: item.created,
+                notes: body,
+                passthrough: item.passthrough))
             extraOps.append(.move(from: item.id.path, to: target.path))
 
         case let .newProject(draft, firstActions):
@@ -478,6 +528,202 @@ public enum Reducer {
         }
     }
 
+    // MARK: - Lists (§5a)
+
+    /// L2 — a list is a folder, so creating one creates `Lists/<name>/` and nothing else.
+    ///
+    /// Not undoable (`Rules.isUndoable`): the only inverse would be removing a directory, and
+    /// nothing in this app removes anything. An empty folder left behind costs nothing.
+    private static func createList(_ s: VaultSnapshot, name: String) throws(GTDError) -> Reduction {
+        let clean = try requireListName(name)
+        // The collision names the list that is already there, not the spelling that was asked
+        // for: on a case-insensitive file system `read` and `Read` are the same folder.
+        if let existing = s.list(named: clean) { throw .titleCollision(existing.name) }
+        var next = s
+        next.lists.append(GTDList(name: clean))
+        return Reduction(
+            snapshot: next,
+            extraOps: [.createFolder(path: s.config.layout.listFolder(clean))])
+    }
+
+    /// L2 — renaming a list renames its folder, and every item travels with it (R-5). The items
+    /// keep their contents; only their `NoteID`s change, which is what `renames` reports so an
+    /// open item editor follows the note instead of concluding it is gone (ARCHITECTURE §4).
+    private static func renameList(
+        _ s: VaultSnapshot, from: String, to: String
+    ) throws(GTDError) -> Reduction {
+        guard let list = s.list(named: from) else { throw .invalid(Message.unknownList(from)) }
+        let clean = try requireListName(to)
+        guard clean != list.name else { return Reduction(snapshot: s) }
+        // A case-only rename would ask a case-insensitive file system to move a folder onto
+        // itself. Refused rather than attempted — see ARCHITECTURE §6.
+        guard !GTDList.sameName(clean, list.name) else {
+            throw .invalid(Message.listCaseOnlyRename)
+        }
+        if let existing = s.list(named: clean) { throw .titleCollision(existing.name) }
+
+        let layout = s.config.layout
+        let oldFolder = layout.listFolder(list.name)
+        let newFolder = layout.listFolder(clean)
+
+        var next = s
+        var renames = RenameMap.empty
+        for index in next.lists.indices where next.lists[index].name == list.name {
+            next.lists[index] = GTDList(name: clean)
+        }
+        for index in next.listItems.indices where next.listItems[index].list == list.name {
+            let item = next.listItems[index]
+            let moved = NoteID(path: newFolder + item.id.path.dropFirst(oldFolder.count))
+            next.listItems[index] = rekey(item, to: moved, list: clean)
+            renames.record(item.id, as: moved)
+        }
+        return Reduction(
+            snapshot: next,
+            extraOps: [.moveFolder(from: oldFolder, to: newFolder)],
+            renames: renames)
+    }
+
+    /// L2/R-5 — removing a list moves its folder into `GTD/Trash/`, items and `Done/` log
+    /// included. Nothing is deleted, the name is freed, and one undo brings the whole tree back.
+    private static func removeList(_ s: VaultSnapshot, name: String) throws(GTDError) -> Reduction {
+        guard let list = s.list(named: name) else { throw .invalid(Message.unknownList(name)) }
+        let layout = s.config.layout
+        var next = s
+        next.lists.removeAll { $0.name == list.name }
+        next.listItems.removeAll { $0.list == list.name }
+        if var favourites = next.config.favouriteLists {
+            favourites.removeAll { GTDList.sameName($0, list.name) }
+            next.config.favouriteLists = favourites
+        }
+        return Reduction(
+            snapshot: next,
+            extraOps: [.moveFolder(
+                from: layout.listFolder(list.name),
+                to: "\(layout.trash)/\(list.name)")])
+    }
+
+    /// I4b/R-5 — which lists the inbox navbar shows, in the user's order. Writing it is what
+    /// turns the derived default into a stored choice; until then `GTD/Config.md` has no
+    /// `favouriteLists:` line at all.
+    private static func setFavouriteLists(
+        _ s: VaultSnapshot, names: [String]
+    ) throws(GTDError) -> Reduction {
+        var chosen: [String] = []
+        for name in names {
+            guard let list = s.list(named: name) else { throw .invalid(Message.unknownList(name)) }
+            if !chosen.contains(list.name) { chosen.append(list.name) }
+        }
+        var next = s
+        next.config.favouriteLists = chosen
+        return Reduction(snapshot: next)
+    }
+
+    /// Editing one item (L1): the title is the file name, so changing it is a move — and, like
+    /// every other rename in this app, it never overwrites (`titleCollision`).
+    private static func updateListItem(
+        _ s: VaultSnapshot, id: NoteID, title: String, notes: String
+    ) throws(GTDError) -> Reduction {
+        guard let index = s.listItems.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
+        let previous = s.listItems[index]
+        let clean = try requireTitle(title)
+
+        var updated = previous
+        updated.title = clean
+        updated.notes = notes
+
+        var next = s
+        var extraOps: [VaultFileOp] = []
+        var renames = RenameMap.empty
+
+        let wanted = s.config.layout.listItemPath(
+            list: previous.list, title: clean, finished: previous.isFinished)
+        if wanted != previous.id {
+            guard !pathExists(wanted, in: s) else { throw .titleCollision(clean) }
+            next.listItems[index] = rekey(updated, to: wanted, list: previous.list)
+            extraOps.append(.move(from: previous.id.path, to: wanted.path))
+            renames.record(previous.id, as: wanted)
+        } else {
+            next.listItems[index] = updated
+        }
+        return Reduction(snapshot: next, extraOps: extraOps, renames: renames)
+    }
+
+    /// L3 — checking an item off moves its note into `Lists/<name>/Done/`, where it stays as a
+    /// log. Idempotent: an already-finished item is left exactly as it is.
+    private static func completeListItem(_ s: VaultSnapshot, id: NoteID) throws(GTDError) -> Reduction {
+        guard let index = s.listItems.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
+        let item = s.listItems[index]
+        guard !item.isFinished else { return Reduction(snapshot: s) }
+
+        let target = s.config.layout.listItemPath(list: item.list, title: item.title, finished: true)
+        guard !pathExists(target, in: s) else { throw .titleCollision(item.title) }
+
+        var moved = rekey(item, to: target, list: item.list)
+        moved.isFinished = true
+        var next = s
+        next.listItems[index] = moved
+        var renames = RenameMap.empty
+        renames.record(item.id, as: target)
+        return Reduction(
+            snapshot: next,
+            extraOps: [.move(from: item.id.path, to: target.path)],
+            renames: renames)
+    }
+
+    /// I4c — the same rule as for an action: the entity leaves the snapshot naming no path, so
+    /// the diff emits the `.delete` that `GTDVault` performs as a move into `GTD/Trash/`.
+    private static func trashListItem(_ s: VaultSnapshot, id: NoteID) throws(GTDError) -> Reduction {
+        guard s.listItem(id) != nil else { throw .notFound(id) }
+        var next = s
+        next.listItems.removeAll { $0.id == id }
+        return Reduction(snapshot: next)
+    }
+
+    /// L4 "Make action" — the note **moves** to `Actions/` (nothing is re-created, so its
+    /// `created` timestamp, its notes and any key the user added survive) and is then subject to
+    /// exactly the rules of an inbox action filing: it goes through `makeAction` and the same
+    /// `checkCap`, so the required-field validation of R-3 (T04) and the cap apply without this
+    /// command knowing anything about either.
+    private static func promoteListItem(
+        _ s: VaultSnapshot, id: NoteID, draft: ActionDraft, env: ReducerEnv
+    ) throws(GTDError) -> Reduction {
+        guard let item = s.listItem(id) else { throw .notFound(id) }
+        var next = s
+        let action = try makeAction(
+            from: draft, in: s, env: env, created: item.created, passthrough: item.passthrough)
+        next.listItems.removeAll { $0.id == id }
+        next.actions.append(action)
+        try checkCap(old: s, new: next, today: env.today)
+        var renames = RenameMap.empty
+        renames.record(item.id, as: action.id)
+        return Reduction(
+            snapshot: next,
+            extraOps: [.move(from: item.id.path, to: action.id.path)],
+            renames: renames)
+    }
+
+    /// L2 — a list name is a folder name: non-empty after sanitising, and never the reserved
+    /// `Done` (which is the finished-items log of *every* list, L3/D38).
+    private static func requireListName(_ raw: String) throws(GTDError) -> String {
+        guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw .invalid(Message.listNameRequired)
+        }
+        let name = VaultLayout.sanitize(raw)
+        guard !VaultLayout.isReservedListName(name) else { throw .invalid(Message.listNameReserved) }
+        return name
+    }
+
+    private static func rekey(_ item: ListItem, to id: NoteID, list: String) -> ListItem {
+        ListItem(
+            id: id,
+            list: list,
+            title: item.title,
+            isFinished: item.isFinished,
+            created: item.created,
+            notes: item.notes,
+            passthrough: item.passthrough)
+    }
+
     // MARK: - Routines
 
     /// R5 — one entry per step per day per device. Re-logging a step replaces the earlier entry,
@@ -575,7 +821,8 @@ public enum Reducer {
         from draft: ActionDraft,
         in s: VaultSnapshot,
         env: ReducerEnv,
-        created: Date? = nil
+        created: Date? = nil,
+        passthrough: NotePassthrough = .empty
     ) throws(GTDError) -> Action {
         let title = try requireTitle(draft.title)
         let id = s.config.layout.actionPath(title: title)
@@ -592,7 +839,11 @@ public enum Reducer {
             due: draft.due,
             created: created ?? env.now,
             why: draft.why,
-            what: draft.what)
+            what: draft.what,
+            // Set when the note already exists and is only *moving* into `Actions/` (L4): the
+            // codec then patches that file instead of rendering a new one, so its body and any
+            // key the user added survive the promotion.
+            passthrough: passthrough)
         try normalize(&action, previous: nil, waiting: draft.waiting, in: s, env: env)
         return action
     }
@@ -694,7 +945,7 @@ public enum Reducer {
 
     private static func pathExists(_ id: NoteID, in s: VaultSnapshot) -> Bool {
         s.action(id) != nil || s.project(id) != nil || s.area(id) != nil
-            || s.routine(id) != nil || s.inboxItem(id) != nil
+            || s.routine(id) != nil || s.inboxItem(id) != nil || s.listItem(id) != nil
     }
 
     private static func rekey(_ action: Action, to id: NoteID) -> Action {
@@ -732,6 +983,11 @@ public enum Reducer {
         static let stepAlreadyPromoted = "This step is already promoted"
         static let stepAlreadyDone = "This step is already done"
         static let knowledgeTargetIsSource = "The knowledge note would overwrite the capture"
+        static let listNameRequired = "A list name is required"
+        static let listNameReserved =
+            "\"\(VaultLayout.doneFolderName)\" is reserved for finished items and cannot be a list"
+        static let listCaseOnlyRename = "Renaming a list only by capitalisation is not supported"
+        static func unknownList(_ name: String) -> String { "Unknown list: \(name)" }
         static let capTooSmall = "Next cap must be at least 1"
         static let contextsRequired = "At least one context is required"
         static func unknownContext(_ value: String) -> String { "Unknown context: \(value)" }

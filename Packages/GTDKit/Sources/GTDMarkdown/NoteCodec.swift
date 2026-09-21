@@ -155,18 +155,72 @@ public enum NoteCodec {
 
         var sections = BodySections(lines: doc.bodyLines, terminator: doc.terminator)
         let hasHeadings = sections.index(of: "Why?") != nil || sections.index(of: "What?") != nil
+        // "The whole body is the What?" holds when this file really decodes as an action —
+        // `decodeAction` reads a headingless body as `what` — or when the body already says
+        // exactly what the action says. When neither holds, the note is being *moved* into
+        // `Actions/` (a promoted list item, L4) and its body is somebody else's content: the
+        // headings are appended **below** it instead of written over it, so nothing is lost.
+        let bodyIsWhat = !hasHeadings
+            && (reference != nil || RawText.text(sections.prefix) == action.what)
         if (reference?.why ?? "") != action.why {
             sections.setText("Why?", action.why, canonicalOrder: Headings.action)
         }
         if (reference?.what ?? "") != action.what {
-            if hasHeadings {
-                sections.setText("What?", action.what, canonicalOrder: Headings.action)
-            } else {
+            if bodyIsWhat {
                 // The whole body was read as "What?" — write it back the same way.
                 sections.prefix = RawText.block(action.what, terminator: doc.terminator)
+            } else {
+                sections.setText("What?", action.what, canonicalOrder: Headings.action)
             }
         }
         doc.setBody(sections.lines)
+        return doc.text
+    }
+
+    // MARK: - List item (§5a)
+
+    /// One note in `Lists/<name>/` (L1). The **title is the file name**, the body is free notes,
+    /// and the only key the app writes is the optional `created` timestamp — a list item carries
+    /// no status, no context and no commitment (D17/D18).
+    ///
+    /// The list it belongs to and whether it is finished come from the path (L3): the folder is
+    /// the only marker there is. `layout` is only needed to know where the lists root is.
+    public static func decodeListItem(
+        id: NoteID, text: String, layout: VaultLayout = .default, timeZone: TimeZone = .current
+    ) throws -> ListItem {
+        let doc = try FrontmatterDocument(text: text, path: id.path)
+        guard let list = layout.listName(of: id) else {
+            throw NoteCodecError.unreadable(
+                path: id.path, reason: "Not a list item: expected \(layout.lists)/<list>/<note>.md")
+        }
+        return ListItem(
+            id: id,
+            list: list,
+            title: id.title,
+            isFinished: layout.isFinishedListItem(id),
+            created: doc.timestamp("created", defaultTimeZone: timeZone),
+            notes: RawText.text(doc.bodyLines),
+            passthrough: passthrough(text))
+    }
+
+    public static func encode(_ item: ListItem, timeZone: TimeZone = .current) -> String {
+        let stored = item.passthrough[sourceSlot]
+        let source = stored ?? NoteTemplates.listItem
+        guard var doc = try? FrontmatterDocument(text: source, path: item.id.path) else { return source }
+        // The stored text may be the note under its *previous* path — a capture being filed into
+        // a list, or an item being renamed — so the reference is decoded against the item's own
+        // list rather than the path the text came from. Only `created` and the body are patched;
+        // neither depends on where the file sits.
+        let reference = stored.flatMap {
+            try? FrontmatterDocument(text: $0, path: item.id.path)
+        }
+        let referenceCreated = reference?.timestamp("created", defaultTimeZone: timeZone)
+        let referenceNotes = reference.map { RawText.text($0.bodyLines) }
+
+        setOptionalDate("created", item.created, referenceCreated, &doc, Keys.listItem, timeZone)
+        if (referenceNotes ?? "") != item.notes {
+            doc.setBody(RawText.block(item.notes, terminator: doc.terminator))
+        }
         return doc.text
     }
 
@@ -427,6 +481,7 @@ public enum NoteCodec {
                 archive: node["archive"]?.scalar?.string ?? layout.archive,
                 projects: node["projects"]?.scalar?.string ?? layout.projects,
                 knowledge: node["knowledge"]?.scalar?.string ?? layout.knowledge,
+                lists: node["lists"]?.scalar?.string ?? layout.lists,
                 routines: node["routines"]?.scalar?.string ?? layout.routines,
                 routineLog: node["routineLog"]?.scalar?.string ?? layout.routineLog,
                 reviews: node["reviews"]?.scalar?.string ?? layout.reviews,
@@ -437,6 +492,9 @@ public enum NoteCodec {
             contexts: doc.list("contexts") ?? GTDConfig.default.contexts,
             onTheGoContexts: doc.list("onTheGoContexts") ?? GTDConfig.default.onTheGoContexts,
             nextCap: doc.int("nextCap") ?? GTDConfig.default.nextCap,
+            // R-5 — absent means "the user has never chosen"; `Rules.favouriteLists` derives the
+            // default. `nil` and `[]` are different answers and both survive a round trip.
+            favouriteLists: doc.hasKey("favouriteLists") ? (doc.list("favouriteLists") ?? []) : nil,
             layout: layout,
             passthrough: passthrough(text))
     }
@@ -459,6 +517,15 @@ public enum NoteCodec {
         if reference?.nextCap != config.nextCap {
             doc.setValue("nextCap", String(config.nextCap), canonicalOrder: order)
         }
+        // R-5 — the derived default is never written: only a choice the user made puts the key
+        // into the file, and clearing it back to `nil` takes the line out again.
+        if reference?.favouriteLists != config.favouriteLists {
+            if let favourites = config.favouriteLists {
+                doc.setValue("favouriteLists", YAMLScalar.flowList(favourites), canonicalOrder: order)
+            } else {
+                doc.removeValue("favouriteLists")
+            }
+        }
         if reference?.layout != config.layout {
             let defaults = VaultLayout.default
             var lines = ["layout:"]
@@ -471,6 +538,7 @@ public enum NoteCodec {
             add("archive", config.layout.archive, defaults.archive)
             add("projects", config.layout.projects, defaults.projects)
             add("knowledge", config.layout.knowledge, defaults.knowledge)
+            add("lists", config.layout.lists, defaults.lists)
             add("routines", config.layout.routines, defaults.routines)
             add("routineLog", config.layout.routineLog, defaults.routineLog)
             add("reviews", config.layout.reviews, defaults.reviews)
@@ -638,10 +706,14 @@ public enum NoteCodec {
             "status", "contexts", "timeEstimate", "project", "defer", "due",
             "waitingFor", "followUpDate", "created", "completedDate", "reviewReason",
         ]
+        /// A list item carries nothing else — that is the point of L1.
+        public static let listItem = ["created"]
         public static let area = ["kind"]
         public static let project = ["kind", "status", "area"]
         public static let routine = ["time"]
-        public static let config = ["contexts", "onTheGoContexts", "nextCap", "layout"]
+        public static let config = [
+            "contexts", "onTheGoContexts", "nextCap", "favouriteLists", "layout",
+        ]
         public static let review = ["kind", "year", "week", "savedAt"]
     }
 
@@ -682,6 +754,7 @@ public enum NoteCodec {
 enum NoteTemplates {
     static let inbox = "---\n---\n"
     static let action = "---\n---\n# Why?\n\n# What?\n"
+    static let listItem = "---\n---\n"
     static let area = "---\nkind: area\n---\n"
     static let project = "---\n---\n# Outcome\n\n# Why?\n\n# Steps\n\n# Log\n"
     static let routine = "---\n---\n"

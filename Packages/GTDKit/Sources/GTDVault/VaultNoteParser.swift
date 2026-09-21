@@ -11,6 +11,9 @@ import GTDModel
 public protocol VaultNoteParser: Sendable {
     func inboxItem(id: NoteID, text: String) throws -> InboxItem
     func action(id: NoteID, text: String) throws -> Action
+    /// §5a — `layout` says where the lists root is; the list and the finished flag come from the
+    /// path below it.
+    func listItem(id: NoteID, text: String, layout: VaultLayout) throws -> ListItem
     func area(id: NoteID, text: String) throws -> Area
     func project(id: NoteID, text: String) throws -> Project
     func routine(id: NoteID, text: String) throws -> Routine
@@ -29,6 +32,10 @@ public struct NoteCodecParser: VaultNoteParser {
 
     public func action(id: NoteID, text: String) throws -> Action {
         try NoteCodec.decodeAction(id: id, text: text)
+    }
+
+    public func listItem(id: NoteID, text: String, layout: VaultLayout) throws -> ListItem {
+        try NoteCodec.decodeListItem(id: id, text: text, layout: layout)
     }
 
     public func area(id: NoteID, text: String) throws -> Area {

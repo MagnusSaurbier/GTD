@@ -45,7 +45,8 @@ for module in Packages/GTDKit/Sources/*/; do BASES+=("${module%/}"); done
 ALLOWED_MISSING=(
     "*.xcodeproj" "GTD.xcodeproj" "App/Info.plist" "App/GTD.entitlements" ".build/" "DerivedData/"
     "Actions" "Actions/*" "Actions_legacy/*" "Archive/*" "Inbox" "Inbox/*" "Inbox.md"
-    "Knowledge/*" "Projects/*" "GTD/*" "migration-report.md" "projects.decisions.yaml"
+    "Knowledge/*" "Projects/*" "GTD/*" "Lists" "Lists/*" "Done" "Done/"
+    "migration-report.md" "projects.decisions.yaml"
 )
 
 problems=0

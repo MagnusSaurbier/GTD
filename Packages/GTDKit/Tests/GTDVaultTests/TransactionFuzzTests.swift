@@ -204,6 +204,12 @@ struct TransactionFuzzTests {
                     folders.insert(destination + String(folder.dropFirst(source.count)))
                 }
                 rememberParents(of: destination + "/x")
+            case let .createFolder(path):
+                let folder = VaultPath.normalize(path)
+                // Idempotent, and refused only when a *file* already sits on the name.
+                guard live[folder] == nil else { return nil }
+                folders.insert(folder)
+                rememberParents(of: folder + "/x")
             case let .delete(path):
                 live[VaultPath.normalize(path)] = nil     // into the trash, which we do not model
             }

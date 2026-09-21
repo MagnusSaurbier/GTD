@@ -8,13 +8,14 @@ Compiles and tests on Linux.
 
 - `Core/` — `NoteID`, `Day` + `DayTime` (integer civil calendar), `VaultLayout` (folder defaults
   and every path builder), `RenameMap` (old id → new id, `resolve`/`merging`).
-- `Entities/` — `InboxItem`, `Action`, `Area`, `Project`, `ProjectStep`, `LogEntry`, `Routine`,
+- `Entities/` — `InboxItem`, `Action`, `GTDList`, `ListItem`, `Area`, `Project`, `ProjectStep`, `LogEntry`, `Routine`,
   `RoutineStep`, `RoutineLogEntry`, `GTDConfig`, `VaultIssue`, `WeeklyReview`, `VaultSnapshot`,
   `NotePassthrough`, `Checkbox`, `ActionStatus`, `ProjectStatus`, `TimeBucket`, `RoutineStepResult`.
 - `Commands/` — `ActionDraft`, `ProjectDraft`, `WaitingInfo`, `InboxDecision`, `GTDCommand`,
   `GTDError`, `AppPrompt`, `VaultFileOp`.
 - `Reducer/` — `ReducerEnv`, `Reduction`, `Reducer.reduce(_:_:env:) throws(GTDError)`.
-- `Rules/` — `Rules` (queries incl. `isUndoable`, `openActions`, `closedDay`, `waitingSince`),
+- `Rules/` — `Rules` (queries incl. `isUndoable`, `openActions`, `closedDay`, `waitingSince`,
+  and the list queries `lists`, `listRows`, `listItems`, `openListItemCount`, `favouriteLists`),
   `Signal`/`SignalKind`/`SignalStep`, `StalenessPolicy`. The list queries are linear in the
   snapshot: `projectRows`/`stalledProjects` bucket the visible actions by project once rather
   than scanning them per project (it used to be O(projects × actions)).
@@ -39,9 +40,20 @@ Compiles and tests on Linux.
   path, so the diff emits `.delete`, which `GTDVault` performs as a move into `GTD/Trash/`.
   `VaultFileOp` has no hard delete and never will: its four cases are `put`, `move`,
   `moveFolder` (R-5 — a whole directory at once, for a list rename, a removed list or a project
-  changing area) and `delete`, and the last one is a move into `GTD/Trash/`.
+  changing area), `createFolder` (an empty list folder; no inverse, so `createList` is not
+  undoable) and `delete`, and the last one is a move into `GTD/Trash/`.
   `ActionStatus.legacyTrashed` exists only to *read* a pre-rework `status: trash` line: it is
   closed, hidden, out of `allCases`, and the reducer refuses any move into it.
+- **A list is a folder** (§5a): `Lists/<name>/` is the list, an item is a note with a title, an
+  optional `created` and free notes, and `Lists/<name>/Done/` is the finished log. `Done` is a
+  reserved name, list names are compared case-insensitively (the file system is), and the six list
+  commands are `createList` / `renameList` / `removeList` / `setFavouriteLists` /
+  `updateListItem` / `completeListItem` / `trashListItem` / `promoteListItem`.
+- **A list item is never an action**: no `Rules` query for actions, no stat, no notification and
+  no review card can see one, and `promoteListItem` is the only door between the two — it goes
+  through the same `makeAction` + `checkCap` as an inbox filing.
+- `GTDConfig.favouriteLists` is `Optional` on purpose: `nil` means "never chosen" and
+  `Rules.favouriteLists` derives the first four lists alphabetically, which is never written back.
 - The cap blocks only commands that *increase* Next occupancy.
 - Every `Rules` list has a **total** order (`NoteID` last), so equal snapshots render identically.
 - `Day` never uses `Calendar` for arithmetic; queries converting a `Date` take a `calendar`
@@ -57,7 +69,11 @@ Compiles and tests on Linux.
   in `GTDAppCore/UndoLabel`.
 - Renaming an action moves the file and rewrites `ProjectStep.promotedTo`. Renaming or re-filing
   a **project** is refused (`.invalid`) — the folder name is its identity.
-- `GTD/Trash/<file>` keeps the source file name; `GTDServices` uniquifies on collision.
+- `GTD/Trash/<file>` keeps the source file name; `GTDServices` uniquifies on collision — a
+  removed list lands there as a whole folder, under a free name.
+- `Rules.listItems(_:in:finished:)` needs the `finished:` flag: the open items and the `Done/`
+  log are two different lists of the same shape, and mixing them is the one mistake the type
+  system cannot catch here.
 
 ## Ownership and testing
 

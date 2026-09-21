@@ -122,6 +122,8 @@ public actor UndoJournal {
                 kind = "move"; self.from = from; self.to = to
             case let .moveFolder(from, to):
                 kind = "moveFolder"; self.from = from; self.to = to
+            case let .createFolder(path):
+                kind = "createFolder"; self.path = path
             case let .delete(path):
                 kind = "delete"; self.path = path
             }
@@ -132,6 +134,7 @@ public actor UndoJournal {
             case "put": path.map { .put(path: $0, text: text ?? "") }
             case "move": from.flatMap { f in to.map { .move(from: f, to: $0) } }
             case "moveFolder": from.flatMap { f in to.map { .moveFolder(from: f, to: $0) } }
+            case "createFolder": path.map { .createFolder(path: $0) }
             case "delete": path.map { .delete(path: $0) }
             default: nil
             }

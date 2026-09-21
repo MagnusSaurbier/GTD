@@ -37,3 +37,23 @@ struct FixturesSmokeTests {
         #expect(audits.contains { $0.rows.contains { $0.cells.contains { $0.result != nil } } })
     }
 }
+
+/// L6/L1 — a list item is not a commitment and never appears in the weekly stats: the numbers
+/// of a vault with lists are the numbers of the same vault without them.
+struct ListItemsAreInvisibleToStatsTests {
+
+    @Test func listItemsChangeNoStatistic() {
+        let week = ISOWeek(containing: Fixtures.today)
+        var withoutLists = Fixtures.sampleSnapshot
+        withoutLists.lists = []
+        withoutLists.listItems = []
+
+        let with = WeeklyStats.compute(
+            snapshot: Fixtures.sampleSnapshot, week: week, calendar: Fixtures.calendar)
+        let without = WeeklyStats.compute(
+            snapshot: withoutLists, week: week, calendar: Fixtures.calendar)
+
+        #expect(!Fixtures.sampleSnapshot.listItems.isEmpty, "the fixture has list items to hide")
+        #expect(with == without)
+    }
+}

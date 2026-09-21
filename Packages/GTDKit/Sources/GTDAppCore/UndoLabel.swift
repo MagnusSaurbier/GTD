@@ -20,6 +20,8 @@ public enum UndoLabel {
             switch decision {
             case let .action(draft): "Filed to \(tier(draft.status))"
             case .knowledge: "Filed to Knowledge"
+            // STYLEGUIDE §6.3 spells this one with the list's name: `Added to Read`.
+            case let .list(name, _, _): "Added to \(name)"
             case .newProject, .existingProject: "Filed to Project"
             case .trash: "Moved to Trash"
             }
@@ -34,6 +36,18 @@ public enum UndoLabel {
         case .createArea: "Created area"
         case .promoteStep: "Promoted step"
         case .deferInboxToReview: "Deferred to review"
+
+        // §5a — the list commands. `Done` is STYLEGUIDE §6.3's wording for a finished list item;
+        // a promoted one reads like any other filing, because that is exactly what it is (L4).
+        case .completeListItem: "Done"
+        case .trashListItem: "Moved to Trash"
+        case let .promoteListItem(_, draft): "Filed to \(tier(draft.status))"
+        case .renameList: "Renamed list"
+        case .removeList: "Removed list"
+        case .updateListItem: "Edited"
+        case .createList, .setFavouriteLists:
+            // Not undoable (`Rules.isUndoable`); never reaches the toast.
+            "Last change"
         case .toggleCheckbox: "Toggled checkbox"
         case .updateAction, .updateProject, .editInboxText: "Edited"
         case .saveWeeklyReview, .logRoutineStep, .setRoutineTime, .updateConfig, .archiveCompleted:

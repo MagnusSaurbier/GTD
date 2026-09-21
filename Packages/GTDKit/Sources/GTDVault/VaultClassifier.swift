@@ -15,6 +15,12 @@ public enum VaultFileKind: String, Sendable, Equatable, CaseIterable {
     case reference
     /// Inside `Knowledge/` — only the folder tree reaches the snapshot (I4).
     case knowledge
+    /// `Lists/<list>/<note>.md` (open) or `Lists/<list>/Done/<note>.md` (finished) — §5a.
+    case listItem
+    /// A markdown note under `Lists/` that is in no list: directly in `Lists/`, or nested deeper
+    /// than a list's `Done/`. Ignored and reported as a `VaultIssue` — never guessed at, never
+    /// moved (§5a).
+    case listMisplaced
     /// Inside `Archive/` — excluded from the snapshot (A5).
     case archive
     /// Inside `GTD/Trash/` — invisible to the app.
@@ -44,6 +50,12 @@ public struct VaultClassifier: Sendable {
         if VaultPath.isInside(path, layout.inbox) { return markdown ? .inbox : .other }
         if VaultPath.isInside(path, layout.actions) { return markdown ? .action : .other }
         if VaultPath.isInside(path, layout.knowledge) { return .knowledge }
+        if VaultPath.isInside(path, layout.lists) {
+            // §5a — a list is a *direct* subfolder of `Lists/`, and `Done/` inside it is the
+            // finished log (L3). Anything else under `Lists/` is left alone and reported.
+            guard markdown else { return .other }
+            return layout.listName(of: NoteID(path: path)) == nil ? .listMisplaced : .listItem
+        }
         if VaultPath.isInside(path, layout.projects) {
             // `Projects/[<Area>/]<Name>/<Name>.md` is the area or project note; everything else
             // in the folder is a reference file.
@@ -59,6 +71,36 @@ public struct VaultClassifier: Sendable {
     /// The folder a project or area note owns — where its reference files live.
     public func projectFolder(of notePath: String) -> String {
         VaultPath.folder(of: notePath)
+    }
+
+    /// A **folder** path → the list it is, or `nil`. `Lists/Read` is the list `Read`;
+    /// `Lists/Read/Done` is the reserved finished-items log (L3), `Lists/Done` is reserved too,
+    /// anything deeper is not a list, and the `Lists` folder itself is not one either (L2).
+    public func listFolderName(of rawPath: String) -> String? {
+        let path = VaultPath.normalize(rawPath)
+        let base = VaultPath.normalize(layout.lists)
+        guard path.hasPrefix(base + "/") else { return nil }
+        let relative = String(path.dropFirst(base.count + 1))
+        guard !relative.isEmpty, !relative.contains("/") else { return nil }
+        return VaultLayout.isReservedListName(relative) ? nil : relative
+    }
+
+    /// Why a markdown note under `Lists/` is in no list — the `VaultIssue`'s message (§5a).
+    public func misplacedListReason(of rawPath: String) -> String {
+        let path = VaultPath.normalize(rawPath)
+        let base = VaultPath.normalize(layout.lists)
+        let relative = path.hasPrefix(base + "/") ? String(path.dropFirst(base.count + 1)) : path
+        let depth = relative.split(separator: "/").count
+        if depth <= 1 {
+            return "A note directly in \(layout.lists)/ is not in any list. Move it into a list "
+                + "folder — the app leaves it exactly where it is (§5a)."
+        }
+        if VaultLayout.isReservedListName(relative.split(separator: "/").first.map(String.init) ?? "") {
+            return "\"\(VaultLayout.doneFolderName)\" is reserved for a list's finished items and "
+                + "is not a list. Move this note into a real list folder."
+        }
+        return "Nested too deeply for a list item: a list holds its notes directly, and only "
+            + "\(VaultLayout.doneFolderName)/ below it. The app ignores this file (§5a)."
     }
 
     /// `Knowledge/Studium/Thesis` → `Studium/Thesis`; the `Knowledge` folder itself → `nil`.
