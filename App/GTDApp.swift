@@ -42,6 +42,8 @@ struct GTDApp: App {
             MacSettingsScene(composition: composition)
                 .environment(composition.model)
         }
+        // Follows `MacSettingsScene`'s min/max frame, so the scrolling form can be resized.
+        .windowResizability(.contentSize)
         #else
         WindowGroup {
             RootView(composition: composition, router: router, notifications: notifications)
