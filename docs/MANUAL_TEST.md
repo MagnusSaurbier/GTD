@@ -119,6 +119,13 @@ You need a full Next list: demote or complete until the Next sidebar count reads
       folders as filing targets. Pick a project folder — the note lands **inside that project's
       folder**.
 - [ ] Tap `More…`: a plain list of every list; tapping one files the card.
+- [ ] In `More…`, tap `New list…`, type a name, `Create`: the folder `Lists/<name>/` exists, the
+      card is filed into it (toast `Added to <name>`), and the next card's navbar shows the new
+      list (while no favourites are chosen). Undo brings the card back to the opened Knowledge /
+      List card; the empty list stays. Typing `read` when `Read` exists, or `Done`, is refused
+      under the field and the sheet stays open.
+- [ ] On a vault whose `Lists/` folder is empty or missing: the navbar is `Knowledge · More…`,
+      and `More…` shows `No lists yet` with an explanation and `New list…` — never an empty sheet.
 - [ ] Only ↓ works as a swipe here (collapse). ← and → do nothing.
 
 ### 1.6 Trash, defer, undo, quit

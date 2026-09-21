@@ -57,7 +57,7 @@ Foundation-only — every file here compiles and is tested on Linux.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 77 tests. `ParityTests` drives 21
+`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 78 tests. `ParityTests` drives 21
 commands through `InMemoryBackend` and `VaultBackend` and compares a fresh scan of the vault with
 the in-memory snapshot after every step; `SnapshotShape` says which fields are compared and why.
 `FolderMoveTests` is the one suite here that uses `@testable`: the collision policy is a private
