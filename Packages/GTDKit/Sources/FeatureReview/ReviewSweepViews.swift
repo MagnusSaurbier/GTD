@@ -172,7 +172,7 @@ struct SweepDeferredStep: View {
 
     /// The sweep's own key map. The inbox's map moved into `GTDAppCore.KeyBindings` when the
     /// card became a two-step state machine (R-10, T08) and is resolved per *step* there; the
-    /// sweep has one flat row of targets, so it keeps this local table until T12 revisits it.
+    /// sweep has one flat row of targets, so it keeps this local, fixed table (not rebindable).
     private static func shortcut(for target: CardTarget) -> KeyEquivalent {
         switch target {
         case .next: .rightArrow

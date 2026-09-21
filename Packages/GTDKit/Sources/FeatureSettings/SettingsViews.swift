@@ -16,7 +16,7 @@ import UIKit
 
 /// First run: explain what to pick, pick it, show a validation preview, ask for notifications,
 /// then hint at the capture Shortcut. Returns a plain `URL` — this target must not import
-/// `GTDVault`; the shell (T15/T40) turns it into a `VaultBookmark`. **Owned by T26.**
+/// `GTDVault`; the app shell turns it into a `VaultBookmark`.
 ///
 /// The validation preview and the rest of onboarding read `@Environment(AppModel.self)` (the
 /// same pattern `SettingsView` uses) rather than a second closure: once the shell hands the
