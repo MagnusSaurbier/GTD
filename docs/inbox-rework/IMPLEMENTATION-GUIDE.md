@@ -377,7 +377,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T09 | | | | | |
 | T10 | | | | | |
 | T11 | **in progress** (started 2026-09-21, worktree, ∥ T08/T12) | | Sonnet | 1 | |
-| T12 | **in progress** (started 2026-09-21, worktree, ∥ T05/T08 — its needs T06/T07 are in) | | Sonnet | 1 | |
+| T12 | done | a88bb96 | Sonnet | 1 | worktree, merged clean; gate green (1148 tests, Review 91); both app builds green. Open wiring for T13: the deck's `onEditAction` hook and the stored `KeyBindings` are not yet passed in by the shell; nobody has driven the deck on screen yet (T15) |
 | T13 | | | | | |
 | T14 | done | 828b678 | Sonnet | 1 | worktree; 42 pytest green from a scratch venv (manager re-ran); script never writes `reading`/`backlog`/`maybe` |
 | T15 | | | | | |
@@ -401,3 +401,4 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 _(one line each: date · task · decision · why — and the ARCHITECTURE §6 row it became)_
 - 2026-09-21 · T07 · `KeyBindings` is a `GTDAppCore` type, persisted through `DeviceSettings` · FeatureInbox/Review/Settings all need it and may not depend on each other · ARCHITECTURE §6.
 - 2026-09-21 · T05 · a stale `area:` key inside `Projects/no_area/` is reported as a `VaultIssue`, not corrected; `Projects/no_area/` is not a required folder (created by the first area-less project) · never rewrite a note unasked · ARCHITECTURE §6.
+- 2026-09-21 · T12 · Someday deck order uses `Action.modified` as "untouched" (never-touched = stalest); the deck has its own `Next is full` sheet; a stored pre-rework `deckBacklogMaybe` page resumes at the Someday deck · ARCHITECTURE §6.
