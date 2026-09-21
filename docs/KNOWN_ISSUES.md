@@ -12,7 +12,7 @@ and `AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the m
 iOS-simulator app built, all package tests and the app's own test bundles passed, and the app
 launched on fixtures on both platforms.
 
-The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 289 package
+The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 295 package
 tests pass and both scratch app builds are warning-free — and parts of it have been driven on
 screen: the two-step card's step 1, the opened action card with its asterisk refusal, a swipe to
 Next, Trash with its toast, the project picker, the keep card's navbar, the Mac per-step key
