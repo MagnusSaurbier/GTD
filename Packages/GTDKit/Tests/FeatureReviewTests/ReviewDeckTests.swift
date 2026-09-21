@@ -165,6 +165,20 @@ struct ReviewDeckTests {
         #expect(session.choice(forKey: "p", on: next) == nil)      // not offered here
     }
 
+    /// R-10 (N7): the deck's key resolution goes through `KeyBindings`, so a rebind follows —
+    /// the old key stops working and the new one takes over.
+    @Test func keyResolutionFollowsARebind() throws {
+        var bindings = KeyBindings.defaults
+        try bindings.rebind(.deckDemote, to: .letter("J"))
+
+        let session = ReviewTest.session(ReviewTest.inboxZero)
+        let next = ReviewDeck.cards(for: .next, in: session.snapshot, today: Fixtures.today)[0]
+        #expect(session.choice(forKey: "j", on: next, bindings: bindings) == .demote)
+        #expect(session.choice(forKey: "d", on: next, bindings: bindings) == nil)
+        // The default table (unaffected) still resolves `d`.
+        #expect(session.choice(forKey: "d", on: next) == .demote)
+    }
+
     @Test func theDeckCounterCountsDecidedCards() async throws {
         let session = ReviewTest.session(ReviewTest.inboxZero)
         ReviewTest.walk(session, to: .deckNext)

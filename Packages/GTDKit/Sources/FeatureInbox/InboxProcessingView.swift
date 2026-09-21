@@ -400,6 +400,12 @@ struct InboxSessionView: View {
         switch resolved {
         case let .target(target):
             Task { await session.choose(target) }
+        case let .command(command):
+            // Only `cardProject` is reachable today (R-10): `P` opens the project chip/picker,
+            // the same sheet the `+ project` chip presents (R-8).
+            if command == .cardProject {
+                session.sheet = .project
+            }
         case let .context(index):
             guard index < session.contexts.count else { return .ignored }
             toggleContext(session.contexts[index])

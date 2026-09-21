@@ -18,6 +18,8 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
   `missingFields(…)` a target demands), `SwipeDirection`, `DragResolver` (axis lock, thresholds,
   commitment, and `collapses(…)` for the downward drag), `KeyMap` (Mac keys).
   The **single** definition of the swipe/key map (ARCHITECTURE §6).
+  `KeyMap.resolve` takes a `GTDAppCore.KeyBindings` (default `.defaults`, R-10/N7): the Mac `P`
+  key resolves to `InboxKey.command(.cardProject)`, a rebindable command.
 - `InboxPickers.swift` — `KnowledgeTree`, `ProjectPicker`, `InboxDefaultsStore`
   (device-local last-used folder + one-time hint; `EphemeralInboxDefaults` for tests).
 - `InboxCopy.swift` — inbox-only strings (the shared ones stay in `DesignSystem.Copy`) and
@@ -80,4 +82,4 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (55 tests).
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (56 tests).

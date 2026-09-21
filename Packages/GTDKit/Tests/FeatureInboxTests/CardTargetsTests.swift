@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import GTDModel
+import GTDAppCore
 import GTDFixtures
 @testable import FeatureInbox
 
@@ -93,10 +94,21 @@ struct CardTargetsTests {
     @Test func letterKeysOpenTheSubFlows() {
         #expect(KeyMap.resolve("x") == .target(.trash))
         #expect(KeyMap.resolve("X") == .target(.trash))
+        // `P` is the project chip/picker command (R-10, R-8) — not `CardTarget.project` — so it
+        // resolves through `KeyBindings` rather than the target scan.
+        #expect(KeyMap.resolve("p") == .command(.cardProject))
+        #expect(KeyMap.resolve("P") == .command(.cardProject))
         #expect(KeyMap.resolve("k") == .target(.knowledge))
         #expect(KeyMap.resolve("w") == .target(.waiting))
         #expect(KeyMap.resolve("r") == .target(.deferToReview))
         #expect(KeyMap.resolve("q") == nil)
+    }
+
+    @Test func projectKeyFollowsARebind() throws {
+        var bindings = KeyBindings.defaults
+        try bindings.rebind(.cardProject, to: .letter("J"))
+        #expect(KeyMap.resolve("j", bindings: bindings) == .command(.cardProject))
+        #expect(KeyMap.resolve("p", bindings: bindings) == nil)
     }
 
     @Test func digitsPickContextsAndShiftedDigitsPickTimeBuckets() {

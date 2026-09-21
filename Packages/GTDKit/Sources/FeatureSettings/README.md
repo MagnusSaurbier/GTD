@@ -16,7 +16,11 @@ section header → drag handles + delete, swipe for Rename / Remove); macOS keep
 Up / Down / Rename / remove buttons in each row. Both go through the same `SettingsSession` calls.
 
 Linux-compilable (unit-tested, no SwiftUI):
-- `DeviceSettings` — device-local state, `Codable`.
+- `DeviceSettings` — device-local state, `Codable`, including `keyBindings: GTDAppCore.KeyBindings`
+  (R-10, N7) — the Mac key rebinds, defaulted to `.defaults`. The Keyboard settings pane (T13)
+  edits it through `DeviceSettings.keyBindings` directly; `KeyBindings` itself lives in
+  `GTDAppCore` (not here), because `FeatureInbox.KeyMap` and `FeatureReview.ReviewSession` also
+  resolve keys through it and neither may depend on this target or on each other (ARCHITECTURE §2).
 - `SettingsStore` protocol + `InMemorySettingsStore` / `UserDefaultsSettingsStore` +
   `DeviceSettingsStore` (load/save `DeviceSettings` through an injected store).
 - `ContextsEditing` — pure add/rename/remove/reorder/on-the-go-toggle over `GTDConfig`, plus
@@ -48,9 +52,11 @@ and is tested on Linux.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureSettingsTests` — 30 tests (persistence
-round-trip, context editing incl. the affected-action count, `SettingsSession` against
-`InMemoryBackend`+`GTDFixtures`, the `DayTime`/`Date` bridge, notification-kind mirror).
+`cd Packages/GTDKit && swift test --filter FeatureSettingsTests` — 31 tests (persistence
+round-trip incl. `keyBindings`, context editing incl. the affected-action count, `SettingsSession`
+against `InMemoryBackend`+`GTDFixtures`, the `DayTime`/`Date` bridge, notification-kind mirror).
+`GTDAppCoreTests/KeyBindingsTests` covers the `KeyBindings` model itself (defaults, rebind,
+conflicts, reset, Codable, legends).
 
 ## Unverified on Apple platforms
 

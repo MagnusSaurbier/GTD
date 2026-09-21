@@ -1,5 +1,6 @@
 import Foundation
 import GTDModel
+import GTDAppCore
 
 /// Device-local settings — never in the vault (ARCHITECTURE §3). Persisted by the app shell.
 /// Owned by T26.
@@ -19,6 +20,10 @@ public struct DeviceSettings: Codable, Equatable, Sendable {
     /// place of the real path — it never resolves `VaultBookmark` itself (must not import
     /// `GTDVault`).
     public var vaultDisplayName: String?
+    /// Mac key rebinds (R-10, N7) — `KeyBindings.defaults` until the user changes one in
+    /// Settings › Keyboard (T13). `FeatureInbox.KeyMap` and `FeatureReview.ReviewSession` resolve
+    /// keys through the value the app shell loads here, not through this type.
+    public var keyBindings: KeyBindings
 
     public init(
         notificationKinds: [String: Bool] = [:],
@@ -26,7 +31,8 @@ public struct DeviceSettings: Codable, Equatable, Sendable {
         lastKnowledgeFolder: String? = nil,
         nextContextFilter: [String] = [],
         nextTimeFilter: Int? = nil,
-        vaultDisplayName: String? = nil
+        vaultDisplayName: String? = nil,
+        keyBindings: KeyBindings = .defaults
     ) {
         self.notificationKinds = notificationKinds
         self.morningTime = morningTime
@@ -34,6 +40,7 @@ public struct DeviceSettings: Codable, Equatable, Sendable {
         self.nextContextFilter = nextContextFilter
         self.nextTimeFilter = nextTimeFilter
         self.vaultDisplayName = vaultDisplayName
+        self.keyBindings = keyBindings
     }
 
     public static let `default` = DeviceSettings()

@@ -1,5 +1,6 @@
 import Foundation
 import GTDModel
+import GTDAppCore
 import DesignSystem
 
 /// The places an inbox card can go (I4), defined **once** for both platforms
@@ -220,6 +221,10 @@ public enum DragResolver {
 /// without SwiftUI and lives next to the swipe map it mirrors.
 public enum InboxKey: Sendable, Equatable {
     case target(CardTarget)
+    /// A rebindable command that has no `CardTarget` of its own (R-8, STYLEGUIDE §3.6): `P`
+    /// opens the project chip/picker rather than filing the card. Modelled as a
+    /// `GTDAppCore.KeyCommand` so this never depends on a `CardTarget.project` filing target.
+    case command(KeyCommand)
     /// `1…8` — the n-th context of `GTDConfig.contexts`, zero-based.
     case context(index: Int)
     /// `⇧1…⇧4` — a time bucket.
@@ -240,11 +245,15 @@ public enum KeyMap {
     public static func target(for direction: SwipeDirection) -> CardTarget? { direction.target }
 
     /// Resolves a character press. `shift` may be reported either through the modifier flag or
-    /// through the shifted character itself (`!@#$`), depending on the keyboard layout — both work.
+    /// through the shifted character itself (`!@#$`), depending on the keyboard layout — both
+    /// work. `bindings` resolves the rebindable commands (R-10); it defaults to
+    /// `KeyBindings.defaults` so existing call sites are unaffected until a caller passes the
+    /// device's stored value.
     public static func resolve(
         _ character: Character,
         shift: Bool = false,
-        command: Bool = false
+        command: Bool = false,
+        bindings: KeyBindings = .defaults
     ) -> InboxKey? {
         if character == "\u{1B}" { return .quit }
         if command {
@@ -257,6 +266,9 @@ public enum KeyMap {
                 return .time(TimeBucket.allCases[digit - 1])
             }
             return .context(index: digit - 1)
+        }
+        if !shift, bindings.key(for: .cardProject) == KeyStroke.letter(character) {
+            return .command(.cardProject)
         }
         let letter = String(character).uppercased()
         if let target = CardTarget.allCases.first(where: { !$0.isDirect && $0.key == letter }) {

@@ -278,8 +278,9 @@ onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
 
 `GTDBackend` (the protocol every backend implements: `snapshots()`, `currentUpdate()`,
 `perform(_:)`, `undo()`, `undoLabel()`), `SnapshotUpdate`, `NavigationRemap`, `AppModel` (`@MainActor @Observable`, handed to views
-through `@Environment(AppModel.self)`), `InMemoryBackend` (reducer only — previews and tests) and
-`UndoLabel` (one label table, shared by both backends).
+through `@Environment(AppModel.self)`), `InMemoryBackend` (reducer only — previews and tests),
+`UndoLabel` (one label table, shared by both backends) and `KeyBindings` (R-10/N7: the device-local
+*command → key* table the Mac keyboard resolves through, §6 "R-10 key bindings").
 
 **Renames travel with the snapshot.** A backend publishes a `SnapshotUpdate` — the snapshot
 plus the `RenameMap` of the command that produced it — through both `snapshots()` and
@@ -358,7 +359,8 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 
 | Date | Decision |
 | --- | --- |
-| 2026-09-18 · rev. 2026-09-21 | **Swipe / key mapping** as in STYLEGUIDE §3.6: swipe → Next, ← Someday, ↓ Trash; buttons Project, Knowledge, Waiting; `⋯` for Defer to review. There is no `↑` target any more — the two "not now" tiers merged (A3), so up files nothing. Mac: arrow keys, `P K W R`, `⌘Z`, `Esc`. Defined once in `FeatureInbox/CardTargets.swift`. (The two-step card of I2–I4c lands in T08/T09.) |
+| 2026-09-18 · rev. 2026-09-21 | **Swipe / key mapping** as in STYLEGUIDE §3.6: swipe → Next, ← Someday, ↓ Trash; buttons Project, Knowledge, Waiting; `⋯` for Defer to review. There is no `↑` target any more — the two "not now" tiers merged (A3), so up files nothing. Defined once in `FeatureInbox/CardTargets.swift`. (The two-step card of I2–I4c lands in T08/T09.) |
+| 2026-09-21 | **R-10 key bindings.** Mac single-key commands (inbox step 1 `A K X D`, opened action card `→ ← W P`, Knowledge/List card `1…9 0`, review deck `K D P T` — STYLEGUIDE §3.6/§3.10) are **rebindable per device** (N7), defaults per REQUIREMENTS I9. The table lives in `GTDAppCore.KeyBindings` (`KeyCommand`/`KeyScreen`/`KeyStroke`) — not in `FeatureInbox/CardTargets.swift`, which now only *resolves through* it — because `FeatureSettings.DeviceSettings` (which persists it), `FeatureInbox.KeyMap` and `FeatureReview.ReviewSession` all need it and may not depend on each other; `GTDAppCore` is the one target all three already depend on. `rebind` refuses a duplicate **within one screen** (the same key is fine on two screens) and refuses the four fixed keys (`Esc`, `Tab`, `⌘Z`, `⌘↩`) and, on the action card, the reserved `1…8`/`⇧1…⇧4` context/time-bucket keys — never a view-layer check. The Mac `P` key on the action card is modelled as a **command** (`KeyCommand.cardProject`, opens the project chip/picker), not a `CardTarget`, so it does not depend on the inbox "Project" filing target R-8 removes. |
 | 2026-09-18 · rev. 2026-09-21 | **Next at cap during processing:** forced choice sheet — demote one of the current Next items, or cancel (D14). Never automatic. |
 | 2026-09-18 | **`in-progress`** counts toward the cap and is pinned on top of Next. |
 | 2026-09-18 | **Routine log format:** one markdown file per day per device, entries in frontmatter (§3). |

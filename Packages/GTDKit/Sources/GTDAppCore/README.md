@@ -19,6 +19,20 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   Views get it with `@Environment(AppModel.self)`.
 - `InMemoryBackend` — `actor`, reducer only, single-level undo by keeping the previous snapshot.
   `init(snapshot:)` plus `deviceID:`/`env:` for deterministic tests.
+- `KeyBindings` (R-10, N7/I9) — the device-local, `Codable` table *command → key* behind the Mac
+  keyboard: `KeyScreen` (the four screens that each refuse duplicates independently),
+  `KeyCommand` (one case per rebindable single-key command, grouped by screen; `.defaultKey` is
+  the I9/STYLEGUIDE §3.6/§3.10 factory map), `KeyStroke` (a displayable letter/digit/arrow, plus
+  the four fixed tokens `.escape`/`.tab`/`.commandZ`/`.commandReturn` and the reserved
+  `.digit`/`.shiftedDigit` action-card keys). `key(for:)` reads with fallback to the default;
+  `rebind(_:to:)` throws `RebindError.fixed`/`.reserved`/`.duplicate(KeyCommand)`; `reset()` /
+  `reset(_:)` restore defaults; `legend(for:titles:)`/`legendString(for:titles:)` build a Mac
+  legend row from the current bindings and caller-supplied labels (no UI strings live here — this
+  target has no `DesignSystem` dependency). Lives here rather than in `FeatureSettings` (which
+  owns *persisting* one inside `DeviceSettings`) because `FeatureInbox.KeyMap` and
+  `FeatureReview.ReviewSession` both resolve keys through it and neither may depend on the other's
+  feature target or on `FeatureSettings` (ARCHITECTURE §2) — `GTDAppCore` is the one target all
+  three already depend on.
 
 ## Invariants
 
@@ -63,4 +77,7 @@ item is checked off (and when a card is filed by the 2-minute rule, I4/D13), and
 
 `cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — the acceptance scenario (file an
 inbox item to Next, hit the cap, complete a project action (prompt), undo), the command-order
-tests, and `ErrorSurfacingTests` for `perform`/`report`.
+tests, `ErrorSurfacingTests` for `perform`/`report`, and `KeyBindingsTests` (defaults, rebind
+happy path, duplicate-within-screen refusal naming the conflicting command, same key on a
+different screen, fixed/reserved keys, reset, Codable round-trip incl. a missing/unknown command,
+legends).

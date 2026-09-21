@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import GTDModel
+import GTDAppCore
 @testable import FeatureSettings
 
 /// Round-trips `DeviceSettings` through the injected `SettingsStore` (T26 brief: "inject a
@@ -55,5 +56,19 @@ struct DeviceSettingsPersistenceTests {
         let settings = DeviceSettings(lastKnowledgeFolder: "Studium/Thesis")
         let data = try JSONEncoder().encode(settings)
         #expect(try JSONDecoder().decode(DeviceSettings.self, from: data) == settings)
+    }
+
+    /// R-10 (N7): key rebinds are device-local, so they persist through `DeviceSettings` exactly
+    /// like every other field — no separate store.
+    @Test func keyBindingsDefaultAndPersistThroughTheStore() throws {
+        #expect(DeviceSettings.default.keyBindings == .defaults)
+
+        var settings = DeviceSettings.default
+        try settings.keyBindings.rebind(.stepAction, to: .letter("Q"))
+
+        let store = InMemorySettingsStore()
+        let settingsStore = DeviceSettingsStore(store: store)
+        settingsStore.save(settings)
+        #expect(settingsStore.load().keyBindings.key(for: .stepAction) == .letter("Q"))
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import GTDModel
+import GTDAppCore
 import DesignSystem
 
 /// The three phases of the deck (§10.2): Next, then Someday, then the projects that
@@ -71,6 +72,18 @@ public enum DeckChoice: String, Sendable, CaseIterable, Codable, Hashable, Ident
 
     /// `keep` writes nothing, so it can never fail and never counts as a change.
     public var changesAnything: Bool { self != .keep }
+
+    /// The rebindable command this choice answers to (STYLEGUIDE §3.10, R-10). `activate`/`drop`
+    /// share `promote`/`trash`'s command exactly as they share their key: a card never offers
+    /// both members of a pair, so there is never a collision to resolve.
+    public var keyCommand: KeyCommand {
+        switch self {
+        case .keep: .deckKeep
+        case .demote: .deckDemote
+        case .promote, .activate: .deckPromote
+        case .trash, .drop: .deckTrash
+        }
+    }
 }
 
 /// One card in the deck: an action in the Next and Someday phases, a project in the last one.

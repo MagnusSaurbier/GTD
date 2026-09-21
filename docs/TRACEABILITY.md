@@ -1,7 +1,9 @@
 # Traceability — every requirement to the code that implements it
 
-Covers `docs/REQUIREMENTS.md` v1 in full: every ID (N1–N6, C1–C4, I1–I7, A1–A5,
+Covers `docs/REQUIREMENTS.md` v1 in full: every ID (N1–N7, C1–C4, I1–I7, I9, A1–A5,
 P1–P7, L1–L6, W1–W2, D1–D3, E1–E4, R1–R6, §10's four steps, M1–M6) and §12's out-of-scope list.
+(I8 — "captures containing several items" — predates this pass and still has no row; not part of
+this update.)
 
 Paths are relative to the repo root; `GTDKit/…` is short for
 `Packages/GTDKit/Sources/…` and test names are suites under `Packages/GTDKit/Tests/`.
@@ -32,6 +34,7 @@ consequence of the app being written on Linux without an Apple SDK (`CLAUDE.md`)
 | N4 | Replaces TaskNotes; the note-per-action data is kept | the whole app; the vault layout of ARCHITECTURE §3 is the existing one | `GTDVaultTests/SampleVaultScanTests` (a real vault tree scans to the expected snapshot) | **done** — a product statement, satisfied by N2 + M1–M6 rather than by code of its own. |
 | N5 | Device split: iPhone capture/inbox/reduced Next/routines, Mac everything | `App/PhoneShell.swift` (three tabs), `App/MacShell.swift`, `Rules.onTheGoNextList` | `GTDModelTests/RulesTests`, `FeatureNextTests/NextListModelTests` (the on-the-go filter), `AppTests/AppShellTests` | **done (blind)** for the shells; the rule itself is **done**. |
 | N6 | Undo for the last filing/status change | `Rules.isUndoable` (one definition, both backends), `GTDAppCore/UndoLabel`, `GTDServices/UndoJournal` (20 entries, hash-checked), `GTDAppCore/InMemoryBackend` | `GTDServicesTests/UndoTests`, `ParityTests`, `GTDAppCoreTests/AppModelAcceptanceTests` | **done** |
+| N7 | Mac keybinds are rebindable in settings (defaults in I9) | `GTDAppCore/KeyBindings` (`KeyCommand`/`KeyScreen`/`KeyStroke`, R-10): pure `rebind`/`reset`/legend model, persisted per device via `FeatureSettings/DeviceSettings.keyBindings`; `FeatureInbox/CardTargets.KeyMap` and `FeatureReview/ReviewSession.choice(forKey:)` resolve a key press through it | `GTDAppCoreTests/KeyBindingsTests`, `FeatureSettingsTests/DeviceSettingsPersistenceTests`, `FeatureInboxTests/CardTargetsTests`, `FeatureReviewTests/ReviewDeckTests` | **partial** — the model, its persistence and both resolution points are **done**; the Settings › Keyboard pane a person actually rebinds a key in does not exist yet (`docs/inbox-rework/IMPLEMENTATION-GUIDE.md` §4 T13). `docs/follow-ups/50-mac-keyboard-map.md` is a different, unrelated gap (the fixed `⌘`-shortcuts of STYLEGUIDE §4.5). |
 
 ## §3 Capture
 
@@ -56,6 +59,7 @@ consequence of the app being written on Linux without an Apple SDK (`CLAUDE.md`)
 | I5 | Defer to weekly review **with a reason** | `GTDCommand.deferInboxToReview`, `Rules.reviewDeferredInbox`, `FeatureReview/ReviewSweep` | `GTDModelTests/ReducerInboxTests`, `FeatureReviewTests/ReviewSweepTests` | **done** |
 | I6 | Counter, undo last card | `InboxSession.counterText` + `undo()`, `DesignSystem.UndoToast` | `FeatureInboxTests/InboxSessionTests` | **done** |
 | I7 | LIFO makes capture → process the "create action now" flow | `Rules.inboxQueue` ordering + `InboxSession` | `FeatureInboxTests/InboxSessionTests`, `GTDServicesTests/EndToEndJourneyTests` | **done** |
+| I9 | Default Mac keys (rebindable, N7): step 1 `a k x d`, action card `→ ← Esc p w ⌘↩ Tab`, Knowledge/List navbar `1 2…9 0`, `⌘Z` undo | `GTDAppCore/KeyBindings.defaults` (`KeyCommand.defaultKey`) for the literal defaults; `Esc`/`Tab`/`⌘Z`/`⌘↩` are `KeyBindings.fixedKeys`, never rebindable | `GTDAppCoreTests/KeyBindingsTests.defaultsMatchRequirementsI9` | **done** for the defaults table (pinned by a test that fails if a default drifts from I9); **partial** — see N7 for the Settings pane gap; the two-step card screens I9 describes (step 1, action card) do not exist yet either (T08/T09). |
 
 ## §5 Actions
 

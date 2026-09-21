@@ -304,9 +304,15 @@ public final class ReviewSession {
         }
     }
 
-    /// Mac keys of STYLEGUIDE §3.10: `K` keep · `D` demote · `P` promote · `T` trash.
-    public func choice(forKey key: String, on card: DeckCard) -> DeckChoice? {
-        card.choices.first { $0.key.caseInsensitiveCompare(key) == .orderedSame }
+    /// Mac keys of STYLEGUIDE §3.10: `K` keep · `D` demote · `P` promote · `T` trash — rebindable
+    /// (R-10). `bindings` defaults to `KeyBindings.defaults` so existing call sites are
+    /// unaffected until a caller passes the device's stored value (T12/T13).
+    public func choice(
+        forKey key: String, on card: DeckCard, bindings: KeyBindings = .defaults
+    ) -> DeckChoice? {
+        card.choices.first {
+            bindings.key(for: $0.keyCommand).display.caseInsensitiveCompare(key) == .orderedSame
+        }
     }
 
     // MARK: - Systems check (§10.3)

@@ -21,6 +21,9 @@ Linux-compilable (all the logic, all of it unit-tested):
 - `ReviewStateStore`: `FileReviewStateStore` (one JSON file in Application Support) and
   `InMemoryReviewStateStore`.
 - `ReviewDeck` / `DeckPhase` / `DeckCard` / `DeckChoice` — deck order and choice → command.
+  `DeckChoice.keyCommand` maps a choice to its `GTDAppCore.KeyCommand`; `ReviewSession.choice(forKey:on:bindings:)`
+  resolves a Mac key press against a card through a `KeyBindings` value (default `.defaults`,
+  R-10/N7) instead of the fixed `DeckChoice.key` string, so a rebind changes what a key does.
 - `DeferredSweep` / `WaitingSweep` / `StalledSweep` — one decision → one `GTDCommand`.
 - `ReviewStats` / `ReviewStatTile` / `ReviewHeatmap` — `GTDStats` output turned into tiles and
   heatmap rows. `ReviewCopy` / `ReviewSymbols` — review-only strings and the §7 symbol lookups.
@@ -47,4 +50,4 @@ Linux-compilable (all the logic, all of it unit-tested):
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureReviewTests` (76 tests).
+`cd Packages/GTDKit && swift test --filter FeatureReviewTests` (79 tests).
