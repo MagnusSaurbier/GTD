@@ -24,7 +24,8 @@ public struct SystemVaultClock: VaultClock {
 /// fire `interval` after the last signal, but never later than `maxDelay` after the first, so a
 /// continuous trickle of events still produces snapshots.
 public struct DebounceState: Sendable, Equatable {
-    /// Quiet period after the last change. Default: 300 ms.
+    /// Quiet period after the last change. Default: 50 ms — long enough for the temp-file-and-
+    /// rename of one atomic write to arrive as one burst, short enough to feel instant.
     public var interval: TimeInterval
     /// Ceiling on coalescing, so a continuous stream still updates the UI.
     public var maxDelay: TimeInterval
@@ -32,7 +33,7 @@ public struct DebounceState: Sendable, Equatable {
     public private(set) var firstSignal: Date?
     public private(set) var lastSignal: Date?
 
-    public init(interval: TimeInterval = 0.3, maxDelay: TimeInterval = 2.0) {
+    public init(interval: TimeInterval = 0.05, maxDelay: TimeInterval = 0.5) {
         self.interval = interval
         self.maxDelay = maxDelay
     }

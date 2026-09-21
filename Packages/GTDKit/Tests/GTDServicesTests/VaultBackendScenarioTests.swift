@@ -285,7 +285,8 @@ struct VaultBackendScenarioTests {
                 deviceID: "mac-1",
                 journal: UndoJournal(directory: stateDirectory),
                 stateDirectory: stateDirectory,
-                env: { Fixtures.reducerEnv(deviceID: "mac-1") })
+                env: { Fixtures.reducerEnv(deviceID: "mac-1") },
+            writes: .awaited)
         }
 
         let archived = "Archive/2026/08/Collect DAAD transcripts.md"
@@ -407,7 +408,8 @@ struct VaultBackendScenarioTests {
         let backend = VaultBackend(
             store: store, deviceID: "test-device",
             journal: UndoJournal(directory: directory), stateDirectory: directory,
-            env: { Fixtures.reducerEnv(deviceID: "test-device") })
+            env: { Fixtures.reducerEnv(deviceID: "test-device") },
+            writes: .awaited)
 
         try await backend.start()
 

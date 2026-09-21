@@ -54,8 +54,11 @@ struct DebounceStateTests {
         #expect(state.wait(from: t0.addingTimeInterval(10)) == 0)
     }
 
-    @Test func theDefaultIs300msAsTheBriefRequires() {
-        #expect(DebounceState.default.interval == 0.3)
+    /// 2026-09-22: an external write has to be on screen at once, so the quiet period only
+    /// spans the temp-file-and-rename of one atomic write, and a burst is cut after half a second.
+    @Test func theDefaultFeelsInstantAndStillCoalescesABurst() {
+        #expect(DebounceState.default.interval == 0.05)
+        #expect(DebounceState.default.maxDelay == 0.5)
     }
 }
 

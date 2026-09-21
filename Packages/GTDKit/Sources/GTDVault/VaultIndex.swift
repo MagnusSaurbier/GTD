@@ -99,6 +99,61 @@ public struct VaultIndex: Sendable {
         return report
     }
 
+    /// Re-indexes **only** `paths` — the fast path behind a watcher hint or a commit, which is
+    /// what lets an external write show up without walking the vault.
+    ///
+    /// Returns `nil`, having changed nothing, whenever the hint is not something a per-file look
+    /// can answer honestly; the caller then does a full `refresh`:
+    /// * a path that is (or was) a **folder** — everything below it moved with it,
+    /// * a file in a folder the index has not seen — the folder list feeds lists (§5a) and
+    ///   Knowledge folders, and only a walk rebuilds it,
+    /// * more paths than a walk would cost.
+    /// Everything else is exactly what `refresh` does for one file: compare the fingerprint,
+    /// re-decode on a difference, drop the entry when the file is gone.
+    public mutating func refresh(
+        paths: Set<String>, using fileSystem: any VaultFileSystem
+    ) throws -> RefreshReport? {
+        guard paths.count <= Self.targetedLimit else { return nil }
+        var report = RefreshReport()
+        var next = entries
+        let knownFolders = Set(folders)
+
+        var files: Set<String> = []
+        for raw in paths {
+            var path = VaultPath.normalize(raw)
+            // An eviction placeholder speaks for the file it stands in for; every other dot
+            // file (atomic-write temporaries, `.DS_Store`) is invisible to the walk as well.
+            if let original = VaultPath.evictedOriginal(of: path) { path = original }
+            guard VaultPath.isSafe(path),
+                  !path.split(separator: "/").contains(where: { $0.hasPrefix(".") })
+            else { continue }
+            files.insert(path)
+        }
+
+        for path in files.sorted() {
+            guard !fileSystem.folderExists(path), !knownFolders.contains(path) else { return nil }
+            guard let info = try fileSystem.info(path) else {
+                if next.removeValue(forKey: path) != nil { report.removed += 1 }
+                continue
+            }
+            let folder = VaultPath.folder(of: path)
+            guard folder.isEmpty || knownFolders.contains(folder) else { return nil }
+            let kind = classifier.kind(of: path)
+            if let cached = next[path], cached.info.fingerprint == info.fingerprint,
+               cached.kind == kind {
+                report.reused += 1
+                continue
+            }
+            if next[path] == nil { report.added += 1 } else { report.updated += 1 }
+            next[path] = decode(info: info, kind: kind, fileSystem: fileSystem)
+        }
+        entries = next
+        return report
+    }
+
+    /// Past this many hinted paths a sync is landing; one walk is cheaper than that many stats.
+    static let targetedLimit = 64
+
     private func decode(
         info: VaultFileInfo, kind: VaultFileKind, fileSystem: any VaultFileSystem
     ) -> Entry {
@@ -143,7 +198,9 @@ public struct VaultIndex: Sendable {
         do {
             switch kind {
             case .inbox:
-                return entry(.inbox(try parser.inboxItem(id: id, text: text)))
+                // A capture from outside the app has no `created`; the file's date stands in.
+                return entry(.inbox(try parser.inboxItem(
+                    id: id, text: text, fileDate: info.modified)))
             case .action:
                 var action = try parser.action(id: id, text: text)
                 // The only field the codec cannot know: file mtime drives the staleness

@@ -19,11 +19,18 @@ public final class AppModel {
     public var prompt: AppPrompt?
     /// Last error that had nowhere else to go (a failed `undo()`). The shell may surface it.
     public private(set) var lastError: (any Error)?
+    /// A change that was shown and then could not be saved (`WriteFailure`); the snapshot has
+    /// already gone back to what the vault holds. Kept apart from `lastError` because the next
+    /// command that goes through clears that one — and with writes queued behind the UI, the
+    /// next command is usually through before the person has read this. Only `clearError()`
+    /// clears it.
+    public private(set) var writeFailure: WriteFailure?
     /// Injectable clock so previews and tests are deterministic.
     public let today: () -> Day
 
     private let backend: any GTDBackend
     private var observation: Task<Void, Never>?
+    private var failureObservation: Task<Void, Never>?
     /// Tail of the serial command chain — see `send(deriving:)`.
     private var tail: Task<Void, Never>?
 
@@ -54,11 +61,22 @@ public final class AppModel {
                 self.apply(update)
             }
         }
+        failureObservation = Task { [weak self] in
+            for await failure in backend.writeFailures() {
+                guard let self else { return }
+                // The first one stays: it is the one the person has to read, and a second
+                // refusal while the alert is up is almost always the same cause.
+                if self.writeFailure == nil { self.writeFailure = failure }
+                self.undoLabel = await backend.undoLabel()
+            }
+        }
     }
 
     public func stop() {
         observation?.cancel()
         observation = nil
+        failureObservation?.cancel()
+        failureObservation = nil
     }
 
     /// The one way a published state reaches the UI. Renames **accumulate** until the shell
@@ -171,5 +189,31 @@ public final class AppModel {
         undoLabel = await backend.undoLabel()
     }
 
-    public func clearError() { lastError = nil }
+    // MARK: - Held edits
+
+    /// Something that holds typed text back from the vault until a natural moment (the editors:
+    /// blur, close) and can be told that such a moment is now.
+    public protocol HeldEdits: AnyObject {
+        @MainActor func flush() async
+    }
+
+    private struct WeakHolder { weak var value: (any HeldEdits)? }
+    private var holders: [ObjectIdentifier: WeakHolder] = [:]
+
+    /// Editors register themselves; they are held weakly and forgotten once they are gone.
+    public func register(_ holder: any HeldEdits) {
+        holders = holders.filter { $0.value.value != nil }
+        holders[ObjectIdentifier(holder)] = WeakHolder(value: holder)
+    }
+
+    /// Sends every held edit now. The shell calls it when the app is about to stop running —
+    /// backgrounding on iOS, ⌘Q on the Mac — before it waits for the write queue.
+    public func flushHeldEdits() async {
+        for holder in holders.values.compactMap(\.value) { await holder.flush() }
+    }
+
+    public func clearError() {
+        lastError = nil
+        writeFailure = nil
+    }
 }

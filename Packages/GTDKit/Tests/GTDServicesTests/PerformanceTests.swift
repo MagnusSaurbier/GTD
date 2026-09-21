@@ -85,7 +85,8 @@ struct PerformanceTests {
         let backend = VaultBackend(
             store: store, deviceID: "bench", journal: UndoJournal(directory: stateDirectory),
             stateDirectory: stateDirectory,
-            env: { Fixtures.reducerEnv(deviceID: "bench") })
+            env: { Fixtures.reducerEnv(deviceID: "bench") },
+            writes: .awaited)
 
         Bench.header("one command — \(files.count)-file vault (InMemoryFileSystem)")
         try await Bench.measureAsync("activate + first scan") { try await store.activate() }

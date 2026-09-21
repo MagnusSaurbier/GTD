@@ -55,7 +55,6 @@ final class AppComposition {
     /// True once the bookmark's security-scoped access is open, so it is stopped exactly once.
     private var isAccessing = false
     /// The day `archiveCompleted` last ran under this process (A5).
-    private var lastArchiveDay: Day?
 
     /// `useFixtures` defaults to the launch argument. Previews pass `true` explicitly, so a
     /// preview can never resolve the bookmark and read the real vault (CLAUDE.md rule 1).
@@ -173,20 +172,12 @@ final class AppComposition {
         }
     }
 
-    /// A5 — archive done notes once a day.
-    ///
-    /// `VaultBackend.start()` already does this at launch and remembers the day outside the
-    /// vault, but a Mac that stays open for a week never starts again; this covers the day
-    /// rolling over under a running app. The command is a no-op when nothing is old enough,
-    /// and it is not undoable, so running it once too often costs nothing.
-    func runDailyHousekeeping() async {
-        guard backend != nil else { return }
-        let today = model.today()
-        guard lastArchiveDay != today else { return }
-        lastArchiveDay = today
-        // Not `try?`: an archive that fails means files did not move, and a failed rollback
-        // (T15) must reach the person rather than be retried in silence (T41).
-        await model.perform(.archiveCompleted)
+    /// Returns once every change the person made is in the vault's files (or was refused and
+    /// reported). Writes are queued behind the UI; see `PendingWrites.swift` for who waits.
+    func flushWrites() async {
+        // Text still held by an open editor first — it becomes a queued write like any other.
+        await model.flushHeldEdits()
+        await backend?.flush()
     }
 
     /// Closes the vault cleanly: stop watching, stop security-scoped access.
@@ -208,13 +199,18 @@ final class AppComposition {
     /// and goes straight through `InboxWriter`, exactly like the Shortcut and the App Intent do.
     /// It gets its **own** `VaultBookmark` instance so its `startAccess`/`stopAccess` pair cannot
     /// close the access the open vault is holding.
+    ///
+    /// The write is a coordinated one into an iCloud folder and can take a moment, so it runs
+    /// off the main actor: the capture sheet is already gone while the file is being written.
     @discardableResult
-    func capture(text: String) -> NoteID? {
+    func capture(text: String) async -> NoteID? {
         if isUsingFixtures { return nil }
-        let writer = InboxWriter(
-            layout: model.snapshot.config.layout, bookmark: VaultBookmark())
+        let layout = model.snapshot.config.layout
         do {
-            let id = try CaptureRequest(text: text).perform(writer: writer)
+            let id = try await Task.detached {
+                try CaptureRequest(text: text).perform(
+                    writer: InboxWriter(layout: layout, bookmark: VaultBookmark()))
+            }.value
             // The watcher will see the new file, but the queue should not wait for a poll.
             Task { await refreshFromDisk() }
             return id

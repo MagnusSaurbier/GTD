@@ -12,7 +12,7 @@ and `AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the m
 iOS-simulator app built, all package tests and the app's own test bundles passed, and the app
 launched on fixtures on both platforms.
 
-The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 297 package
+The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 309 package
 tests pass and both scratch app builds are warning-free — and parts of it have been driven on
 screen: the two-step card's step 1, the opened action card with its asterisk refusal, a swipe to
 Next, Trash with its toast, the project picker, the keep card's navbar, the Mac per-step key
@@ -87,6 +87,18 @@ of the same fact.
 
 ## 4. Smaller things worth knowing
 
+- **Vault writes are queued behind the UI (2026-09-21) — unit-tested against a gated store, not
+  yet felt on the real iCloud vault.** What follows from it: `⌘Z` still *waits* (for the queue,
+  then for its own commit — undo is not optimistic); a collision with a file the index does not
+  know (a Knowledge note landing on an existing file) is no longer a thrown `titleCollision` but
+  a `WriteFailure` alert after the card has already left the screen, with the capture back in
+  the inbox; and a force-quit or crash inside the queue's window loses the changes that were on
+  screen but not yet written (⌘Q and iOS backgrounding flush first). Since 2026-09-22 the
+  editors hold typed text until blur/close/backgrounding instead of autosaving on a typing
+  pause, so the same crash also loses the field being typed in; and the daily archive only
+  happens on a day on which the person changes something. The post-commit re-index
+  still walks the whole vault per write — off the UI path now, but it bounds how fast the queue
+  drains (`docs/follow-ups/55-incremental-reindex.md`).
 - **Lists are complete end to end (§5a), but only their Mac sidebar row has been seen running.**
   The domain (folder layout, item note, classifier, the eight commands, the `Rules` queries), the
   Settings sections (add / rename / remove with a `confirmationDialog`; favourites capped at 8,

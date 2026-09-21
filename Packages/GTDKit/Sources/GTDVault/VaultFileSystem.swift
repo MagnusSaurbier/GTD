@@ -161,6 +161,17 @@ enum VaultPath {
         return p == f || p.hasPrefix(f + "/")
     }
 
+    /// `url` as a vault-relative path, or `nil` when it is the root itself or lies outside it.
+    /// Both sides are compared with symlinks resolved: the file-event APIs report real paths
+    /// (`/private/var/…`), while the root is usually the path the person picked.
+    static func relative(_ url: URL, to root: URL) -> String? {
+        let base = root.resolvingSymlinksInPath().standardizedFileURL.path
+        let full = url.resolvingSymlinksInPath().standardizedFileURL.path
+        guard full.hasPrefix(base + "/") else { return nil }
+        let path = normalize(String(full.dropFirst(base.count + 1)))
+        return isSafe(path) ? path : nil
+    }
+
     /// iCloud evicts a file to a hidden placeholder `.<name>.icloud` in the same folder.
     /// Returns the path of the real file when `path` is such a placeholder.
     static func evictedOriginal(of path: String) -> String? {

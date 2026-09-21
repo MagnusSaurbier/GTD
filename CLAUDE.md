@@ -28,7 +28,7 @@ From the repo root. Verified on Linux with Swift 6.4, and on macOS with Xcode 27
 scripts/check.sh                             # the gate: build + test + docs check + migration tests
 scripts/check.sh --app                       # additionally xcodegen + build the app
 cd Packages/GTDKit && swift build
-cd Packages/GTDKit && swift test              # 1 297 tests across 19 test targets
+cd Packages/GTDKit && swift test              # 1 309 tests across 19 test targets
 cd Packages/GTDKit && swift test --filter GTDModelTests               # one test target
 cd Packages/GTDKit && swift test --filter "RulesTests/sidebarCounts"  # one test
 cd Tools/migrate && pytest -q                # the migration script's 42 tests
@@ -59,6 +59,8 @@ expect 11 harmless `no rule to process file … xcstrings/assetcatalog` warnings
 6. UI follows `docs/STYLEGUIDE.md` (run its §9 checklist). Core principle: **no lying defaults** —
    undecided = empty; a suggestion is dashed, never persisted until confirmed.
 7. An error is never swallowed: `AppModel.send` throws, `perform`/`report` reach the shell's alert.
+   Vault writes are queued behind the UI; a refused one reverts the snapshot and reaches the same
+   alert as `AppModel.writeFailure`. Never make a view wait for a file.
 8. Out of scope unless the user says otherwise: everything in REQUIREMENTS §12.
 9. Gate before reporting done: `scripts/check.sh`. Report failures verbatim; never disable a test.
 

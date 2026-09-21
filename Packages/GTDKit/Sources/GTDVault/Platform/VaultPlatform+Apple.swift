@@ -17,8 +17,15 @@ extension VaultPlatform {
     public static func makeWatcher(
         fileSystem: any VaultFileSystem, clock: any VaultClock
     ) -> any VaultWatcher {
-        PresenterVaultWatcher(root: fileSystem.root, fallback: PollingVaultWatcher(
+        let presenter = PresenterVaultWatcher(root: fileSystem.root, fallback: PollingVaultWatcher(
             fileSystem: fileSystem, interval: 5, clock: clock))
+        #if os(macOS)
+        // FSEvents first: it is the one that sees an uncoordinated write (Obsidian, a script)
+        // the moment it happens. The presenter and the poll stay as they were.
+        return CompositeVaultWatcher([FSEventsVaultWatcher(root: fileSystem.root), presenter])
+        #else
+        return presenter
+        #endif
     }
 }
 #endif
