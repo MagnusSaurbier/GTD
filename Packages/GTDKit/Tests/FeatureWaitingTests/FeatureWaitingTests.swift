@@ -112,6 +112,31 @@ struct FeatureWaitingTests {
         #expect(list.waitingSinceDays(neitherStamped) == 0)
     }
 
+    // MARK: - Row meta text (W1/D39 — who is optional)
+
+    /// `<who> · <age>` when `who` is on file, plain `<age>` when it is empty/nil — never a
+    /// dangling separator (STYLEGUIDE "no lying defaults": an absent value is omitted, not
+    /// printed as an empty dash).
+    @Test func rowMetaNamesWhoWhenPresentAndOmitsItWhenNot() {
+        #expect(WaitingListModel.rowMeta(who: "Finanzamt", ageText: "16d") == ["Finanzamt", "16d"])
+        #expect(WaitingListModel.rowMeta(who: "", ageText: "16d") == ["16d"])
+        #expect(WaitingListModel.rowMeta(who: nil, ageText: "16d") == ["16d"])
+    }
+
+    @Test func metaPartsForActionCombinesWaitingForAndTheComputedAge() {
+        let today = Day(year: 2026, month: 9, day: 19)
+        let withWho = makeAction(
+            "A", status: .waiting, who: "Finanzamt", followUp: today,
+            created: Fixtures.date(today.adding(days: -16), 9, 0))
+        let withoutWho = makeAction(
+            "B", status: .waiting, who: nil, followUp: today,
+            created: Fixtures.date(today.adding(days: -16), 9, 0))
+        let list = makeList(actions: [withWho, withoutWho], today: today)
+
+        #expect(list.metaParts(for: withWho) == ["Finanzamt", "16d"])
+        #expect(list.metaParts(for: withoutWho) == ["16d"])
+    }
+
     // MARK: - Editing / bumping who and follow-up
 
     @Test func waitingInfoReflectsTheCurrentWhoAndFollowUp() {

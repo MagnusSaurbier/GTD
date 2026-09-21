@@ -23,6 +23,10 @@ enum OverviewCopy {
     static let vaultIssues = "Vault issues"
     static let calendar = "Calendar"
     static let newCapture = "New capture"
+    /// `⌘⇧N`/`⌘⇧S` menu items (STYLEGUIDE §4.5, fixed — not one of inbox processing's rebindable
+    /// single keys): move the action open in the detail column to Next / Someday.
+    static let moveToNext = "Move to Next"
+    static let moveToSomeday = "Move to Someday"
     static let status = "Status"
     static let context = "Context"
     static let time = "Time"
@@ -41,7 +45,6 @@ enum OverviewCopy {
     /// `12 items` — the count under a list's title when it is filtered.
     static func matches(_ count: Int) -> String { count == 1 ? "1 match" : "\(count) matches" }
 
-    static func emptyListTitle(_ status: String) -> String { "Nothing in \(status)" }
     static let emptyListBody = "Process your inbox, or move something here."
     static let emptyFilterTitle = "No match"
     static let emptyFilterBody = "Nothing here fits this filter."

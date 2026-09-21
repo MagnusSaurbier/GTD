@@ -27,12 +27,12 @@ same fact.
 
 | Requirement | What is missing | Brief |
 | --- | --- | --- |
-| E3 (STYLEGUIDE §4.5) | `⌘⏎`, `⌘⇧N/B/M`, `⌘⇧W` are not in the menu bar: they act on the focused row and no feature view exposes a focus target to the shell. | `50-mac-keyboard-map.md` |
+| E3 (STYLEGUIDE §4.5) | `⌘⏎`, `⌘⇧W`, `Space` are not in the menu bar: they act on the focused row and no feature view exposes a focus target to the shell. (`⌘⇧N`/`⌘⇧S` shipped in T11, reading `OverviewNavigation.openAction`.) | `50-mac-keyboard-map.md` |
 | E1/E3 | `⌘F` filters only `FeatureOverview`'s own lists — `\.overviewQuery` is internal to that target, so `NextView`/`WaitingView`/`ProjectsListView` never see it. Searching in those sections does nothing, silently. | `51-search-across-lists.md` |
 | D2/R3 | Notifications carry no actions ("Start routine", "Done"); there is no Control Widget (it needs a widget-extension target `project.yml` does not declare); Shortcuts shows a text field instead of a routine picker. | `52-notification-actions-and-widget.md` |
 | N3 | An ordinary command has no staleness guard. A device whose snapshot predates a rename writes the old path and the vault ends up with **two** notes — nothing is lost, but nothing warns either. Pinned by `GTDServicesTests/SyncScenarioTests`. | `53-stale-write-guard.md` |
 | §10.3 | "Captured vs processed" in the weekly review is an approximation: the vault records when a note was created and completed, never when it was filed out of the inbox. `WeeklyStats.compute` documents it and the review presents it honestly. | `54-filed-at-record.md` |
-| I4/D12 (R-3) | Only the inbox card, "Make action" and (T12, 2026-09-21) the review deck's `Promote` turn `GTDError.missingFields` into an inline, per-card notice. The action editor's status chip and "What's next?" still route it through `perform`/`report`, so the **shell's alert** names the fields (`Still missing: Why?, Context, Time`) instead of marking them. Acceptable for v1, and deliberate: the reducer is the single authority either way. | — (T11 refines the remaining two) |
+| I4/D12 (R-3) | The inbox card, "Make action" and the review deck's `Promote` turn `GTDError.missingFields` into an inline, per-card notice; the action editor's status chip names the fields inline (T11). `⌘⇧N` and "What's next?" still route it through `perform`/`report`, so the **shell's alert** names the fields (`Still missing: Why?, Context, Time`) instead of marking them. Acceptable for v1, and deliberate: the reducer is the single authority either way. | — |
 | I2–I4c (T08/T09) | The two-step card's **state machine, keys, legends, picker models and navbar model are done and tested** (`FeatureInbox/InboxSession`), but its **views are not**: `InboxProcessingView`/`InboxCardView`/`InboxSheets` were adapted mechanically so the package builds, not designed. Missing against STYLEGUIDE §3.5/§3.6: the three real bars (`StepOneBar`/`ActionCardBar`/`KnowledgeListNavbar` exist in `DesignSystem` but are not wired), expand-in-place motion with the cross-fade, the asterisks and the shake on the card, the one-time hint's real wording, the step-1 card scrolling its text instead of `Show all` (`InboxSession.Sheet.fullText` still exists for that), VoiceOver custom actions beyond the plain list, the Reduce Motion path, and previews per step × platform. | — (T09) |
 | L4 | `FeatureInbox.MakeActionModel` is the card entry point and is tested, but nothing presents it yet: `FeatureLists` does not exist. | — (T10) |
 | performance | Every command re-lists and re-assembles the whole vault (~235 ms of a 276 ms `setStatus` at 1 000 notes, debug build on Linux). Measured by `scripts/benchmark.sh`. | `55-incremental-reindex.md` |
@@ -44,8 +44,8 @@ same fact.
 
 - **A project cannot be renamed** in the app: the folder name is the project's identity
   (ARCHITECTURE §6), and `updateProject` refuses a changed title with `.invalid`. Its **area**
-  can be changed since R-7 — that moves the project's folder — but no view offers it yet (T11),
-  so today it is reachable only through `ProjectDetailModel.setArea(_:)`.
+  can be changed since R-7 — that moves the project's folder — through the project detail's area
+  picker (T11), which surfaces a name collision or a gone area inline rather than swallowing it.
 - **Projects a pre-rework vault left directly under `Projects/`** keep working with no area and
   are **never moved automatically** (R-6): moving files nobody asked about is the one thing this
   app does not do. They show up first in the projects list, next to the `Projects/no_area/` ones.
@@ -61,7 +61,8 @@ same fact.
   `capSignal` shows `17/15`. Since R-2 this is also reachable without hand-editing: a deferred
   Next item comes back on its date into an already full list. Nothing is demoted automatically —
   `NextListModel.showsCapSheet` asks for the `Next is full` sheet once per foreground until the
-  user demotes something (the sheet itself is wired in T11).
+  user demotes something; `NextView` presents it as `NextCapSheet` (T11: `Demote` buttons +
+  `Cancel`, no "send to Someday instead" — STYLEGUIDE §3.6).
 - **Legacy tier words stay in the file until the status changes.** A note that still says
   `status: backlog` or `status: maybe` reads as Someday and is *not* rewritten (R-1,
   ARCHITECTURE §6) — deliberate, so nothing in the vault is touched behind the user's back. The

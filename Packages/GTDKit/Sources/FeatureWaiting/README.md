@@ -28,6 +28,10 @@ the deferred screen is titled **"Deferred"**, the section's name, not `Copy.defe
   are never tinted). `followUpSignal(for:)` — the `chase` signal's step, which tints the row's
   follow-up date chip once the date has passed. `badges(for:)`, `recentWho` (deduped, capped at 5, for
   `WaitingInfoSheet(suggestedWho:)`).
+- `metaParts(for:)` (T11, W1/D39) — the row's meta line as parts: `who` first when present, then
+  the "waiting since" age — `who` is simply omitted when it is empty/nil, never printed as a
+  dangling "— " (§1 "no lying defaults"). Pure (`WaitingListModel.rowMeta(who:ageText:)`), tested
+  for both branches without SwiftUI; `WaitingRow` renders it with `Copy.metaLine(_:)`.
 
 ## Invariants
 

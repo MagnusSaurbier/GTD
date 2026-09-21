@@ -346,6 +346,12 @@ private struct ActionDetailEditor: View {
     }
 
     /// A refused command (STYLEGUIDE §4.3: no alerts for validation — inline, in place).
+    ///
+    /// STYLEGUIDE §3.6 ("Next at cap"): demote one **or cancel** — no "send to Someday instead"
+    /// shortcut. This banner *is* that cap refusal for an existing action (moving it to Next
+    /// through the status chips), so it offers no such shortcut either; the person clears the
+    /// error and swipes/chips their way to Someday themselves, same as the inbox and the Next
+    /// list's own cap sheet (ARCHITECTURE §6, T11).
     @ViewBuilder private func errorBanner(_ editor: ActionEditModel) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Text(errorTitle(editor.lastError))
@@ -355,13 +361,6 @@ private struct ActionDetailEditor: View {
                 Text(Copy.capSheetBody)
                     .font(Typo.meta)
                     .foregroundStyle(Color.textSecondary)
-                Button(Copy.sendToSomedayInstead) {
-                    editor.clearError()
-                    editor.setStatus(.someday)
-                }
-                .buttonStyle(.plain)
-                .font(Typo.meta)
-                .foregroundStyle(Color.gtdAccent)
             }
         }
         .padding(Spacing.m)
@@ -375,9 +374,12 @@ private struct ActionDetailEditor: View {
         return false
     }
 
+    /// R-3 — a `missingFields` refusal names the gap (`Copy.missingFields`), same wording the
+    /// shell's alert uses for every other flow that goes through `report` (deliverable 6).
     private func errorTitle(_ error: (any Error)?) -> String {
         switch error as? GTDError {
         case .nextCapReached: Copy.capSheetTitle
+        case let .missingFields(fields): Copy.missingFields(fields)
         case .titleCollision: OverviewCopy.titleTaken
         case .notFound: OverviewCopy.missingActionTitle
         default: OverviewCopy.notSaved

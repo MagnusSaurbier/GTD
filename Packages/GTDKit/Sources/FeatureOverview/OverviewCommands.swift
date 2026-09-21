@@ -41,6 +41,26 @@ public struct OverviewCommands: Commands {
             .keyboardShortcut("i", modifiers: .command)
         }
 
+        // STYLEGUIDE §4.5 — fixed (not rebindable) shortcuts: move the action open in the
+        // detail column to Next / Someday. Every transition into Next goes through
+        // `AppModel.perform`, so a cap or `missingFields` refusal reaches the shell's one alert
+        // instead of failing silently (deliverable 1, R-3).
+        CommandGroup(after: .toolbar) {
+            Button(OverviewCopy.moveToNext) {
+                guard let id = navigation.openAction else { return }
+                Task { await model.perform(.setStatus(id, .next, waiting: nil)) }
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .disabled(navigation.openAction == nil)
+
+            Button(OverviewCopy.moveToSomeday) {
+                guard let id = navigation.openAction else { return }
+                Task { await model.perform(.setStatus(id, .someday, waiting: nil)) }
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+            .disabled(navigation.openAction == nil)
+        }
+
         CommandMenu(OverviewCopy.go) {
             ForEach(Array(SidebarItem.counted.enumerated()), id: \.element) { index, item in
                 Button(item.title) {

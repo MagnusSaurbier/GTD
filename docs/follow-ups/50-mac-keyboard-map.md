@@ -23,12 +23,16 @@ These are **not**:
 | Shortcut | Action |
 | --- | --- |
 | `⌘⏎` | mark the focused action done |
-| `⌘⇧N` / `⌘⇧S` | move the focused action to Next / Someday |
 | `⌘⇧W` | set the focused action to waiting (opens `WaitingInfoSheet`, W1) |
 | `Space` | toggle the focused chip or checkbox |
 
-They all act on **the focused row**, and no feature view exposes a focus target the shell can
-reach — which is why T40 left them out and T41 declined to add them blind (T40 decision #2, in
+**`⌘⇧N` / `⌘⇧S`** (move to Next / Someday) shipped with the inbox rework (T11,
+`FeatureOverview/OverviewCommands.swift`): they read `OverviewNavigation.openAction` — the note
+the detail column shows, already promoted by the Mac list's own `selection:` (M2) — rather than a
+new focus concept, exactly as deliverable 1 below suggested. They go through `AppModel.perform`,
+so a cap or `missingFields` refusal reaches the shell's alert. The remaining three still act on
+**the focused row**, and no feature view exposes a focus target the shell can reach for them —
+which is why T40 left them out and T41 declined to add them blind (T40 decision #2, in
 `docs/history/build-out/ORCHESTRATOR-NOTES.md`).
 
 ## Owns
@@ -44,8 +48,9 @@ reach — which is why T40 left them out and T41 declined to add them blind (T40
    `NoteID` — lists already track a selection for the detail column, so prefer promoting that over
    inventing a second concept. If a list cannot supply one, say so in the Result rather than
    faking it.
-2. **The four commands in the menu bar**, in the stock `Commands` groups, disabled (greyed, not
-   hidden) when nothing is focused. `⌘⇧W` opens the existing `WaitingInfoSheet`; it never sets
+2. **The remaining three commands in the menu bar** (`⌘⏎`, `⌘⇧W`, `Space`), in the stock
+   `Commands` groups, disabled (greyed, not hidden) when nothing is focused — same shape as the
+   `⌘⇧N`/`⌘⇧S` pair T11 already added. `⌘⇧W` opens the existing `WaitingInfoSheet`; it never sets
    `waiting` without who + follow-up (W1).
 3. **`Space` on a focused chip / checkbox.** If Full Keyboard Access already gives this for free
    on a `Button`, verify it and write that down instead of adding code.

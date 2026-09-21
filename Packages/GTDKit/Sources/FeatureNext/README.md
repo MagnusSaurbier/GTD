@@ -40,9 +40,20 @@ overdue follow-ups (E1, E2, W2).
 - **`showsCapSheet`** is the R-2 flag the view acts on: Next can be over the cap when a deferred
   item returns, and the `Next is full` sheet is then presented **once per foreground**
   (`enteredForeground()` arms it, `capSheetShown()` puts it down) until something is demoted.
-- Every row command goes through a small `run(_:)` wrapper that turns a thrown `GTDError` into an
-  alert instead of a silent `try?` (a refused command must
-  reach the person).
+  `NextView` wires this itself (T11): `@Environment(\.scenePhase)` calls `enteredForeground()` on
+  every transition to `.active`, and `NextCapSheet` (built locally from `DesignSystem` pieces —
+  this target does not import `FeatureInbox`) lists the current Next items with `Demote` buttons
+  and `Cancel`, **no "send to Someday instead" shortcut** (STYLEGUIDE §3.6). `isCapSheetPresented`
+  stays true once armed, independent of `showsCapSheet` itself flipping back to `false` the
+  instant `capSheetShown()` is called.
+- Every row command goes through a small `run(_:)` wrapper that turns a thrown `GTDError` — a cap
+  refusal or a `missingFields` refusal (R-3, named via `Copy.missingFields`) alike — into an alert
+  instead of a silent `try?` (a refused command must reach the person).
+- **Chase row title** (STYLEGUIDE §3.3): `Chase: <who> — <what>` when the action has a `who`,
+  `Chase: <what>` when W1/D39 leaves it empty — never a dangling "— ". Built by
+  `NextListModel.chaseTitle(for:)` (pure, Linux-tested) and passed into `NextRow`'s `title`, which
+  is what the row actually displays and speaks (`action.title` is only the *default* for a plain
+  Next row).
 - Next section header (STYLEGUIDE §2.2): `Next · 14/15` as plain text below the cap, `Next` +
   `Badge` (`15/15`, overdue past it) at/above — never a meter, never a bare number. When the list
   shows fewer rows than that count the header's trailing text says why: `8 of 14 on the go`
@@ -70,7 +81,7 @@ gap, not filled in the guide itself since it is a synced vault note).
 `NextView.swift` and `NextRow.swift` are wrapped entirely in `#if canImport(SwiftUI)` — they do
 not compile on Linux; build them on a Mac (`scripts/check.sh --app`).
 `NextListModel.swift` and `NextFilterStore.swift` have no SwiftUI import and are fully covered by
-`swift test` (27 tests), including against `AppModel` + `InMemoryBackend` + `GTDFixtures`.
+`swift test` (32 tests), including against `AppModel` + `InMemoryBackend` + `GTDFixtures`.
 
 ## Gotchas
 
@@ -80,6 +91,11 @@ not compile on Linux; build them on a Mac (`scripts/check.sh --app`).
 - **Do not give the top chip bar a material background.** With `.background(.bar)` on a
   `safeAreaInset` iOS 26+ blurs the large title away; `safeAreaBar(edge: .top)` gets the system's
   scroll-edge blur under the chips without that.
+- **Read a `View`-conforming type's static member into a local `let` before an `@Sendable`
+  closure**, don't reference it from inside one. `nextRowChrome()`'s `.alignmentGuide` closure
+  reading `NextRow.separatorInset` directly warned ("main actor-isolated static property
+  referenced from a Sendable closure"); capturing it in a local first (T11) fixed the warning
+  without silencing the check.
 
 ## Testing
 

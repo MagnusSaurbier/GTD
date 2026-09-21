@@ -8,8 +8,11 @@ action editor no other feature target owns.
 - `OverviewView()` — the three-column shell; the guided flows (`SidebarItem.spansDetailColumn`:
   weekly review, routines) get sidebar + one wide column. `OverviewView(navigation:)` shares one
   `OverviewNavigation` with the menu bar.
-- `OverviewCommands(navigation:model:)` — menu-bar shortcuts `⌘1…7`, `⌘N`, `⌘I`, `⌘Z`
-  (STYLEGUIDE §4.5). `⌘F` lives inside the window, because it focuses the filter field.
+- `OverviewCommands(navigation:model:)` — menu-bar shortcuts `⌘1…7`, `⌘N`, `⌘I`, `⌘Z`, and (T11)
+  the fixed `⌘⇧N`/`⌘⇧S` "Move to Next"/"Move to Someday" of whatever action is open in the detail
+  column, disabled when nothing is open. Both go through `AppModel.perform(_:)`, so a cap or
+  `missingFields` refusal reaches the shell's one alert (STYLEGUIDE §4.5). `⌘F` lives inside the
+  window, because it focuses the filter field.
 - `ActionListView(status:selection:onOpen:)` — Someday, grouped by area/project. On
   macOS a selectable `List`: click or arrow keys call `onOpen`, `selection` is the highlighted row.
   Waiting, Deferred (`FeatureWaiting`) and Projects (`FeatureProjects`) take the same
@@ -38,8 +41,12 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
   `Reduction.renames`, it travels with the snapshot (`GTDAppCore.SnapshotUpdate`), and the shell
   hands it to `OverviewNavigation.apply(snapshot:renames:)`, which remaps the detail column
   **before** dropping notes that are genuinely gone.
-- A refused command (cap, waiting info, title collision) is kept in `lastError`, shown inline,
-  and **not** retried until the next edit — the user's text is never thrown away.
+- A refused command (cap, waiting info, title collision, `missingFields`) is kept in `lastError`,
+  shown inline, and **not** retried until the next edit — the user's text is never thrown away.
+  `ActionDetailView`'s cap-refusal banner (moving the action open in the detail column to Next
+  through the status chips) offers no "send to Someday instead" shortcut (T11, STYLEGUIDE §3.6:
+  demote-or-cancel only) — it is the cap sheet for an existing action, unlike the distinct
+  fallback `FeatureProjects`' step-promotion sheets keep (ARCHITECTURE §6).
 - Lists group **by area / project**; context and time are filter chips. Actions without a project
   come first, without a header.
 - The shell holds no GTD semantics: every section routes to the feature that owns it.

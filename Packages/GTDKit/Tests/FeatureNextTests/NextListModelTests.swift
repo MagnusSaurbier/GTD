@@ -277,6 +277,20 @@ struct NextListModelTests {
         #expect(list.chase.isEmpty)
     }
 
+    /// STYLEGUIDE §3.3: `Chase: <who> — <what>` with a who on file, `Chase: <what>` — never a
+    /// dangling "— " — once W1/D39 lets `who` be empty.
+    @Test func chaseTitleNamesWhoWhenPresentAndOmitsTheDashWhenNot() {
+        #expect(NextListModel.chaseTitle(who: "Finanzamt", what: "Renew passport") == "Chase: Finanzamt — Renew passport")
+        #expect(NextListModel.chaseTitle(who: "", what: "Renew passport") == "Chase: Renew passport")
+        #expect(NextListModel.chaseTitle(who: nil, what: "Renew passport") == "Chase: Renew passport")
+    }
+
+    @Test func chaseTitleForActionReadsItsWaitingForAndTitle() throws {
+        let list = NextListModel(model: makeModel(), mode: .full, store: InMemoryNextFilterStore())
+        let chaseItem = try #require(list.chase.first)
+        #expect(list.chaseTitle(for: chaseItem) == NextListModel.chaseTitle(who: chaseItem.waitingFor, what: chaseItem.title))
+    }
+
     // MARK: - Inline checklist (A2)
 
     @Test func showsChecklistOnlyWithTwoOrMoreCheckboxes() throws {

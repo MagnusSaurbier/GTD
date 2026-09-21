@@ -173,8 +173,12 @@ public struct ActionListView: View {
                 systemImage: OverviewSymbols.filter,
                 description: Text(OverviewCopy.emptyFilterBody))
         } else {
+            // This list only ever shows Someday (`ProjectsListView`/`WaitingView`/`NextView` own
+            // their own tiers) — the canonical empty-state string (STYLEGUIDE §3.9, DesignSystem)
+            // instead of the generic `OverviewCopy.emptyListTitle(_:)` this used to share with
+            // every status.
             ContentUnavailableView(
-                OverviewCopy.emptyListTitle(Copy.status(status)),
+                Copy.emptySomedayTitle,
                 systemImage: Symbols.someday,
                 description: Text(OverviewCopy.emptyListBody))
         }

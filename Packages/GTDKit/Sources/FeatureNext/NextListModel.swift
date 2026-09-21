@@ -243,4 +243,22 @@ public final class NextListModel {
     public func resolveChase(_ action: Action) async throws {
         try await model.send(.complete(action.id))
     }
+
+    // MARK: - Chase row title (STYLEGUIDE §3.3, W1/D39's optional who)
+
+    /// `Chase: <who> — <what>` when a who is on file, `Chase: <what>` when it is empty/nil —
+    /// never a dangling "— " suffix. Pure, so it is testable without SwiftUI (ARCHITECTURE §5).
+    public func chaseTitle(for action: Action) -> String {
+        NextListModel.chaseTitle(who: action.waitingFor, what: action.title)
+    }
+
+    static func chaseTitle(who: String?, what: String) -> String {
+        guard let who, !who.isEmpty else { return "\(Copy.chase): \(what)" }
+        return "\(Copy.chase): \(who) — \(what)"
+    }
+
+    /// VoiceOver label for a chase row: the built title, then meta and badges as usual.
+    public func chaseSpokenLabel(for action: Action) -> String {
+        Copy.spoken([chaseTitle(for: action)] + metaParts(for: action) + badges(for: action).map(\.accessibilityLabel))
+    }
 }

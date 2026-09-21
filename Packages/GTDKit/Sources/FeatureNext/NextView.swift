@@ -53,11 +53,19 @@ private struct NextListContent: View {
     @State private var list: NextListModel
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// R-2 — the app coming to the foreground re-arms the `Next is full` sheet if Next is still
+    /// over the cap (`NextListModel.enteredForeground()`).
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var toastLabel: String?
     @State private var toastTask: Task<Void, Never>?
     @State private var waitingSheetAction: Action?
     @State private var deferSheetAction: Action?
+    /// R-2 — set (and `NextListModel.capSheetShown()` called) the moment `list.showsCapSheet`
+    /// turns true, so the sheet stays presented for the rest of this foreground even though
+    /// `showsCapSheet` itself goes false the instant it is "shown" (that flag means "still owed",
+    /// not "currently visible").
+    @State private var isCapSheetPresented = false
     /// A row command the reducer refused. Never swallowed with `try?` — every row action goes
     /// through `run(_:)`, which lands the failure here so it reaches the person instead of
     /// disappearing silently.
@@ -118,6 +126,19 @@ private struct NextListContent: View {
                 run { try await list.setDefer(action, to: newValue) }
             }
         }
+        .sheet(isPresented: $isCapSheetPresented) {
+            NextCapSheet(list: list) { action in
+                run { try await list.demoteToSomeday(action) }
+            }
+        }
+        .onChange(of: list.showsCapSheet, initial: true) { _, showsCapSheet in
+            guard showsCapSheet else { return }
+            isCapSheetPresented = true
+            list.capSheetShown()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { list.enteredForeground() }
+        }
         .alert(
             errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
         ) {
@@ -141,6 +162,9 @@ private struct NextListContent: View {
         switch error {
         case let GTDError.invalid(reason): reason
         case GTDError.nextCapReached: Copy.capSheetTitle
+        // R-3 — a row action that tries to move something into Next without what it needs names
+        // the gap instead of failing silently (deliverable 1: "surfaces to the shell's alert").
+        case let GTDError.missingFields(fields): Copy.missingFields(fields)
         default: Copy.actionFailed
         }
     }
@@ -329,7 +353,9 @@ private struct NextListContent: View {
     }
 
     @ViewBuilder private func chaseRow(_ action: Action) -> some View {
-        row(action) { run { try await list.resolveChase(action) } }
+        row(
+            action, title: list.chaseTitle(for: action), spokenLabel: list.chaseSpokenLabel(for: action)
+        ) { run { try await list.resolveChase(action) } }
             .nextRowChrome()
             #if os(iOS)
             .swipeActions(edge: .trailing) {
@@ -347,12 +373,18 @@ private struct NextListContent: View {
             }
     }
 
-    private func row(_ action: Action, onComplete: @escaping () -> Void) -> NextRow {
+    private func row(
+        _ action: Action,
+        title: String? = nil,
+        spokenLabel: String? = nil,
+        onComplete: @escaping () -> Void
+    ) -> NextRow {
         NextRow(
             action: action,
+            title: title ?? action.title,
             metaParts: list.metaParts(for: action),
             badges: list.badges(for: action),
-            spokenLabel: list.spokenLabel(for: action),
+            spokenLabel: spokenLabel ?? list.spokenLabel(for: action),
             onOpen: {
                 selectedID = action.id
                 onOpen(action.id)
@@ -442,8 +474,14 @@ private extension View {
     /// What every Next/chase row shares with the `List` around it: the separator starts where
     /// the row's text starts, for every row alike, and the row is a whole number of points tall.
     func nextRowChrome() -> some View {
-        WholePointHeight { self }
-            .alignmentGuide(.listRowSeparatorLeading) { _ in NextRow.separatorInset }
+        // `NextRow.separatorInset` is read once, here, on the main actor: the closure below is
+        // `@Sendable` (`.alignmentGuide`'s parameter type), and reading a static member of a
+        // `View`-conforming type from inside it warned ("main actor-isolated static property
+        // referenced from a Sendable closure"). Capturing the already-read value sidesteps the
+        // cross-isolation access instead of silencing the check.
+        let inset = NextRow.separatorInset
+        return WholePointHeight { self }
+            .alignmentGuide(.listRowSeparatorLeading) { _ in inset }
     }
 }
 
@@ -464,6 +502,50 @@ private struct WholePointHeight: Layout {
         subviews.first?.place(
             at: bounds.origin, anchor: .topLeading,
             proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+
+/// R-2's `Next is full` sheet: a deferred item returned into an already-full Next. Lists the
+/// current Next items with a `Demote` button each, and `Cancel` — the same shape as the inbox's
+/// cap sheet (STYLEGUIDE §3.6), reimplemented locally because `FeatureNext` does not import
+/// `FeatureInbox` (ARCHITECTURE §2: features depend only on `GTDAppCore` + `DesignSystem`).
+/// **No "send to Someday instead" shortcut** — STYLEGUIDE §3.6 is explicit that a cap refusal
+/// offers demote-or-cancel only, never an automatic reroute.
+private struct NextCapSheet: View {
+    let list: NextListModel
+    let onDemote: (Action) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text(Copy.capSheetBody)
+                        .font(Typo.meta)
+                        .foregroundStyle(Color.textSecondary)
+                }
+                ForEach(list.items, id: \.id) { action in
+                    HStack {
+                        ActionRow(action: action, projectTitle: list.projectTitle(for: action))
+                        Spacer(minLength: Spacing.s)
+                        Button(Copy.demote) {
+                            onDemote(action)
+                            dismiss()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+            .navigationTitle(Copy.capSheetTitle)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(Copy.cancel) { dismiss() }
+                }
+            }
+        }
+        #if os(iOS)
+        .presentationDetents([.medium, .large])
+        #endif
     }
 }
 

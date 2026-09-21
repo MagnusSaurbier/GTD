@@ -58,6 +58,23 @@ public final class WaitingListModel {
         SignalPresentation.badges(for: Rules.signals(for: action, today: today), today: today)
     }
 
+    // MARK: - Row / title text (W1/D39's optional who)
+
+    /// The waiting row's meta line: `who` (when present) then the "waiting since" age, never a
+    /// dangling separator when `who` is empty/nil (D39 — who is optional, STYLEGUIDE "no lying
+    /// defaults": an absent value is simply omitted, not printed as an empty dash). Pure, so it
+    /// is testable without SwiftUI (ARCHITECTURE §5).
+    public func metaParts(for action: Action) -> [String] {
+        WaitingListModel.rowMeta(who: action.waitingFor, ageText: DateText.age(days: waitingSinceDays(action)))
+    }
+
+    static func rowMeta(who: String?, ageText: String) -> [String] {
+        var parts: [String] = []
+        if let who, !who.isEmpty { parts.append(who) }
+        parts.append(ageText)
+        return parts
+    }
+
     /// The action's current `who` + follow-up, for `WaitingInfoSheet(initial:)` when editing.
     public func waitingInfo(for action: Action) -> WaitingInfo? { action.waiting }
 

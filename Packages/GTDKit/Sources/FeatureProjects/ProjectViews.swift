@@ -249,6 +249,9 @@ public struct ProjectDetailView: View {
                 .textFieldStyle(.plain)
                 .font(Typo.body)
                 .foregroundStyle(Color.textSecondary)
+
+            Text(Copy.area).font(Typo.meta).foregroundStyle(Color.textSecondary)
+            AreaPicker(detail: detail)
         }
     }
 
@@ -771,6 +774,79 @@ public struct ProjectPicker: View {
         #if os(iOS)
         .presentationDetents([.medium, .large])
         #endif
+    }
+}
+
+// MARK: - Area picker (P6, R-7)
+
+/// The project detail's area picker: a **chip** showing the current area (confirmed) or an
+/// unset `Area` chip; tapping it opens the list of areas — popover on Mac, medium sheet on iOS,
+/// the same presentation as `ProjectPicker`/`DateValueChip`. Never a "No area" row inside that
+/// list (STYLEGUIDE); clearing the area is the separate `ProjectsCopy.removeFromArea` action,
+/// offered only once the project has an area to remove.
+///
+/// `ProjectDetailModel.setArea(_:)` can refuse (`GTDError.titleCollision`/`.notFound`, R-7) —
+/// the refusal is shown inline here, never swallowed with `try?` (ARCHITECTURE §6).
+private struct AreaPicker: View {
+    let detail: ProjectDetailModel
+    @State private var isPresented = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            let chip = AreaPickerContent.chip(area: detail.area)
+            Chip(chip.title, state: chip.state, symbol: chip.state == .unset ? Symbols.addValue : nil) {
+                isPresented = true
+            }
+            .accessibilityLabel(Copy.spoken(chip.state == .unset ? [chip.title] : [Copy.area, chip.title]))
+            .popover(isPresented: $isPresented) { list }
+            if let errorMessage {
+                Text(errorMessage).font(Typo.meta).foregroundStyle(Color.textSecondary)
+            }
+        }
+    }
+
+    private var list: some View {
+        List {
+            ForEach(detail.areas, id: \.id) { area in
+                Button {
+                    Task { await setArea(area.id) }
+                } label: {
+                    HStack {
+                        Text(area.title).font(Typo.body).foregroundStyle(Color.ink)
+                        Spacer()
+                        if detail.area?.id == area.id {
+                            Image(systemName: Symbols.done).foregroundStyle(Color.gtdAccent)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(detail.area?.id == area.id ? [.isSelected] : [])
+            }
+            if detail.area != nil {
+                Button(role: .destructive) {
+                    Task { await setArea(nil) }
+                } label: {
+                    Text(ProjectsCopy.removeFromArea)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(minWidth: 280, minHeight: 320)
+        #if os(iOS)
+        .presentationDetents([.medium, .large])
+        #endif
+    }
+
+    private func setArea(_ area: NoteID?) async {
+        do {
+            try await detail.setArea(area)
+            errorMessage = nil
+            isPresented = false
+        } catch {
+            errorMessage = AreaPickerContent.message(for: error)
+        }
     }
 }
 

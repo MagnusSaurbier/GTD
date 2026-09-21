@@ -108,6 +108,9 @@ public enum Copy {
     public static let capSheetTitle = "Next is full"
     public static let capSheetBody = "Demote one to make room."
     public static let sendToSomedayInstead = "Send to Someday instead"
+    /// The `Next is full` sheet's other exit (STYLEGUIDE §3.6: "Demote one … or cancel") and any
+    /// other forced-choice sheet that needs a plain way out.
+    public static let cancel = "Cancel"
     public static let deferToReviewPrompt = "Why doesn't this fit?"
 
     /// `What's next for <project>?` (P5)

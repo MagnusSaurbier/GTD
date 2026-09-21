@@ -157,15 +157,12 @@ private struct WaitingRow: View {
         }
     }
 
-    @ViewBuilder private var metaLine: some View {
-        HStack(spacing: Spacing.xs) {
-            if let who = action.waitingFor, !who.isEmpty {
-                Text(who)
-            }
-            Text(DateText.age(days: list.waitingSinceDays(action)))
-        }
-        .font(Typo.meta)
-        .foregroundStyle(Color.textSecondary)
+    /// `<who> · <age>` when `who` is present, plain `<age>` when it is not — never a dangling
+    /// separator (W1/D39, built by `WaitingListModel.metaParts(for:)` so the logic is testable).
+    private var metaLine: some View {
+        Text(Copy.metaLine(list.metaParts(for: action)))
+            .font(Typo.meta)
+            .foregroundStyle(Color.textSecondary)
     }
 
     @ViewBuilder private var badgeRow: some View {

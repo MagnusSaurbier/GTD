@@ -16,6 +16,9 @@ import DesignSystem
 /// No decisions live here — what to show comes from `NextListModel`.
 struct NextRow: View {
     let action: Action
+    /// What the row's title line shows — `action.title` for a plain Next row, or
+    /// `NextListModel.chaseTitle(for:)` (`Chase: <who> — <what>`) for a chase row.
+    let title: String
     /// `NextListModel.metaParts(for:)` — project, contexts, time bucket.
     let metaParts: [String]
     let badges: [BadgeContent]
@@ -90,7 +93,7 @@ struct NextRow: View {
 
     private func textBlock(titleLines: Int) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(action.title)
+            Text(title)
                 .font(Typo.body)
                 .foregroundStyle(isProminent ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.ink))
                 .lineLimit(titleLines)
@@ -150,7 +153,7 @@ struct NextRow: View {
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.success, trigger: isDrawingCheck)
-        .accessibilityLabel("\(Copy.done) \(action.title)")
+        .accessibilityLabel("\(Copy.done) \(title)")
     }
 }
 #endif
