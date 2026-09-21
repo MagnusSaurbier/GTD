@@ -366,13 +366,13 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | Task | Status | Commit | Model used | Rounds | Notes |
 | --- | --- | --- | --- | --- | --- |
 | T00 | done | 8fa4105 | manager | 1 | gate green; baseline 904 Swift tests (Model 135, Markdown 115, Vault 113, Review 77, Projects 64, Overview 58, Services 54, Inbox 53, Stats 32, DesignSystem 30, Settings 30, Next 27, Notifications 27, AppCore 23, Intents 22, Waiting 21, Routines 17, Fixtures 6) — pytest is not installed on this Mac, so check.sh SKIPs the 40 migration tests (T14 runs them from a scratch venv); both scratch app builds green, one pre-existing warning (`FeatureNext/NextView.swift:446` separatorInset) |
-| T01 | done | (this commit) | Opus | 1 | gate green, 920 tests, no target dropped; grep clean (only tolerant decode + its tests); both app builds green. `GTDCommand.trashAction` added; `SidebarItem.maybe` dropped; `Next is full` sheet for R-2 is only a `NextListModel` flag until T11; a stored pre-rework `DeckPhase` will not decode until T12 |
-| T02 | done | (this commit) | Opus | 1 | gate green, 945 tests (Vault 130, Services 63); no delete path added; `VaultStore.folderContents(_:)` added for the undo-stale guard; `scripts/check-docs.sh` now ignores `.claude/` (agent worktrees broke the gate); coordinated folder move never ran against a live iCloud vault |
-| T03 | done | (this commit) | Opus | 2 | gate green, 1040 tests (Model 191, Markdown 139, Vault 143, Services 67). Round 1 rejected: sample vault's empty `Lists/Wish/` would vanish in a git clone — Wish got an item + a clone-fidelity test. `createList`/`setFavouriteLists` are not undoable; `VaultFileOp.createFolder` added (no inverse); action encoder appends headings below a promoted item's notes |
-| T04 | done | (this commit) | Opus | 1 | gate green, 1073 tests (Model 215, Markdown 145, Inbox 55); both app builds green. `InboxDecision` = action / knowledge / list / trash; filing moves the capture file; `Reduction.filedNotes` carries the Knowledge note; promotion sheets outside the inbox still offer `Send to Someday instead` (T11 to check against STYLEGUIDE) |
-| T05 | | | | | |
-| T06 | | | | | |
-| T07 | | | | | |
+| T01 | done | f78b347 | Opus | 1 | gate green, 920 tests, no target dropped; grep clean (only tolerant decode + its tests); both app builds green. `GTDCommand.trashAction` added; `SidebarItem.maybe` dropped; `Next is full` sheet for R-2 is only a `NextListModel` flag until T11; a stored pre-rework `DeckPhase` will not decode until T12 |
+| T02 | done | 828b678^ | Opus | 1 | gate green, 945 tests (Vault 130, Services 63); no delete path added; `VaultStore.folderContents(_:)` added for the undo-stale guard; `scripts/check-docs.sh` now ignores `.claude/` (agent worktrees broke the gate); coordinated folder move never ran against a live iCloud vault |
+| T03 | done | 48c6c1e | Opus | 2 | gate green, 1040 tests (Model 191, Markdown 139, Vault 143, Services 67). Round 1 rejected: sample vault's empty `Lists/Wish/` would vanish in a git clone — Wish got an item + a clone-fidelity test. `createList`/`setFavouriteLists` are not undoable; `VaultFileOp.createFolder` added (no inverse); action encoder appends headings below a promoted item's notes |
+| T04 | done | 9658e01 | Opus | 1 | gate green, 1073 tests (Model 215, Markdown 145, Inbox 55); both app builds green. `InboxDecision` = action / knowledge / list / trash; filing moves the capture file; `Reduction.filedNotes` carries the Knowledge note; promotion sheets outside the inbox still offer `Send to Someday instead` (T11 to check against STYLEGUIDE) |
+| T05 | **in progress** (started 2026-09-21, worktree, ∥ T06/T07) | | Opus | 1 | |
+| T06 | **in progress** (started 2026-09-21, worktree, ∥ T05/T07) | | Sonnet | 1 | |
+| T07 | **in progress** (started 2026-09-21 during T04, worktree) | | Sonnet | 1 | |
 | T08 | | | | | |
 | T09 | | | | | |
 | T10 | | | | | |
