@@ -1,6 +1,7 @@
 import SwiftUI
 import GTDAppCore
 import GTDModel
+import DesignSystem
 import FeatureOverview
 
 /// The app shell. **Owned by T40.**
@@ -41,7 +42,12 @@ struct GTDApp: App {
         Settings {
             MacSettingsScene(composition: composition)
                 .environment(composition.model)
+                // A scene of its own: it inherits nothing from `RootView` ("Open in Obsidian"
+                // in Vault issues needs the root).
+                .environment(\.vaultRootPath, composition.vaultRootPath)
         }
+        // Follows `MacSettingsScene`'s min/max frame, so the scrolling form can be resized.
+        .windowResizability(.contentSize)
         #else
         WindowGroup {
             RootView(composition: composition, router: router, notifications: notifications)

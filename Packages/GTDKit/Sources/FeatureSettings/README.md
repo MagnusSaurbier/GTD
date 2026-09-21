@@ -59,11 +59,16 @@ This target must **not** import `GTDVault`: folder picking returns a plain `URL`
 
 ## Design notes
 
+- `SettingsView`'s `Form` is `.formStyle(.grouped)` on both platforms (STYLEGUIDE §4.4). On macOS
+  that is load-bearing: the default `.columns` style does not scroll, so a form taller than the
+  `Settings` window cuts its lower sections off. The shell (`App/MacShell.swift`) gives the window
+  a min/ideal/max frame rather than a fixed size; never wrap the form in a fixed height.
 - Removing/renaming a context only edits `GTDConfig`; it never rewrites existing action
   frontmatter. `affectedActionCount` is shown so the user knows what stays behind (no lying
   defaults — nothing is silently fixed up).
-- `VaultIssuesView`'s "Reveal"/"Open in Obsidian" actions only have the vault-relative
-  `VaultIssue.path` (no root URL, by contract) — best-effort, documented as a known limitation.
+- `VaultIssuesView`'s "Open in Obsidian" goes through `GTDAppCore.ObsidianLink` with
+  `\.vaultRootPath` (hidden without a root, i.e. on fixtures). "Reveal" still only passes the
+  vault-relative `VaultIssue.path` — best-effort, a known limitation.
 - List add/rename refusals (`GTDError.invalid`/`.titleCollision`) show inline in the row/field —
   never an alert (STYLEGUIDE §4.3). **Remove list** is the one exception that still gets a
   `confirmationDialog` despite being undoable, because it takes every item in the list with it

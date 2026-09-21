@@ -58,6 +58,9 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 - `updateProject` still refuses a changed **title**, so the UI never offers project rename; the
   folder name is the project's identity. Its *area* is editable (R-7) through
   `ProjectDetailModel.setArea(_:)`, wired to the project detail's area picker (T11).
+- `WhatsNextSheet` and `ConvertToProjectSheet` are content-sized `VStack` sheets; their step rows
+  sit in `DesignSystem.OverflowScroll`, so a project with many open steps scrolls inside the
+  sheet instead of pushing the buttons off the screen. Not yet seen on screen.
 - STYLEGUIDE §3.6 forbids "send to Someday instead" on the Next-is-full cap sheet, but that rule
   is about *that* sheet (the inbox's, and `FeatureNext`'s R-2 sheet for an existing action) — the
   step/project-promotion sheets here (`PromoteStepSheet`, `WhatsNextSheet`,

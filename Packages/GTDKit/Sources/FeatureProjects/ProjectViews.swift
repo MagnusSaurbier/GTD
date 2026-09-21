@@ -179,6 +179,7 @@ public struct ProjectDetailView: View {
     private let projectID: NoteID
     private let onOpenAction: (NoteID) -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.vaultRootPath) private var vaultRootPath
     @State private var detailModel: ProjectDetailModel?
     @State private var newStepText = ""
     @State private var promptingStepIndex: Int?
@@ -329,7 +330,7 @@ public struct ProjectDetailView: View {
     @ViewBuilder
     private func referenceFilesSection(_ detail: ProjectDetailModel) -> some View {
         ForEach(detail.referenceFiles, id: \.self) { path in
-            if let url = URL(string: "obsidian://open?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path)") {
+            if let url = ObsidianLink.url(forVaultPath: path, vaultRoot: vaultRootPath) {
                 Link(destination: url) {
                     Label(path, systemImage: Symbols.knowledge)
                 }
@@ -552,13 +553,18 @@ public struct WhatsNextSheet: View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             Text(Copy.whatsNext(project: next.title)).font(Typo.sectionHeader)
 
-            ForEach(next.openSteps) { entry in
-                Button {
-                    Task { await promote(next, stepIndex: entry.stepIndex) }
-                } label: {
-                    Text(entry.step.text).font(Typo.body)
+            // A long project's open steps scroll instead of pushing the buttons off the sheet.
+            if !next.openSteps.isEmpty {
+                OverflowScroll {
+                    ForEach(next.openSteps) { entry in
+                        Button {
+                            Task { await promote(next, stepIndex: entry.stepIndex) }
+                        } label: {
+                            Text(entry.step.text).font(Typo.body)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
 
             HStack {
@@ -664,12 +670,16 @@ public struct ConvertToProjectSheet: View {
                 .textFieldStyle(.plain)
                 .font(Typo.screenTitle)
 
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                HStack(spacing: Spacing.m) {
-                    Image(systemName: selectedStepIndex == index ? Symbols.done : "circle")
-                        .foregroundStyle(selectedStepIndex == index ? Color.gtdAccent : Color.textTertiary)
-                        .onTapGesture { selectedStepIndex = selectedStepIndex == index ? nil : index }
-                    Text(step).font(Typo.body)
+            if !steps.isEmpty {
+                OverflowScroll {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                        HStack(spacing: Spacing.m) {
+                            Image(systemName: selectedStepIndex == index ? Symbols.done : "circle")
+                                .foregroundStyle(selectedStepIndex == index ? Color.gtdAccent : Color.textTertiary)
+                                .onTapGesture { selectedStepIndex = selectedStepIndex == index ? nil : index }
+                            Text(step).font(Typo.body)
+                        }
+                    }
                 }
             }
 

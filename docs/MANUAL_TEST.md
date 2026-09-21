@@ -86,6 +86,17 @@ swipes, Mac with keys. Open it with the `Process inbox` button, `⌘I`, or `gtd:
       action and names its project.
 - [ ] `+ project` opens the picker: a search field on top, then projects **without an area
       first and without any header** (never a "No area" label), then areas with their projects.
+- [ ] **Mac, with more projects than the sheet is tall (15+; the fixtures have too few — use a
+      vault copy, or the Xcode preview `Project — 40 projects, must scroll` in
+      `FeatureInbox/InboxPreviews.swift`):** the sheet is a grouped form — the search field is a
+      full-width row whose placeholder reads `Pick a project`, **not** a label in a left column —
+      and it scrolls to the last project and to the `Create project` row. Scroll down, type: the
+      field still takes the text and the list filters. `Esc` closes the sheet and leaves the card
+      and its draft as they were; a second `Esc` is the card's own ladder.
+- [ ] Same check for the other inbox sheets on the Mac: `Knowledge` (long folder tree + the
+      `Project` section + notes reachable by scrolling), `Defer to review`, `Next is full`,
+      `More…` — each opens at a sensible size (about 440×520), none is a tiny strip, none clips.
+      And `Make action` on a list item › `+ project` (the same picker over a list item).
 - [ ] Type a name no project has: the last row reads `Create project "<text>"`. Tap it — the chip
       confirms with that name.
 - [ ] File the card. In the vault copy, `Projects/no_area/<name>/<name>.md` exists with
@@ -119,6 +130,13 @@ You need a full Next list: demote or complete until the Next sidebar count reads
       folders as filing targets. Pick a project folder — the note lands **inside that project's
       folder**.
 - [ ] Tap `More…`: a plain list of every list; tapping one files the card.
+- [ ] In `More…`, tap `New list…`, type a name, `Create`: the folder `Lists/<name>/` exists, the
+      card is filed into it (toast `Added to <name>`), and the next card's navbar shows the new
+      list (while no favourites are chosen). Undo brings the card back to the opened Knowledge /
+      List card; the empty list stays. Typing `read` when `Read` exists, or `Done`, is refused
+      under the field and the sheet stays open.
+- [ ] On a vault whose `Lists/` folder is empty or missing: the navbar is `Knowledge · More…`,
+      and `More…` shows `No lists yet` with an explanation and `New list…` — never an empty sheet.
 - [ ] Only ↓ works as a swipe here (collapse). ← and → do nothing.
 
 ### 1.6 Trash, defer, undo, quit
@@ -137,6 +155,14 @@ You need a full Next list: demote or complete until the Next sidebar count reads
 - [ ] The toolbar button says `Close`, not `Done` (on this screen `Done` files a card).
 - [ ] `Esc` is a ladder: focused field → blurs it; opened card → collapses it; step 1 → quits
       the session.
+- [ ] **Mac, by hand:** press `A` (the caret lands in `Why?`), type a word, then `Esc` three
+      times. 1st: the caret leaves the field, the sheet stays, `W`/`←`/`→` act on the card
+      again. 2nd: the card collapses to the small step-1 card, and `A` reopens it with the word
+      still in `Why?`. 3rd: inbox processing closes. The sheet must **never** close on the 1st or
+      2nd press — also not after clicking a chip or a bar button first, and not from the
+      Knowledge / List card (`K`, click into `Notes`, `Esc` `Esc` `Esc`).
+- [ ] **Mac:** with a nested sheet open (`P` project, `W` waiting, `0` More…), `Esc` closes only
+      that sheet; the card under it stays opened.
 - [ ] Capture something new mid-session (`⌘N`): it queues **behind** a card you have already
       opened, and jumps to the front only if the current card is an untouched step-1 card.
 - [ ] Process the queue to zero: the reward moment appears with `n processed · m min` and a
@@ -173,6 +199,8 @@ Unplug the mouse for this one.
       opened action card** as the inbox's step 2a — same fields, same asterisks, same cap sheet.
       File it: the note **moves** to `Actions/`, and the notes you had written on the item are
       still in it, above `# Why?`.
+- [ ] **Mac:** in the Make action sheet `Esc` first blurs the focused field (sheet stays), the
+      next `Esc` cancels and closes it; the item is still in its list.
 - [ ] Make an action into **Next** without a `Why?`: refused with asterisks, exactly as in §1.2.
 - [ ] **Mac:** the sidebar has a single `Lists` row (count = open items across all lists),
       between `Waiting` and `Projects`. Its content column shows one **section per list**
@@ -222,8 +250,17 @@ Unplug the mouse for this one.
       (a name collision), and nothing moves.
 - [ ] Renaming a project is still refused — the folder is the project's identity.
 
+- [ ] **Mac, a project with 15+ open steps:** complete its last open action — the `What's next?`
+      sheet scrolls the steps inside the sheet and its three buttons stay visible. With two or
+      three steps there is no scroll view and no gap under them. Same for an action with many
+      checkboxes › `Turn into project`.
+
 ### 3.5 Settings (L2/R-5, N7)
 
+- [ ] **Mac, `⌘,`: the Settings window scrolls.** At its default size (520×560) scroll from
+      Contexts down to About — every section (Lists, Favourites, Next cap, Routines,
+      Notifications, Keyboard, Vault, About) is reachable. Drag the window shorter (down to
+      320 pt) and taller: it resizes, and the form still scrolls to the last row.
 - [ ] **Lists section:** add a list (it appears at once, and `Lists/<name>/` exists as an empty
       folder), rename one (the folder moves, items included, `Done/` too), remove one — that
       asks with a `confirmationDialog` naming the list **and its item count**, then moves the
@@ -287,6 +324,11 @@ Run **without** `-useFixtures`.
 - [ ] Rename an action in the detail editor: the file moves and the project note's step link
       follows it, in one go.
 - [ ] Trash a card, an action and a list item: all three files are in `GTD/Trash/`, none deleted.
+- [ ] **Open in Obsidian** (the copy must be a vault Obsidian knows — open the folder as a vault
+      once): from an action's detail, from a project's reference file, and from
+      `Settings → Vault issues`, Obsidian opens that very file — no "Vault not found". Try a file
+      whose name has a space, an `&` and an umlaut. Do it on the Mac (`path=`) **and** on the
+      iPhone (`vault=&file=`). On fixtures the button is absent.
 - [ ] `Settings → Change vault…` then pick the copy again: everything still works.
 
 ## 5. Two devices (Mac + iPhone, same iCloud vault copy)
