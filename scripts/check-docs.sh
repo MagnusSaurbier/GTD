@@ -123,8 +123,10 @@ echo "checking that no live document points at the archived task board"
 while IFS= read -r hit; do
     echo "  STALE LINK: $hit"
     problems=$((problems + 1))
+# `.claude/` holds agent scaffolding, including the git worktrees parallel subtasks run in —
+# a second checkout of this repo, whose copy of this script would otherwise report itself.
 done < <(grep -rIln 'agent_task/' \
-    --exclude-dir=.git --exclude-dir=.build --exclude-dir=history \
+    --exclude-dir=.git --exclude-dir=.build --exclude-dir=history --exclude-dir=.claude \
     . 2>/dev/null | sed 's|^\./||' | grep -v '^scripts/check-docs.sh$')
 
 echo "checking the build-out phase marker"

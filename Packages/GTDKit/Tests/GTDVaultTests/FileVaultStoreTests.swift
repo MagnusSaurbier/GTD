@@ -131,6 +131,61 @@ struct FileVaultStoreTests {
         #expect(await store.currentSnapshot.inbox.count == 1)
     }
 
+    // MARK: Folder moves (R-5)
+
+    /// The index is rebuilt from the tree after every commit, so a folder move needs no special
+    /// handling — but it has to actually show, at the new paths and nowhere else.
+    @Test func aFolderMoveReachesTheSnapshotAtTheNewPaths() async throws {
+        let (store, fs) = store()
+        try await store.scan()
+        #expect(await store.currentSnapshot.projects.map(\.id.path)
+            == ["Projects/Applications/DAAD/DAAD.md"])
+
+        let inverse = try await store.commit([
+            .moveFolder(from: "Projects/Applications/DAAD", to: "Projects/no_area/DAAD"),
+        ])
+
+        #expect(await store.currentSnapshot.projects.map(\.id.path)
+            == ["Projects/no_area/DAAD/DAAD.md"])
+        // Everything travelled, including the files the index ignores.
+        #expect(try fs.readText("Projects/no_area/DAAD/Transcript.pdf") == "%PDF")
+        #expect(!fs.folderExists("Projects/Applications/DAAD"))
+
+        _ = try await store.commit(inverse)
+        #expect(await store.currentSnapshot.projects.map(\.id.path)
+            == ["Projects/Applications/DAAD/DAAD.md"])
+    }
+
+    /// The watcher's debounced re-index must not trip over a tree that moved under it.
+    @Test func theWatcherSurvivesAFolderMoveInsteadOfMisfiring() async throws {
+        let (store, fs) = store()
+        try await store.scan()
+        await store.startWatching()
+        defer { Task { await store.close() } }
+
+        _ = try await store.commit([
+            .moveFolder(from: "Knowledge/Studium", to: "Knowledge/Uni"),
+        ])
+        await store.simulateChangeForTesting()
+
+        #expect(try fs.readText("Knowledge/Uni/Thesis/Sources.md") == "a knowledge note")
+        // The vault still scans clean: no issue, and no note lost on the way.
+        #expect(await store.currentSnapshot.issues.isEmpty)
+        #expect(await store.currentSnapshot.actions.count == 2)
+    }
+
+    @Test func folderContentsListsTheTreeAndNilsAnythingThatIsNotAFolder() async throws {
+        let (store, _) = store()
+        #expect(try await store.folderContents("Projects/Applications") == [
+            "Projects/Applications/Applications.md",
+            "Projects/Applications/DAAD/DAAD.md",
+            "Projects/Applications/DAAD/Scratch.md",
+            "Projects/Applications/DAAD/Transcript.pdf",
+        ])
+        #expect(try await store.folderContents("Projects/Nope") == nil)
+        #expect(try await store.folderContents("GTD/Config.md") == nil)
+    }
+
     // MARK: Issues surface through the store
 
     @Test func issuesReachTheSnapshot() async throws {

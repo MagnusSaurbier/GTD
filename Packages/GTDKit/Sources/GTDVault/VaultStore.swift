@@ -12,6 +12,15 @@ public protocol VaultStore: Sendable {
     /// A `.delete` moves the file into `GTD/Trash/` — the app never hard-deletes (N3).
     func commit(_ ops: [VaultFileOp]) async throws -> [VaultFileOp]
 
+    /// Vault-relative paths of every file below `folder`, recursively, or `nil` when there is no
+    /// such folder.
+    ///
+    /// `GTDServices` needs it for the two questions a `.moveFolder` raises and that no other op
+    /// does (R-5, contract change T02-1): *is that destination free?* — a folder is invisible to
+    /// `read(path:)` — and *which files would an undo of this move carry back?*, which is what
+    /// the undo journal hashes so a folder move goes stale when anything inside it changed.
+    func folderContents(_ folder: String) async throws -> [String]?
+
     /// Makes the store usable: creates the folders the layout requires, scans once and starts
     /// watching for changes. Idempotent — callers may call it before every command.
     ///
@@ -140,6 +149,14 @@ public actor FileVaultStore: VaultStore {
 
     public func read(path: String) async throws -> String? {
         try fileSystem.readText(path)
+    }
+
+    /// T02-1. Reads the tree rather than the index: a folder move takes *every* file with it,
+    /// including the ones the index ignores (`Knowledge/`, attachments, a `Done/` log).
+    public func folderContents(_ folder: String) async throws -> [String]? {
+        guard fileSystem.folderExists(folder) else { return nil }
+        let prefix = VaultPath.normalize(folder) + "/"
+        return try fileSystem.listFiles().map(\.path).filter { $0.hasPrefix(prefix) }.sorted()
     }
 
     /// Applies `ops`, re-indexes, publishes, and returns the inverse ops in undo order.

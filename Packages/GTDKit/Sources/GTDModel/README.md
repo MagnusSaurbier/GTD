@@ -37,6 +37,9 @@ Compiles and tests on Linux.
   the cap. Nothing is demoted automatically.
 - **Trash is not a status** (I4c). `trashAction` removes the note from the snapshot and names no
   path, so the diff emits `.delete`, which `GTDVault` performs as a move into `GTD/Trash/`.
+  `VaultFileOp` has no hard delete and never will: its four cases are `put`, `move`,
+  `moveFolder` (R-5 — a whole directory at once, for a list rename, a removed list or a project
+  changing area) and `delete`, and the last one is a move into `GTD/Trash/`.
   `ActionStatus.legacyTrashed` exists only to *read* a pre-rework `status: trash` line: it is
   closed, hidden, out of `allCases`, and the reducer refuses any move into it.
 - The cap blocks only commands that *increase* Next occupancy.

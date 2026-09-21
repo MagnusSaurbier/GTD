@@ -257,33 +257,53 @@ public actor VaultBackend: GTDBackend {
     ///
     /// Everywhere else a taken destination is the user's problem to solve, not ours to rename
     /// around: it becomes `GTDError.titleCollision`, which the UI already knows how to show.
-    private func resolveCollisions(
+    /// Internal rather than private so `FolderMoveTests` can pin the policy for a folder move:
+    /// no command emits one until T03/T05, and the rule must hold before the first one does.
+    func resolveCollisions(
         _ ops: [VaultFileOp], layout: VaultLayout
     ) async throws -> [VaultFileOp] {
         var resolved: [VaultFileOp] = []
         var taken = Set<String>()
         for op in ops {
-            guard case let .move(from, to) = op else {
+            switch op {
+            case let .move(from, to):
+                resolved.append(.move(
+                    from: from,
+                    to: try await freeDestination(to, isFolder: false, layout: layout, taken: &taken)))
+            case let .moveFolder(from, to):
+                // R-5: removing a list is a folder move into `GTD/Trash/`, and the same list may
+                // be removed, re-created and removed again. App-owned folders take a free name;
+                // anywhere else — a list renamed onto a name that exists, a project moved into an
+                // area that already has one — the user resolves it.
+                resolved.append(.moveFolder(
+                    from: from,
+                    to: try await freeDestination(to, isFolder: true, layout: layout, taken: &taken)))
+            case .put, .delete:
                 resolved.append(op)
-                continue
             }
-            if try await exists(to) || taken.contains(to) {
-                let isAppOwned = to.hasPrefix(layout.archive + "/") || to.hasPrefix(layout.trash + "/")
-                guard isAppOwned else {
-                    throw GTDError.titleCollision(NoteID(path: to).title)
-                }
-                let free = try await freeName(near: to, taken: taken)
-                taken.insert(free)
-                resolved.append(.move(from: from, to: free))
-                continue
-            }
-            taken.insert(to)
-            resolved.append(op)
         }
         return resolved
     }
 
-    private func freeName(near path: String, taken: Set<String>) async throws -> String {
+    /// `to` itself when it is free; a free name beside it when it is taken and lives in an
+    /// app-owned folder; `GTDError.titleCollision` otherwise.
+    private func freeDestination(
+        _ to: String, isFolder: Bool, layout: VaultLayout, taken: inout Set<String>
+    ) async throws -> String {
+        guard try await isOccupied(to, isFolder: isFolder) || taken.contains(to) else {
+            taken.insert(to)
+            return to
+        }
+        let isAppOwned = to.hasPrefix(layout.archive + "/") || to.hasPrefix(layout.trash + "/")
+        guard isAppOwned else { throw GTDError.titleCollision(NoteID(path: to).title) }
+        let free = try await freeName(near: to, isFolder: isFolder, taken: taken)
+        taken.insert(free)
+        return free
+    }
+
+    private func freeName(
+        near path: String, isFolder: Bool, taken: Set<String>
+    ) async throws -> String {
         let id = NoteID(path: path)
         let folder = id.folder
         let name = id.title
@@ -292,12 +312,22 @@ public actor VaultBackend: GTDBackend {
             let candidate = folder.isEmpty
                 ? "\(name) \(suffix)\(ext)"
                 : "\(folder)/\(name) \(suffix)\(ext)"
-            if try await !exists(candidate), !taken.contains(candidate) { return candidate }
+            if try await !isOccupied(candidate, isFolder: isFolder), !taken.contains(candidate) {
+                return candidate
+            }
         }
         let unique = folder.isEmpty
             ? "\(name) \(UUID().uuidString)\(ext)"
             : "\(folder)/\(name) \(UUID().uuidString)\(ext)"
         return unique
+    }
+
+    /// Is something already at `path`? A folder is invisible to `read(path:)`, so a folder
+    /// destination asks the store for the folder as well (T02-1).
+    private func isOccupied(_ path: String, isFolder: Bool) async throws -> Bool {
+        if try await exists(path) { return true }
+        guard isFolder else { return false }
+        return try await store.folderContents(path) != nil
     }
 
     private func exists(_ path: String) async throws -> Bool {
@@ -312,9 +342,18 @@ public actor VaultBackend: GTDBackend {
     // MARK: - Undo safety
 
     /// The files an undo would overwrite or move, as they look right now.
+    ///
+    /// `ops` are the **inverse** ops, so a `.moveFolder` names the folder where it sits after the
+    /// commit. Every file below it travels back with the undo, so every one of them is hashed —
+    /// otherwise undoing a list rename or an area change would carry an edit someone made inside
+    /// the folder in the meantime back to the old path, unnoticed (N3 §7.6).
     private func hashes(touchedBy ops: [VaultFileOp]) async throws -> [String: String] {
+        var paths = SnapshotDiff.ownedPaths(in: ops)
+        for move in SnapshotDiff.foldersMoved(in: ops) {
+            paths.formUnion(try await store.folderContents(move.from) ?? [])
+        }
         var hashes: [String: String] = [:]
-        for path in SnapshotDiff.ownedPaths(in: ops).sorted() {
+        for path in paths.sorted() {
             hashes[path] = ContentHash.of(try? await store.read(path: path))
         }
         return hashes

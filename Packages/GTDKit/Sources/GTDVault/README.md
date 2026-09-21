@@ -4,15 +4,18 @@ The only module that touches the file system.
 
 ## Public API
 
-- `VaultStore` (protocol) — `snapshots()`, `read(path:)`, `commit(_:)`, `activate()`
-  (creates `VaultLayout.requiredFolders`, scans and starts watching; default no-op, so a
-  store that needs no preparation is unaffected).
+- `VaultStore` (protocol) — `snapshots()`, `read(path:)`, `commit(_:)`, `folderContents(_:)`
+  (the files below a folder, `nil` when there is none — T02-1, what `GTDServices` hashes for a
+  folder move and asks before choosing a free name), `activate()` (creates
+  `VaultLayout.requiredFolders`, scans and starts watching; default no-op, so a store that needs
+  no preparation is unaffected).
 - `FileVaultStore` (actor) — scans, watches and commits. `init(root:layout:)` picks the platform
   pieces; the full `init(fileSystem:layout:parser:watcher:debounce:clock:today:)` is what tests use.
   Also `scan()`, `currentSnapshot`, `startWatching()`, `stopWatching()`, `close()`.
 - `VaultBookmark` + `BookmarkStore` / `PathBookmarkStore` — durable folder access.
 - `InboxWriter` — standalone capture (C1/C3); needs only the bookmark, no index, no codec.
-- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (`listEntries()` returns a
+- `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (`moveFolder(_:to:)` and
+  `folderExists(_:)` alongside the file operations; `listEntries()` returns a
   `VaultListing` — files **and** folders from one walk; the index calls it on every refresh, and
   the two-walk default is only for a conformer that does not override it), `VaultIndex`, `VaultClassifier`,
   `VaultNoteParser` / `NoteCodecParser`, `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
@@ -21,7 +24,8 @@ The only module that touches the file system.
 ## Invariants
 
 1. **Nothing is ever hard-deleted.** `VaultFileSystem` has no delete method at all;
-   `VaultFileOp.delete` moves the file into `GTD/Trash/` with a free name.
+   `VaultFileOp.delete` moves the file into `GTD/Trash/` with a free name. `moveFolder` is a
+   rename too — it can empty a folder's old path, never its contents.
 2. `commit` is all-or-nothing: a failure rolls back what was applied. If rollback itself fails,
    `VaultError.rollbackFailed` carries both reasons — the vault is mixed and the user must hear it.
 3. `commit` returns the inverse ops **already in undo order**: feeding them back into `commit`
@@ -29,10 +33,17 @@ The only module that touches the file system.
 4. A `.move` never overwrites (`VaultError.destinationExists`); the caller picks another name.
    `GTDServices` does that for `Archive/` and `GTD/Trash/` and turns it into
    `GTDError.titleCollision` everywhere else.
-5. Decode failures, evicted iCloud items and conflict copies become `VaultIssue`s. Conflict
+5. **`.moveFolder` (R-5) moves the directory in one step** — one `NSFileCoordinator` call, not
+   one per file — and follows the same rules: a destination taken by a file *or* a folder is
+   `destinationExists`, a missing (or non-folder) source throws, the inverse is the move back,
+   and a folder cannot be moved inside itself. The one sequence it cannot undo is a commit that
+   moves a folder away *and* writes a file back into the old path: the old path is then a folder
+   again, and the move back is refused rather than removing it (`TransactionFuzzTests` covers
+   this branch). No reducer emits such a pair.
+6. Decode failures, evicted iCloud items and conflict copies become `VaultIssue`s. Conflict
    copies are reported, never resolved, and are still indexed so nothing disappears.
-6. `Action.modified` is the file mtime — the only field the codec cannot supply.
-7. `GTDMarkdown.NoteCodec` is reached only through `VaultNoteParser`.
+7. `Action.modified` is the file mtime — the only field the codec cannot supply.
+8. `GTDMarkdown.NoteCodec` is reached only through `VaultNoteParser`.
 
 ## Platform split (ARCHITECTURE §5)
 
@@ -40,7 +51,10 @@ Everything above is Foundation-only and runs on Linux. `Platform/` holds the fou
 entirely in `#if os(iOS) || os(macOS)`: `CoordinatedFileSystem` (`NSFileCoordinator`, iCloud
 downloads), `SecurityScopedBookmarkStore`, `PresenterVaultWatcher` (`NSFilePresenter` + polling
 safety net) and `VaultPlatform+Apple`; `VaultPlatform+Portable` is their non-Apple counterpart.
-**All four are compiled blind** — verify with `scripts/check.sh` on a Mac.
+They compile on a Mac (`swift build` and the iOS-simulator step of `scripts/check.sh`); nothing
+in them has run against a real iCloud vault yet. `CoordinatedFileSystem.moveFolder` is the one to
+watch: it coordinates the *directory* with `.forMoving` and then announces the move with
+`item(at:didMoveTo:)`, so presenters below it follow the tree instead of pointing at the old URL.
 
 ## Gotchas
 
@@ -57,11 +71,12 @@ safety net) and `VaultPlatform+Apple`; `VaultPlatform+Portable` is their non-App
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDVaultTests` (112 tests, never the real vault).
-`TransactionFuzzTests` throws 600 random op sequences at `VaultTransaction`, half of them
-against an injected write or move failure, and asserts the three rules the vault depends on: a
-refused commit changes nothing outside `GTD/Trash/`, a successful one matches a plain simulation
-of its own ops and its inverse restores the vault byte for byte, and no byte that existed before
+`cd Packages/GTDKit && swift test --filter GTDVaultTests` (130 tests, never the real vault).
+`TransactionFuzzTests` throws 900 random op sequences at `VaultTransaction` — puts, file moves,
+folder moves and deletes — half of them against an injected write or move failure, and asserts
+the three rules the vault depends on: a refused commit changes nothing outside `GTD/Trash/`, a
+successful one matches a plain simulation of its own ops and its inverse restores the vault byte
+for byte (or is refused without touching anything, invariant 5), and no byte that existed before
 is ever gone unless a `.put` overwrote the file it lived in. Failures print the seed.
 `SampleVaultScanTests` and `captureRoundTripsThroughTheCodec` are `.enabled(if:
 NoteCodecParser.codecIsImplemented)`, which the finished codec satisfies, so they run.

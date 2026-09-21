@@ -89,6 +89,54 @@ struct PlainFileSystemTests {
         #expect(vault.read("Archive/2026/09/A.md") == "done")
     }
 
+    // MARK: moveFolder (R-5)
+
+    @Test func moveFolderTakesTheWholeTreeWithIt() throws {
+        let vault = try TempVault()
+        let fs = PlainFileSystem(root: vault.url)
+        try fs.writeText("one", to: "Lists/Read/Dune.md")
+        try fs.writeText("two", to: "Lists/Read/Done/Ubik.md")
+
+        try fs.moveFolder("Lists/Read", to: "Lists/Reading")
+
+        #expect(!vault.exists("Lists/Read"))
+        #expect(vault.read("Lists/Reading/Dune.md") == "one")
+        #expect(vault.read("Lists/Reading/Done/Ubik.md") == "two")
+        #expect(try fs.listFiles().map(\.path)
+            == ["Lists/Reading/Done/Ubik.md", "Lists/Reading/Dune.md"])
+    }
+
+    @Test func moveFolderCreatesTheDestinationParentAndRefusesATakenName() throws {
+        let vault = try TempVault()
+        let fs = PlainFileSystem(root: vault.url)
+        try fs.writeText("x", to: "Projects/no_area/Thesis/Thesis.md")
+        try fs.moveFolder("Projects/no_area/Thesis", to: "Projects/Uni/Thesis")
+        #expect(vault.read("Projects/Uni/Thesis/Thesis.md") == "x")
+
+        // Taken by a folder…
+        try fs.writeText("y", to: "Projects/no_area/Thesis/Thesis.md")
+        #expect(throws: VaultError.destinationExists(path: "Projects/Uni/Thesis")) {
+            try fs.moveFolder("Projects/no_area/Thesis", to: "Projects/Uni/Thesis")
+        }
+        // …and by a file.
+        try fs.writeText("in the way", to: "Lists/Read")
+        #expect(throws: VaultError.destinationExists(path: "Lists/Read")) {
+            try fs.moveFolder("Projects/no_area/Thesis", to: "Lists/Read")
+        }
+        #expect(vault.read("Projects/no_area/Thesis/Thesis.md") == "y")
+        #expect(vault.read("Lists/Read") == "in the way")
+    }
+
+    @Test func moveFolderOfSomethingThatIsNotAFolderFails() throws {
+        let vault = try TempVault()
+        let fs = PlainFileSystem(root: vault.url)
+        try fs.writeText("x", to: "Actions/A.md")
+        #expect(throws: VaultError.self) { try fs.moveFolder("Lists/Gone", to: "Lists/Here") }
+        // A file is not a folder, even though `exists` says yes.
+        #expect(fs.exists("Actions/A.md") && !fs.folderExists("Actions/A.md"))
+        #expect(throws: VaultError.self) { try fs.moveFolder("Actions/A.md", to: "Lists/Here") }
+    }
+
     @Test func readingAMissingFileReturnsNil() throws {
         let vault = try TempVault()
         let fs = PlainFileSystem(root: vault.url)
@@ -163,6 +211,37 @@ struct InMemoryFileSystemTests {
     @Test func derivesFoldersFromPaths() throws {
         let fs = InMemoryFileSystem(files: ["Knowledge/Studium/Thesis/S.md": "x"])
         #expect(try fs.listFolders() == ["Knowledge", "Knowledge/Studium", "Knowledge/Studium/Thesis"])
+    }
+
+    /// The fake has to answer the two folder questions the same way the real one does, or the
+    /// transaction tests that run on it prove nothing.
+    @Test func knowsFoldersAndMovesThemWholeLikePlainFileSystem() throws {
+        let fs = InMemoryFileSystem(files: [
+            "Lists/Read/Dune.md": "one",
+            "Lists/Read/Done/Ubik.md": "two",
+            "Lists/Watch/Solaris.md": "three",
+        ])
+        #expect(fs.folderExists("Lists/Read"))
+        #expect(fs.folderExists("Lists/Read/Done"))
+        #expect(!fs.folderExists("Lists/Readme"))
+        #expect(!fs.folderExists("Lists/Read/Dune.md"))
+
+        try fs.moveFolder("Lists/Read", to: "GTD/Trash/Read")
+        #expect(!fs.folderExists("Lists/Read"))
+        #expect(try fs.readText("GTD/Trash/Read/Dune.md") == "one")
+        #expect(try fs.readText("GTD/Trash/Read/Done/Ubik.md") == "two")
+        #expect(try fs.readText("Lists/Watch/Solaris.md") == "three")
+        #expect(try fs.listFolders().contains("GTD/Trash/Read/Done"))
+        #expect(!(try fs.listFolders().contains("Lists/Read")))
+    }
+
+    @Test func refusesAFolderMoveOntoATakenNameOrFromNowhere() throws {
+        let fs = InMemoryFileSystem(files: ["Lists/Read/Dune.md": "one", "Lists/Watch/S.md": "x"])
+        #expect(throws: VaultError.destinationExists(path: "Lists/Watch")) {
+            try fs.moveFolder("Lists/Read", to: "Lists/Watch")
+        }
+        #expect(throws: VaultError.self) { try fs.moveFolder("Lists/Gone", to: "Lists/Here") }
+        #expect(try fs.readText("Lists/Read/Dune.md") == "one")
     }
 
     @Test func everyWriteAdvancesTheFingerprint() throws {

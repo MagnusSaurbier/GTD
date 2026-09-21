@@ -154,6 +154,13 @@ public struct PlainFileSystem: VaultFileSystem {
         return FileManager.default.fileExists(atPath: target.path)
     }
 
+    public func folderExists(_ path: String) -> Bool {
+        guard let target = try? url(path) else { return false }
+        var isDirectory: ObjCBool = false
+        let present = FileManager.default.fileExists(atPath: target.path, isDirectory: &isDirectory)
+        return present && isDirectory.boolValue
+    }
+
     public func readText(_ path: String) throws -> String? {
         let target = try url(path)
         guard FileManager.default.fileExists(atPath: target.path) else {
@@ -202,6 +209,26 @@ public struct PlainFileSystem: VaultFileSystem {
             try FileManager.default.moveItem(at: source, to: destination)
         } catch {
             throw VaultError.ioFailed(path: path, reason: "\(error)")
+        }
+    }
+
+    /// One `moveItem` of the directory itself (R-5) — not a walk. The file system renames the
+    /// whole subtree atomically within a volume, which is exactly what a list rename or an area
+    /// change needs: either every note moved or none did.
+    public func moveFolder(_ from: String, to path: String) throws {
+        let source = try url(from)
+        let destination = try url(path)
+        guard folderExists(from) else {
+            throw VaultError.ioFailed(path: VaultPath.normalize(from), reason: "no such folder")
+        }
+        guard !exists(path), !folderExists(path) else {
+            throw VaultError.destinationExists(path: VaultPath.normalize(path))
+        }
+        try createFolder(VaultPath.folder(of: path))
+        do {
+            try FileManager.default.moveItem(at: source, to: destination)
+        } catch {
+            throw VaultError.ioFailed(path: VaultPath.normalize(path), reason: "\(error)")
         }
     }
 

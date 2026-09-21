@@ -83,6 +83,44 @@ struct SnapshotDiffTests {
         #expect(ops == [move, .put(path: renamed.id.path, text: NoteCodec.encode(renamed))])
     }
 
+    // MARK: - Folder moves (R-5)
+
+    /// A `.moveFolder` owns both ends of the tree it moves: the notes under the old path have not
+    /// "left the snapshot" (no `.delete`), and the ones under the new path are the same notes
+    /// (no `.put` for content that did not change).
+    @Test func aFolderMoveOwnsEveryNoteThatTravelsWithIt() throws {
+        var next = sample
+        let index = try #require(next.actions.firstIndex { $0.title == "Learn Portuguese" })
+        let old = next.actions[index]
+        next.actions[index] = rekey(
+            old, to: NoteID(path: "Lists/Reading/Learn Portuguese.md"), title: old.title)
+        // Pretend the note lived in the folder that moved.
+        var previous = sample
+        previous.actions[index] = rekey(
+            old, to: NoteID(path: "Lists/Read/Learn Portuguese.md"), title: old.title)
+        let move = VaultFileOp.moveFolder(from: "Lists/Read", to: "Lists/Reading")
+
+        let ops = try SnapshotDiff.ops(from: previous, to: next, extraOps: [move])
+        #expect(ops == [move], "the folder move says it all — nothing is written or trashed")
+    }
+
+    @Test func aFolderMoveWithAnEditWritesTheNewPathAfterTheMove() throws {
+        var next = sample
+        let index = try #require(next.actions.firstIndex { $0.title == "Learn Portuguese" })
+        let old = next.actions[index]
+        var previous = sample
+        previous.actions[index] = rekey(
+            old, to: NoteID(path: "Lists/Read/Learn Portuguese.md"), title: old.title)
+        var moved = rekey(
+            old, to: NoteID(path: "Lists/Reading/Learn Portuguese.md"), title: old.title)
+        moved.status = .next
+        next.actions[index] = moved
+        let move = VaultFileOp.moveFolder(from: "Lists/Read", to: "Lists/Reading")
+
+        let ops = try SnapshotDiff.ops(from: previous, to: next, extraOps: [move])
+        #expect(ops == [move, .put(path: moved.id.path, text: NoteCodec.encode(moved))])
+    }
+
     // MARK: - The collections that are not `[Entity]`
 
     @Test func onlyTheChangedDayAndDeviceOfTheRoutineLogIsRewritten() throws {

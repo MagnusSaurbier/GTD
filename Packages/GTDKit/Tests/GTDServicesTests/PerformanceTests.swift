@@ -473,6 +473,7 @@ final class CountingFileSystem: VaultFileSystem, @unchecked Sendable {
 
     func info(_ path: String) throws -> VaultFileInfo? { try base.info(path) }
     func exists(_ path: String) -> Bool { base.exists(path) }
+    func folderExists(_ path: String) -> Bool { base.folderExists(path) }
 
     func readText(_ path: String) throws -> String? {
         lock.withLock { readCount += 1 }
@@ -485,6 +486,7 @@ final class CountingFileSystem: VaultFileSystem, @unchecked Sendable {
     }
 
     func move(_ from: String, to path: String) throws { try base.move(from, to: path) }
+    func moveFolder(_ from: String, to path: String) throws { try base.moveFolder(from, to: path) }
     func createFolder(_ path: String) throws { try base.createFolder(path) }
     func requestDownload(_ path: String) throws { try base.requestDownload(path) }
 }

@@ -37,8 +37,7 @@ public enum SnapshotDiff {
         extraOps: [VaultFileOp],
         timeZone: TimeZone = .current
     ) throws -> [VaultFileOp] {
-        let owned = ownedPaths(in: extraOps)
-        let renamed = moveDestinations(in: extraOps)
+        let owned = Ownership(extraOps)
         var puts: [VaultFileOp] = []
 
         func diff<T: Equatable>(
@@ -56,7 +55,7 @@ public enum SnapshotDiff {
                 newPaths.insert(path)
                 // Unchanged, renamed, or brand new — in all three cases the question is the same:
                 // does the file that will carry this entity differ from what it says now?
-                let previous = oldByPath[path] ?? renamed[path].flatMap { oldByPath[$0] }
+                let previous = oldByPath[path] ?? owned.source(of: path).flatMap { oldByPath[$0] }
                 if let previous {
                     // `encode` is a pure function of the entity, so equal entities encode
                     // identically — and one command changes one of them. Without this line the
@@ -73,7 +72,7 @@ public enum SnapshotDiff {
 
             for item in oldItems {
                 let path = id(item).path
-                guard !newPaths.contains(path), !owned.contains(path) else { continue }
+                guard !newPaths.contains(path), !owned.owns(path) else { continue }
                 // Left the snapshot and nobody said where it went: the trash (T00-1).
                 puts.append(.delete(path: path))
             }
@@ -97,11 +96,11 @@ public enum SnapshotDiff {
     /// `GTD/Config.md`. Written only by `updateConfig` — the reducer copies the config forward
     /// untouched otherwise, so the encoding is identical and nothing is written.
     private static func appendConfig(
-        from old: VaultSnapshot, to new: VaultSnapshot, owned: Set<String>,
+        from old: VaultSnapshot, to new: VaultSnapshot, owned: Ownership,
         into puts: inout [VaultFileOp]
     ) {
         let path = new.config.layout.configFile
-        guard !owned.contains(path) else { return }
+        guard !owned.owns(path) else { return }
         let text = NoteCodec.encode(new.config)
         guard text != NoteCodec.encode(old.config) else { return }
         puts.append(.put(path: path, text: text))
@@ -111,12 +110,12 @@ public enum SnapshotDiff {
     /// writes the note. An older review arriving through a sync never rewrites anything: only a
     /// *changed* `lastReview` is encoded.
     private static func appendReview(
-        from old: VaultSnapshot, to new: VaultSnapshot, owned: Set<String>, timeZone: TimeZone,
+        from old: VaultSnapshot, to new: VaultSnapshot, owned: Ownership, timeZone: TimeZone,
         into puts: inout [VaultFileOp]
     ) {
         guard let review = new.lastReview, review != old.lastReview else { return }
         let path = review.noteID(layout: new.config.layout).path
-        guard !owned.contains(path) else { return }
+        guard !owned.owns(path) else { return }
         puts.append(.put(path: path, text: NoteCodec.encode(review, timeZone: timeZone)))
     }
 
@@ -125,7 +124,7 @@ public enum SnapshotDiff {
     /// its own day/device group changed, so this device never rewrites another device's file.
     /// Log files are never deleted, whatever leaves the 14-day window.
     private static func appendRoutineLog(
-        from old: VaultSnapshot, to new: VaultSnapshot, owned: Set<String>, timeZone: TimeZone,
+        from old: VaultSnapshot, to new: VaultSnapshot, owned: Ownership, timeZone: TimeZone,
         into puts: inout [VaultFileOp]
     ) {
         let layout = new.config.layout
@@ -141,7 +140,7 @@ public enum SnapshotDiff {
         let after = group(new.routineLog)
 
         for id in after.keys.sorted(by: { $0.path < $1.path }) {
-            guard !owned.contains(id.path) else { continue }
+            guard !owned.owns(id.path) else { continue }
             let entries = after[id] ?? []
             guard sorted(entries) != sorted(before[id] ?? []) else { continue }
             puts.append(.put(
@@ -155,17 +154,74 @@ public enum SnapshotDiff {
 
     // MARK: - extraOps bookkeeping
 
-    /// Every path `extraOps` speaks for.
+    /// What `extraOps` speaks for: the paths it names, and the folders it moves.
+    ///
+    /// A `.moveFolder` (R-5) is the one op that owns paths it does not name — every note that
+    /// travelled with the folder. Both ends count: a note under the old folder has *not* silently
+    /// left the snapshot, and one under the new folder is the same note under a new path, never a
+    /// new file to write from scratch.
+    struct Ownership {
+        private var paths: Set<String> = []
+        private var folders: [(from: String, to: String)] = []
+        /// destination → source, for the plain file moves.
+        private var renamed: [String: String] = [:]
+
+        init(_ ops: [VaultFileOp]) {
+            for op in ops {
+                switch op {
+                case let .put(path, _):
+                    paths.insert(path)
+                case let .move(from, to):
+                    paths.insert(from)
+                    paths.insert(to)
+                    renamed[to] = from
+                case let .moveFolder(from, to):
+                    folders.append((from: NoteID(path: from).path, to: NoteID(path: to).path))
+                case let .delete(path):
+                    paths.insert(path)
+                }
+            }
+        }
+
+        /// True when `extraOps` has already said what happens to this path.
+        func owns(_ path: String) -> Bool {
+            if paths.contains(path) { return true }
+            guard !folders.isEmpty else { return false }
+            let id = NoteID(path: path)
+            return folders.contains { id.isInside($0.from) || id.isInside($0.to) }
+        }
+
+        /// Where the note at `path` was before this command — `nil` when it is new.
+        func source(of path: String) -> String? {
+            if let source = renamed[path] { return source }
+            let id = NoteID(path: path)
+            guard let move = folders.first(where: { id.isInside($0.to) }) else { return nil }
+            return move.from + id.path.dropFirst(move.to.count)
+        }
+    }
+
+    /// Every path `extraOps` names outright. Folder moves name none — ``Ownership`` answers for
+    /// those, and ``foldersMoved(in:)`` lists them.
     static func ownedPaths(in ops: [VaultFileOp]) -> Set<String> {
         var paths = Set<String>()
         for op in ops {
             switch op {
             case let .put(path, _): paths.insert(path)
             case let .move(from, to): paths.insert(from); paths.insert(to)
+            case .moveFolder: continue
             case let .delete(path): paths.insert(path)
             }
         }
         return paths
+    }
+
+    /// The folder moves in `ops`, as (from, to) pairs. `VaultBackend` expands them into the files
+    /// an undo would carry back, so a folder move can go stale like any other op.
+    static func foldersMoved(in ops: [VaultFileOp]) -> [(from: String, to: String)] {
+        ops.compactMap {
+            guard case let .moveFolder(from, to) = $0 else { return nil }
+            return (from: NoteID(path: from).path, to: NoteID(path: to).path)
+        }
     }
 
     /// destination → source, for the moves in `extraOps`. A destination that turns up as a new

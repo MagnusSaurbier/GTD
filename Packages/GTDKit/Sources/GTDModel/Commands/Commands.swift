@@ -139,9 +139,18 @@ public enum AppPrompt: Sendable, Equatable {
 }
 
 /// A file-level effect that is not implied by the snapshot diff: knowledge notes, the weekly
-/// review note, trash moves, archive moves.
+/// review note, trash moves, archive moves, folder moves.
+///
+/// There is deliberately **no hard delete**: `.delete` is performed by `GTDVault` as a move into
+/// `GTD/Trash/` (ARCHITECTURE §4), and `.moveFolder` is a rename, never a removal.
 public enum VaultFileOp: Sendable, Equatable {
     case put(path: String, text: String)
     case move(from: String, to: String)
+    /// Moves a whole directory and everything below it in one step (R-5): renaming a list,
+    /// removing a list (into `GTD/Trash/`) and re-assigning a project's area. It never
+    /// overwrites — a destination that already exists, as a file *or* a folder, is
+    /// `VaultError.destinationExists` — and its inverse is the move back, so it undoes and rolls
+    /// back like every other op.
+    case moveFolder(from: String, to: String)
     case delete(path: String)
 }

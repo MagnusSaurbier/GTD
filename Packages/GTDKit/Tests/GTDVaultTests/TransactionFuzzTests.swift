@@ -5,14 +5,17 @@ import Testing
 
 /// Data safety under randomised op sequences (T41).
 ///
-/// `VaultTransactionTests` pins each rule with a hand-written case. This suite throws ~1 500
-/// random op sequences at `VaultTransaction` — with and without an injected write/move failure —
-/// and checks the three invariants the user's vault depends on (ARCHITECTURE §7, CLAUDE.md rule 2):
+/// `VaultTransactionTests` pins each rule with a hand-written case. This suite throws ~2 700
+/// random op sequences at `VaultTransaction` — puts, file moves, folder moves (R-5) and deletes,
+/// half of them against an injected write or move failure — and checks the three invariants the
+/// user's vault depends on (ARCHITECTURE §7, CLAUDE.md rule 2):
 ///
 /// 1. **All or nothing.** A commit that throws anything but `rollbackFailed` leaves every file
 ///    outside `GTD/Trash/` exactly as it was.
 /// 2. **The inverse really is the inverse.** `commit(commit(ops))` restores the vault byte for
-///    byte (again ignoring the trash, which only ever grows).
+///    byte (again ignoring the trash, which only ever grows), or is refused without touching
+///    anything — see the comment on the refused-undo branch for the one sequence that cannot be
+///    undone, and why refusing is the only answer that does not hard-delete.
 /// 3. **Nothing is ever hard-deleted.** Every byte that existed before the commit is still
 ///    somewhere in the vault afterwards — unless a `.put` deliberately overwrote the file it
 ///    was living in. A successful commit is additionally compared against a plain simulation
@@ -25,7 +28,9 @@ struct TransactionFuzzTests {
     @Test func randomOpSequencesEitherApplyCompletelyOrNotAtAll() throws {
         var rollbackFailures = 0
         var refusals = 0
-        for seed in UInt64(1)...600 {
+        var undone = 0
+        var refusedUndos = 0
+        for seed in UInt64(1)...900 {
             var fuzz = Fuzz(seed: seed)
             let start = Self.startingVault(seed: seed)
             let fs = InMemoryFileSystem(files: start)
@@ -53,21 +58,43 @@ struct TransactionFuzzTests {
             // vault must look like — op for op, with nothing extra and nothing missing.
             let simulated = try #require(Self.simulate(ops, from: start),
                                          "seed \(seed) — commit succeeded but the simulation says it could not")
-            #expect(Self.outsideTrash(fs) == simulated.live,
+            #expect(Self.outsideTrash(fs) == Self.outsideTrash(simulated.live),
                     "seed \(seed) — \(ops) did not leave the vault the ops describe")
             Self.expectNothingLost(start: start, now: fs, overwritten: simulated.overwritten, seed: seed)
 
-            // Undo restores the vault byte for byte. The injected failure is disarmed first:
-            // it models the *commit* failing, not the undo.
+            // Undo restores the vault byte for byte — or is refused and changes nothing at all.
+            // The injected failure is disarmed first: it models the *commit* failing, not the undo.
             fs.failWrites(matching: [])
             fs.failMoves(to: [])
-            _ = try tx.commit(try #require(inverse))
-            #expect(Self.outsideTrash(fs) == start,
-                    "seed \(seed) — undoing \(ops) did not restore the vault")
+            let afterCommit = fs.snapshotOfFiles
+            do {
+                _ = try tx.commit(try #require(inverse))
+                undone += 1
+                #expect(Self.outsideTrash(fs) == start,
+                        "seed \(seed) — undoing \(ops) did not restore the vault")
+            } catch let error as VaultError {
+                if case .rollbackFailed = error {
+                    rollbackFailures += 1
+                    continue
+                }
+                // The one shape that cannot be undone: the commit moved a folder away *and* wrote
+                // a file back into its old path, so the old path is an (empty) folder again and
+                // the move back would have to overwrite it. Refusing is the only honest answer —
+                // removing that folder would be the hard delete this vault never does. The app
+                // never emits such a pair (a reducer's `extraOps` name where a note went, not
+                // both), and the refusal is loud and leaves the vault exactly as it was.
+                refusedUndos += 1
+                #expect(Self.outsideTrash(fs) == Self.outsideTrash(afterCommit),
+                        "seed \(seed) — a refused undo (\(error)) still changed the vault")
+                Self.expectNothingLost(
+                    start: start, now: fs, overwritten: simulated.overwritten, seed: seed)
+            }
         }
-        // The generator has to actually reach both paths, or this suite proves nothing.
+        // The generator has to actually reach every path, or this suite proves nothing.
         #expect(refusals > 20, "the fuzz never produced a refused commit (\(refusals))")
-        #expect(rollbackFailures < 120, "rollback fails suspiciously often (\(rollbackFailures)/600)")
+        #expect(undone > 300, "the fuzz barely undid anything (\(undone)/900)")
+        #expect(refusedUndos < 90, "undo is refused suspiciously often (\(refusedUndos)/900)")
+        #expect(rollbackFailures < 180, "rollback fails suspiciously often (\(rollbackFailures)/900)")
     }
 
     /// `.delete` of two different files that share a name must not let one overwrite the other
@@ -104,7 +131,11 @@ struct TransactionFuzzTests {
     // MARK: - Invariants
 
     private static func outsideTrash(_ fs: InMemoryFileSystem) -> [String: String] {
-        fs.snapshotOfFiles.filter { !$0.key.hasPrefix("GTD/Trash/") }
+        outsideTrash(fs.snapshotOfFiles)
+    }
+
+    private static func outsideTrash(_ files: [String: String]) -> [String: String] {
+        files.filter { !$0.key.hasPrefix("GTD/Trash/") }
     }
 
     /// Invariant 3: every byte that was in the vault is still in the vault — unless a `.put`
@@ -127,17 +158,52 @@ struct TransactionFuzzTests {
     ) -> (live: [String: String], overwritten: Set<String>)? {
         var live = start
         var overwritten: Set<String> = []
+        // `InMemoryFileSystem` remembers folders as well as files — a folder a plain move
+        // emptied still exists — so the reference has to remember them too, or a folder move
+        // onto such a name would look like a bug rather than the refusal it is.
+        var folders: Set<String> = []
+        func rememberParents(of path: String) {
+            var parts = path.split(separator: "/").map(String.init)
+            parts.removeLast()
+            while !parts.isEmpty {
+                folders.insert(parts.joined(separator: "/"))
+                parts.removeLast()
+            }
+        }
+        func hasFolder(_ path: String) -> Bool {
+            folders.contains(path) || live.keys.contains { $0.hasPrefix(path + "/") }
+        }
+        for path in live.keys { rememberParents(of: path) }
+
         for op in ops {
             switch op {
             case let .put(path, text):
                 if let previous = live[VaultPath.normalize(path)] { overwritten.insert(previous) }
                 live[VaultPath.normalize(path)] = text
+                rememberParents(of: VaultPath.normalize(path))
             case let .move(from, to):
                 let source = VaultPath.normalize(from), destination = VaultPath.normalize(to)
                 if source == destination { continue }
                 guard let text = live[source], live[destination] == nil else { return nil }
                 live[source] = nil
                 live[destination] = text
+                rememberParents(of: destination)
+            case let .moveFolder(from, to):
+                let source = VaultPath.normalize(from), destination = VaultPath.normalize(to)
+                if source == destination { continue }
+                guard hasFolder(source), !hasFolder(destination),
+                      live[destination] == nil,
+                      !(destination + "/").hasPrefix(source + "/")
+                else { return nil }
+                for path in live.keys where path.hasPrefix(source + "/") {
+                    live[destination + String(path.dropFirst(source.count))] = live[path]
+                    live[path] = nil
+                }
+                for folder in folders where folder == source || folder.hasPrefix(source + "/") {
+                    folders.remove(folder)
+                    folders.insert(destination + String(folder.dropFirst(source.count)))
+                }
+                rememberParents(of: destination + "/x")
             case let .delete(path):
                 live[VaultPath.normalize(path)] = nil     // into the trash, which we do not model
             }
@@ -157,6 +223,30 @@ struct TransactionFuzzTests {
         "Inbox/2026-09-19 090000.md",
         "GTD/Config.md",
         "Archive/2026/08/Old thing.md",
+        "Lists/Read/Dune.md",
+        "Lists/Read/Done/Ubik.md",
+        "Lists/Watch/Solaris.md",
+    ]
+
+    /// The folders `.moveFolder` picks from, and the names it moves them to. The destinations are
+    /// never file paths, so the only way one is taken is an earlier folder move in the same
+    /// sequence — which is exactly the collision the op has to refuse.
+    private static let folders = [
+        "Lists/Read",
+        "Lists/Read/Done",
+        "Lists/Watch",
+        "Projects/Applications/DAAD",
+        "Knowledge/Uni",
+        "Lists/Never existed",
+    ]
+
+    private static let folderDestinations = [
+        "Lists/Reading",
+        "Lists/Watch later",
+        "GTD/Trash/Removed list",
+        "Projects/Uni/DAAD",
+        "Lists/Read/Done",
+        "Lists/Read",
     ]
 
     private static func startingVault(seed: UInt64) -> [String: String] {
@@ -189,12 +279,15 @@ struct TransactionFuzzTests {
 
         mutating func ops() -> [VaultFileOp] {
             (0...int(5)).map { _ in
-                switch int(3) {
+                switch int(4) {
                 case 0:
                     return .put(path: pick(TransactionFuzzTests.paths), text: "written by the fuzz")
                 case 1:
                     return .move(from: pick(TransactionFuzzTests.paths),
                                  to: pick(TransactionFuzzTests.paths))
+                case 2:
+                    return .moveFolder(from: pick(TransactionFuzzTests.folders),
+                                       to: pick(TransactionFuzzTests.folderDestinations))
                 default:
                     return .delete(path: pick(TransactionFuzzTests.paths))
                 }
@@ -204,9 +297,10 @@ struct TransactionFuzzTests {
         /// Half the sequences run against a file system that fails one write or one move —
         /// the only way to reach the rollback path deterministically.
         mutating func injectFailure(into fs: InMemoryFileSystem) {
-            switch int(4) {
+            switch int(5) {
             case 0: fs.failWrites(matching: [pick(TransactionFuzzTests.paths)])
             case 1: fs.failMoves(to: [pick(TransactionFuzzTests.paths)])
+            case 2: fs.failMoves(to: [pick(TransactionFuzzTests.folderDestinations)])
             default: break
             }
         }

@@ -10,7 +10,9 @@ Foundation-only — every file here compiles and is tested on Linux.
   bracket its lifetime; `perform`, `undo`, `undoLabel`, `snapshots`, `currentSnapshot` are the
   protocol. `lastHousekeepingError` says why the last automatic archive did not run.
 - `SnapshotDiff.ops(from:to:extraOps:timeZone:)` — two snapshots and the reducer's `extraOps`
-  into one ordered list of `VaultFileOp`.
+  into one ordered list of `VaultFileOp`. A `.moveFolder` in `extraOps` owns *both* ends of the
+  tree it moves: no note under the old path is trashed for "leaving the snapshot", and a note
+  under the new path is the same note, written again only if its content changed too.
 - `UndoJournal` (actor) — device-local, persisted in Application Support, keeps 20 entries.
 - `ServiceError` — `.nothingToUndo`, `.undoStale(path:)`.
 
@@ -29,12 +31,17 @@ Foundation-only — every file here compiles and is tested on Linux.
    vault twice — 4.4 s on 1 000 notes.
 4. **Undo is refused, never forced.** Each entry stores a content hash per file it would touch;
    anything that moved in the meantime (sync, Obsidian, another device) turns the undo into
-   `ServiceError.undoStale`. The journal is deeper than N6 asks (20), so ⌘Z walks back a session.
+   `ServiceError.undoStale`. For a `.moveFolder` that means the files **inside** the folder:
+   they are the ones the undo carries back, so the journal asks the store for
+   `folderContents` and hashes every one. The journal is deeper than N6 asks (20), so ⌘Z walks
+   back a session.
 5. **Optimistic then authoritative.** A successful command publishes the reduced snapshot at
    once; the store's scanned snapshot replaces it when it arrives. `pullFromStore` always asks
    the store for its *current* value, so a late event can never walk the app backwards.
 6. The archive and the trash pick a free name on collision (they are app-owned); anywhere else a
-   taken destination is `GTDError.titleCollision` for the user to resolve.
+   taken destination is `GTDError.titleCollision` for the user to resolve. Folder moves follow
+   the same policy (R-5): "remove list" is a `.moveFolder` into `GTD/Trash/` and gets a free
+   name, while renaming a list onto a name that exists is the user's to resolve.
 7. Housekeeping (`start()`): folder skeleton from `VaultLayout`, then `archiveCompleted` once per
    day, remembered in `housekeeping.json` next to the journal — never in the vault. The day is
    recorded **only on success**, so a failed archive is retried at the next launch rather than
@@ -45,6 +52,9 @@ Foundation-only — every file here compiles and is tested on Linux.
 `cd Packages/GTDKit && swift test --filter GTDServicesTests`. `ParityTests` drives 21
 commands through `InMemoryBackend` and `VaultBackend` and compares a fresh scan of the vault with
 the in-memory snapshot after every step; `SnapshotShape` says which fields are compared and why.
+`FolderMoveTests` is the one suite here that uses `@testable`: the collision policy is a private
+step of `perform`, and no command emits a `.moveFolder` until T03/T05 — its undo half still goes
+through the real backend, with a store that smuggles the move into the next commit.
 `SyncScenarioTests` runs the situations that need two writers on one folder — two devices
 logging the same routine, an undo refused after someone else wrote, a conflict copy, an evicted
 file, and a rename while another view holds the old `NoteID`. `PerformanceTests` generates

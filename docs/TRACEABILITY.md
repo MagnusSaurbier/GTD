@@ -76,7 +76,7 @@ consequence of the app being written on Linux without an Apple SDK (`CLAUDE.md`)
 | P5 | Completing a project action prompts "What's next for …?" | `AppPrompt.whatsNext` from `Reducer.complete`, `FeatureProjects/WhatsNextModel` | `GTDModelTests/ReducerActionTests`, `FeatureProjectsTests/WhatsNextModelTests` | **done** |
 | P6 | Mac project view: header, inline step edit/reorder/promote, reference files, dated log | `FeatureProjects/ProjectViews` + `ProjectDetailModel` + `StepReorder`; `Project.referenceFiles` filled by `VaultIndex` | `FeatureProjectsTests/ProjectDetailModelTests`, `StepReorderTests`, `GTDVaultTests/VaultIndexTests` | **done (blind)** for the view; models and reference-file collection are **done**. |
 | P7 | Project deadlines / milestones | — | no `milestone`/`deadline` anywhere | **out of scope** (P7) |
-| — | Renaming a project | refused by `Reducer.updateProject` (`.invalid`) | `GTDModelTests/ReducerProjectTests` | **deferred by design** — ARCHITECTURE §6 "Project rename (T11)": the folder is the project's identity and moving a folder tree is out of v1 scope. |
+| — | Renaming a project | refused by `Reducer.updateProject` (`.invalid`) | `GTDModelTests/ReducerProjectTests` | **deferred by design** — ARCHITECTURE §6 "Project rename": the folder is the project's identity. Changing a project's *area* is no longer blocked by the file system — `VaultFileOp.moveFolder` (R-5) exists — and lands as a command in T05; the title stays refused. |
 
 ## §7 Waiting-for, dates, tickler
 

@@ -57,6 +57,25 @@ struct VaultTransaction {
             try fileSystem.move(source, to: destination)
             return [.move(from: destination, to: source)]
 
+        case let .moveFolder(from, to):
+            let source = VaultPath.normalize(from)
+            let destination = VaultPath.normalize(to)
+            guard source != destination else { return [] }
+            // Moving a folder below itself would make the source disappear into the destination.
+            guard !VaultPath.isInside(destination, source) else {
+                throw VaultError.ioFailed(
+                    path: destination, reason: "a folder cannot be moved inside itself")
+            }
+            guard fileSystem.folderExists(source) else {
+                throw VaultError.ioFailed(path: source, reason: "no such folder to move")
+            }
+            guard !fileSystem.exists(destination), !fileSystem.folderExists(destination) else {
+                // Never overwrite, and never merge two trees: the caller picks another name.
+                throw VaultError.destinationExists(path: destination)
+            }
+            try fileSystem.moveFolder(source, to: destination)
+            return [.moveFolder(from: destination, to: source)]
+
         case let .delete(path):
             let source = VaultPath.normalize(path)
             // Idempotent: a file an external edit already removed is not an error.
@@ -80,6 +99,14 @@ struct VaultTransaction {
                 throw VaultError.destinationExists(path: destination)
             }
             try fileSystem.move(source, to: destination)
+        case let .moveFolder(from, to):
+            let source = VaultPath.normalize(from)
+            let destination = VaultPath.normalize(to)
+            guard source != destination, fileSystem.folderExists(source) else { return }
+            if fileSystem.exists(destination) || fileSystem.folderExists(destination) {
+                throw VaultError.destinationExists(path: destination)
+            }
+            try fileSystem.moveFolder(source, to: destination)
         case let .delete(path):
             let source = VaultPath.normalize(path)
             guard fileSystem.exists(source) else { return }

@@ -65,7 +65,15 @@ public protocol VaultFileSystem: Sendable {
     func listEntries() throws -> VaultListing
 
     func info(_ path: String) throws -> VaultFileInfo?
+
+    /// True when a **file** lives at `path`. `PlainFileSystem` answers for a directory too (that
+    /// is what `FileManager` does); ask ``folderExists(_:)`` when the answer has to be exact.
     func exists(_ path: String) -> Bool
+
+    /// True when a **folder** lives at `path`. Needed because a folder move must refuse a
+    /// destination that is taken by either kind (R-5), and `exists(_:)` cannot see an
+    /// `InMemoryFileSystem` folder at all.
+    func folderExists(_ path: String) -> Bool
 
     /// `nil` when the file does not exist. Throws `VaultError.notDownloaded` for an evicted
     /// iCloud item (and asks for the download).
@@ -76,6 +84,11 @@ public protocol VaultFileSystem: Sendable {
 
     /// Creates intermediate folders for the destination. Fails if the destination exists.
     func move(_ from: String, to path: String) throws
+
+    /// Moves a directory and everything below it in **one** step (R-5). Creates intermediate
+    /// folders for the destination, fails if the destination exists in any form, and fails if
+    /// `from` is not a folder. It is a rename, never a removal: no content is dropped.
+    func moveFolder(_ from: String, to path: String) throws
 
     func createFolder(_ path: String) throws
 

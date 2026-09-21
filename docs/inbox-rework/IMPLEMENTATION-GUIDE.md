@@ -367,7 +367,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | --- | --- | --- | --- | --- | --- |
 | T00 | done | 8fa4105 | manager | 1 | gate green; baseline 904 Swift tests (Model 135, Markdown 115, Vault 113, Review 77, Projects 64, Overview 58, Services 54, Inbox 53, Stats 32, DesignSystem 30, Settings 30, Next 27, Notifications 27, AppCore 23, Intents 22, Waiting 21, Routines 17, Fixtures 6) — pytest is not installed on this Mac, so check.sh SKIPs the 40 migration tests (T14 runs them from a scratch venv); both scratch app builds green, one pre-existing warning (`FeatureNext/NextView.swift:446` separatorInset) |
 | T01 | done | (this commit) | Opus | 1 | gate green, 920 tests, no target dropped; grep clean (only tolerant decode + its tests); both app builds green. `GTDCommand.trashAction` added; `SidebarItem.maybe` dropped; `Next is full` sheet for R-2 is only a `NextListModel` flag until T11; a stored pre-rework `DeckPhase` will not decode until T12 |
-| T02 | | | | | |
+| T02 | done | (this commit) | Opus | 1 | gate green, 945 tests (Vault 130, Services 63); no delete path added; `VaultStore.folderContents(_:)` added for the undo-stale guard; `scripts/check-docs.sh` now ignores `.claude/` (agent worktrees broke the gate); coordinated folder move never ran against a live iCloud vault |
 | T03 | | | | | |
 | T04 | | | | | |
 | T05 | | | | | |
@@ -379,7 +379,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T11 | | | | | |
 | T12 | | | | | |
 | T13 | | | | | |
-| T14 | | | | | |
+| T14 | done | (cherry-pick after T02) | Sonnet | 1 | worktree; 42 pytest green from a scratch venv (manager re-ran); script never writes `reading`/`backlog`/`maybe` |
 | T15 | | | | | |
 
 ### Decisions taken beyond §3
@@ -387,5 +387,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 - 2026-09-21 · T00 · `feature/inbox-rework` **is pushed** to `origin` after each finished epoch · the user asked for it in the session that ran this guide, overriding §2.2's "do not push"; still no PR and no merge into `main`.
 - 2026-09-21 · T01 · a legacy `status: trash` note keeps the 30-day archive threshold, only its destination changes to `GTD/Trash/` · moving them at once would touch files on first launch unasked · ARCHITECTURE §6.
 - 2026-09-21 · T01 · the sample vault keeps one `status: trash` note so R-1 is testable end to end · ARCHITECTURE §6.
+- 2026-09-21 · T02 · `VaultStore.folderContents(_:)` is a required protocol member · the undo-stale guard of a folder move needs enumeration · ARCHITECTURE §6.
+- 2026-09-21 · T02 · a commit that moves a folder away and writes a file back into its old path cannot be undone (refused, nothing changed) · undoing it would need a hard delete; no reducer emits such a pair · ARCHITECTURE §6.
 
 _(one line each: date · task · decision · why — and the ARCHITECTURE §6 row it became)_

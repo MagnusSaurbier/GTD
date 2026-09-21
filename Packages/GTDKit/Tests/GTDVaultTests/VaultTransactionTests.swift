@@ -65,6 +65,127 @@ struct VaultTransactionTests {
         #expect(try fs.readText("Actions/A.md") == "x")
     }
 
+    // MARK: moveFolder (R-5)
+
+    @Test func moveFolderMovesTheTreeAndInvertsToTheMoveBack() throws {
+        let (tx, fs) = transaction([
+            "Lists/Read/Dune.md": "one",
+            "Lists/Read/Done/Ubik.md": "two",
+        ])
+        let inverse = try tx.commit([.moveFolder(from: "Lists/Read", to: "Lists/Reading")])
+        #expect(inverse == [.moveFolder(from: "Lists/Reading", to: "Lists/Read")])
+        #expect(try fs.readText("Lists/Reading/Done/Ubik.md") == "two")
+
+        _ = try tx.commit(inverse)
+        #expect(fs.snapshotOfFiles == ["Lists/Read/Dune.md": "one", "Lists/Read/Done/Ubik.md": "two"])
+    }
+
+    @Test func moveFolderOntoAnExistingFolderIsRefused() throws {
+        let (tx, fs) = transaction(["Lists/Read/A.md": "x", "Lists/Watch/B.md": "y"])
+        #expect(throws: VaultError.destinationExists(path: "Lists/Watch")) {
+            try tx.commit([.moveFolder(from: "Lists/Read", to: "Lists/Watch")])
+        }
+        #expect(fs.snapshotOfFiles == ["Lists/Read/A.md": "x", "Lists/Watch/B.md": "y"])
+    }
+
+    @Test func moveFolderOntoAnExistingFileIsRefused() throws {
+        let (tx, _) = transaction(["Lists/Read/A.md": "x", "Lists/Watch": "a file, not a folder"])
+        #expect(throws: VaultError.destinationExists(path: "Lists/Watch")) {
+            try tx.commit([.moveFolder(from: "Lists/Read", to: "Lists/Watch")])
+        }
+    }
+
+    @Test func moveFolderOfAMissingFolderFails() throws {
+        let (tx, _) = transaction(["Actions/A.md": "x"])
+        #expect(throws: VaultError.self) {
+            try tx.commit([.moveFolder(from: "Lists/Gone", to: "Lists/Here")])
+        }
+        // A file is not a folder.
+        #expect(throws: VaultError.self) {
+            try tx.commit([.moveFolder(from: "Actions/A.md", to: "Actions/B")])
+        }
+    }
+
+    @Test func aFolderCannotBeMovedInsideItself() throws {
+        let (tx, fs) = transaction(["Lists/Read/A.md": "x"])
+        #expect(throws: VaultError.self) {
+            try tx.commit([.moveFolder(from: "Lists/Read", to: "Lists/Read/Deeper")])
+        }
+        #expect(try fs.readText("Lists/Read/A.md") == "x")
+    }
+
+    @Test func aFolderMoveOntoItselfIsANoOp() throws {
+        let (tx, fs) = transaction(["Lists/Read/A.md": "x"])
+        #expect(try tx.commit([.moveFolder(from: "Lists/Read", to: "Lists/Read")]).isEmpty)
+        #expect(try fs.readText("Lists/Read/A.md") == "x")
+    }
+
+    /// The acceptance case of T02: `[moveFolder, put]` where the `put` fails leaves the tree
+    /// exactly where it was.
+    @Test func aFailingPutAfterAFolderMoveRollsTheFolderBack() throws {
+        let files = ["Lists/Read/Dune.md": "one", "Lists/Read/Done/Ubik.md": "two"]
+        let (tx, fs) = transaction(files)
+        fs.failWrites(matching: ["Lists/Reading/New.md"])
+
+        #expect(throws: VaultError.self) {
+            try tx.commit([
+                .moveFolder(from: "Lists/Read", to: "Lists/Reading"),
+                .put(path: "Lists/Reading/New.md", text: "never lands"),
+            ])
+        }
+        #expect(fs.snapshotOfFiles == files)
+        #expect(!fs.folderExists("Lists/Reading"))
+    }
+
+    /// The same acceptance case on a **real** directory: `InMemoryFileSystem` could be wrong
+    /// about what a file system does with a tree, so the rollback is proved on disk too. The put
+    /// fails because its parent path is a file, which no injection is needed for.
+    @Test func aFailingPutAfterAFolderMoveRollsBackOnARealFileSystem() throws {
+        let vault = try TempVault()
+        let fs = PlainFileSystem(root: vault.url)
+        let tx = VaultTransaction(fileSystem: fs, layout: .default)
+        try fs.writeText("one", to: "Lists/Read/Dune.md")
+        try fs.writeText("two", to: "Lists/Read/Done/Ubik.md")
+        let before = try fs.listFiles().map(\.path)
+
+        #expect(throws: VaultError.self) {
+            try tx.commit([
+                .moveFolder(from: "Lists/Read", to: "Lists/Reading"),
+                // `Dune.md` is a file, so creating it as a folder — and the write below it —
+                // cannot work.
+                .put(path: "Lists/Reading/Dune.md/never.md", text: "boom"),
+            ])
+        }
+
+        #expect(try fs.listFiles().map(\.path) == before)
+        #expect(vault.read("Lists/Read/Dune.md") == "one")
+        #expect(vault.read("Lists/Read/Done/Ubik.md") == "two")
+        #expect(!vault.exists("Lists/Reading"))
+    }
+
+    @Test func aFailingRollbackOfAFolderMoveIsReportedNotSwallowed() throws {
+        let (tx, fs) = transaction(["Lists/Read/A.md": "x"])
+        // The folder move succeeds, the put fails, and moving the folder back fails too.
+        fs.failWrites(matching: ["Lists/Reading/New.md"])
+        fs.failMoves(to: ["Lists/Read"])
+
+        var caught: VaultError?
+        do {
+            _ = try tx.commit([
+                .moveFolder(from: "Lists/Read", to: "Lists/Reading"),
+                .put(path: "Lists/Reading/New.md", text: "boom"),
+            ])
+        } catch let error as VaultError {
+            caught = error
+        }
+        guard case .rollbackFailed = caught else {
+            Issue.record("expected rollbackFailed, got \(String(describing: caught))")
+            return
+        }
+        // The vault really is in the mixed state the error announces — which is why it is loud.
+        #expect(try fs.readText("Lists/Reading/A.md") == "x")
+    }
+
     // MARK: delete → trash
 
     @Test func deleteMovesIntoTrashAndInvertsToAMoveBack() throws {

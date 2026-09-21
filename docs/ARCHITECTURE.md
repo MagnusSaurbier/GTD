@@ -203,7 +203,14 @@ stand-in they fall back to off Apple platforms.
   returned inverse ops come back **already in undo order**.
 - A `.move` never overwrites (`VaultError.destinationExists`); `.delete` of a missing file is a
   no-op, `.move` of a missing source throws.
-- **Nothing here can hard-delete**: `VaultFileSystem` has no delete member. Keep it that way.
+- **`.moveFolder` (R-5)** moves a whole directory in one coordinated step — a list renamed or
+  removed, a project changing area. Same rules as `.move`: a destination taken by a file *or* a
+  folder is refused, a missing or non-folder source throws, the inverse is the move back, and it
+  takes part in the all-or-nothing rollback. `VaultStore.folderContents(_:)` (T02-1) says which
+  files are below a folder, which is what `GTDServices` hashes and what it asks before picking a
+  free name in an app-owned folder.
+- **Nothing here can hard-delete**: `VaultFileSystem` has no delete member, and a folder move is
+  a rename. Keep it that way.
 - `activate()` creates `VaultLayout.requiredFolders`, scans once and starts watching.
 - Decode failures never lose a note: they become `VaultIssue`s. Use `VaultNoteParser`, not
   `NoteCodec` directly.
@@ -218,12 +225,14 @@ onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
   cannot come apart.
 - A note is written only when its encoding changed, so untouched files keep their mtime.
 - Undo journal entries carry a content hash per file they would touch and are refused as
-  `ServiceError.undoStale` when any of them changed since (N3). It keeps 20 entries and is
-  persisted in Application Support.
+  `ServiceError.undoStale` when any of them changed since (N3) — for a `.moveFolder`, that is
+  every file **inside** the folder, because those are what the undo carries back. It keeps 20
+  entries and is persisted in Application Support.
 - A successful command publishes the reduced snapshot immediately; the store's scanned snapshot
   replaces it when it arrives.
 - Collisions in `Archive/` and `GTD/Trash/` get a free name (app-owned folders); anywhere else a
-  taken destination is `GTDError.titleCollision`.
+  taken destination is `GTDError.titleCollision`. Folder moves included: "remove list" is a
+  `.moveFolder` into `GTD/Trash/`.
 
 ### GTDAppCore — what the UI sees
 
@@ -324,7 +333,7 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-19 | **Liquid Glass:** `GlassActionBar`/`UndoToast` use `.glassEffect()` behind `if #available(iOS 26, macOS 26, *)` with a `.ultraThinMaterial` fallback. Nobody has compiled the call — `TEST-INSTRUCTIONS.md` "Where to look first" #1. |
 | 2026-09-19 · reversed 2026-09-21 | **Defer × Next (R-2):** a Next item **may** carry a future `defer`. While hidden it does not occupy a cap slot (`Rules.countsTowardCap(_:today:)`, so the cap queries take a `Day`); on its date it returns to Next with the `back` badge. If Next is then over the cap nothing is demoted automatically: the `16/15` signal shows and `NextListModel.showsCapSheet` asks the view to present `Next is full` once per foreground until the user demotes something. This reverses the earlier "the reducer refuses the combination" decision (D15). |
 | 2026-09-19 · rev. 2026-09-21 | **"Open action" for stalled (P4):** a project is stalled when it has no *visible, non-`someday`* open action. The merged "not now" tier is not a commitment (it replaces the old `maybe` exception) and a deferred action is not now. |
-| 2026-09-19 | **Project rename:** `updateProject` refuses a changed title or area (`.invalid`) — the folder is the project's identity and moving a folder tree is out of v1 scope. Status, outcome, why, steps and log are editable. |
+| 2026-09-19 · rev. 2026-09-21 | **Project rename:** `updateProject` refuses a changed title or area (`.invalid`) — the folder is the project's identity. Status, outcome, why, steps and log are editable. The *area* half of this is being reversed by R-7: `VaultFileOp.moveFolder` (T02) is the primitive it needs, and T05 is the command; renaming a project's **title** stays refused. |
 | 2026-09-19 | **Turn into project:** `convertActionToProject` moves the action note to `GTD/Trash/`, takes its checkboxes as steps and emits `.whatsNext`, so the new project is never born stalled. |
 | 2026-09-19 | **Next list order:** `in-progress` first, then nearest `due`, then oldest capture, then path. The list is **never truncated to the cap** — an over-cap vault must stay repairable; `capSignal` shows `17/15` instead. |
 | 2026-09-19 | **Undo depth:** `VaultBackend` keeps 20 journal entries, so `⌘Z` walks back through a session; `InMemoryBackend` restores one snapshot. Every entry is checked against the files before it is applied. |
@@ -343,6 +352,8 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-21 | **Legacy status words are read, never rewritten (R-1).** `backlog`/`maybe` decode as `.someday`, `trash` as `ActionStatus.legacyTrashed` (closed, hidden, not user-settable, out of `allCases`; the reducer refuses any move *into* it). Because the encoder patches only lines whose decoded value changed, such a file keeps its own word until the status really changes. `archiveCompleted` sends a legacy-trashed note to `GTD/Trash/` instead of `Archive/`. |
 | 2026-09-21 | **No `reading` context (A4).** `GTDConfig.default` drops it from the contexts and the on-the-go set. Only the *default* changed: a vault whose `Config.md` still lists `reading` keeps it, because the list in the file is the user's. |
 | 2026-09-21 | **A legacy-trashed note stays an archive *candidate*, not an immediate move.** `archiveCompleted` keeps the same 30-day threshold for it and only changes the destination (`GTD/Trash/`). Moving such notes at once would touch files the user has not asked about on the first launch after the rework; the requirements are silent, and this is the option that cannot surprise anyone. |
+| 2026-09-21 | **One new vault primitive, `VaultFileOp.moveFolder` (R-5).** Renaming a list, removing one and re-assigning a project's area all move a directory, so `GTDVault` gained exactly one op rather than a loop of file moves: one coordinated directory move (`.forMoving` + `item(at:didMoveTo:)`), never overwriting, inverse in undo order, part of the all-or-nothing rollback. It is **not** a delete — `VaultFileSystem` still has no delete member. `VaultStore` gained `folderContents(_:)` (contract change T02-1) because a folder is invisible to `read(path:)` and the undo journal has to hash the files inside it. |
+| 2026-09-21 | **A folder move away from a path that the same commit writes into again cannot be undone.** The old path is then a folder again, and the move back is refused (`destinationExists`) rather than removing it — removing it would be the hard delete this vault never does. No reducer emits such a pair; `TransactionFuzzTests` asserts the refusal changes nothing and loses nothing. |
 | 2026-09-21 | **The sample vault keeps one `status: trash` note** (`Actions/Look into that podcast app.md`). `GTDFixtures` is the only writer of that word, on purpose: it is what makes R-1 — hidden state, tolerant decode, archive-to-trash routing — testable end to end against a realistic pre-rework vault. |
 
 ## 7. Sync safety rules (N3) — apply to every change that writes
@@ -355,7 +366,8 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
    reported as `VaultIssue` until available.
 5. Conflict copies (unresolved `NSFileVersion` conflicts, "… 2.md" duplicates) are surfaced as
    `VaultIssue`, never auto-resolved.
-6. Undo is refused when a file it would touch has changed since (`ServiceError.undoStale`).
+6. Undo is refused when a file it would touch has changed since (`ServiceError.undoStale`) —
+   including every file inside a folder a `.moveFolder` would carry back.
    An **ordinary** command has no such guard yet — a write built on a pre-rename snapshot
    duplicates a note rather than losing one (`docs/follow-ups/53-stale-write-guard.md`).
 7. Tests and agents never touch the real vault. Use `GTDFixtures` or a temp copy.

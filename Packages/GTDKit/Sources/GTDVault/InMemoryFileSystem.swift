@@ -110,6 +110,14 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
         return files[VaultPath.normalize(path)] != nil
     }
 
+    public func folderExists(_ path: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let key = VaultPath.normalize(path)
+        guard !key.isEmpty else { return true }
+        if folders.contains(key) { return true }
+        return files.keys.contains { $0.hasPrefix(key + "/") }
+    }
+
     public func readText(_ path: String) throws -> String? {
         lock.lock()
         let key = VaultPath.normalize(path)
@@ -152,6 +160,40 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
         files[destination] = node
     }
 
+    /// Re-keys every file below `from`, and the folder entries with it. `failMoves(to:)` applies
+    /// to the folder's destination too, so rollback can be exercised for a folder move.
+    public func moveFolder(_ from: String, to path: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        let source = VaultPath.normalize(from)
+        let destination = VaultPath.normalize(path)
+        guard VaultPath.isSafe(source), VaultPath.isSafe(destination) else {
+            throw VaultError.ioFailed(path: path, reason: "path escapes the vault root")
+        }
+        guard hasFolder(source) else {
+            throw VaultError.ioFailed(path: source, reason: "no such folder")
+        }
+        guard files[destination] == nil, !hasFolder(destination) else {
+            throw VaultError.destinationExists(path: destination)
+        }
+        if failingMoves.contains(destination) {
+            throw VaultError.ioFailed(path: destination, reason: "injected move failure")
+        }
+        let prefix = source + "/"
+        for key in files.keys where key.hasPrefix(prefix) {
+            files[destination + "/" + String(key.dropFirst(prefix.count))] = files[key]
+            files[key] = nil
+        }
+        for folder in folders where folder == source || folder.hasPrefix(prefix) {
+            folders.remove(folder)
+            folders.insert(destination + String(folder.dropFirst(source.count)))
+        }
+        var parts = destination.split(separator: "/").map(String.init)
+        while !parts.isEmpty {
+            folders.insert(parts.joined(separator: "/"))
+            parts.removeLast()
+        }
+    }
+
     public func createFolder(_ path: String) throws {
         lock.lock(); defer { lock.unlock() }
         let key = VaultPath.normalize(path)
@@ -165,6 +207,13 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
     }
 
     // MARK: Private
+
+    /// `folderExists` without taking the lock — for use from methods that already hold it.
+    private func hasFolder(_ key: String) -> Bool {
+        guard !key.isEmpty else { return true }
+        if folders.contains(key) { return true }
+        return files.keys.contains { $0.hasPrefix(key + "/") }
+    }
 
     private func store(_ text: String, at key: String) {
         clockTick += 1

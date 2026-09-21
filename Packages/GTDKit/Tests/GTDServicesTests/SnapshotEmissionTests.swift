@@ -144,6 +144,14 @@ final class PassiveStore: VaultStore, @unchecked Sendable {
         withLock { files[path] }
     }
 
+    func folderContents(_ folder: String) async throws -> [String]? {
+        withLock {
+            let prefix = folder.hasSuffix("/") ? folder : folder + "/"
+            let inside = files.keys.filter { $0.hasPrefix(prefix) }.sorted()
+            return inside.isEmpty ? nil : inside
+        }
+    }
+
     func commit(_ ops: [VaultFileOp]) async throws -> [VaultFileOp] {
         try withLock { try apply(ops) }
     }
@@ -172,6 +180,20 @@ final class PassiveStore: VaultStore, @unchecked Sendable {
                 files[to] = text
                 files[from] = nil
                 inverse.append(.move(from: to, to: from))
+            case let .moveFolder(from, to):
+                let prefix = from + "/"
+                let inside = files.keys.filter { $0.hasPrefix(prefix) }
+                guard !inside.isEmpty else {
+                    throw VaultError.ioFailed(path: from, reason: "no such folder to move")
+                }
+                guard !files.keys.contains(where: { $0.hasPrefix(to + "/") || $0 == to }) else {
+                    throw VaultError.destinationExists(path: to)
+                }
+                for path in inside {
+                    files[to + "/" + String(path.dropFirst(prefix.count))] = files[path]
+                    files[path] = nil
+                }
+                inverse.append(.moveFolder(from: to, to: from))
             case let .delete(path):
                 guard let text = files[path] else { continue }
                 let trashed = VaultLayout.default.trashPath(for: NoteID(path: path)).path

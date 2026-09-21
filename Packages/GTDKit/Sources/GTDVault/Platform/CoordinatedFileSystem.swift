@@ -67,6 +67,8 @@ public struct CoordinatedFileSystem: VaultFileSystem {
 
     public func exists(_ path: String) -> Bool { plain.exists(path) }
 
+    public func folderExists(_ path: String) -> Bool { plain.folderExists(path) }
+
     // MARK: Reading and writing
 
     public func readText(_ path: String) throws -> String? {
@@ -128,6 +130,47 @@ public struct CoordinatedFileSystem: VaultFileSystem {
         if let thrown { throw thrown }
         if let coordinationError {
             throw VaultError.ioFailed(path: path, reason: "\(coordinationError)")
+        }
+    }
+
+    /// **One** coordinated move of the directory (R-5), not one per file inside it.
+    ///
+    /// `.forMoving` on the source tells every presenter below it that their items are about to
+    /// go somewhere else, and `item(at:didMoveTo:)` afterwards tells them where — without it a
+    /// presenter (Obsidian, the Files app, our own `PresenterVaultWatcher`) keeps pointing at
+    /// the old URL. Moving the folder file by file would give up the atomicity that makes a list
+    /// rename or an area change safe in the middle of a sync.
+    public func moveFolder(_ from: String, to path: String) throws {
+        let source = try plain.url(from)
+        let destination = try plain.url(path)
+        guard plain.folderExists(from) else {
+            throw VaultError.ioFailed(path: VaultPath.normalize(from), reason: "no such folder")
+        }
+        guard !plain.exists(path), !plain.folderExists(path) else {
+            throw VaultError.destinationExists(path: VaultPath.normalize(path))
+        }
+        try createFolder(VaultPath.folder(of: path))
+
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinationError: NSError?
+        var thrown: (any Error)?
+        coordinator.coordinate(
+            writingItemAt: source, options: .forMoving,
+            writingItemAt: destination, options: .forReplacing,
+            error: &coordinationError
+        ) { newSource, newDestination in
+            do {
+                try FileManager.default.moveItem(at: newSource, to: newDestination)
+                coordinator.item(at: newSource, didMoveTo: newDestination)
+            } catch {
+                thrown = VaultError.ioFailed(
+                    path: VaultPath.normalize(path), reason: "\(error)")
+            }
+        }
+        if let thrown { throw thrown }
+        if let coordinationError {
+            throw VaultError.ioFailed(
+                path: VaultPath.normalize(path), reason: "\(coordinationError)")
         }
     }
 
