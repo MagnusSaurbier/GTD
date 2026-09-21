@@ -101,7 +101,22 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 | The swipe hint showed on the first card of a fresh device | It shows the first time an **action card opens** — there is nothing to hint at on the small card |
 | `InboxSession.Draft` (nested) | `InboxDraft` (top level, `+ notes`), with the nested name kept as a typealias for `FeatureReview` |
 
+## `Esc` on the Mac (gotcha)
+
+`.onKeyPress(.escape)` on the focusable card area is **not** how `Esc` arrives: while a
+`TextField` is first responder (and `Why?` is, the moment the action card opens) the field editor
+turns `Esc` into `cancelOperation:`, the handler never fires, and the macOS sheet dismisses itself
+— the ladder is skipped and the session closes. `EscapeKeyMonitor.swift` (`onEscapeKey`, macOS
+only) therefore takes `Esc` from a local `NSEvent` monitor scoped to the view's own window and
+swallows it: one press, one rung, whatever has focus. A nested sheet is another window, so its
+`Esc` is left alone; so is an `Esc` that cancels an input-method composition.
+`.interactiveDismissDisabled()` sits under it as the net. After a blur or a collapse the view
+takes key focus back (`hasKeyFocus`), so the single keys and the next `Esc` still land.
+`InboxSessionView` and `MakeActionCardView` both use it.
+
 ## Platform guards (ARCHITECTURE §5)
+
+`EscapeKeyMonitor.swift` is wrapped in `#if canImport(SwiftUI) && os(macOS)`.
 
 `InboxProcessingView.swift`, `InboxCardView.swift`, `InboxSheets.swift`, `InboxPreviews.swift` and
 `MakeActionCardView.swift` are wrapped entirely in `#if canImport(SwiftUI)`. T08 adapted the views

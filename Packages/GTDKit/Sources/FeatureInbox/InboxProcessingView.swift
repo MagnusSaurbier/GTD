@@ -71,6 +71,9 @@ struct InboxSessionView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focus: CardField?
+    /// Mac: key focus of the card area itself, which is what receives the single-key shortcuts.
+    /// Taken back whenever a field is blurred or the card collapses, so the next key still lands.
+    @FocusState private var hasKeyFocus: Bool
 
     @State private var translation: CGSize = .zero
     @State private var dragTarget: InboxExit?
@@ -247,13 +250,19 @@ struct InboxSessionView: View {
         }
         .padding(.horizontal, Spacing.screenMargin)
         .focusable()
+        .focused($hasKeyFocus)
         .focusEffectDisabled()
         .onKeyPress(.leftArrow) { press(.arrowLeft) }
         .onKeyPress(.rightArrow) { press(.arrowRight) }
-        .onKeyPress(.escape) { escape() }
         .onKeyPress(characters: Self.keyCharacters, phases: .down) {
             handle($0)
         }
+        // Not `.onKeyPress(.escape)`: a focused field never lets it fire, and the sheet then
+        // dismisses itself on `cancelOperation:` (see `onEscapeKey`).
+        .onEscapeKey { escape() }
+        // The net under it: whatever still reaches the sheet must not close it past the ladder.
+        .interactiveDismissDisabled()
+        .onAppear { hasKeyFocus = true }
     }
     #endif
 
@@ -466,14 +475,17 @@ struct InboxSessionView: View {
 
     /// `Esc` is a ladder (STYLEGUIDE §3.6): focused field → blur; opened card → collapse;
     /// step 1 → quit. The session owns the middle rung; the view owns the two ends.
-    private func escape() -> KeyPress.Result {
+    private func escape() {
         session.isFieldFocused = focus != nil
         switch session.escape() {
-        case .blurField: focus = nil
-        case .collapsed: break
-        case .quit: onFinished()
+        case .blurField:
+            focus = nil
+            hasKeyFocus = true
+        case .collapsed:
+            hasKeyFocus = true
+        case .quit:
+            onFinished()
         }
-        return .handled
     }
 
     private func handle(_ keyPress: KeyPress) -> KeyPress.Result {

@@ -144,6 +144,14 @@ You need a full Next list: demote or complete until the Next sidebar count reads
 - [ ] The toolbar button says `Close`, not `Done` (on this screen `Done` files a card).
 - [ ] `Esc` is a ladder: focused field → blurs it; opened card → collapses it; step 1 → quits
       the session.
+- [ ] **Mac, by hand:** press `A` (the caret lands in `Why?`), type a word, then `Esc` three
+      times. 1st: the caret leaves the field, the sheet stays, `W`/`←`/`→` act on the card
+      again. 2nd: the card collapses to the small step-1 card, and `A` reopens it with the word
+      still in `Why?`. 3rd: inbox processing closes. The sheet must **never** close on the 1st or
+      2nd press — also not after clicking a chip or a bar button first, and not from the
+      Knowledge / List card (`K`, click into `Notes`, `Esc` `Esc` `Esc`).
+- [ ] **Mac:** with a nested sheet open (`P` project, `W` waiting, `0` More…), `Esc` closes only
+      that sheet; the card under it stays opened.
 - [ ] Capture something new mid-session (`⌘N`): it queues **behind** a card you have already
       opened, and jumps to the front only if the current card is an untouched step-1 card.
 - [ ] Process the queue to zero: the reward moment appears with `n processed · m min` and a
@@ -180,6 +188,8 @@ Unplug the mouse for this one.
       opened action card** as the inbox's step 2a — same fields, same asterisks, same cap sheet.
       File it: the note **moves** to `Actions/`, and the notes you had written on the item are
       still in it, above `# Why?`.
+- [ ] **Mac:** in the Make action sheet `Esc` first blurs the focused field (sheet stays), the
+      next `Esc` cancels and closes it; the item is still in its list.
 - [ ] Make an action into **Next** without a `Why?`: refused with asterisks, exactly as in §1.2.
 - [ ] **Mac:** the sidebar has a single `Lists` row (count = open items across all lists),
       between `Waiting` and `Projects`. Its content column shows one **section per list**

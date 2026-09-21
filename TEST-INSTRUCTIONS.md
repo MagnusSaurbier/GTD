@@ -233,7 +233,12 @@ Docs the run made untrue, corrected: `CLAUDE.md`, `README.md`, `docs/ARCHITECTUR
 
 **From the 2026-09-19 run**
 
-0. Mac inbox processing: once a card text field has focus, `Esc` did not blur it, so the arrow
+0. **Fix attempted 2026-09-21 (`fix/followup-esc`), not yet seen on screen.** The user then
+   reported the worse half by hand: `Esc` on the opened action card closed the whole sheet. `Esc`
+   now comes from a window-scoped `NSEvent` monitor (`FeatureInbox/EscapeKeyMonitor.swift`) plus
+   `.interactiveDismissDisabled()`; it compiles and the suite is green, but nobody has pressed
+   the key yet — run the "Mac, by hand" `Esc` checks in `docs/MANUAL_TEST.md` §1. Original note:
+   Mac inbox processing: once a card text field has focus, `Esc` did not blur it, so the arrow
    keys kept moving the caret instead of filing (`InboxProcessingView.quit()` expects "Esc first
    blurs the field"). A focused `TextField` probably consumes Esc before the container's
    `.onKeyPress(.escape)`. Adding `.onExitCommand` on the container did not help and was reverted.
