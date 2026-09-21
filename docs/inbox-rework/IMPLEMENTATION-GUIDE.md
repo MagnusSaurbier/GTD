@@ -378,7 +378,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T10 | **in progress** (started 2026-09-21, worktree, ∥ T09/T13; the Make-action sheet is reconciled with T09's card view at merge) | | Sonnet | 1 | |
 | T11 | done | e285909 | Sonnet | 1 | worktree; doc conflicts resolved by the manager; gate green (1207 tests; Next 32, Waiting 23, Projects 71); both app builds green and now **warning-free** (the `NextView` separatorInset warning is fixed). Only compiled + unit-tested + one launch screenshot: Someday list, Waiting rows, area picker and the R-2 cap sheet were **not** clicked through — T15 must |
 | T12 | done | a88bb96 | Sonnet | 1 | worktree, merged clean; gate green (1148 tests, Review 91); both app builds green. Open wiring for T13: the deck's `onEditAction` hook and the stored `KeyBindings` are not yet passed in by the shell; nobody has driven the deck on screen yet (T15) |
-| T13 | **in progress** (started 2026-09-21, worktree, ∥ T09/T10 — owns FeatureSettings only) | | Sonnet | 1 | |
+| T13 | done | 3af0e87 | Sonnet | 1 (interrupted by a session restart, resumed) | worktree, merged clean; gate green (1249 tests, Settings 73); both app builds warning-free. Seen on screen: the Keyboard pane with the I9 defaults. **Not** clicked: Lists/Favourites sections, remove-list dialog, an actual rebind/reset — T15. Shell wiring of the stored `KeyBindings` into inbox + deck and the deck's `onEditAction` is still open (manager, after T09/T10) |
 | T14 | done | 828b678 | Sonnet | 1 | worktree; 42 pytest green from a scratch venv (manager re-ran); script never writes `reading`/`backlog`/`maybe` |
 | T15 | | | | | |
 
@@ -405,3 +405,4 @@ _(one line each: date · task · decision · why — and the ARCHITECTURE §6 ro
 - 2026-09-21 · T08 · a wrong-step exit is a refusal, not a no-op; undo restores the step (R-9); an asterisk follows the draft, not the refusal; a mid-session capture never displaces an *opened* card; `escape()` reports blur/collapsed/quit and the view owns focus · ARCHITECTURE §6.
 - 2026-09-21 · T11 · `Send to Someday instead` is gone from the editor's cap refusal (that is the Next-cap sheet, D14) but stays in the project step-promotion sheets as a separate explicit choice, so a project is never left stalled · ARCHITECTURE §6.
 - 2026-09-21 · T11 · `Next is full` for R-2 is a local `NextCapSheet` in `FeatureNext` built from DesignSystem pieces (FeatureNext may not depend on FeatureInbox) · ARCHITECTURE §6.
+- 2026-09-21 · T13 · `favouriteLists` stays one synced array; Settings caps it at 8 (Mac navbar), the iPhone shows the first four and the editor marks the rest `Mac only` · one list, no per-device copy · ARCHITECTURE §6.
