@@ -375,10 +375,10 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T07 | done | e1616bc | Sonnet | 1 | worktree; merge conflicts with T04 in `CardTargets`/`InboxProcessingView` resolved by the manager (`P` opens the project sheet); gate green. `KeyBindings` lives in `GTDAppCore` (all three consumers depend on it; no Package.swift change). Legacy single-card letters still resolve via `CardTarget.key` until T08/T09 |
 | T08 | done | b7a59d2 | Opus | 1 | worktree; merge conflicts only in docs (manager resolved); gate green (1199 tests, Inbox 107); both app builds green. `InboxStep`/`InboxExit`/`take(_:)`, `ActionCardEngine` shared with `MakeActionModel` (L4); old README invariants consciously replaced (table in `FeatureInbox/README.md`); views only adapted mechanically — T09 |
 | T09 | **in progress** (started 2026-09-21, worktree, ∥ T11) | | Sonnet | 1 | |
-| T10 | | | | | |
+| T10 | **in progress** (started 2026-09-21, worktree, ∥ T09/T13; the Make-action sheet is reconciled with T09's card view at merge) | | Sonnet | 1 | |
 | T11 | done | e285909 | Sonnet | 1 | worktree; doc conflicts resolved by the manager; gate green (1207 tests; Next 32, Waiting 23, Projects 71); both app builds green and now **warning-free** (the `NextView` separatorInset warning is fixed). Only compiled + unit-tested + one launch screenshot: Someday list, Waiting rows, area picker and the R-2 cap sheet were **not** clicked through — T15 must |
 | T12 | done | a88bb96 | Sonnet | 1 | worktree, merged clean; gate green (1148 tests, Review 91); both app builds green. Open wiring for T13: the deck's `onEditAction` hook and the stored `KeyBindings` are not yet passed in by the shell; nobody has driven the deck on screen yet (T15) |
-| T13 | | | | | |
+| T13 | **in progress** (started 2026-09-21, worktree, ∥ T09/T10 — owns FeatureSettings only) | | Sonnet | 1 | |
 | T14 | done | 828b678 | Sonnet | 1 | worktree; 42 pytest green from a scratch venv (manager re-ran); script never writes `reading`/`backlog`/`maybe` |
 | T15 | | | | | |
 
