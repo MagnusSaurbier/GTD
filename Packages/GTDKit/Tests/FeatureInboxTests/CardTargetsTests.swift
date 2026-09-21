@@ -293,6 +293,18 @@ struct InboxPickerTests {
         #expect(model.suggestedTarget == nil)
     }
 
+    /// T15 defect 6 — no pre-selection: with nothing chosen `Done` must stay disabled, even
+    /// though the root `Knowledge` folder's path (`""`) and the "nothing chosen" state used to
+    /// share the same view-level sentinel and drew the root row pre-checked.
+    @Test func knowledgeSaveIsDisabledUntilATargetIsChosen() {
+        #expect(!KnowledgePickerModel.canSave(selection: nil, projectTarget: nil))
+        // Choosing the root folder (`""`) is a real choice, not "still nothing".
+        #expect(KnowledgePickerModel.canSave(selection: "", projectTarget: nil))
+        #expect(KnowledgePickerModel.canSave(selection: "Technik", projectTarget: nil))
+        #expect(KnowledgePickerModel.canSave(
+            selection: nil, projectTarget: NoteID(path: "Projects/Foo/Foo.md")))
+    }
+
     @Test func projectsAreGroupedByAreaWithUngroupedFirst() {
         var snapshot = Fixtures.sampleSnapshot
         let loose = Project(

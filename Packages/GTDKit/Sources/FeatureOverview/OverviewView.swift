@@ -59,7 +59,13 @@ public struct OverviewView: View {
                 }
             }
         }
-        .overlay(alignment: .bottom) { UndoOverlay() }
+        // N6/T15 defect 8 — `InboxProcessingView` shows its own toast (`Moved to Done · Undo`)
+        // while its sheet is up; without this the shell drew a second one (`Done · Undo`) behind
+        // it at the same time. Same rule `App/PhoneShell` documents for its tabs: the shell only
+        // covers a screen that has no toast of its own.
+        .overlay(alignment: .bottom) {
+            if !nav.isProcessingInbox { UndoOverlay() }
+        }
         // The `NavigationStack` renders `InboxProcessingView`'s toolbar — counter, `⌘Z` and
         // `Done`. Without it the sheet has no way out (T41); the previews had one, the app did not.
         .sheet(isPresented: processingBinding) {
@@ -399,24 +405,42 @@ private struct InboxRawList: View {
 }
 
 /// N6 — the undo toast, bottom-anchored, one at a time (STYLEGUIDE §3.8).
+///
+/// `.onChange(of: model.undoLabel)` rather than `.task(id:)` (T15 defect 2, same fix as
+/// `App/PhoneShell.UndoOverlay`): this view is re-mounted whenever it is conditionally wrapped
+/// (`!nav.isProcessingInbox`), and a freshly mounted `.task(id:)` misses a command that sets
+/// `undoLabel` to the same string the view already mounted with.
 private struct UndoOverlay: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown: String?
+    @State private var dismissTask: Task<Void, Never>?
 
     var body: some View {
         Group {
             if let shown {
-                UndoToast(label: shown, onUndo: { Task { await model.undo() } })
-                    .padding(.bottom, Spacing.l)
-                    .transition(.opacity)
+                UndoToast(label: shown, onUndo: {
+                    dismissTask?.cancel()
+                    self.shown = nil
+                    Task { await model.undo() }
+                })
+                .padding(.bottom, Spacing.l)
+                .transition(.opacity)
             }
         }
         .animation(Motion.standard(reduceMotion: reduceMotion), value: shown)
-        .task(id: model.undoLabel) {
-            shown = model.undoLabel
-            guard shown != nil else { return }
+        .onChange(of: model.undoLabel) { _, newValue in
+            guard let newValue else { return }
+            showToast(newValue)
+        }
+    }
+
+    private func showToast(_ label: String) {
+        dismissTask?.cancel()
+        shown = label
+        dismissTask = Task {
             try? await Task.sleep(for: .seconds(MotionTiming.toastDuration))
+            guard !Task.isCancelled else { return }
             shown = nil
         }
     }

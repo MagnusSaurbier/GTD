@@ -68,6 +68,11 @@ public enum MotionTiming {
     public static let rowCollapse: Double = 0.4
     /// Undo toast auto-dismiss.
     public static let toastDuration: Double = 5
+    /// A sheet's own presentation animation before content inside it is safe to focus
+    /// programmatically — focusing while the sheet is still animating in produces a stuck/ghost
+    /// keyboard accessory view (iOS). Anything that auto-focuses a field on a freshly presented
+    /// sheet waits this long first.
+    public static let sheetSettle: Double = 0.45
 }
 
 /// Validation shake (STYLEGUIDE §3.6, §5): "shakes once (6 pt, 0.3 s)". Reduce Motion drops the

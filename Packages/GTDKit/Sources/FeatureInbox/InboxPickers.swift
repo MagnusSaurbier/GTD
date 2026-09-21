@@ -106,6 +106,14 @@ public struct KnowledgePickerModel: Sendable, Equatable {
 
     /// The target the suggested row would file to, or `nil` when there is no suggestion.
     public var suggestedTarget: KnowledgeTarget? { suggestion.map(KnowledgeTarget.folder) }
+
+    /// I4b/D36, STYLEGUIDE §1 "no lying defaults" (T15 defect 6): with no last-used folder the
+    /// root `Knowledge` row must **not** appear pre-checked, and `Done` stays disabled until the
+    /// user picks a target. `selection` is `nil` until a folder row (including the root, `""`)
+    /// or the suggested chip is tapped; a project target counts too.
+    public static func canSave(selection: String?, projectTarget: NoteID?) -> Bool {
+        projectTarget != nil || selection != nil
+    }
 }
 
 // MARK: - Project picker

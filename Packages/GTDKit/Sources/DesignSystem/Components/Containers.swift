@@ -184,6 +184,9 @@ public struct WaitingInfoSheet: View {
             }
         }
         .padding(Spacing.cardPadding)
+        // Without an explicit top alignment the sheet centers this short VStack in the whole
+        // `.medium` detent, leaving a large empty gap above it (T15 defect 4c).
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // A tap outside the field puts the keyboard away (no scroll view to attach
         // `.scrollDismissesKeyboard` to here).
         .contentShape(Rectangle())

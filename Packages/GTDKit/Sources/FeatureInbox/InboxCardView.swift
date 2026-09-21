@@ -100,24 +100,36 @@ struct InboxCardView: View {
     /// R-4 — the note's title *is* the capture text: this field edits the capture itself, and the
     /// reducer names the file after its first line. It is the **only** text field for the
     /// captured text — step 2a's "title still editable on tap" is this same field, not a copy.
+    ///
+    /// Only the **step-1 small card** scrolls internally past `rawTextMaxHeight` (STYLEGUIDE
+    /// §3.5: "the only place a card scrolls internally"); a `ScrollView` always claims up to its
+    /// `maxHeight`, even for one line of text, so wrapping an *opened* card's title in one too
+    /// left a fixed-looking gap between it and `Notes`/`Why?` (T15 defect 5) — 2a and 2b hug their
+    /// content and scroll with the page instead (§3.5 "an opened card … scrolls with the page").
     @ViewBuilder private var rawText: some View {
-        ScrollView {
-            TextField(
-                "",
-                text: $session.draft.text,
-                prompt: Self.prompt(InboxCopy.rawTextPlaceholder),
-                axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(Typo.cardText)
-                .foregroundStyle(Color.ink)
-                // Never compressed: without this the last line loses its descenders.
-                .fixedSize(horizontal: false, vertical: true)
-                .focused($focus, equals: .text)
-                .accessibilityLabel(InboxCopy.rawTextPlaceholder)
+        let field = TextField(
+            "",
+            text: $session.draft.text,
+            prompt: Self.prompt(InboxCopy.rawTextPlaceholder),
+            axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(Typo.cardText)
+            .foregroundStyle(Color.ink)
+            // Never compressed: without this the last line loses its descenders.
+            .fixedSize(horizontal: false, vertical: true)
+            .focused($focus, equals: .text)
+            .accessibilityLabel(InboxCopy.rawTextPlaceholder)
+
+        if session.step == .step1 {
+            ScrollView {
+                field
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: rawTextMaxHeight)
+            .id(CardField.text)
+        } else {
+            field.id(CardField.text)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(maxHeight: rawTextMaxHeight)
-        .id(CardField.text)
     }
 
     // MARK: Step 2a — Why? / What? / chips
@@ -234,8 +246,8 @@ struct InboxCardView: View {
                     today: session.today)
                 Chip(
                     projectChipTitle,
-                    state: projectChipTitle == Copy.project ? .unset : .confirmed,
-                    symbol: projectChipTitle == Copy.project ? "plus" : nil
+                    state: isProjectChosen ? .confirmed : .unset,
+                    symbol: isProjectChosen ? nil : "plus"
                 ) {
                     session.sheet = .project
                 }
@@ -243,10 +255,13 @@ struct InboxCardView: View {
         }
     }
 
-    /// Unset: the `plus` symbol is the "+", so the title is the bare label (no `+ + Project`) —
-    /// same wording and casing as `DateValueChip` next to it and as the action detail.
+    /// Unset: the `plus` symbol is the "+", so the title is the bare, lowercase label (no
+    /// `+ + Project`, no `+ Project`) — same wording and casing as `DateValueChip` next to it
+    /// (STYLEGUIDE §3.1/§3.5's `+ project`).
+    private var chosenProjectTitle: String? { session.projectChipTitle(in: session.snapshot) }
+    private var isProjectChosen: Bool { chosenProjectTitle != nil }
     private var projectChipTitle: String {
-        session.projectChipTitle(in: session.snapshot) ?? Copy.project
+        chosenProjectTitle ?? Copy.unsetValueChipTitle(Copy.project)
     }
 
     // MARK: Step 2b — Notes

@@ -169,9 +169,10 @@ public enum Copy {
         metaLine(["\(active) active", stepsLeft(remainingSteps)])
     }
 
-    /// The title of an **unset** "add a value" chip (`Defer`, `Due`, `Project`). The chip draws the
-    /// `plus` symbol itself, so the title never carries a literal "+"; a leading one a caller
-    /// passed is stripped, and the first letter is capitalised so every screen reads the same.
+    /// The title of an **unset** "add a value" chip (`Area`, `Project`) as `ActionDetailView`'s
+    /// single-value pickers draw it: the chip draws the `plus` symbol itself, so the title never
+    /// carries a literal "+"; a leading one a caller passed is stripped, and the first letter is
+    /// capitalised so every one of *these* reads the same.
     public static func unsetChipTitle(_ label: String) -> String {
         var text = label.trimmingCharacters(in: .whitespaces)
         while text.hasPrefix("+") {
@@ -179,6 +180,20 @@ public enum Copy {
         }
         guard let first = text.first else { return text }
         return first.uppercased() + text.dropFirst()
+    }
+
+    /// The title of an **unset** date/project **value chip** on the inbox card (`DateValueChip`,
+    /// and the `+ project` chip step 2a draws with the same wording) — STYLEGUIDE §3.1/§3.5 spell
+    /// these lower case: `+ defer` / `+ due` / `+ project`, unlike `unsetChipTitle`'s title-case
+    /// `Area`/`Project` single-value chips in the Mac editor (T15 defect 9: these two were
+    /// conflated and every value chip read `+ Defer` / `+ Due` / `+ Project`).
+    public static func unsetValueChipTitle(_ label: String) -> String {
+        var text = label.trimmingCharacters(in: .whitespaces)
+        while text.hasPrefix("+") {
+            text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+        }
+        guard let first = text.first else { return text }
+        return first.lowercased() + text.dropFirst()
     }
 
     public static let onTheRemarkable = "On the reMarkable"

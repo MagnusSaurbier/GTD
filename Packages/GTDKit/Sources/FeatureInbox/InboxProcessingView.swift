@@ -90,10 +90,6 @@ struct InboxSessionView: View {
                     .presentationDetents(sheet == .cap ? [.large] : [.medium, .large])
                 #endif
             }
-            #if os(macOS)
-            // iPhone shows the toast in the bottom inset, above the action bar (`bottomInset`).
-            .overlay(alignment: .bottom) { toastOverlay.padding(.bottom, Spacing.xxl) }
-            #endif
             .overlay { hintOverlay }
             .onChange(of: session.processed) { old, new in
                 guard new > old, let label = session.undoToastLabel else { return }
@@ -241,6 +237,12 @@ struct InboxSessionView: View {
                 .multilineTextAlignment(.center)
                 .accessibilityLabel(InboxCopy.keyLegendLabel)
                 .accessibilityValue(session.legendString)
+            // In the VStack's own flow, below the legend — never floating over the step-1
+            // buttons the way an absolute bottom overlay did (T15 defect 7). `frame(minHeight:)`
+            // keeps its slot from collapsing to zero, so the legend does not jump when a toast
+            // appears/disappears.
+            toastOverlay
+                .frame(minHeight: Spacing.xxl)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Spacing.screenMargin)

@@ -59,7 +59,15 @@ public struct MakeActionCardView: View {
                 model.isFieldFocused = field != nil
             }
             .task {
-                if focus == nil { focus = .why }
+                // Presented as a `.sheet` (unlike `InboxProcessingView`'s `fullScreenCover`,
+                // which only moves focus on a later step transition): focusing `Why?` while the
+                // sheet is still animating in leaves a stuck/ghost keyboard `Done` accessory
+                // behind the real one until the keyboard is dismissed once. Wait for the
+                // presentation to settle first (STYLEGUIDE §3.6 "focus goes to `Why?`").
+                guard focus == nil else { return }
+                try? await Task.sleep(nanoseconds: UInt64(MotionTiming.sheetSettle * 1_000_000_000))
+                guard focus == nil, !model.isFiled else { return }
+                focus = .why
             }
             .onChange(of: model.isFiled) { _, filed in
                 if filed { onFinished() }
@@ -99,10 +107,13 @@ public struct MakeActionCardView: View {
                     onFileToSomeday: { fly(to: .someday) })
                     .padding(.bottom, Spacing.s)
             } else {
+                // Mirrors `InboxSessionView.keyboardBar`: a single `Done` control replaces the
+                // action bar while a field has the keyboard, never both at once.
                 HStack {
                     Spacer(minLength: 0)
                     Button(Copy.done) { focus = nil }
                         .buttonStyle(.glass)
+                        .accessibilityIdentifier("inbox.keyboardDone")
                 }
                 .padding(.horizontal, Spacing.screenMargin)
                 .padding(.bottom, Spacing.s)
@@ -283,7 +294,6 @@ private struct MakeActionCardBody: View {
     let shake: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ScaledMetric(relativeTo: .title3) private var rawTextMaxHeight: CGFloat = 260
 
     private var rotation: Double {
         guard !reduceMotion else { return 0 }
@@ -301,20 +311,20 @@ private struct MakeActionCardBody: View {
                     Spacer(minLength: 0)
                 }
             }
-            ScrollView {
-                TextField(
-                    "", text: $model.draft.text,
-                    prompt: Text(InboxCopy.rawTextPlaceholder).foregroundStyle(Color.textTertiary),
-                    axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(Typo.cardText)
-                    .foregroundStyle(Color.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .focused($focus, equals: .text)
-                    .accessibilityLabel(InboxCopy.rawTextPlaceholder)
-            }
-            .frame(maxHeight: rawTextMaxHeight)
-            .id(CardField.text)
+            // Always an *opened* action card (there is no step 1 here) — it hugs its content
+            // like `InboxCardView`'s 2a/2b, rather than reserving `rawTextMaxHeight` the way a
+            // `ScrollView` would even for one line of text (T15 defect 5).
+            TextField(
+                "", text: $model.draft.text,
+                prompt: Text(InboxCopy.rawTextPlaceholder).foregroundStyle(Color.textTertiary),
+                axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(Typo.cardText)
+                .foregroundStyle(Color.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .focused($focus, equals: .text)
+                .accessibilityLabel(InboxCopy.rawTextPlaceholder)
+                .id(CardField.text)
 
             fieldSection(
                 label: Copy.why, isMissing: model.isMissing(.why), placeholder: Copy.whyPlaceholder,
@@ -412,8 +422,8 @@ private struct MakeActionCardBody: View {
                 DateValueChip(label: Copy.due, value: $model.draft.due, today: model.today)
                 Chip(
                     projectChipTitle,
-                    state: projectChipTitle == Copy.project ? .unset : .confirmed,
-                    symbol: projectChipTitle == Copy.project ? "plus" : nil
+                    state: isProjectChosen ? .confirmed : .unset,
+                    symbol: isProjectChosen ? nil : "plus"
                 ) {
                     model.sheet = .project
                 }
@@ -421,8 +431,10 @@ private struct MakeActionCardBody: View {
         }
     }
 
+    private var chosenProjectTitle: String? { model.projectChipTitle(in: model.snapshot) }
+    private var isProjectChosen: Bool { chosenProjectTitle != nil }
     private var projectChipTitle: String {
-        model.projectChipTitle(in: model.snapshot) ?? Copy.project
+        chosenProjectTitle ?? Copy.unsetValueChipTitle(Copy.project)
     }
 }
 

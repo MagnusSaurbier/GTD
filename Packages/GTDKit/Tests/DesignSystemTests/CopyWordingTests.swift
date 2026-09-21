@@ -20,6 +20,18 @@ struct CopyWordingTests {
         #expect(Copy.unsetChipTitle("") == "")
     }
 
+    /// T15 defect 9 — the inbox card's **value** chips (`DateValueChip`, `+ project`) are lower
+    /// case per STYLEGUIDE §3.1/§3.5 (`+ defer` / `+ due` / `+ project`), unlike
+    /// `unsetChipTitle`'s title-case `Area`/`Project` single-value chips in the Mac editor — the
+    /// two were conflated and every value chip read `+ Defer` / `+ Due` / `+ Project` on screen.
+    @Test func anUnsetValueChipTitleIsLowercasedNeverCarriesAPlusAndMatchesRegardlessOfInputCasing() {
+        #expect(Copy.unsetValueChipTitle("Defer") == "defer")
+        #expect(Copy.unsetValueChipTitle("+ Due") == "due")
+        #expect(Copy.unsetValueChipTitle("+ + Project") == "project")
+        #expect(Copy.unsetValueChipTitle("defer") == Copy.unsetValueChipTitle("Defer"))
+        #expect(Copy.unsetValueChipTitle("") == "")
+    }
+
     /// M9 — "1 steps left".
     @Test func stepsLeftIsPluralised() {
         #expect(Copy.stepsLeft(0) == "0 steps left")

@@ -244,25 +244,46 @@ private struct PhoneSettingsSheet: View {
 }
 
 /// N6 — the shell's undo toast, same component and timing as the Mac window's (STYLEGUIDE §3.8).
+///
+/// `.onChange(of: model.undoLabel)` rather than `.task(id:)` (T15 defect 2): this view mounts and
+/// unmounts as `router.tab`/`isFlowPresented` toggle the `if` that wraps it in `PhoneShell`, and a
+/// freshly mounted `.task(id:)` only reacts to the *next* change of its id — a mount that lands
+/// with `model.undoLabel` already equal to the very label the next command is about to set again
+/// (e.g. two list items finished in a row, both "Done") never restarts it, so the Lists tab (which
+/// has no toast of its own) silently showed nothing. `onChange` fires on every distinct update
+/// regardless of when this view mounted, matching `FeatureNext.NextView`'s own toast.
 private struct UndoOverlay: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown: String?
+    @State private var dismissTask: Task<Void, Never>?
 
     var body: some View {
         Group {
             if let shown {
-                UndoToast(label: shown, onUndo: { Task { await model.undo() } })
-                    .padding(.horizontal, Spacing.screenMargin)
-                    .padding(.bottom, Spacing.l)
-                    .transition(.opacity)
+                UndoToast(label: shown, onUndo: {
+                    dismissTask?.cancel()
+                    self.shown = nil
+                    Task { await model.undo() }
+                })
+                .padding(.horizontal, Spacing.screenMargin)
+                .padding(.bottom, Spacing.l)
+                .transition(.opacity)
             }
         }
         .animation(Motion.standard(reduceMotion: reduceMotion), value: shown)
-        .task(id: model.undoLabel) {
-            shown = model.undoLabel
-            guard shown != nil else { return }
+        .onChange(of: model.undoLabel) { _, newValue in
+            guard let newValue else { return }
+            showToast(newValue)
+        }
+    }
+
+    private func showToast(_ label: String) {
+        dismissTask?.cancel()
+        shown = label
+        dismissTask = Task {
             try? await Task.sleep(for: .seconds(MotionTiming.toastDuration))
+            guard !Task.isCancelled else { return }
             shown = nil
         }
     }

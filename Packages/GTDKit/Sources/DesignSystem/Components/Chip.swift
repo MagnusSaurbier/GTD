@@ -241,7 +241,14 @@ public struct DateValueChip: View {
 
     public var body: some View {
         Chip(title, state: state, symbol: symbol, signal: signal) {
-            isPresented = true
+            // STYLEGUIDE §3.1: suggested → confirmed on tap (the +7 d follow-up etc. is never
+            // silently written); a **second** tap, once it is `.confirmed`, opens the picker to
+            // change it. Only `.unset`/`.confirmed` open the picker directly.
+            if state == .suggested, let suggestion {
+                value = suggestion
+            } else {
+                isPresented = true
+            }
         }
         .popover(isPresented: $isPresented) { picker }
     }
@@ -255,7 +262,8 @@ public struct DateValueChip: View {
         if let value { return DateText.short(value, today: today) }
         if let suggestion { return DateText.short(suggestion, today: today) }
         // The chip already draws the `plus` symbol — a literal "+" here doubled it (P4).
-        return Copy.unsetChipTitle(label)
+        // Lower case, never title case (STYLEGUIDE §3.1: `+ defer` / `+ due`, T15 defect 9).
+        return Copy.unsetValueChipTitle(label)
     }
 
     private var state: ChipState {
@@ -265,18 +273,32 @@ public struct DateValueChip: View {
     }
 
     private var picker: some View {
-        DatePicker(
-            label,
-            selection: Binding(
-                get: { (value ?? suggestion ?? today).startOfDay() ?? Date() },
-                set: { value = Day($0) }),
-            displayedComponents: .date)
-            .datePickerStyle(.graphical)
-            .labelsHidden()
-            .padding(Spacing.l)
+        VStack(spacing: 0) {
             #if os(iOS)
-            .presentationDetents([.medium])
+            // The graphical `DatePicker` has no confirm control of its own and picking a day
+            // does not dismiss it — without this the only way out was swiping down (T15
+            // defect 4b). Swipe-down still works; this just gives it a second, discoverable
+            // way out, same as every other sheet in the app.
+            HStack {
+                Spacer(minLength: 0)
+                Button(Copy.done) { isPresented = false }
+            }
+            .padding(.horizontal, Spacing.l)
+            .padding(.top, Spacing.m)
             #endif
+            DatePicker(
+                label,
+                selection: Binding(
+                    get: { (value ?? suggestion ?? today).startOfDay() ?? Date() },
+                    set: { value = Day($0) }),
+                displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .padding(Spacing.l)
+        }
+        #if os(iOS)
+        .presentationDetents([.medium])
+        #endif
     }
 }
 #endif

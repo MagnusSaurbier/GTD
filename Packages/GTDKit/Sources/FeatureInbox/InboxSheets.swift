@@ -16,7 +16,11 @@ struct KnowledgeSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var folders: [String] = []
-    @State private var selection: String = ""
+    /// `nil` = **nothing chosen yet** (§1 "no lying defaults") — the root `Knowledge` row shares
+    /// path `""` with this sentinel's old value, which used to draw it pre-checked before any tap
+    /// (T15). A last-used folder is offered only as the `.suggested` chip above; picking it is
+    /// what sets this, never the fact that it exists.
+    @State private var selection: String?
     /// I4b — an active project's folder, chosen instead of a `Knowledge/` folder.
     @State private var projectTarget: NoteID?
     @State private var notes: String = ""
@@ -103,7 +107,10 @@ struct KnowledgeSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     // R-4 — nothing to type: the note is named after the capture text.
+                    // I4b/D36 — `Done` stays disabled until a target is chosen; choosing the
+                    // root `Knowledge` folder (`selection == ""`) still counts as a choice.
                     Button(Copy.done) { save() }
+                        .disabled(!KnowledgePickerModel.canSave(selection: selection, projectTarget: projectTarget))
                 }
             }
         }
@@ -125,15 +132,17 @@ struct KnowledgeSheet: View {
 
     private func addFolder() {
         projectTarget = nil
-        folders = KnowledgeTree.adding(newFolder, under: selection, to: folders)
+        let parent = selection ?? ""
+        folders = KnowledgeTree.adding(newFolder, under: parent, to: folders)
         let name = newFolder.trimmingCharacters(in: .whitespacesAndNewlines)
-        selection = selection.isEmpty ? name : selection + "/" + name
+        selection = parent.isEmpty ? name : parent + "/" + name
         newFolder = ""
         isAddingFolder = false
     }
 
     private func save() {
-        let target: KnowledgeTarget = projectTarget.map(KnowledgeTarget.project) ?? .folder(selection)
+        let target: KnowledgeTarget = projectTarget.map(KnowledgeTarget.project)
+            ?? .folder(selection ?? "")
         let body = notes
         dismiss()
         Task { await session.confirmKnowledge(target: target, notes: body) }

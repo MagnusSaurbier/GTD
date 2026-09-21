@@ -40,6 +40,9 @@ public struct StepOneBar: View {
             VStack(spacing: Spacing.xs) {
                 Image(systemName: symbol).symbolRenderingMode(.hierarchical)
                 Text(title)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
             }
             .font(Typo.chip)
             .foregroundStyle(Color.ink)
