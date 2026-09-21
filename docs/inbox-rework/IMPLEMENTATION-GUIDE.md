@@ -365,7 +365,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 
 | Task | Status | Commit | Model used | Rounds | Notes |
 | --- | --- | --- | --- | --- | --- |
-| T00 | | | | | baseline test counts: |
+| T00 | done | 8fa4105 | manager | 1 | gate green; baseline 904 Swift tests (Model 135, Markdown 115, Vault 113, Review 77, Projects 64, Overview 58, Services 54, Inbox 53, Stats 32, DesignSystem 30, Settings 30, Next 27, Notifications 27, AppCore 23, Intents 22, Waiting 21, Routines 17, Fixtures 6) + 40 pytest; both scratch app builds green, one pre-existing warning (`FeatureNext/NextView.swift:446` separatorInset) |
 | T01 | | | | | |
 | T02 | | | | | |
 | T03 | | | | | |
@@ -383,5 +383,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T15 | | | | | |
 
 ### Decisions taken beyond §3
+
+- 2026-09-21 · T00 · `feature/inbox-rework` **is pushed** to `origin` after each finished epoch · the user asked for it in the session that ran this guide, overriding §2.2's "do not push"; still no PR and no merge into `main`.
 
 _(one line each: date · task · decision · why — and the ARCHITECTURE §6 row it became)_
