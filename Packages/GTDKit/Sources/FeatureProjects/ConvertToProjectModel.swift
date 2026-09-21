@@ -44,7 +44,7 @@ public final class ConvertToProjectModel {
 
     /// Converts the action, then — when `promoteStepIndex` names a step in `draft.steps` —
     /// promotes it in the same flow (the brief's "first step pre-selected for promotion").
-    /// Cap handling is simplified from T20: the caller offers a single "Send to Backlog instead".
+    /// Cap handling is simplified from T20: the caller offers a single "Send to Someday instead".
     @discardableResult
     public func convert(_ draft: ProjectDraft, promoteStepIndex: Int?) async throws -> PromotionOutcome {
         try await model.send(.convertActionToProject(actionID, draft))
@@ -56,11 +56,11 @@ public final class ConvertToProjectModel {
     }
 
     /// Cap fallback for the step promoted right after conversion (the project itself is
-    /// already created at this point — only the promotion is retried, to Backlog).
+    /// already created at this point — only the promotion is retried, to Someday).
     @discardableResult
-    public func promoteConvertedStepToBacklog(_ draft: ProjectDraft, stepIndex: Int) async throws -> PromotionOutcome {
+    public func promoteConvertedStepToSomeday(_ draft: ProjectDraft, stepIndex: Int) async throws -> PromotionOutcome {
         let newProject = projectID(for: draft)
-        let promoteDraft = ActionDraft(title: draft.steps[stepIndex], status: .backlog)
+        let promoteDraft = ActionDraft(title: draft.steps[stepIndex], status: .someday)
         return try await sendCapAware(model, .promoteStep(project: newProject, stepIndex: stepIndex, promoteDraft))
     }
 }

@@ -12,8 +12,8 @@ public enum Copy {
 
     public static let inbox = "Inbox"
     public static let next = "Next"
-    public static let backlog = "Backlog"
-    public static let maybe = "Maybe"
+    /// The single "not now" tier (A3); the two older ones were merged into it.
+    public static let someday = "Someday"
     public static let waiting = "Waiting"
     public static let project = "Project"
     /// Title of the projects **list** screen (the singular names one project or the field).
@@ -67,19 +67,19 @@ public enum Copy {
         "\(remaining) of \(total) left"
     }
 
-    /// `Moved to Backlog`
+    /// `Moved to Someday`
     public static func movedTo(_ destination: String) -> String { "Moved to \(destination)" }
 
     public static let capSheetTitle = "Next is full"
-    public static let capSheetBody = "Demote one, or send this to Backlog."
-    public static let sendToBacklogInstead = "Send to Backlog instead"
+    public static let capSheetBody = "Demote one to make room."
+    public static let sendToSomedayInstead = "Send to Someday instead"
     public static let deferToReviewPrompt = "Why doesn't this fit?"
 
     /// `What's next for <project>?` (P5)
     public static func whatsNext(project: String) -> String { "What's next for \(project)?" }
 
     public static let emptyNextTitle = "Nothing in Next"
-    public static let emptyNextBody = "Promote from Backlog, or process your inbox."
+    public static let emptyNextBody = "Promote from Someday, or process your inbox."
     public static let emptyNextFilteredTitle = "No match"
     public static let emptyNextFilteredBody = "Nothing in Next fits these filters."
     public static let emptyWaitingTitle = "Not waiting on anyone"
@@ -128,12 +128,11 @@ public enum Copy {
     public static func status(_ status: ActionStatus) -> String {
         switch status {
         case .next: next
-        case .backlog: backlog
-        case .maybe: maybe
+        case .someday: someday
         case .inProgress: "In progress"
         case .waiting: waiting
         case .done: done
-        case .trash: trash
+        case .legacyTrashed: trash
         }
     }
 

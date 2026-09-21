@@ -92,7 +92,7 @@ public final class ActionEditModel {
     public var title: String { draft?.title ?? "" }
     public var why: String { draft?.why ?? "" }
     public var what: String { draft?.what ?? "" }
-    public var status: ActionStatus { draft?.status ?? .backlog }
+    public var status: ActionStatus { draft?.status ?? .someday }
     public var contexts: [String] { draft?.contexts ?? [] }
     public var timeBucket: TimeBucket? { draft?.timeBucket }
     public var project: NoteID? { draft?.project }
@@ -105,9 +105,13 @@ public final class ActionEditModel {
 
     public var hasUnsavedEdits: Bool { !dirty.isEmpty }
 
-    /// Done or trashed (A5: gone from every list) — the detail stops offering it for editing.
-    /// An undo brings it back through `refresh()`.
-    public var isClosed: Bool { draft?.status.isClosed ?? false }
+    /// The note is gone from every list: completed (A5), trashed into `GTD/Trash/` (I4c, in
+    /// which case it has left the snapshot altogether), or carrying the legacy `trash` status
+    /// (R-1). The detail stops offering it for editing; an undo brings it back through `refresh()`.
+    public var isClosed: Bool {
+        guard let draft else { return model.snapshot.action(id) == nil }
+        return draft.status.isClosed
+    }
 
     // MARK: - Editing
 
@@ -183,10 +187,11 @@ public final class ActionEditModel {
         await close { .complete($0) }
     }
 
-    /// Moves the action to Trash — a status, never a file deletion (CLAUDE.md rule 2).
+    /// I4c — moves the note to `GTD/Trash/`. Trash is not a status and the file is never
+    /// deleted (CLAUDE.md rule 2), so undo brings the note back where it was.
     @discardableResult
     public func trash() async -> Bool {
-        await close { .setStatus($0, .trash, waiting: nil) }
+        await close { .trashAction($0) }
     }
 
     private func close(_ command: (NoteID) -> GTDCommand) async -> Bool {

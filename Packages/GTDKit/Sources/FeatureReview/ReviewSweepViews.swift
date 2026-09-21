@@ -161,8 +161,7 @@ struct SweepDeferredStep: View {
     private static func shortcut(for target: CardTarget) -> KeyEquivalent {
         switch target {
         case .next: .rightArrow
-        case .backlog: .leftArrow
-        case .maybe: .upArrow
+        case .someday: .leftArrow
         case .trash: .downArrow
         case .project: "p"
         case .knowledge: "k"

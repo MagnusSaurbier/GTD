@@ -36,6 +36,33 @@ struct UndoTests {
         #expect(SnapshotShape(await vault.backend.currentSnapshot()) == SnapshotShape(start))
     }
 
+    /// I4c — trashing an action through the whole stack: the note file leaves `Actions/` and
+    /// turns up in `GTD/Trash/`, nothing is hard-deleted, no `status: trash` is written, and
+    /// undo puts the file back byte for byte.
+    @Test func trashingAnActionMovesTheFileToTheTrashAndUndoBringsItBack() async throws {
+        let vault = try TestVault.onDisk()
+        defer { vault.cleanUp() }
+        try await vault.backend.start()
+        let before = try vault.files()
+        let action = try #require(await vault.backend.currentSnapshot().actions.first {
+            $0.title == "Buy a birthday present for Jonas"
+        })
+        let original = try #require(try vault.text(action.id.path))
+
+        _ = try await vault.backend.perform(.trashAction(action.id))
+
+        #expect(try vault.text(action.id.path) == nil)
+        let trashed = try #require(try vault.text("GTD/Trash/Buy a birthday present for Jonas.md"))
+        #expect(trashed == original, "the note is moved, not rewritten")
+        #expect(!trashed.contains("status: trash"))
+        #expect(await vault.backend.currentSnapshot().action(action.id) == nil)
+        #expect(await vault.backend.undoLabel() == "Moved to Trash")
+
+        try await vault.backend.undo()
+        #expect(try vault.files() == before)
+        #expect(await vault.backend.currentSnapshot().action(action.id) != nil)
+    }
+
     @Test func undoRestoresARenameAndTheLinksThatFollowedIt() async throws {
         let vault = try TestVault.onDisk()
         defer { vault.cleanUp() }
@@ -92,7 +119,7 @@ struct UndoTests {
         _ = try await vault.backend.perform(.updateAction(action))
 
         let root = try #require(vault.root)
-        try "---\nstatus: backlog\n---\n# What?\nSomething else entirely.\n"
+        try "---\nstatus: someday\n---\n# What?\nSomething else entirely.\n"
             .write(to: root.appendingPathComponent(oldPath), atomically: true, encoding: .utf8)
 
         await #expect(throws: ServiceError.undoStale(path: oldPath)) {
@@ -107,8 +134,8 @@ struct UndoTests {
         let start = await vault.backend.currentSnapshot()
 
         let action = try #require(start.actions.first { $0.title == "Order the new passport photo" })
-        _ = try await vault.backend.perform(.setStatus(action.id, .backlog, waiting: nil))
-        #expect(await vault.backend.undoLabel() == "Moved to Backlog")
+        _ = try await vault.backend.perform(.setStatus(action.id, .someday, waiting: nil))
+        #expect(await vault.backend.undoLabel() == "Moved to Someday")
 
         var config = start.config
         config.nextCap = 12
@@ -118,7 +145,7 @@ struct UndoTests {
             .logRoutineStep(routine: routine.id, stepID: routine.steps[0].id, .done))
         _ = try await vault.backend.perform(.saveWeeklyReview(WeeklyReview(year: 2026, week: 38)))
 
-        #expect(await vault.backend.undoLabel() == "Moved to Backlog",
+        #expect(await vault.backend.undoLabel() == "Moved to Someday",
                 "none of the three entered the journal (N6)")
     }
 
@@ -132,7 +159,7 @@ struct UndoTests {
         let action = try #require(await vault.backend.currentSnapshot().actions.first {
             $0.title == "Return the library books"
         })
-        _ = try await vault.backend.perform(.setStatus(action.id, .maybe, waiting: nil))
+        _ = try await vault.backend.perform(.setStatus(action.id, .someday, waiting: nil))
 
         // A new process: new store, new backend, same device-local directory.
         let root = try #require(vault.root)
@@ -147,7 +174,7 @@ struct UndoTests {
             stateDirectory: vault.stateDirectory,
             env: { Fixtures.reducerEnv(deviceID: "test-device") })
 
-        #expect(await relaunched.undoLabel() == "Moved to Maybe")
+        #expect(await relaunched.undoLabel() == "Moved to Someday")
         try await relaunched.undo()
         #expect(try vault.files() == before)
     }
@@ -163,11 +190,11 @@ struct UndoTests {
         let first = try #require(start.actions.first { $0.title == "Buy a birthday present for Jonas" })
         let second = try #require(start.actions.first { $0.title == "Book the dentist appointment" })
 
-        _ = try await vault.backend.perform(.setStatus(first.id, .backlog, waiting: nil))
-        _ = try await vault.backend.perform(.setStatus(second.id, .maybe, waiting: nil))
+        _ = try await vault.backend.perform(.setStatus(first.id, .someday, waiting: nil))
+        _ = try await vault.backend.perform(.setStatus(second.id, .someday, waiting: nil))
 
         try await vault.backend.undo()
-        #expect(await vault.backend.undoLabel() == "Moved to Backlog")
+        #expect(await vault.backend.undoLabel() == "Moved to Someday")
         try await vault.backend.undo()
 
         #expect(try vault.files() == before)

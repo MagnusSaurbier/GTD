@@ -307,8 +307,8 @@ private struct NextListContent: View {
                 .tint(Color.signalDone)
         }
         .swipeActions(edge: .leading) {
-            Button("\(Copy.demote) to \(Copy.backlog)") {
-                run { try await list.demoteToBacklog(action) }
+            Button("\(Copy.demote) to \(Copy.someday)") {
+                run { try await list.demoteToSomeday(action) }
             }
             .tint(Color.fillQuiet)
         }
@@ -320,8 +320,8 @@ private struct NextListContent: View {
             if action.status != .inProgress {
                 Button(Copy.start) { run { try await list.start(action) } }
             }
-            Button("\(Copy.demote) to \(Copy.backlog)") {
-                run { try await list.demoteToBacklog(action) }
+            Button("\(Copy.demote) to \(Copy.someday)") {
+                run { try await list.demoteToSomeday(action) }
             }
             Button(Copy.waiting) { waitingSheetAction = action }
             Button(Copy.deferLabel) { deferSheetAction = action }

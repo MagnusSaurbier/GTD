@@ -103,16 +103,38 @@ public final class NextListModel {
     // MARK: - Cap (STYLEGUIDE §2.2)
 
     /// How many actions occupy a Next slot right now — independent of the view's own filters.
-    public var capCount: Int { Rules.countsTowardCap(model.snapshot) }
+    public var capCount: Int { Rules.countsTowardCap(model.snapshot, today: today) }
 
     /// `nil` below the cap (render `capCount` as a plain number); `15/15` at the cap; overdue
     /// styling above it. Never a meter/progress component.
     public var capBadge: BadgeContent? {
-        Rules.capSignal(model.snapshot).map { SignalPresentation.badge(for: $0, today: today) }
+        Rules.capSignal(model.snapshot, today: today).map { SignalPresentation.badge(for: $0, today: today) }
     }
 
     /// The cap the count is measured against (`config.nextCap`).
     public var capLimit: Int { model.snapshot.config.nextCap }
+
+    /// A3 — Next holds more than the cap allows. Only reachable without the user's consent
+    /// through R-2: a deferred Next item comes back on its date into an already full list.
+    public var isOverCap: Bool { capCount > capLimit }
+
+    /// R-2 — nothing is demoted automatically when a deferred item returns into a full Next.
+    /// The over-cap signal (`16/15`) shows, and the view presents the `Next is full` sheet
+    /// **once per foreground** until the user has demoted something.
+    ///
+    /// The flag is the whole decision; presenting the sheet is the view's job (T11). It starts
+    /// armed, because opening the app *is* the first foreground of a session.
+    private var capSheetArmed = true
+
+    /// True while the view still owes the user the `Next is full` sheet this foreground.
+    public var showsCapSheet: Bool { capSheetArmed && isOverCap }
+
+    /// The app came to the foreground: the sheet is due again if Next is still over the cap.
+    public func enteredForeground() { capSheetArmed = true }
+
+    /// The view has shown the sheet. It stays down until the next foreground, whatever the user
+    /// chose — demoting clears `isOverCap` too, so a repaired list never re-arms it.
+    public func capSheetShown() { capSheetArmed = false }
 
     /// The Next section's header label — `Next · 14/15`. Never a bare number: a count without
     /// its label and its limit says nothing (walkthrough P13). At/above the cap the view shows
@@ -190,23 +212,20 @@ public final class NextListModel {
         try await model.send(.setStatus(action.id, .inProgress, waiting: nil))
     }
 
-    /// Context menu / leading swipe: send back to Backlog.
-    public func demoteToBacklog(_ action: Action) async throws {
-        try await model.send(.setStatus(action.id, .backlog, waiting: nil))
+    /// Context menu / leading swipe: send back to Someday.
+    public func demoteToSomeday(_ action: Action) async throws {
+        try await model.send(.setStatus(action.id, .someday, waiting: nil))
     }
 
     public func setWaiting(_ action: Action, _ info: WaitingInfo) async throws {
         try await model.send(.setStatus(action.id, .waiting, waiting: info))
     }
 
-    /// The reducer refuses a future `deferDate` on a `next`/`in-progress` action outright (D1 ×
-    /// A3: a deferred action cannot sit in Next) and never demotes it for you. Deferring a row
-    /// out of this list therefore explicitly demotes to Backlog first, as its own command, then
-    /// sets the date — two real, visible state changes, never a silent one.
+    /// R-2 — a Next item may carry a future `defer`. Deferring a row therefore changes exactly
+    /// one thing: the date. The row disappears from Next until then and stops occupying a slot
+    /// (`Rules.countsTowardCap(_:today:)`); on its date it comes back with the `back` badge.
+    /// Nothing is demoted behind the user's back, here or in the reducer.
     public func setDefer(_ action: Action, to day: Day?) async throws {
-        if day != nil, action.status.countsTowardCap {
-            try await model.send(.setStatus(action.id, .backlog, waiting: nil))
-        }
         guard var updated = model.snapshot.action(action.id) else { return }
         updated.deferDate = day
         try await model.send(.updateAction(updated))

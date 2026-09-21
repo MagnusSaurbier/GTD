@@ -148,7 +148,7 @@ struct FidelityTests {
             time: DayTime(hour: 0, minute: 5),
             steps: [
                 RoutineStep(id: RoutineStep.slug("Frühstück"), title: "Frühstück",
-                            substeps: ["Brainsmoothie", "Maybe Brötchen"]),
+                            substeps: ["Brainsmoothie", "Brötchen"]),
                 RoutineStep(id: RoutineStep.slug("Get things done"), title: "Get things done"),
             ])
         let back = try NoteCodec.decodeRoutine(id: routine.id, text: NoteCodec.encode(routine))

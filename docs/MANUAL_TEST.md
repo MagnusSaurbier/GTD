@@ -27,7 +27,7 @@ open GTD.xcodeproj            # run the GTD scheme on My Mac and on an iPhone si
 
 Run with the `-useFixtures` launch argument (Product → Scheme → Edit Scheme → Arguments).
 
-- [ ] **Mac:** window opens at ≥ 900×560; sidebar lists Inbox · Next · Backlog · Waiting · Maybe ·
+- [ ] **Mac:** window opens at ≥ 900×560; sidebar lists Inbox · Next · Someday · Waiting ·
       Projects · Deferred, then Review and Routines, with live counts.
 - [ ] Inbox shows ~6 raw captures and a `Process inbox` button; process two cards with the
       buttons/keys — the counter goes `n of m left` and the queue shrinks.

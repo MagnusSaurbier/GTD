@@ -26,7 +26,7 @@ Linux-compilable models (no SwiftUI — this is where the logic worth testing li
   `moveUp`/`moveDown`, `move(fromOffsets:toOffset:)` — reimplemented by hand since
   `Array.move(fromOffsets:toOffset:)` is a SwiftUI extension, not available on Linux).
 - `PromotionOutcome` (`.success` / `.capReached(cap:)`) — every promotion path returns this
-  instead of throwing on `GTDError.nextCapReached`, so a view can offer "Send to Backlog instead"
+  instead of throwing on `GTDError.nextCapReached`, so a view can offer "Send to Someday instead"
   (a simplified version of the inbox's "Next is full" sheet) without re-deriving the cap by hand.
 
 ## Platform guards (ARCHITECTURE §5)
@@ -50,4 +50,4 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 
 `cd Packages/GTDKit && swift test --filter FeatureProjectsTests` — 64 tests, all Linux-only
 (the picker chip's content, reorder maths, grouping/filtering, step CRUD, status-change demotion, and the cap-reached →
-Backlog-fallback path on every promotion entry point).
+Someday-fallback path on every promotion entry point).

@@ -30,8 +30,8 @@ struct CardDragGeometryTests {
         #expect(geometry.releaseDirection(for: CGSize(width: -200, height: 0)) == .left)
     }
 
-    @Test func maybeNeedsOnlyTwentyFivePercentOfHeightButTrashNeedsForty() {
-        // 25% of 600 = 150pt files to Maybe.
+    @Test func upNeedsOnlyTwentyFivePercentOfHeightButTrashNeedsForty() {
+        // 25% of 600 = 150pt is enough for an upward release.
         #expect(geometry.releaseDirection(for: CGSize(width: 0, height: -150)) == .up)
         #expect(geometry.releaseDirection(for: CGSize(width: 0, height: -100)) == nil)
         // Trash needs 40% of 600 = 240pt; 25% (150pt) is not enough.

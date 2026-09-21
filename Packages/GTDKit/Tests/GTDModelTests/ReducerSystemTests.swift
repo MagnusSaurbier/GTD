@@ -142,7 +142,7 @@ struct ReducerSystemTests {
         var config = vault.config
         config.nextCap = 5
         let result = try Reducer.reduce(vault, .updateConfig(config), env: env)
-        #expect(Rules.capSignal(result.snapshot)?.step == .overdue)
+        #expect(Rules.capSignal(result.snapshot, today: env.today)?.step == .overdue)
         vault = result.snapshot
         #expect(TestVault.error(vault, .createAction(ActionDraft(title: "Noch eins", status: .next)), env: env)
                 == .nextCapReached(cap: 5))
@@ -179,16 +179,18 @@ struct ReducerSystemTests {
             TestVault.action("Alt erledigt", .done, completed: -31),
             TestVault.action("Genau dreißig", .done, completed: -30),      // not yet
             TestVault.action("Neu erledigt", .done, completed: -1),
-            TestVault.action("Alt verworfen", .trash, completed: -40),
+            TestVault.action("Alt verworfen", .legacyTrashed, completed: -40),
             TestVault.action("Offen", .next, modified: -100),
         ])
         let result = try Reducer.reduce(vault, .archiveCompleted, env: env)
 
         #expect(result.snapshot.actions.map(\.title).sorted()
                 == ["Genau dreißig", "Neu erledigt", "Offen"])
+        // R-1 — a note still carrying the legacy `status: trash` is not archive material:
+        // it goes to `GTD/Trash/`, where everything the user threw away lives (I4c).
         #expect(result.extraOps == [
             .move(from: "Actions/Alt erledigt.md", to: "Archive/2026/08/Alt erledigt.md"),
-            .move(from: "Actions/Alt verworfen.md", to: "Archive/2026/08/Alt verworfen.md"),
+            .move(from: "Actions/Alt verworfen.md", to: "GTD/Trash/Alt verworfen.md"),
         ])
     }
 
@@ -248,7 +250,7 @@ struct ReducerSystemTests {
         let vault = Fixtures.sampleSnapshot
         let env = Fixtures.reducerEnv()
         let inbox = try #require(Rules.inboxQueue(vault).first)
-        let backlog = try #require(vault.actions.first { $0.status == .backlog && $0.deferDate == nil })
+        let someday = try #require(vault.actions.first { $0.status == .someday && $0.deferDate == nil })
         let routine = try #require(vault.routines.first)
         let step = try #require(routine.steps.first)
         let project = Fixtures.daadProject
@@ -256,15 +258,16 @@ struct ReducerSystemTests {
         let commands: [GTDCommand] = [
             .editInboxText(inbox.id, "edited"),
             .fileInbox(inbox.id, .trash),
-            .fileInbox(inbox.id, .action(ActionDraft(title: "Frisch", status: .backlog))),
+            .fileInbox(inbox.id, .action(ActionDraft(title: "Frisch", status: .someday))),
             .fileInbox(inbox.id, .knowledge(folder: "Studium", title: "Notiz")),
             .deferInboxToReview(inbox.id, reason: "needs thinking"),
-            .createAction(ActionDraft(title: "Brand new action", status: .backlog)),
-            .updateAction(backlog),
-            .setStatus(backlog.id, .maybe, waiting: nil),
-            .setStatus(backlog.id, .waiting, waiting: WaitingInfo(who: "Lena", followUp: Fixtures.day(7))),
-            .complete(backlog.id),
-            .convertActionToProject(backlog.id, ProjectDraft(title: "Ein Projekt")),
+            .createAction(ActionDraft(title: "Brand new action", status: .someday)),
+            .updateAction(someday),
+            .setStatus(someday.id, .next, waiting: nil),
+            .trashAction(someday.id),
+            .setStatus(someday.id, .waiting, waiting: WaitingInfo(who: "Lena", followUp: Fixtures.day(7))),
+            .complete(someday.id),
+            .convertActionToProject(someday.id, ProjectDraft(title: "Ein Projekt")),
             .createArea(title: "Gesundheit"),
             .createProject(ProjectDraft(title: "Zahnarzt", newAreaTitle: "Gesundheit")),
             .updateProject(project),

@@ -6,7 +6,7 @@ import DesignSystem
 import GTDFixtures
 
 /// Waiting-for list (W2): what · who · waiting since N days · follow-up, sorted by staleness.
-/// Row actions: chase done → bump the follow-up, resolved → back to Next/Backlog or done, edit
+/// Row actions: chase done → bump the follow-up, resolved → back to Next/Someday or done, edit
 /// who. **Owned by T23.**
 ///
 /// On the Mac the list is a stock selectable `List` (M2, same as `ActionListView`): a click or
@@ -123,9 +123,9 @@ private struct WaitingRow: View {
         }
         .swipeActions(edge: .leading) {
             Button {
-                Task { await model.perform(.setStatus(action.id, .backlog, waiting: nil)) }
+                Task { await model.perform(.setStatus(action.id, .someday, waiting: nil)) }
             } label: {
-                Label(Copy.backlog, systemImage: Symbols.backlog)
+                Label(Copy.someday, systemImage: Symbols.someday)
             }
         }
         .contextMenu {
@@ -140,9 +140,9 @@ private struct WaitingRow: View {
                 Label(Copy.next, systemImage: Symbols.next)
             }
             Button {
-                Task { await model.perform(.setStatus(action.id, .backlog, waiting: nil)) }
+                Task { await model.perform(.setStatus(action.id, .someday, waiting: nil)) }
             } label: {
-                Label(Copy.backlog, systemImage: Symbols.backlog)
+                Label(Copy.someday, systemImage: Symbols.someday)
             }
             Button {
                 Task { await model.perform(.complete(action.id)) }

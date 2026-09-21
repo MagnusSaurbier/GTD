@@ -137,7 +137,7 @@ struct ReviewWizardView: View {
         case .sweepDeferred: SweepDeferredStep(session: session)
         case .sweepWaiting: SweepWaitingStep(session: session)
         case .sweepStalled: SweepStalledStep(session: session)
-        case .deckNext, .deckBacklogMaybe, .deckProjects: ReviewDeckStep(session: session)
+        case .deckNext, .deckSomeday, .deckProjects: ReviewDeckStep(session: session)
         case .systemsCheck: SystemsCheckStep(session: session)
         case .reflection: ReflectionStep(session: session)
         case .summary: ReviewSummaryStep(session: session, onFinished: onFinished)

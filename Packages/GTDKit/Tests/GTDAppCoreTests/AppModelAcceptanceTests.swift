@@ -23,7 +23,7 @@ struct AppModelAcceptanceTests {
 
     @Test func sampleVaultSitsOneBelowTheCap() {
         let snapshot = Fixtures.sampleSnapshot
-        #expect(Rules.countsTowardCap(snapshot) == snapshot.config.nextCap - 1)
+        #expect(Rules.countsTowardCap(snapshot, today: Fixtures.today) == snapshot.config.nextCap - 1)
     }
 
     @Test func fileInboxToNextThenHitTheCapThenCompleteThenUndo() async throws {
@@ -36,7 +36,7 @@ struct AppModelAcceptanceTests {
         try await model.send(.fileInbox(queue[0].id, .action(
             ActionDraft(title: "Call the Hausverwaltung", status: .next,
                         contexts: ["calls"], what: "Call about the window handle"))))
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
         #expect(model.snapshot.inboxItem(queue[0].id) == nil)
         #expect(model.undoLabel == "Filed to Next")
 
@@ -46,7 +46,7 @@ struct AppModelAcceptanceTests {
                 ActionDraft(title: "Rename scanned pdfs", status: .next,
                             what: "Write the rename script"))))
         }
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
         #expect(model.snapshot.inboxItem(queue[1].id) != nil)
 
         // 3. Completing a project action emits the "What's next?" prompt (P5).
@@ -70,7 +70,7 @@ struct AppModelAcceptanceTests {
 
     @Test func waitingRequiresWhoAndFollowUp() async throws {
         let (model, _) = makeModel()
-        let action = try #require(model.snapshot.actions.first { $0.status == .backlog })
+        let action = try #require(model.snapshot.actions.first { $0.status == .someday })
         await #expect(throws: GTDError.waitingInfoRequired) {
             try await model.send(.setStatus(action.id, .waiting, waiting: nil))
         }

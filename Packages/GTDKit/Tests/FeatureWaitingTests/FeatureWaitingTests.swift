@@ -146,12 +146,12 @@ struct FeatureWaitingTests {
     @Test func deferredGroupsIntoThisWeekAndLater() {
         let today = Day(year: 2026, month: 9, day: 19)
         let list = makeList(actions: [
-            makeAction("Tomorrow", status: .backlog, deferDate: today.adding(days: 1)),
-            makeAction("In a week", status: .backlog, deferDate: today.adding(days: 7)),
-            makeAction("Just over a week", status: .backlog, deferDate: today.adding(days: 8)),
-            makeAction("A month out", status: .backlog, deferDate: today.adding(days: 30)),
-            makeAction("Already returned", status: .backlog, deferDate: today.adding(days: -1)),
-            makeAction("Not deferred", status: .backlog),
+            makeAction("Tomorrow", status: .someday, deferDate: today.adding(days: 1)),
+            makeAction("In a week", status: .someday, deferDate: today.adding(days: 7)),
+            makeAction("Just over a week", status: .someday, deferDate: today.adding(days: 8)),
+            makeAction("A month out", status: .someday, deferDate: today.adding(days: 30)),
+            makeAction("Already returned", status: .someday, deferDate: today.adding(days: -1)),
+            makeAction("Not deferred", status: .someday),
         ], today: today)
 
         #expect(list.deferredThisWeek.map(\.title) == ["Tomorrow", "In a week"])
@@ -161,14 +161,14 @@ struct FeatureWaitingTests {
     @Test func unDeferredClearsTheDeferDate() {
         let today = Day(year: 2026, month: 9, day: 19)
         let list = makeList(actions: [], today: today)
-        let action = makeAction("A", status: .backlog, deferDate: today.adding(days: 10))
+        let action = makeAction("A", status: .someday, deferDate: today.adding(days: 10))
         #expect(list.unDeferred(action).deferDate == nil)
     }
 
     @Test func redeferredSetsTheNewDeferDate() {
         let today = Day(year: 2026, month: 9, day: 19)
         let list = makeList(actions: [], today: today)
-        let action = makeAction("A", status: .backlog, deferDate: today.adding(days: 10))
+        let action = makeAction("A", status: .someday, deferDate: today.adding(days: 10))
         #expect(list.redeferred(action, to: today.adding(days: 20)).deferDate == today.adding(days: 20))
         #expect(list.redeferred(action, to: nil).deferDate == nil)
     }
@@ -225,7 +225,7 @@ struct FeatureWaitingTests {
             makeAction("Overdue due date", status: .next, due: today.adding(days: -1)),
             makeAction("Due today (not in the pile)", status: .next, due: today),
             makeAction("Overdue follow-up", status: .waiting, who: "X", followUp: today.adding(days: -2)),
-            makeAction("Stale defer date", status: .backlog, deferDate: today.adding(days: -3)),
+            makeAction("Stale defer date", status: .someday, deferDate: today.adding(days: -3)),
             makeAction("Future due date", status: .next, due: today.adding(days: 5)),
         ], today: today)
 

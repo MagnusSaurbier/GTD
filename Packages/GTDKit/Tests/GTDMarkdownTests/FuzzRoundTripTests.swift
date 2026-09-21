@@ -192,7 +192,7 @@ struct FuzzRoundTripTests {
 
         static let all: [Mutation] = [
             Mutation(name: "status",
-                     apply: { $0.status = $0.status == .next ? .backlog : .next },
+                     apply: { $0.status = $0.status == .next ? .someday : .next },
                      reads: { $0.status.rawValue }),
             Mutation(name: "contexts",
                      apply: { $0.contexts = $0.contexts == ["home"] ? [] : ["home"] },
@@ -278,7 +278,7 @@ struct Fuzz {
 
     /// One frontmatter entry, already split into its own lines (a block list is several).
     private mutating func knownActionEntries() -> [[String]] {
-        var entries: [[String]] = [["status: \(pick(["next", "backlog", "maybe", "in-progress", "waiting", "done"]))"]]
+        var entries: [[String]] = [["status: \(pick(["next", "someday", "backlog", "maybe", "trash", "in-progress", "waiting", "done"]))"]]
         if bool(70) {
             entries.append(bool() ? ["contexts: [mac, campus]"] : ["contexts:", "  - mac", "  - campus"])
         }

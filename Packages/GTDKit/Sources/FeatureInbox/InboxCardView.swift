@@ -298,7 +298,6 @@ struct InboxCardView: View {
         switch direction {
         case .right: return .trailing
         case .left: return .leading
-        case .up: return .top
         case .down: return .bottom
         }
     }

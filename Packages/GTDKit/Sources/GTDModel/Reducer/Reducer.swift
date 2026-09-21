@@ -21,9 +21,10 @@ import Foundation
 /// | I5 defer to review needs a reason | `deferInboxToReview` |
 /// | A1 one file per action, unique title | `makeAction`, `updateAction` |
 /// | A4 contexts are a closed list | `normalizeContexts` |
-/// | A5 done/trash set a closing date, archive after 30 d | `normalize`, `archiveCompleted` |
+/// | A5 done sets a closing date, archive after 30 d | `normalize`, `archiveCompleted` |
+/// | I4c trash is a move, never a status | `trashAction`, `fileInbox` |
 /// | W1 waiting needs who + follow-up, leaving clears both | `normalize` |
-/// | D1 defer hides — so it cannot sit in Next | `normalize` |
+/// | R-2 a Next item may be deferred; it just does not occupy a slot while hidden | `Rules` |
 /// | P3 only active projects put actions into Next; leaving `active` demotes | `normalize`, `updateProject` |
 /// | P4/P5 completion logs, ticks the step and asks "what's next?" | `settle` |
 /// | R5 one routine-log entry per step per day per device | `logRoutineStep` |
@@ -52,6 +53,9 @@ public enum Reducer {
 
         case let .setStatus(id, status, waiting):
             return try setStatus(s, id: id, status: status, waiting: waiting, env: env)
+
+        case let .trashAction(id):
+            return try trashAction(s, id: id)
 
         case let .complete(id):
             return try complete(s, id: id, env: env)
@@ -177,7 +181,7 @@ public enum Reducer {
         }
 
         next.inbox.removeAll { $0.id == id }
-        try checkCap(old: s, new: next)
+        try checkCap(old: s, new: next, today: env.today)
         return Reduction(snapshot: next, prompts: prompts, extraOps: extraOps)
     }
 
@@ -189,7 +193,7 @@ public enum Reducer {
         var next = s
         let action = try makeAction(from: draft, in: s, env: env)
         next.actions.append(action)
-        try checkCap(old: s, new: next)
+        try checkCap(old: s, new: next, today: env.today)
         return Reduction(snapshot: next)
     }
 
@@ -225,7 +229,7 @@ public enum Reducer {
             next.actions[index] = updated
         }
 
-        try checkCap(old: s, new: next)
+        try checkCap(old: s, new: next, today: env.today)
         let prompts = settle(&next, at: index, previousStatus: previous.status, env: env)
         return Reduction(
             snapshot: next, prompts: prompts, extraOps: extraOps, renames: renames)
@@ -245,9 +249,21 @@ public enum Reducer {
 
         var next = s
         next.actions[index] = updated
-        try checkCap(old: s, new: next)
+        try checkCap(old: s, new: next, today: env.today)
         let prompts = settle(&next, at: index, previousStatus: previous.status, env: env)
         return Reduction(snapshot: next, prompts: prompts)
+    }
+
+    /// I4c — trash is a move, not a status. The note leaves the snapshot without an `extraOp`,
+    /// which is exactly the "removed entity nobody spoke for" rule of ARCHITECTURE §4: the diff
+    /// emits `.delete`, and `GTDVault` performs a `.delete` as a move into `GTD/Trash/`. So the
+    /// file survives, undo restores it, and no `status: trash` is ever written.
+    private static func trashAction(_ s: VaultSnapshot, id: NoteID) throws(GTDError) -> Reduction {
+        guard s.action(id) != nil else { throw .notFound(id) }
+        var next = s
+        next.actions.removeAll { $0.id == id }
+        retarget(from: id, to: nil, in: &next)
+        return Reduction(snapshot: next)
     }
 
     /// A5/P4/P5 — completing an action. Idempotent: completing a done action changes nothing,
@@ -348,7 +364,7 @@ public enum Reducer {
     }
 
     /// P3 — a project that is not `active` cannot hold actions in Next; changing its status
-    /// demotes them to Backlog. Renaming or re-filing a project is not supported in v1: the
+    /// demotes them to Someday. Renaming or re-filing a project is not supported in v1: the
     /// folder name is the identity, so the title must keep matching the note's path.
     private static func updateProject(
         _ s: VaultSnapshot, project: Project, env: ReducerEnv
@@ -370,7 +386,7 @@ public enum Reducer {
             for actionIndex in next.actions.indices
             where next.actions[actionIndex].project == project.id
                 && next.actions[actionIndex].status.countsTowardCap {
-                next.actions[actionIndex].status = .backlog
+                next.actions[actionIndex].status = .someday
                 next.actions[actionIndex].modified = env.now
             }
         }
@@ -400,7 +416,7 @@ public enum Reducer {
         let action = try makeAction(from: linked, in: next, env: env)
         next.actions.append(action)
         next.projects[projectIndex].steps[stepIndex].promotedTo = action.id
-        try checkCap(old: s, new: next)
+        try checkCap(old: s, new: next, today: env.today)
         return Reduction(snapshot: next)
     }
 
@@ -523,8 +539,11 @@ public enum Reducer {
 
     // MARK: - Archive
 
-    /// A5 — done and trashed notes older than 30 days move to `Archive/YYYY/MM/` and leave the
-    /// snapshot. Nothing is deleted, and nothing still open is ever touched.
+    /// A5 — done notes older than 30 days move to `Archive/YYYY/MM/` and leave the snapshot.
+    /// Nothing is deleted, and nothing still open is ever touched.
+    ///
+    /// R-1 — a note still carrying the legacy `status: trash` is **not** archive material: it
+    /// goes to `GTD/Trash/`, where the rework puts everything the user threw away (I4c).
     ///
     /// A promoted project step keeps pointing at the note it promoted, so the archive move
     /// **retargets** `ProjectStep.promotedTo` the same way a rename does (T41). Without that the
@@ -537,9 +556,11 @@ public enum Reducer {
         var ops: [VaultFileOp] = []
         for action in candidates {
             let day = Rules.closedDay(action, calendar: env.calendar) ?? env.today
-            let target = s.config.layout.archivePath(for: action.id, completedOn: day)
+            let target = action.status == .legacyTrashed
+                ? s.config.layout.trashPath(for: action.id)
+                : s.config.layout.archivePath(for: action.id, completedOn: day)
             ops.append(.move(from: action.id.path, to: target.path))
-            retarget(from: action.id, to: target, in: &next)
+            retarget(from: action.id, to: action.status == .legacyTrashed ? nil : target, in: &next)
         }
         let archived = Set(candidates.map(\.id))
         next.actions.removeAll { archived.contains($0.id) }
@@ -580,9 +601,9 @@ public enum Reducer {
     ///
     /// - W1 `waiting` needs who **and** follow-up; leaving `waiting` clears both.
     /// - P3 only an active project may hold an action in Next.
-    /// - D1 × A3 a future defer date and a Next slot contradict each other.
     /// - A4 contexts come from the configured closed list (values already in the file survive).
     /// - A5 a closed action carries a closing date; re-opening one clears it.
+    /// - R-1 nothing may move *into* the legacy `trash` state.
     /// - §1 `timeEstimate: 0` is never written.
     private static func normalize(
         _ action: inout Action,
@@ -593,6 +614,12 @@ public enum Reducer {
     ) throws(GTDError) {
         action.title = try requireTitle(action.title)
         action.contexts = try normalizeContexts(action.contexts, previous: previous?.contexts, in: s)
+
+        // R-1/I4c — trash is not a status. A note that already carries the legacy `status: trash`
+        // keeps it (the vault stays repairable); nothing may *move into* it.
+        if !action.status.isUserSettable, previous?.status != action.status {
+            throw .invalid(Message.trashIsNotAStatus)
+        }
 
         if let estimate = action.timeEstimate, estimate <= 0 { action.timeEstimate = nil }
 
@@ -615,14 +642,10 @@ public enum Reducer {
             }
         }
 
-        if action.status.countsTowardCap, let deferDate = action.deferDate, deferDate > env.today {
-            // Only refuse the *new* contradiction — a hand-edited vault stays repairable.
-            var wasAlreadyDeferredIntoNext = false
-            if let previous, previous.status.countsTowardCap, let old = previous.deferDate {
-                wasAlreadyDeferredIntoNext = old > env.today
-            }
-            guard wasAlreadyDeferredIntoNext else { throw .invalid(Message.deferredCannotBeNext) }
-        }
+        // R-2 — a Next item may carry a future `defer`. It is hidden until its date and does not
+        // occupy a slot while hidden (`Rules.countsTowardCap(_:today:)`); on its date it comes
+        // back into Next with the `back` badge, and an over-cap Next is shown, never repaired
+        // behind the user's back. The 2026-09-19 refusal is gone.
 
         if action.status.isClosed {
             if action.completedDate == nil { action.completedDate = env.now }
@@ -661,11 +684,11 @@ public enum Reducer {
 
     /// I4/A3 — the cap only blocks commands that *increase* Next occupancy, so a vault edited
     /// by hand into 17/15 can still be repaired from the app. Never automatic: the UI must
-    /// offer "demote something" or "send to Backlog".
-    private static func checkCap(old: VaultSnapshot, new: VaultSnapshot) throws(GTDError) {
+    /// offer "demote something" or cancel (D14).
+    private static func checkCap(old: VaultSnapshot, new: VaultSnapshot, today: Day) throws(GTDError) {
         let cap = new.config.nextCap
-        let after = Rules.countsTowardCap(new)
-        guard after > cap, after > Rules.countsTowardCap(old) else { return }
+        let after = Rules.countsTowardCap(new, today: today)
+        guard after > cap, after > Rules.countsTowardCap(old, today: today) else { return }
         throw .nextCapReached(cap: cap)
     }
 
@@ -702,7 +725,7 @@ public enum Reducer {
         static let titleRequired = "A title is required"
         static let reviewReasonRequired = "Defer to review needs a reason"
         static let projectNotActive = "Only active projects put actions into Next"
-        static let deferredCannotBeNext = "A deferred action cannot sit in Next"
+        static let trashIsNotAStatus = "Trash is not a status — trashing moves the note to GTD/Trash/"
         static let projectNeedsAction = "Filing to a project needs at least one action"
         static let projectRenameUnsupported = "Renaming a project is not supported"
         static let projectMoveUnsupported = "Moving a project to another area is not supported"

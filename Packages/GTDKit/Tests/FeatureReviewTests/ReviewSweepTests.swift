@@ -31,9 +31,9 @@ struct ReviewSweepTests {
         draft.contexts = ["mac"]
         draft.timeBucket = .upTo30
 
-        guard case let .action(action)? = DeferredSweep.decision(target: .backlog, draft: draft)
+        guard case let .action(action)? = DeferredSweep.decision(target: .someday, draft: draft)
         else { Issue.record("expected an action decision"); return }
-        #expect(action.status == .backlog)
+        #expect(action.status == .someday)
         #expect(action.title == "Mail three chairs")
         #expect(action.contexts == ["mac"])
         #expect(action.timeEstimate == 30)
@@ -61,11 +61,11 @@ struct ReviewSweepTests {
             == .knowledge(folder: "Studium", title: "Do it"))
     }
 
-    @Test func nextAndBacklogStillNeedAWhat() {
+    @Test func nextAndSomedayStillNeedAWhat() {
         let empty = InboxSession.Draft(text: "Raw capture")
         #expect(!DeferredSweep.isComplete(empty, for: .next))
-        #expect(!DeferredSweep.isComplete(empty, for: .backlog))
-        #expect(DeferredSweep.isComplete(empty, for: .maybe))
+        #expect(!DeferredSweep.isComplete(empty, for: .someday))
+        #expect(DeferredSweep.isComplete(empty, for: .knowledge))
         #expect(DeferredSweep.isComplete(empty, for: .trash))
 
         let filled = InboxSession.Draft(text: "Raw capture", what: "Write it down")
@@ -79,7 +79,7 @@ struct ReviewSweepTests {
 
         var draft = InboxSession.Draft(item: item)
         draft.what = "Block 60 minutes to decide"
-        let decision = try #require(DeferredSweep.decision(target: .backlog, draft: draft))
+        let decision = try #require(DeferredSweep.decision(target: .someday, draft: draft))
 
         await session.fileDeferred(item, decision: decision, systemFix: "Give decisions their own queue")
 
@@ -105,7 +105,7 @@ struct ReviewSweepTests {
         let session = ReviewTest.session()
         let item = try #require(session.currentDeferredItem)
         // No `What?`, no title — the reducer refuses a title-less action.
-        let decision = InboxDecision.action(ActionDraft(title: "   ", status: .backlog))
+        let decision = InboxDecision.action(ActionDraft(title: "   ", status: .someday))
         await session.fileDeferred(item, decision: decision, systemFix: "a fix")
         #expect(session.lastError != nil)
         #expect(session.deferredItems.contains { $0.id == item.id })
@@ -156,16 +156,16 @@ struct ReviewSweepTests {
         #expect(session.state.changes.waitingHandled == 0)
     }
 
-    /// Resolve goes to Backlog, not Next: the end of a wait is not by itself a commitment, and
-    /// Backlog can never fail on the cap. The deck step right afterwards promotes it if it earns
+    /// Resolve goes to Someday, not Next: the end of a wait is not by itself a commitment, and
+    /// Someday can never fail on the cap. The deck step right afterwards promotes it if it earns
     /// a slot.
-    @Test func resolveMovesTheItemToBacklog() async throws {
+    @Test func resolveMovesTheItemToSomeday() async throws {
         let session = ReviewTest.session()
         let action = try #require(session.waitingItems.first)
         await session.apply(.resolve, to: action)
 
         let updated = try #require(session.snapshot.action(action.id))
-        #expect(updated.status == .backlog)
+        #expect(updated.status == .someday)
         #expect(updated.waitingFor == nil)
         #expect(updated.followUpDate == nil)
         #expect(session.state.changes.waitingHandled == 1)

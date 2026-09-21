@@ -107,6 +107,18 @@ struct RoundTripTests {
         ("legacy timeEstimate zero stays untouched",
          "---\nstatus: next\ntimeEstimate: 0\n---\n# Why?\nx\n"),
 
+        // R-1 — the pre-2026-09-21 tier words and the pre-rework trash state. They decode
+        // (`backlog`/`maybe` ⇒ `.someday`, `trash` ⇒ the hidden legacy state) and the file keeps
+        // its own word: the encoder patches only lines whose *decoded* value changed.
+        ("legacy status backlog stays untouched",
+         "---\nstatus: backlog\ncontexts: [mac]\ntimeEstimate: 30\n---\n# Why?\nx\n\n# What?\n- [ ] y\n"),
+
+        ("legacy status maybe stays untouched",
+         "---\nstatus: maybe\ncreated: 2026-08-01T10:00:00+02:00\n---\n# Why?\nx\n"),
+
+        ("legacy status trash stays untouched",
+         "---\nstatus: trash\ncompletedDate: 2026-08-20T17:45:00+02:00\n---\n# What?\nx\n"),
+
         ("quoted key",
          "---\n\"status\": next\ncontexts: [mac]\n---\n# Why?\nx\n"),
 

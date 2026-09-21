@@ -5,8 +5,8 @@ import Foundation
 public enum Symbols {
     public static let inbox = "tray"
     public static let next = "arrow.right.circle"
-    public static let backlog = "tray.full"
-    public static let maybe = "moon.zzz"
+    /// Someday — the single "not now" tier (STYLEGUIDE §7).
+    public static let someday = "moon.zzz"
     public static let waiting = "hourglass"
     public static let chase = "bell.badge"
     public static let projects = "square.stack"

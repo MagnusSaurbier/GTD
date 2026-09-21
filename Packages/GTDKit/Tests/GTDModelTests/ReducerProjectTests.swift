@@ -79,9 +79,9 @@ struct ReducerProjectTests {
                 title: "CV updaten", status: actionStatus, project: project.id)), env: env)
             #expect(error == .invalid("Only active projects put actions into Next"))
         }
-        // …but backlog, maybe and waiting are fine.
+        // …but the Someday tier and waiting are fine.
         #expect(TestVault.error(vault, .createAction(ActionDraft(
-            title: "CV updaten", status: .backlog, project: project.id)), env: env) == nil)
+            title: "CV updaten", status: .someday, project: project.id)), env: env) == nil)
     }
 
     @Test(arguments: [ProjectStatus.onHold, .someday, .done])
@@ -91,7 +91,8 @@ struct ReducerProjectTests {
             actions: [
                 TestVault.action("Letter", .inProgress, project: project.id),
                 TestVault.action("Form", .next, project: project.id),
-                TestVault.action("Bib", .maybe, project: project.id),
+                TestVault.action("Bib", .waiting, project: project.id,
+                                 waiting: WaitingInfo(who: "Bib", followUp: TestVault.day(3))),
                 TestVault.action("Fremd", .next),
             ],
             projects: [project])
@@ -100,11 +101,11 @@ struct ReducerProjectTests {
         changed.status = status
         let result = try Reducer.reduce(vault, .updateProject(changed), env: env)
 
-        #expect(result.snapshot.action(TestVault.actionID("Letter"))?.status == .backlog)
-        #expect(result.snapshot.action(TestVault.actionID("Form"))?.status == .backlog)
-        #expect(result.snapshot.action(TestVault.actionID("Bib"))?.status == .maybe)      // untouched
+        #expect(result.snapshot.action(TestVault.actionID("Letter"))?.status == .someday)
+        #expect(result.snapshot.action(TestVault.actionID("Form"))?.status == .someday)
+        #expect(result.snapshot.action(TestVault.actionID("Bib"))?.status == .waiting)    // untouched
         #expect(result.snapshot.action(TestVault.actionID("Fremd"))?.status == .next)     // other project
-        #expect(Rules.countsTowardCap(result.snapshot) == 1)
+        #expect(Rules.countsTowardCap(result.snapshot, today: env.today) == 1)
     }
 
     /// A vault edited by hand can hold a Next action under an on-hold project; the next
@@ -116,17 +117,17 @@ struct ReducerProjectTests {
         var edited = project
         edited.outcome = "Working-student job"
         let result = try Reducer.reduce(vault, .updateProject(edited), env: env)
-        #expect(result.snapshot.actions[0].status == .backlog)
+        #expect(result.snapshot.actions[0].status == .someday)
     }
 
     @Test func reactivatingAProjectDoesNotPromoteAnything() throws {
         let project = TestVault.project("DAAD", status: .onHold)
         let vault = TestVault.snapshot(
-            actions: [TestVault.action("Letter", .backlog, project: project.id)], projects: [project])
+            actions: [TestVault.action("Letter", .someday, project: project.id)], projects: [project])
         var active = project
         active.status = .active
         let result = try Reducer.reduce(vault, .updateProject(active), env: env)
-        #expect(result.snapshot.actions[0].status == .backlog)   // never automatic (I4)
+        #expect(result.snapshot.actions[0].status == .someday)   // never automatic (I4)
     }
 
     @Test func renamingOrMovingAProjectIsRefused() {
@@ -192,7 +193,7 @@ struct ReducerProjectTests {
         ])
         let vault = TestVault.snapshot(
             actions: [TestVault.action("Write", .next, project: project.id)], projects: [project])
-        let draft = ActionDraft(title: "Noch mal", status: .backlog)
+        let draft = ActionDraft(title: "Noch mal", status: .someday)
 
         #expect(TestVault.error(vault, .promoteStep(project: project.id, stepIndex: 0, draft), env: env)
                 == .invalid("This step is already done"))

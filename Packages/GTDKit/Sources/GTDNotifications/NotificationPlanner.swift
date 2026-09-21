@@ -100,7 +100,7 @@ public enum NotificationPlanner {
 
         var candidates: [PlannedNotification] = []
         for action in snapshot.actions {
-            guard action.status != .done, action.status != .trash else { continue }
+            guard !action.status.isClosed else { continue }   // A5: done and legacy trash (R-1)
 
             if settings.enabledKinds.contains(.deferReturn), let deferDate = action.deferDate,
                let notification = itemNotification(

@@ -134,7 +134,7 @@ public struct PlainFileSystem: VaultFileSystem {
         let manager = FileManager.default
         var isDirectory: ObjCBool = false
         guard manager.fileExists(atPath: target.path, isDirectory: &isDirectory) else {
-            // Maybe it is evicted and only the placeholder is on disk.
+            // It may be evicted, with only the placeholder on disk.
             let placeholder = try url(VaultPath.join(
                 VaultPath.folder(of: path), ".\(VaultPath.name(of: path)).icloud"))
             guard manager.fileExists(atPath: placeholder.path) else { return nil }

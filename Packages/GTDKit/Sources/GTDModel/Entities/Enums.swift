@@ -1,20 +1,49 @@
 import Foundation
 
 /// Commitment tier and lifecycle of an action (A3). Raw values are what the frontmatter holds.
+///
+/// **Someday is the single "not now" tier** — the former `backlog` and `maybe` merged (A3, D1).
+/// Legacy vaults still hold the old words; `init(tolerantRawValue:)` reads them (R-1).
+///
+/// `legacyTrashed` is **not a tier**: trashing a note moves it to `GTD/Trash/` (I4c, D41).
+/// It exists only to read a `status: trash` line a pre-rework vault (or the user's own editing)
+/// left in `Actions/`, so such a note is hidden rather than refused. It is deliberately **not**
+/// in `allCases`, so no status picker ever offers it, and the reducer refuses a command that
+/// would set it.
 public enum ActionStatus: String, Sendable, CaseIterable, Codable, Hashable {
     case next
-    case backlog
-    case maybe
+    case someday
     case inProgress = "in-progress"
     case waiting
     case done
-    case trash
+    case legacyTrashed = "trash"
+
+    /// The statuses a user can choose (A3). `legacyTrashed` is read-only and stays out (R-1).
+    public static var allCases: [ActionStatus] { [.next, .someday, .inProgress, .waiting, .done] }
 
     /// `next` and `in-progress` occupy a slot under the hard cap (ARCHITECTURE §6).
+    /// A *hidden* (future-deferred) one does not — see `Rules.countsTowardCap(_:today:)` (R-2).
     public var countsTowardCap: Bool { self == .next || self == .inProgress }
 
-    /// Done and trashed actions vanish from every list immediately (A5).
-    public var isClosed: Bool { self == .done || self == .trash }
+    /// Done and legacy-trashed actions vanish from every list immediately (A5, R-1).
+    public var isClosed: Bool { self == .done || self == .legacyTrashed }
+
+    /// True for the states the user cannot pick (R-1).
+    public var isUserSettable: Bool { self != .legacyTrashed }
+
+    /// Tolerant read of a `status:` line (R-1). `backlog` and `maybe` are the pre-2026-09-21
+    /// spellings of `someday`; nothing rewrites the file until the status really changes,
+    /// because the encoder only patches lines whose *decoded* value differs.
+    public init?(tolerantRawValue raw: String) {
+        switch raw {
+        case "backlog", "maybe": self = .someday
+        default: self.init(rawValue: raw)
+        }
+    }
+
+    /// The spellings a `status:` line may carry, for the codec's error message (R-1).
+    public static let acceptedRawValues: [String] =
+        ActionStatus.allCases.map(\.rawValue) + ["backlog", "maybe", ActionStatus.legacyTrashed.rawValue]
 }
 
 /// Project lifecycle (P3). Only `active` projects may put actions into Next.

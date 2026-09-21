@@ -9,6 +9,6 @@ time: "07:00"
 - [ ] Cold shower
 - [ ] Frühstück
     - [ ] Brainsmoothie
-    - [ ] Maybe Brötchen
+    - [ ] Brötchen
 - [ ] Sonnencreme
 - [ ] Get things done

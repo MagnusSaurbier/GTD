@@ -8,18 +8,17 @@ import DesignSystem
 public enum SidebarItem: Hashable, Sendable, CaseIterable {
     case inbox
     case next
-    case backlog
+    case someday
     case waiting
-    case maybe
     case projects
     case deferred
     case review
     case routines
 
     /// The counted sections, in the order of STYLEGUIDE §4.1 — they form the first sidebar group
-    /// and own `⌘1…⌘7`.
+    /// and own `⌘1…⌘6` (Lists joins them in T10).
     public static let counted: [SidebarItem] = [
-        .inbox, .next, .backlog, .waiting, .maybe, .projects, .deferred,
+        .inbox, .next, .someday, .waiting, .projects, .deferred,
     ]
 
     /// The second sidebar group: the two guided flows.
@@ -29,9 +28,8 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: Copy.inbox
         case .next: Copy.next
-        case .backlog: Copy.backlog
+        case .someday: Copy.someday
         case .waiting: Copy.waiting
-        case .maybe: Copy.maybe
         case .projects: OverviewCopy.projects
         case .deferred: OverviewCopy.deferred
         case .review: Copy.weeklyReview
@@ -43,9 +41,8 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: Symbols.inbox
         case .next: Symbols.next
-        case .backlog: Symbols.backlog
+        case .someday: Symbols.someday
         case .waiting: Symbols.waiting
-        case .maybe: Symbols.maybe
         case .projects: Symbols.projects
         case .deferred: Symbols.deferred
         case .review: Symbols.weeklyReview
@@ -68,8 +65,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     /// The action status this section lists, if it is a plain status list.
     public var listedStatus: ActionStatus? {
         switch self {
-        case .backlog: .backlog
-        case .maybe: .maybe
+        case .someday: .someday
         default: nil
         }
     }
@@ -97,7 +93,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     /// forced order, I1).
     public var emptyDetailBody: String? {
         switch self {
-        case .next, .backlog, .waiting, .maybe, .deferred: OverviewMacCopy.pickAnAction
+        case .next, .someday, .waiting, .deferred: OverviewMacCopy.pickAnAction
         case .projects: OverviewMacCopy.pickAProject
         case .inbox: OverviewMacCopy.inboxIsProcessed
         case .review, .routines: nil
@@ -108,9 +104,8 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: counts.inbox
         case .next: counts.next
-        case .backlog: counts.backlog
+        case .someday: counts.someday
         case .waiting: counts.waiting
-        case .maybe: counts.maybe
         case .projects: counts.projects
         case .deferred: counts.deferred
         default: nil

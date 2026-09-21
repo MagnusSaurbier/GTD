@@ -12,7 +12,7 @@ struct ReducerSmokeTests {
 
     @Test func everyCommandIsHandled() throws {
         let inbox = try #require(Rules.inboxQueue(snapshot).first)
-        let backlog = try #require(snapshot.actions.first { $0.status == .backlog })
+        let someday = try #require(snapshot.actions.first { $0.status == .someday })
         let routine = try #require(snapshot.routines.first)
         let step = try #require(routine.steps.first)
 
@@ -20,8 +20,9 @@ struct ReducerSmokeTests {
             .editInboxText(inbox.id, "edited"),
             .fileInbox(inbox.id, .trash),
             .deferInboxToReview(inbox.id, reason: "needs thinking"),
-            .createAction(ActionDraft(title: "Brand new action", status: .backlog)),
-            .setStatus(backlog.id, .maybe, waiting: nil),
+            .createAction(ActionDraft(title: "Brand new action", status: .someday)),
+            .setStatus(someday.id, .next, waiting: nil),
+            .trashAction(someday.id),
             .createArea(title: "Gesundheit"),
             .createProject(ProjectDraft(title: "Zahnarzt", newAreaTitle: "Gesundheit")),
             .logRoutineStep(routine: routine.id, stepID: step.id, .done),
@@ -36,7 +37,7 @@ struct ReducerSmokeTests {
     }
 
     @Test func reducerIsDeterministic() throws {
-        let command = GTDCommand.createAction(ActionDraft(title: "Deterministic", status: .backlog))
+        let command = GTDCommand.createAction(ActionDraft(title: "Deterministic", status: .someday))
         let a = try Reducer.reduce(snapshot, command, env: env)
         let b = try Reducer.reduce(snapshot, command, env: env)
         #expect(a.snapshot == b.snapshot)

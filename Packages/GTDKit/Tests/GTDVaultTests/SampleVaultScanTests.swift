@@ -77,11 +77,11 @@ struct SampleVaultScanTests {
         // Obsidian on another device rewrites a note.
         let id = try #require(before.actions.first { $0.status == .next }?.id)
         let text = try #require(try await store.read(path: id.path))
-        try text.replacingOccurrences(of: "status: next", with: "status: backlog")
+        try text.replacingOccurrences(of: "status: next", with: "status: someday")
             .write(to: root.appendingPathComponent(id.path), atomically: true, encoding: .utf8)
 
         let after = try await store.scan()
-        #expect(after.action(id)?.status == .backlog)
+        #expect(after.action(id)?.status == .someday)
     }
 
     @Test func commitAndItsInverseRestoreTheVaultByteForByte() async throws {

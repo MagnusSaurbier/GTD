@@ -142,10 +142,10 @@ struct PatchTests {
         let text = "---\r\nstatus: next\r\ncontexts: [mac]\r\n---\r\n# Why?\r\nx\r\n"
         let id = NoteID(path: "Actions/A.md")
         var action = try NoteCodec.decodeAction(id: id, text: text, timeZone: vaultTimeZone)
-        action.status = .backlog
+        action.status = .someday
         action.why = "y"
         let encoded = NoteCodec.encode(action, timeZone: vaultTimeZone)
-        #expect(encoded == "---\r\nstatus: backlog\r\ncontexts: [mac]\r\n---\r\n# Why?\r\ny\r\n")
+        #expect(encoded == "---\r\nstatus: someday\r\ncontexts: [mac]\r\n---\r\n# Why?\r\ny\r\n")
     }
 
     @Test func aMissingSectionIsInsertedInOrder() throws {
@@ -188,6 +188,41 @@ struct PatchTests {
         project.log.append(LogEntry(day: Day(year: 2026, month: 9, day: 19), text: "Wrote the letter"))
         let encoded = NoteCodec.encode(project)
         #expect(encoded == text + "- 2026-09-19 Wrote the letter\n")
+    }
+
+    // MARK: - R-1: the legacy status words
+
+    /// The heart of R-1: a file that says `status: backlog` decodes as `.someday`, so writing it
+    /// back changes **nothing** — the user's note is not rewritten behind their back. Only a real
+    /// status change touches the line, and then exactly that line.
+    @Test func aLegacyBacklogFileKeepsItsWordUntilTheStatusReallyChanges() throws {
+        let id = NoteID(path: "Actions/Alt.md")
+        let text = "---\nstatus: backlog\ncontexts: [mac]\n---\n# Why?\nx\n\n# What?\ny\n"
+        var action = try NoteCodec.decodeAction(id: id, text: text)
+        #expect(action.status == .someday)
+        #expect(NoteCodec.encode(action) == text)          // byte for byte: nothing changed
+
+        // Editing another field still leaves the status line alone.
+        action.contexts = ["home"]
+        #expect(NoteCodec.encode(action)
+            == text.replacingOccurrences(of: "contexts: [mac]", with: "contexts: [home]"))
+
+        // Only a real tier change rewrites it — and it rewrites one line.
+        var promoted = try NoteCodec.decodeAction(id: id, text: text)
+        promoted.status = .next
+        #expect(NoteCodec.encode(promoted)
+            == text.replacingOccurrences(of: "status: backlog", with: "status: next"))
+    }
+
+    /// The same for the legacy `trash` state: repairing it writes the new word, once.
+    @Test func aLegacyTrashFileIsRewrittenOnlyWhenItIsRepaired() throws {
+        let id = NoteID(path: "Actions/Verworfen.md")
+        let text = "---\nstatus: trash\n---\n# What?\nx\n"
+        var action = try NoteCodec.decodeAction(id: id, text: text)
+        #expect(NoteCodec.encode(action) == text)
+        action.status = .someday
+        #expect(NoteCodec.encode(action)
+            == text.replacingOccurrences(of: "status: trash", with: "status: someday"))
     }
 
     // MARK: - Routines

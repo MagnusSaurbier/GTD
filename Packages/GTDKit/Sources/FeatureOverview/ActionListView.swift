@@ -25,7 +25,7 @@ extension View {
     }
 }
 
-/// Backlog / Maybe — the two lists no feature target owns (E3).
+/// Someday — the tier list no feature target owns (E3).
 ///
 /// Grouped by area / project; context and time are **filters** (chips), never groupings.
 ///
@@ -137,7 +137,7 @@ public struct ActionListView: View {
     /// The statuses this list can move an item to — `waiting` needs who + follow-up (W1) and is
     /// therefore only reachable from the detail editor.
     private var moveTargets: [ActionStatus] {
-        [.next, .backlog, .maybe].filter { $0 != status }
+        [.next, .someday].filter { $0 != status }
     }
 
     @ViewBuilder private func filterChips(_ list: ActionListModel) -> some View {
@@ -175,7 +175,7 @@ public struct ActionListView: View {
         } else {
             ContentUnavailableView(
                 OverviewCopy.emptyListTitle(Copy.status(status)),
-                systemImage: status == .maybe ? Symbols.maybe : Symbols.backlog,
+                systemImage: Symbols.someday,
                 description: Text(OverviewCopy.emptyListBody))
         }
     }
@@ -185,16 +185,16 @@ public struct ActionListView: View {
     }
 }
 
-#Preview("Backlog") {
-    ActionListView(status: .backlog, onOpen: { _ in })
+#Preview("Someday") {
+    ActionListView(status: .someday, onOpen: { _ in })
         .environment(AppModel(
             backend: InMemoryBackend(snapshot: Fixtures.sampleSnapshot),
             snapshot: Fixtures.sampleSnapshot,
             today: { Fixtures.today }))
 }
 
-#Preview("Maybe · dark") {
-    ActionListView(status: .maybe, onOpen: { _ in })
+#Preview("Someday · dark") {
+    ActionListView(status: .someday, onOpen: { _ in })
         .environment(AppModel(
             backend: InMemoryBackend(snapshot: Fixtures.sampleSnapshot),
             snapshot: Fixtures.sampleSnapshot,

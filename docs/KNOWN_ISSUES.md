@@ -44,7 +44,15 @@ same fact.
   is one file per day, and a fresh run reads only today's. Every entry still carries its own real
   day, so no log is ever wrong (`FeatureRoutines/README.md`).
 - **The Next list is never truncated to the cap.** An over-cap vault must stay repairable;
-  `capSignal` shows `17/15`.
+  `capSignal` shows `17/15`. Since R-2 this is also reachable without hand-editing: a deferred
+  Next item comes back on its date into an already full list. Nothing is demoted automatically —
+  `NextListModel.showsCapSheet` asks for the `Next is full` sheet once per foreground until the
+  user demotes something (the sheet itself is wired in T11).
+- **Legacy tier words stay in the file until the status changes.** A note that still says
+  `status: backlog` or `status: maybe` reads as Someday and is *not* rewritten (R-1,
+  ARCHITECTURE §6) — deliberate, so nothing in the vault is touched behind the user's back. The
+  same holds for a pre-rework `status: trash` note: it stays hidden, and `archiveCompleted`
+  moves it to `GTD/Trash/` once it is 30 days old.
 - **`InMemoryBackend` undoes one step**, `VaultBackend` twenty. Previews and tests use the first.
 - **Quick capture is disabled under `-useFixtures`** — there is no file system to write to.
 - **`AppComposition.shutdown()` is never called**, deliberately; see its doc comment.

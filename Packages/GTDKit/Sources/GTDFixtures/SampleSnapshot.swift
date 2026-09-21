@@ -153,7 +153,7 @@ public enum Fixtures {
 
         // next (12)
         action("Read candidate thesis papers", .next,
-               contexts: ["reading", "deep-work"], estimate: 90, project: thesisProject.id,
+               contexts: ["deep-work"], estimate: 90, project: thesisProject.id,
                created: -9, modified: -2,
                why: "Cannot pick a topic without knowing what is already written.",
                what: "Read the three PDFs in Knowledge/Thesis and take one page of notes each."),
@@ -205,39 +205,38 @@ public enum Fixtures {
                why: "Two of them are due on Monday.",
                what: "Drop them at the TUM Stammgelände library desk."),
 
-        // backlog (5) — one of them deferred into the future
-        action("Set up the new bank account", .backlog,
+        // someday (8) — two of them deferred into the future
+        action("Set up the new bank account", .someday,
                contexts: ["mac"], estimate: 60, created: -25, modified: -25,
                why: "The old account charges 5 € a month.",
                what: "Open the DKB account online."),
-        action("Write the tenant profile", .backlog,
+        action("Write the tenant profile", .someday,
                contexts: ["mac"], estimate: 30, project: flatProject.id,
                deferDate: day(9), created: -13, modified: -13,
                why: "Landlords ask for it before a viewing.",
                what: "One page: who I am, what I earn, references."),
-        action("Plan the semester timetable", .backlog,
+        action("Plan the semester timetable", .someday,
                contexts: ["mac"], estimate: 60, deferDate: day(20), created: -18, modified: -18,
                why: "Registration opens in October.",
                what: "Check overlaps between the two seminars."),
-        action("Deep-clean the kitchen", .backlog,
+        action("Deep-clean the kitchen", .someday,
                contexts: ["home"], estimate: 90, created: -34, modified: -34,
                why: "The sublet hand-over will be checked.",
                what: "Oven, fridge, the cupboard behind the door."),
-        action("Digitise the old notes", .backlog,
+        action("Digitise the old notes", .someday,
                contexts: ["home", "deep-work"], created: -60, modified: -45,
                why: "Two boxes of paper I will never carry to the next flat.",
                what: "Scan and shred, folder by folder."),
 
-        // maybe (3)
-        action("Learn Portuguese", .maybe,
-               contexts: ["reading"], created: -90, modified: -70,
+        action("Learn Portuguese", .someday,
+               contexts: ["home"], created: -90, modified: -70,
                why: "Would make the Lisbon option far more attractive.",
                what: "Try the first ten Duolingo lessons and see if it sticks."),
-        action("Start a bouldering course", .maybe,
+        action("Start a bouldering course", .someday,
                contexts: ["errands"], created: -50, modified: -50,
                why: "Sport that is not running.",
                what: "Look at the course plan of the Boulderwelt."),
-        action("Build a small weather station", .maybe,
+        action("Build a small weather station", .someday,
                contexts: ["home", "deep-work"], created: -120, modified: -100,
                why: "A reason to finally use the ESP32 in the drawer.",
                what: "Sensor, case, a tiny dashboard."),
@@ -270,8 +269,10 @@ public enum Fixtures {
                why: "Cover expires at the end of the month.",
                what: "Renewed online."),
 
-        // trash (1)
-        action("Look into that podcast app", .trash,
+        // legacy `status: trash` (1) — a note a pre-rework vault left behind. Trash is not a
+        // status any more (I4c); R-1 decodes this one into the hidden legacy state, keeps it out
+        // of every list, and `archiveCompleted` moves it to `GTD/Trash/` instead of `Archive/`.
+        action("Look into that podcast app", .legacyTrashed,
                created: -33, modified: -30, completed: -30,
                why: "",
                what: "Not a real commitment."),
@@ -301,7 +302,7 @@ public enum Fixtures {
             ("Drink TPS/Water", ["Creatine if morning sport"]),
             ("5 min workout", []),
             ("Cold shower", []),
-            ("Frühstück", ["Brainsmoothie", "Maybe Brötchen"]),
+            ("Frühstück", ["Brainsmoothie", "Brötchen"]),
             ("Sonnencreme", []),
             ("Get things done", []),
         ])

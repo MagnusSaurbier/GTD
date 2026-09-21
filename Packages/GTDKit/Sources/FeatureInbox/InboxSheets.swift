@@ -393,7 +393,7 @@ struct DeferToReviewSheet: View {
 
 // MARK: - Next is full (A3, I4)
 
-/// The forced choice: demote one of the current Next items, or send this card to Backlog.
+/// The forced choice: demote one of the current Next items, or send this card to Someday.
 /// Never an automatic re-route (ARCHITECTURE §6).
 struct CapSheet: View {
     @Bindable var session: InboxSession
@@ -418,7 +418,7 @@ struct CapSheet: View {
                     }
                 }
                 Section {
-                    Button(Copy.sendToBacklogInstead) { sendToBacklog() }
+                    Button(Copy.sendToSomedayInstead) { sendToSomeday() }
                         .buttonStyle(.borderedProminent)
                 }
             }
@@ -436,9 +436,9 @@ struct CapSheet: View {
         Task { await session.demoteAndRetry(id) }
     }
 
-    private func sendToBacklog() {
+    private func sendToSomeday() {
         dismiss()
-        Task { await session.sendToBacklogInstead() }
+        Task { await session.sendToSomedayInstead() }
     }
 
     private func cancel() {

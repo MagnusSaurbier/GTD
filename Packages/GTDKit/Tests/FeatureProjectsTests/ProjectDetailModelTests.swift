@@ -120,7 +120,7 @@ struct ProjectDetailModelTests {
 
     @Test func promoteStepCreatesAnActionAndMarksTheStepPromoted() async throws {
         let model = makeModel()
-        #expect(Rules.countsTowardCap(model.snapshot) == model.snapshot.config.nextCap - 1)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == model.snapshot.config.nextCap - 1)
         let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
         // Steps 0 and 1 are already done/promoted in the fixture — 2 is the first open one.
 
@@ -128,7 +128,7 @@ struct ProjectDetailModelTests {
             at: 2, draft: ActionDraft(title: "Ask Prof. Weber for a reference", status: .next))
 
         #expect(outcome == .success)
-        #expect(Rules.countsTowardCap(model.snapshot) == model.snapshot.config.nextCap)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == model.snapshot.config.nextCap)
         #expect(detail.steps[2].promotedTo != nil)
         let created = try #require(model.snapshot.action(detail.steps[2].promotedTo!))
         #expect(created.status == .next)
@@ -136,11 +136,11 @@ struct ProjectDetailModelTests {
     }
 
     /// The brief's required case: promoting into a full Next hits the cap, and the caller can
-    /// fall back to Backlog — the simplified T22 version of T20's "Next is full" sheet.
-    @Test func promotingIntoAFullNextReachesTheCapThenSucceedsToBacklog() async throws {
+    /// fall back to Someday — the simplified T22 version of T20's "Next is full" sheet.
+    @Test func promotingIntoAFullNextReachesTheCapThenSucceedsToSomeday() async throws {
         let model = makeModel()
         let cap = model.snapshot.config.nextCap
-        #expect(Rules.countsTowardCap(model.snapshot) == cap - 1)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap - 1)
         let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
 
         // First promotion fills the last Next slot (14 → 15). Steps 0 and 1 are already
@@ -148,23 +148,23 @@ struct ProjectDetailModelTests {
         let first = try await detail.promoteStep(
             at: 2, draft: ActionDraft(title: "Ask Prof. Weber for a reference", status: .next))
         #expect(first == .success)
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
 
         // A second `.next` promotion is refused — never silently rerouted (I4, A3).
         let refused = try await detail.promoteStep(
             at: 3, draft: ActionDraft(title: "Submit the online form", status: .next))
         #expect(refused == .capReached(cap: cap))
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)          // vault untouched
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)          // vault untouched
         #expect(detail.steps[3].promotedTo == nil)                     // step still open
 
-        // The offered fallback succeeds: send the same step to Backlog instead.
-        let fallback = try await detail.promoteStepToBacklog(
+        // The offered fallback succeeds: send the same step to Someday instead.
+        let fallback = try await detail.promoteStepToSomeday(
             at: 3, draft: ActionDraft(title: "Submit the online form", status: .next))
         #expect(fallback == .success)
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)          // Backlog doesn't count
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)          // Someday doesn't count
         #expect(detail.steps[3].promotedTo != nil)
         let created = try #require(model.snapshot.action(detail.steps[3].promotedTo!))
-        #expect(created.status == .backlog)
+        #expect(created.status == .someday)
     }
 
     // MARK: - Reference files and log (P6)

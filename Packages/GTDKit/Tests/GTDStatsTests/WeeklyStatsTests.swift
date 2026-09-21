@@ -100,7 +100,7 @@ struct WeeklyStatsTests {
             Self.action("4 days old", created: Self.date(2026, 9, 16)),    // age 4
             Self.action("20 days old", created: Self.date(2026, 8, 31)),   // age 20
             Self.action("No created date"),                                 // excluded
-            Self.action("Backlog, not Next", status: .backlog, created: Self.date(2026, 9, 1)),
+            Self.action("Someday, not Next", status: .someday, created: Self.date(2026, 9, 1)),
         ]
         let stats = WeeklyStats.compute(snapshot: snapshot, week: week, calendar: Self.calendar)
         #expect(stats.medianNextAgeDays == 10)   // median of [4, 10, 20]

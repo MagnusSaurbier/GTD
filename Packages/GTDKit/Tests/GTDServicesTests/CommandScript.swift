@@ -29,11 +29,11 @@ enum CommandScript {
                 why: "The window handle has been broken for two weeks.",
                 what: "Describe the damage and ask for a repair date.")))
         },
-        Step(name: "file a card to Maybe") { s in
+        Step(name: "file a card to Someday") { s in
             guard let item = capture("idea: a script", in: s) else { return nil }
             return .fileInbox(item.id, .action(ActionDraft(
                 title: "Script that renames scanned PDFs",
-                status: .maybe,
+                status: .someday,
                 contexts: ["deep-work"],
                 what: "Read the date from the scan and rename the file.")))
         },
@@ -52,7 +52,7 @@ enum CommandScript {
                     steps: ["Collect the receipts", "Fill in the forms"]),
                 firstActions: [ActionDraft(
                     title: "Check whether the semester ticket is deductible",
-                    status: .backlog,
+                    status: .someday,
                     contexts: ["mac"],
                     what: "Ask in the student forum.")]))
         },
@@ -75,7 +75,7 @@ enum CommandScript {
         Step(name: "create an action") { _ in
             .createAction(ActionDraft(
                 title: "Buy a desk lamp",
-                status: .backlog,
+                status: .someday,
                 contexts: ["errands"],
                 timeEstimate: 30,
                 why: "The ceiling light is useless in the evening.",
@@ -96,11 +96,16 @@ enum CommandScript {
             else { return nil }
             return .promoteStep(project: project.id, stepIndex: index, ActionDraft(
                 title: "Draft the thesis exposé",
-                status: .backlog,
+                status: .someday,
                 contexts: ["deep-work"],
                 timeEstimate: 90,
                 project: project.id,
                 what: "One page: question, method, timeline."))
+        },
+        Step(name: "trash an action (I4c: a move into GTD/Trash/, not a status)") { s in
+            guard let action = s.actions.first(where: { $0.title == "Digitise the old notes" })
+            else { return nil }
+            return .trashAction(action.id)
         },
         Step(name: "create an area") { _ in .createArea(title: "Gesundheit") },
         Step(name: "create a project in it") { s in

@@ -127,7 +127,7 @@ struct InboxSessionView: View {
     /// The card sits in a `ScrollView`, so the software keyboard can shrink the viewport without
     /// squeezing the card: the fields keep their height, the focused one is scrolled into view,
     /// and dragging the content down takes the keyboard with it. With no field focused and a
-    /// card that fits, scrolling is off, so the vertical swipes (Maybe, Trash) stay the card's.
+    /// card that fits, scrolling is off, so the downward swipe (Trash) stays the card's.
     /// A card taller than the screen scrolls instead; `⋯` in the action bar still files it.
     private var phoneContent: some View {
         GeometryReader { viewport in
@@ -221,9 +221,8 @@ struct InboxSessionView: View {
         .padding(.horizontal, Spacing.screenMargin)
         .focusable()
         .focusEffectDisabled()
-        .onKeyPress(.leftArrow) { press(.backlog) }
+        .onKeyPress(.leftArrow) { press(.someday) }
         .onKeyPress(.rightArrow) { press(.next) }
-        .onKeyPress(.upArrow) { press(.maybe) }
         .onKeyPress(.downArrow) { press(.trash) }
         .onKeyPress(.escape) { quit() }
         .onKeyPress(characters: Self.keyCharacters, phases: .down) {
@@ -313,13 +312,12 @@ struct InboxSessionView: View {
         switch direction {
         case .right: return CGSize(width: width, height: 0)
         case .left: return CGSize(width: -width, height: 0)
-        case .up: return CGSize(width: 0, height: -height)
         case .down: return CGSize(width: 0, height: height)
         }
     }
 
     /// Floating glass capsule above the home indicator: the four targets that have no swipe as
-    /// labelled buttons, and `⋯` with the four swipe targets for whoever cannot or will not
+    /// labelled buttons, and `⋯` with the swipe targets for whoever cannot or will not
     /// swipe (one-handed use, Switch Control, a card taller than the screen).
     private var actionBar: some View {
         GlassActionBar {

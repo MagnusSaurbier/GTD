@@ -21,18 +21,18 @@ struct ReviewDeckTests {
         #expect(cards.allSatisfy { $0.choices == [.keep, .demote] })
     }
 
-    @Test func backlogIsDealtBeforeMaybeAndEachOldestFirst() {
-        let cards = ReviewDeck.cards(for: .backlogMaybe, in: snapshot, today: Fixtures.today)
+    /// A3 merged the two old "not now" tiers, so the phase deals one tier — every Someday
+    /// action, oldest capture first (replaces the old two-tier ordering test).
+    @Test func theSomedayPhaseDealsTheWholeTierOldestFirst() {
+        let cards = ReviewDeck.cards(for: .someday, in: snapshot, today: Fixtures.today)
         let statuses = cards.compactMap { $0.action?.status }
         #expect(!statuses.isEmpty)
-        // No `maybe` may appear before a `backlog`.
-        let firstMaybe = statuses.firstIndex(of: .maybe) ?? statuses.count
-        #expect(!statuses.prefix(firstMaybe).contains(.maybe))
-        #expect(statuses.dropFirst(firstMaybe).allSatisfy { $0 == .maybe })
+        #expect(statuses.allSatisfy { $0 == .someday })
+        #expect(cards.count == snapshot.actions.count { $0.status == .someday })
 
-        let backlogDates = cards.compactMap { $0.action }.filter { $0.status == .backlog }
+        let somedayDates = cards.compactMap { $0.action }.filter { $0.status == .someday }
             .map { $0.created ?? .distantFuture }
-        #expect(backlogDates == backlogDates.sorted())
+        #expect(somedayDates == somedayDates.sorted())
         #expect(cards.allSatisfy { $0.choices == [.promote, .keep, .trash] })
     }
 
@@ -59,12 +59,13 @@ struct ReviewDeckTests {
 
     @Test func demotePromoteAndTrashMapToStatusChanges() throws {
         let next = ReviewDeck.cards(for: .next, in: snapshot, today: Fixtures.today)[0]
-        #expect(ReviewDeck.command(for: .demote, card: next) == .setStatus(next.id, .backlog, waiting: nil))
+        #expect(ReviewDeck.command(for: .demote, card: next) == .setStatus(next.id, .someday, waiting: nil))
 
-        let backlog = try #require(
-            ReviewDeck.cards(for: .backlogMaybe, in: snapshot, today: Fixtures.today).first)
-        #expect(ReviewDeck.command(for: .promote, card: backlog) == .setStatus(backlog.id, .next, waiting: nil))
-        #expect(ReviewDeck.command(for: .trash, card: backlog) == .setStatus(backlog.id, .trash, waiting: nil))
+        let someday = try #require(
+            ReviewDeck.cards(for: .someday, in: snapshot, today: Fixtures.today).first)
+        #expect(ReviewDeck.command(for: .promote, card: someday) == .setStatus(someday.id, .next, waiting: nil))
+        // I4c — trash is a move, not a status.
+        #expect(ReviewDeck.command(for: .trash, card: someday) == .trashAction(someday.id))
     }
 
     @Test func activateAndDropRewriteTheProjectStatus() throws {
@@ -84,7 +85,7 @@ struct ReviewDeckTests {
         let session = ReviewTest.session(ReviewTest.inboxZero)
         let card = ReviewDeck.cards(for: .next, in: session.snapshot, today: Fixtures.today)[0]
         await session.apply(.trash, to: card)             // Next cards offer keep/demote only
-        #expect(session.snapshot.action(card.id)?.status != .trash)
+        #expect(session.snapshot.action(card.id) != nil)  // still there — nothing was trashed
         #expect(session.state.handledDeckCards.isEmpty)
     }
 
@@ -95,7 +96,7 @@ struct ReviewDeckTests {
         let card = try #require(session.deckCards(for: .next).first)
         await session.apply(.demote, to: card)
 
-        #expect(session.snapshot.action(card.id)?.status == .backlog)
+        #expect(session.snapshot.action(card.id)?.status == .someday)
         #expect(session.state.changes.demoted == 1)
         #expect(session.state.handledDeckCards == [card.id.path])
     }
@@ -104,26 +105,26 @@ struct ReviewDeckTests {
         let session = ReviewTest.session(ReviewTest.inboxZero)
         let card = try #require(session.deckCards(for: .next).first)
         await session.apply(.demote, to: card)
-        // It is `backlog` now, so the next phase would otherwise offer it a second time.
-        #expect(!session.deckCards(for: .backlogMaybe).contains { $0.id == card.id })
+        // It is `someday` now, so the next phase would otherwise offer it a second time.
+        #expect(!session.deckCards(for: .someday).contains { $0.id == card.id })
         #expect(!session.deckCards(for: .next).contains { $0.id == card.id })
     }
 
     @Test func promotingIntoAFullNextIsRefusedAndTheCardStays() async throws {
         // Fixtures sit at 14/15; one promotion fits, the next one hits the cap.
         let session = ReviewTest.session(ReviewTest.inboxZero)
-        let cards = session.deckCards(for: .backlogMaybe)
+        let cards = session.deckCards(for: .someday)
         let first = try #require(cards.first)
         await session.apply(.promote, to: first)
         #expect(session.nextCount == session.cap)
         #expect(session.lastError == nil)
 
-        let second = try #require(session.deckCards(for: .backlogMaybe).first)
+        let second = try #require(session.deckCards(for: .someday).first)
         await session.apply(.promote, to: second)
         #expect(session.lastError == .nextCapReached(cap: session.cap))
         #expect(session.snapshot.action(second.id)?.status != .next)
         // Refused, so the card is still on the deck — never a silent skip.
-        #expect(session.deckCards(for: .backlogMaybe).first?.id == second.id)
+        #expect(session.deckCards(for: .someday).first?.id == second.id)
         #expect(session.state.changes.promoted == 1)
     }
 

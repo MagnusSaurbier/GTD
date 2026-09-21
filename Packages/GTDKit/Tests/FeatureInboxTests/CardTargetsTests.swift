@@ -12,8 +12,9 @@ struct CardTargetsTests {
         let size = CGSize(width: 360, height: 600)
         #expect(DragResolver.target(dx: 8, dy: 4, cardSize: size) == nil)
         #expect(DragResolver.target(dx: 200, dy: 10, cardSize: size) == .next)
-        #expect(DragResolver.target(dx: -200, dy: 10, cardSize: size) == .backlog)
-        #expect(DragResolver.target(dx: 10, dy: -200, cardSize: size) == .maybe)
+        #expect(DragResolver.target(dx: -200, dy: 10, cardSize: size) == .someday)
+        // Up files nothing since the tiers merged into Someday (A3): the card springs back.
+        #expect(DragResolver.target(dx: 10, dy: -200, cardSize: size) == nil)
         // Trash needs 40 % of the height, so 25 % is not enough.
         #expect(DragResolver.target(dx: 10, dy: 160, cardSize: size) == nil)
         #expect(DragResolver.target(dx: 10, dy: 260, cardSize: size) == .trash)
@@ -23,7 +24,7 @@ struct CardTargetsTests {
         #expect(DragResolver.direction(dx: 5, dy: 5) == nil)              // below the 12 pt lock
         #expect(DragResolver.direction(dx: 30, dy: 12) == .right)
         #expect(DragResolver.direction(dx: -30, dy: 12) == .left)
-        #expect(DragResolver.direction(dx: 12, dy: -30) == .up)
+        #expect(DragResolver.direction(dx: 12, dy: -30) == nil)
         #expect(DragResolver.direction(dx: 12, dy: 30) == .down)
 
         #expect(DragResolver.lockedTranslation(dx: 40, dy: 15) == CGSize(width: 40, height: 0))
@@ -40,19 +41,18 @@ struct CardTargetsTests {
         #expect(DragResolver.commitment(dx: 0, dy: 0, cardSize: size) == 0)
     }
 
-    @Test func everyTargetHasAKeyANameateSymbolAndFourAreDirect() {
-        #expect(CardTarget.allCases.count == 8)
+    @Test func everyTargetHasAKeyANameateSymbolAndThreeAreDirect() {
+        #expect(CardTarget.allCases.count == 7)
         #expect(CardTarget.allCases.allSatisfy { !$0.key.isEmpty })
         #expect(CardTarget.allCases.allSatisfy { !$0.title.isEmpty })
         #expect(CardTarget.allCases.allSatisfy { !$0.symbol.isEmpty })
-        #expect(CardTarget.allCases.count { $0.isDirect } == 4)
-        #expect(CardTarget.allCases.filter(\.requiresWhat) == [.next, .backlog])
+        #expect(CardTarget.allCases.count { $0.isDirect } == 3)
+        #expect(CardTarget.allCases.filter(\.requiresWhat) == [.next, .someday])
     }
 
     @Test func swipeMapMatchesTheCommitmentAxis() {
         #expect(CardTarget.next.swipe == .right)
-        #expect(CardTarget.backlog.swipe == .left)
-        #expect(CardTarget.maybe.swipe == .up)
+        #expect(CardTarget.someday.swipe == .left)
         #expect(CardTarget.trash.swipe == .down)
         for direction in SwipeDirection.allCases {
             #expect(KeyMap.target(for: direction).swipe == direction)
@@ -61,14 +61,14 @@ struct CardTargetsTests {
 
     @Test func macLegendReadsAsTheStyleGuideSpellsIt() {
         #expect(CardTarget.keyLegend
-            == "← Backlog  ↑ Maybe  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review")
+            == "← Someday  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review")
     }
 
-    /// Every target is reachable without a swipe: four labelled buttons, four menu entries.
+    /// Every target is reachable without a swipe: four labelled buttons, three menu entries.
     @Test func theActionBarCoversEveryTargetExactlyOnce() {
         #expect(CardTarget.buttonTargets == [.project, .knowledge, .waiting, .deferToReview])
         #expect(CardTarget.buttonTargets.allSatisfy { !$0.isDirect })
-        #expect(CardTarget.menuTargets == [.backlog, .maybe, .next, .trash])
+        #expect(CardTarget.menuTargets == [.someday, .next, .trash])
         #expect(Set(CardTarget.buttonTargets + CardTarget.menuTargets) == Set(CardTarget.allCases))
         #expect(CardTarget.deferToReview.shortTitle == "Review")
         #expect(CardTarget.waiting.shortTitle == CardTarget.waiting.title)

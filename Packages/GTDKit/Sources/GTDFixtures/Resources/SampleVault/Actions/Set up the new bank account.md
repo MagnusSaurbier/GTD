@@ -1,5 +1,5 @@
 ---
-status: backlog
+status: someday
 contexts: [mac]
 timeEstimate: 60
 created: 2026-08-25T09:30:00+02:00

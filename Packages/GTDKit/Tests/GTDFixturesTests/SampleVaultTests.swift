@@ -7,7 +7,7 @@ struct SampleVaultTests {
 
     @Test func snapshotInvariants() {
         let s = Fixtures.sampleSnapshot
-        #expect(Rules.countsTowardCap(s) == s.config.nextCap - 1)
+        #expect(Rules.countsTowardCap(s, today: Fixtures.today) == s.config.nextCap - 1)
         #expect(s.inbox.count == 6)
         #expect(s.actions.count >= 25)
         #expect(s.areas.count == 2)

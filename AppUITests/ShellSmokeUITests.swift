@@ -127,7 +127,7 @@ final class ShellSmokeUITests: XCTestCase {
     func testSidebarSectionsAreThere() {
         let app = launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
-        for section in ["Inbox", "Next", "Backlog", "Waiting", "Maybe", "Projects", "Deferred"] {
+        for section in ["Inbox", "Next", "Someday", "Waiting", "Projects", "Deferred"] {
             XCTAssertTrue(
                 app.descendants(matching: .any)[section].waitForExistence(timeout: 10),
                 "sidebar is missing \(section)")

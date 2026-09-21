@@ -32,7 +32,7 @@ public struct ActionDraft: Sendable, Equatable, Codable {
 
     public init(
         title: String,
-        status: ActionStatus = .backlog,
+        status: ActionStatus = .someday,
         contexts: [String] = [],
         timeEstimate: Int? = nil,
         project: NoteID? = nil,
@@ -84,7 +84,7 @@ public struct ProjectDraft: Sendable, Equatable, Codable {
 
 /// Where an inbox card goes when it leaves (I4).
 public enum InboxDecision: Sendable, Equatable, Codable {
-    /// next / backlog / maybe / waiting — the status lives in the draft.
+    /// next / someday / waiting / done — the status lives in the draft.
     case action(ActionDraft)
     case knowledge(folder: String, title: String)
     case newProject(ProjectDraft, firstActions: [ActionDraft])
@@ -103,6 +103,9 @@ public enum GTDCommand: Sendable, Equatable {
     case createAction(ActionDraft)
     case updateAction(Action)
     case setStatus(NoteID, ActionStatus, waiting: WaitingInfo?)
+    /// I4c — trashing an action. Trash is **not a status**: the note leaves the snapshot and
+    /// `GTDVault` moves the file into `GTD/Trash/`. Nothing is ever hard-deleted, so undo works.
+    case trashAction(NoteID)
     case complete(NoteID)
     case toggleCheckbox(NoteID, index: Int)
     case convertActionToProject(NoteID, ProjectDraft)
@@ -120,7 +123,7 @@ public enum GTDCommand: Sendable, Equatable {
 // MARK: - Errors and prompts
 
 public enum GTDError: Error, Sendable, Equatable {
-    /// I4, A3 — the UI must offer "demote something" or "send to Backlog". Never automatic.
+    /// I4, A3 — the UI must offer "demote something" or cancel. Never automatic (D14).
     case nextCapReached(cap: Int)
     /// W1 — `waiting` needs both who and follow-up date.
     case waitingInfoRequired

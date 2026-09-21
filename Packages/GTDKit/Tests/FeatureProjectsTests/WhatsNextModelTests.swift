@@ -51,23 +51,23 @@ struct WhatsNextModelTests {
     }
 
     /// The explicit cap-error path required by the brief, from the "What's next?" flow.
-    @Test func promoteReachesTheCapThenFallsBackToBacklog() async throws {
+    @Test func promoteReachesTheCapThenFallsBackToSomeday() async throws {
         let model = makeModel()
         let cap = model.snapshot.config.nextCap
         let next = WhatsNextModel(project: Fixtures.daadProject.id, model: model)
 
         #expect(try await next.promote(stepIndex: 2) == .success)
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
 
         let refused = try await next.promote(stepIndex: 3)
         #expect(refused == .capReached(cap: cap))
         #expect(model.snapshot.project(Fixtures.daadProject.id)?.steps[3].promotedTo == nil)
 
-        let fallback = try await next.promoteToBacklog(stepIndex: 3)
+        let fallback = try await next.promoteToSomeday(stepIndex: 3)
         #expect(fallback == .success)
         let step = model.snapshot.project(Fixtures.daadProject.id)?.steps[3]
         let created = try #require(model.snapshot.action(step!.promotedTo!))
-        #expect(created.status == .backlog)
+        #expect(created.status == .someday)
     }
 
     @Test func createActionAttachesTheFreeTextTitleToTheProject() async throws {

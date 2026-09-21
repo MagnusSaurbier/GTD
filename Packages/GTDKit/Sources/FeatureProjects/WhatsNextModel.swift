@@ -56,9 +56,9 @@ public final class WhatsNextModel {
     }
 
     @discardableResult
-    public func promoteToBacklog(stepIndex: Int) async throws -> PromotionOutcome {
+    public func promoteToSomeday(stepIndex: Int) async throws -> PromotionOutcome {
         guard let project, project.steps.indices.contains(stepIndex) else { return .success }
-        let draft = ActionDraft(title: project.steps[stepIndex].text, status: .backlog)
+        let draft = ActionDraft(title: project.steps[stepIndex].text, status: .someday)
         return try await sendCapAware(model, .promoteStep(project: projectID, stepIndex: stepIndex, draft))
     }
 
@@ -72,11 +72,11 @@ public final class WhatsNextModel {
     }
 
     @discardableResult
-    public func createActionInBacklog(title: String) async throws -> PromotionOutcome {
+    public func createActionInSomeday(title: String) async throws -> PromotionOutcome {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .success }
         return try await sendCapAware(
-            model, .createAction(ActionDraft(title: trimmed, status: .backlog, project: projectID)))
+            model, .createAction(ActionDraft(title: trimmed, status: .someday, project: projectID)))
     }
 
     /// "Project is done" (P5).

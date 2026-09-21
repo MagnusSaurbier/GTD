@@ -18,7 +18,7 @@ public enum DeferredSweep {
     /// The targets the review offers for a deferred item. `deferToReview` is not among them —
     /// the item is already here, and parking it again would make the escape hatch a loop (I5).
     public static let targets: [CardTarget] = [
-        .next, .backlog, .maybe, .waiting, .project, .knowledge, .trash,
+        .next, .someday, .waiting, .project, .knowledge, .trash,
     ]
 
     /// An `ActionDraft` built from the card draft, exactly as inbox filing builds one.
@@ -49,7 +49,7 @@ public enum DeferredSweep {
         project: NoteID? = nil
     ) -> InboxDecision? {
         switch target {
-        case .next, .backlog, .maybe:
+        case .next, .someday:
             guard let status = target.status else { return nil }
             return .action(actionDraft(draft, status: status))
         case .trash:
@@ -68,7 +68,7 @@ public enum DeferredSweep {
         }
     }
 
-    /// Next and Backlog need a decision about the next physical action, same as the inbox card
+    /// Next and Someday need a decision about the next physical action, same as the inbox card
     /// (STYLEGUIDE §3.6). Everything else may leave `What?` empty.
     public static func isComplete(_ draft: InboxSession.Draft, for target: CardTarget) -> Bool {
         guard target.requiresWhat else { return true }
@@ -83,8 +83,8 @@ public enum DeferredSweep {
 /// Chase and bump both rewrite `followUpDate` — the difference is what the user just did, and
 /// therefore which date is *suggested*: a chase has just happened, so the next check is close;
 /// a bump is "not now", so it goes out a week. Neither date is written until the user confirms
-/// it (STYLEGUIDE §3.1). Resolve moves the item to **Backlog**, not Next: the wait ending is
-/// not by itself a commitment, and Backlog can never fail on the cap — the deck step that
+/// it (STYLEGUIDE §3.1). Resolve moves the item to **Someday**, not Next: the wait ending is
+/// not by itself a commitment, and Someday can never fail on the cap — the deck step that
 /// follows immediately is where it earns a Next slot.
 public enum WaitingSweep {
     public enum Choice: String, Sendable, CaseIterable, Codable, Hashable, Identifiable {
@@ -136,7 +136,7 @@ public enum WaitingSweep {
     public static func command(_ choice: Choice, action: Action, followUp: Day?) -> GTDCommand? {
         switch choice {
         case .resolve:
-            return .setStatus(action.id, .backlog, waiting: nil)
+            return .setStatus(action.id, .someday, waiting: nil)
         case .chase, .bump:
             guard let followUp, let who = action.waitingFor, !who.isEmpty else { return nil }
             return .setStatus(action.id, .waiting, waiting: WaitingInfo(who: who, followUp: followUp))
@@ -169,7 +169,7 @@ public enum StalledSweep {
             switch self {
             case .addNextAction: ReviewSymbols.promote
             case .putOnHold: ReviewSymbols.stalled
-            case .shelve: ReviewSymbols.maybe
+            case .shelve: ReviewSymbols.someday
             }
         }
 

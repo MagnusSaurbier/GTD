@@ -65,7 +65,7 @@ import GTDVault
 
         let snapshot = await vault.backend.currentSnapshot()
         let action = try #require(snapshot.actions.first { $0.status == .next })
-        _ = try await vault.backend.perform(.setStatus(action.id, .backlog, waiting: nil))
+        _ = try await vault.backend.perform(.setStatus(action.id, .someday, waiting: nil))
 
         // "Obsidian on the other device" edits the same note a moment later.
         let edited = try #require(try vault.text(action.id.path)) + "\nA line typed elsewhere.\n"
@@ -99,9 +99,9 @@ import GTDVault
         #expect(rescanned.actions.contains { $0.id == action.id }, "the real note still loads")
 
         // Working on the real note is unaffected, and the copy is left exactly as it was.
-        _ = try await vault.backend.perform(.setStatus(action.id, .backlog, waiting: nil))
+        _ = try await vault.backend.perform(.setStatus(action.id, .someday, waiting: nil))
         #expect(try vault.text(copyPath) == original, "the app never rewrites a conflict copy")
-        #expect(try #require(try vault.text(action.id.path)).contains("status: backlog"))
+        #expect(try #require(try vault.text(action.id.path)).contains("status: someday"))
     }
 
     /// A file another device has not finished syncing is an issue, not a silent hole: it is
@@ -201,7 +201,7 @@ import GTDVault
         try await phone.vault.start()          // both now hold the same snapshot
 
         let snapshot = await phone.vault.currentSnapshot()
-        let original = try #require(snapshot.actions.first { $0.status == .backlog })
+        let original = try #require(snapshot.actions.first { $0.status == .someday })
 
         var renamed = original
         renamed.title = "Renamed on the Mac"

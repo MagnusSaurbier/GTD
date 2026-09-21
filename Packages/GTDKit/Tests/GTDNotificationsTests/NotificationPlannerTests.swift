@@ -117,16 +117,16 @@ struct NotificationPlannerTests {
         #expect(planned[0].fireDate > now)
     }
 
-    // MARK: - Completed / trashed items
+    // MARK: - Closed items (done, or the legacy `status: trash` of R-1)
 
-    @Test func doneAndTrashedActionsAreNeverPlannedEvenWithFutureDates() {
+    @Test func closedActionsAreNeverPlannedEvenWithFutureDates() {
         let today = Day(year: 2026, month: 6, day: 15)
         let now = Support.instant(today, 9, 0, calendar: utc)
         let future = today.adding(days: 3)
         let snapshot = VaultSnapshot(actions: [
             Support.action("Done with a due date", status: .done, due: future),
             Support.action(
-                "Trashed but was waiting", status: .trash,
+                "Legacy-trashed but was waiting", status: .legacyTrashed,
                 waitingFor: "Bob", followUpDate: future),
         ])
 

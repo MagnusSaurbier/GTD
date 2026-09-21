@@ -16,7 +16,7 @@ struct ReviewStateStoreTests {
 
     @Test func theStateRoundTripsThroughJSON() throws {
         var state = ReviewSessionState(
-            year: 2026, week: 38, page: .deckBacklogMaybe,
+            year: 2026, week: 38, page: .deckSomeday,
             startedAt: Date(timeIntervalSince1970: 1_758_240_000))
         state.review.goalForNextWeek = "Letter submitted."
         state.systemsCheck.routines = "Bedtime is drifting."

@@ -66,19 +66,20 @@ public enum Rules {
 
     // MARK: - Next and the cap
 
-    /// How many actions occupy a Next slot (A3; ARCHITECTURE §6: `in-progress` counts too).
+    /// How many actions occupy a Next slot **today** (A3; ARCHITECTURE §6: `in-progress`
+    /// counts too).
     ///
-    /// Deliberately **not** filtered by defer date: the reducer refuses to put a future defer
-    /// date on a `next`/`in-progress` action (D1 × A3), so in a vault the app has written the
-    /// two sets are identical. A hand-edited vault can differ; the cap then still counts the
-    /// commitment, and `checkCap` only blocks commands that make it worse.
-    public static func countsTowardCap(_ s: VaultSnapshot) -> Int {
-        s.actions.count { $0.status.countsTowardCap }
+    /// R-2: a Next item may carry a future `defer`. While it is hidden it is not a commitment
+    /// for today, so it does not occupy a slot; on its defer date it comes back and counts
+    /// again — possibly pushing Next over the cap, which is shown (`16/15`) and never repaired
+    /// automatically. `checkCap` only blocks commands that make the number worse.
+    public static func countsTowardCap(_ s: VaultSnapshot, today: Day) -> Int {
+        s.actions.count { $0.status.countsTowardCap && isVisible($0, today: today) }
     }
 
     /// True when no further action fits into Next (A3, I4).
-    public static func isAtCap(_ s: VaultSnapshot) -> Bool {
-        countsTowardCap(s) >= s.config.nextCap
+    public static func isAtCap(_ s: VaultSnapshot, today: Day) -> Bool {
+        countsTowardCap(s, today: today) >= s.config.nextCap
     }
 
     /// The Next list (E1): `in-progress` pinned on top, then `next`, filtered by context and by
@@ -177,11 +178,11 @@ public enum Rules {
     // MARK: - Projects
 
     /// P4 — the actions that actually move a project: open, visible today, and committed.
-    /// `maybe` is explicitly *not* a commitment, so it does not keep a project off the
+    /// `someday` is explicitly *not* a commitment, so it does not keep a project off the
     /// stalled list; a deferred action does not either, because it is hidden until its date.
     public static func openActions(of project: NoteID, in s: VaultSnapshot, today: Day) -> [Action] {
         visibleActions(s, today: today)
-            .filter { $0.project == project && $0.status != .maybe }
+            .filter { $0.project == project && $0.status != .someday }
             .sorted(by: nextIsOrdered)
     }
 
@@ -209,11 +210,11 @@ public enum Rules {
     }
 
     /// P4 with the project's visible actions already in hand — the same rule `isStalled` and
-    /// `openActions` apply: `maybe` is not a commitment, and a deferred action is not now
+    /// `openActions` apply: `someday` is not a commitment, and a deferred action is not now
     /// (deferred actions are not in `visible` at all).
     private static func isStalled(_ project: Project, visible: [Action]) -> Bool {
         guard project.status == .active else { return false }
-        return !visible.contains { $0.status != .maybe }
+        return !visible.contains { $0.status != .someday }
     }
 
     /// Active projects with zero open actions — badge plus weekly-review sweep (P4, §10.1).
@@ -284,18 +285,16 @@ public enum Rules {
     public struct SidebarCounts: Sendable, Equatable {
         public var inbox: Int
         public var next: Int
-        public var backlog: Int
+        public var someday: Int
         public var waiting: Int
-        public var maybe: Int
         public var projects: Int
         public var deferred: Int
 
-        public init(inbox: Int, next: Int, backlog: Int, waiting: Int, maybe: Int, projects: Int, deferred: Int) {
+        public init(inbox: Int, next: Int, someday: Int, waiting: Int, projects: Int, deferred: Int) {
             self.inbox = inbox
             self.next = next
-            self.backlog = backlog
+            self.someday = someday
             self.waiting = waiting
-            self.maybe = maybe
             self.projects = projects
             self.deferred = deferred
         }
@@ -307,9 +306,8 @@ public enum Rules {
         return SidebarCounts(
             inbox: inboxQueue(s).count,
             next: visible.count { $0.status.countsTowardCap },
-            backlog: visible.count { $0.status == .backlog },
+            someday: visible.count { $0.status == .someday },
             waiting: visible.count { $0.status == .waiting },
-            maybe: visible.count { $0.status == .maybe },
             projects: s.projects.count { $0.status == .active },
             deferred: deferredList(s, today: today).count)
     }
@@ -418,8 +416,8 @@ public enum Rules {
     }
 
     /// Sidebar / Next-view cap signal: `15/15` at the cap, overdue styling above it (A3, §2.2).
-    public static func capSignal(_ s: VaultSnapshot) -> Signal? {
-        let count = countsTowardCap(s)
+    public static func capSignal(_ s: VaultSnapshot, today: Day) -> Signal? {
+        let count = countsTowardCap(s, today: today)
         let cap = s.config.nextCap
         if count > cap { return Signal(kind: .cap(count: count, cap: cap), step: .overdue) }
         if count == cap { return Signal(kind: .cap(count: count, cap: cap), step: .attention) }
@@ -428,7 +426,9 @@ public enum Rules {
 
     // MARK: - Archive
 
-    /// A5 — done or trashed actions whose closing date is older than the archive threshold.
+    /// A5 — closed actions (done, or still carrying the legacy `status: trash`) whose closing
+    /// date is older than the archive threshold. R-1 sends the legacy-trashed ones to
+    /// `GTD/Trash/` rather than `Archive/` — `archiveCompleted` decides that, not this query.
     /// A hand-edited note without `completedDate` falls back to its file modification date;
     /// with neither, it is never archived (the app does not guess when something was closed).
     public static func archiveCandidates(
@@ -517,8 +517,8 @@ public enum Rules {
         case .updateConfig, .logRoutineStep, .setRoutineTime, .saveWeeklyReview, .archiveCompleted:
             false
         case .editInboxText, .fileInbox, .deferInboxToReview, .createAction, .updateAction,
-             .setStatus, .complete, .toggleCheckbox, .convertActionToProject, .createArea,
-             .createProject, .updateProject, .promoteStep:
+             .setStatus, .trashAction, .complete, .toggleCheckbox, .convertActionToProject,
+             .createArea, .createProject, .updateProject, .promoteStep:
             true
         }
     }

@@ -2,12 +2,14 @@ import Foundation
 import GTDModel
 import DesignSystem
 
-/// The seven-plus-one places an inbox card can go (I4), defined **once** for both platforms
+/// The places an inbox card can go (I4), defined **once** for both platforms
 /// (ARCHITECTURE §6, STYLEGUIDE §3.6). Owned by T20.
+///
+/// A3 merged the two old "not now" tiers into `someday`, so the `↑` target is gone: up files
+/// nothing any more.
 public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     case next
-    case backlog
-    case maybe
+    case someday
     case trash
     case project
     case knowledge
@@ -20,8 +22,7 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     public var swipe: SwipeDirection? {
         switch self {
         case .next: .right
-        case .backlog: .left
-        case .maybe: .up
+        case .someday: .left
         case .trash: .down
         default: nil
         }
@@ -31,8 +32,7 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     public var key: String {
         switch self {
         case .next: "→"
-        case .backlog: "←"
-        case .maybe: "↑"
+        case .someday: "←"
         case .trash: "↓"
         case .project: "P"
         case .knowledge: "K"
@@ -48,9 +48,8 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     public var status: ActionStatus? {
         switch self {
         case .next: .next
-        case .backlog: .backlog
-        case .maybe: .maybe
-        case .trash: .trash
+        case .someday: .someday
+        // I4c — Trash is not a status: the card's note is moved to `GTD/Trash/`.
         default: nil
         }
     }
@@ -59,8 +58,7 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     public var title: String {
         switch self {
         case .next: Copy.next
-        case .backlog: Copy.backlog
-        case .maybe: Copy.maybe
+        case .someday: Copy.someday
         case .trash: Copy.trash
         case .project: Copy.project
         case .knowledge: Copy.knowledge
@@ -73,8 +71,7 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     public var symbol: String {
         switch self {
         case .next: Symbols.next
-        case .backlog: Symbols.backlog
-        case .maybe: Symbols.maybe
+        case .someday: Symbols.someday
         case .trash: Symbols.trash
         case .project: Symbols.projects
         case .knowledge: Symbols.knowledge
@@ -83,10 +80,10 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    /// Only Next/Backlog demand a decision about the *next physical action* (STYLEGUIDE §3.6).
-    public var requiresWhat: Bool { self == .next || self == .backlog }
+    /// Only Next/Someday demand a decision about the *next physical action* (STYLEGUIDE §3.6).
+    public var requiresWhat: Bool { self == .next || self == .someday }
 
-    /// What the undo toast says after this card left: `Moved to Backlog` (STYLEGUIDE §3.8, §6.3).
+    /// What the undo toast says after this card left: `Moved to Someday` (STYLEGUIDE §3.8, §6.3).
     public var undoToastLabel: String {
         self == .deferToReview ? Copy.deferToReview : Copy.movedTo(title)
     }
@@ -104,14 +101,14 @@ public enum CardTarget: String, Sendable, CaseIterable, Hashable, Identifiable {
     /// (one-handed use, Switch Control). Same order as the legend.
     public static let menuTargets: [CardTarget] = directionalTargets
 
-    /// The four directional targets, in legend order.
-    public static let directionalTargets: [CardTarget] = [.backlog, .maybe, .next, .trash]
+    /// The directional targets, in legend order.
+    public static let directionalTargets: [CardTarget] = [.someday, .next, .trash]
 
     /// Drag tint of the Trash target: `signalOverdue` at 18 % (STYLEGUIDE §3.6). The other
     /// targets use a token colour as is (`accentWash`, `fillQuiet`).
     public static let trashTintOpacity: Double = 0.18
 
-    /// `← Backlog  ↑ Maybe  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review`
+    /// `← Someday  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review`
     /// (STYLEGUIDE §3.6, Mac legend row). Every key names its target — a bare letter explains
     /// nothing.
     public static var keyLegend: String {
@@ -131,8 +128,10 @@ public enum InboxSymbols {
     public static let more = "ellipsis"
 }
 
+/// The directions a card can be thrown in. There is no `up` any more: the tier it used to file
+/// to was merged into Someday (A3).
 public enum SwipeDirection: Sendable, Equatable, CaseIterable {
-    case left, right, up, down
+    case left, right, down
 
     public var isHorizontal: Bool { self == .left || self == .right }
 
@@ -140,8 +139,7 @@ public enum SwipeDirection: Sendable, Equatable, CaseIterable {
     public var target: CardTarget {
         switch self {
         case .right: .next
-        case .left: .backlog
-        case .up: .maybe
+        case .left: .someday
         case .down: .trash
         }
     }
@@ -153,7 +151,8 @@ public enum DragResolver {
     public static func direction(dx: CGFloat, dy: CGFloat) -> SwipeDirection? {
         guard max(abs(dx), abs(dy)) >= DragThresholds.axisLock else { return nil }
         if abs(dx) >= abs(dy) { return dx > 0 ? .right : .left }
-        return dy < 0 ? .up : .down
+        // Up files nothing since the tiers were merged into Someday (A3): the card springs back.
+        return dy < 0 ? nil : .down
     }
 
     /// The target reached at this translation, or `nil` when the card springs back.
@@ -188,7 +187,6 @@ public enum DragResolver {
     private static func threshold(for direction: SwipeDirection) -> CGFloat {
         switch direction {
         case .left, .right: DragThresholds.horizontal
-        case .up: DragThresholds.vertical
         case .down: DragThresholds.trash
         }
     }

@@ -93,7 +93,7 @@ public final class InboxSession {
         case project
         case waiting
         case deferToReview
-        /// `Next is full` — demote one, or send this card to Backlog. Never automatic.
+        /// `Next is full` — demote one, or send this card to Someday. Never automatic.
         case cap
         /// The raw captured text in full, when the card had to collapse it (STYLEGUIDE §3.5).
         case fullText
@@ -105,7 +105,7 @@ public final class InboxSession {
     /// (STYLEGUIDE §3.6, §4.3). `nonce` changes on every refusal so a repeated one animates again.
     public struct Validation: Sendable, Equatable {
         public enum Issue: Sendable, Equatable {
-            /// Next and Backlog need a non-empty *What?*.
+            /// Next and Someday need a non-empty *What?*.
             case whatRequired
             /// Defer to review needs a reason (I5).
             case reasonRequired
@@ -177,7 +177,7 @@ public final class InboxSession {
     /// What `undo()` would revert, as the backend words it (N6).
     public var undoLabel: String? { model.undoLabel }
 
-    /// The toast's wording, in the canonical form of STYLEGUIDE §6.3 (`Moved to Backlog`).
+    /// The toast's wording, in the canonical form of STYLEGUIDE §6.3 (`Moved to Someday`).
     /// `nil` when there is nothing to undo.
     public var undoToastLabel: String? {
         guard canUndo, let last = history.last else { return nil }
@@ -255,7 +255,7 @@ public final class InboxSession {
         guard current != nil else { return }
         guard validate(for: target) else { return }
         switch target {
-        case .next, .backlog, .maybe:
+        case .next, .someday:
             guard let status = target.status else { return }
             await file(.action(actionDraft(status: status)), as: target)
         case .trash:
@@ -271,7 +271,7 @@ public final class InboxSession {
         }
     }
 
-    /// Validation before leaving: Next/Backlog require a non-empty *What?* (STYLEGUIDE §3.6).
+    /// Validation before leaving: Next/Someday require a non-empty *What?* (STYLEGUIDE §3.6).
     /// Contexts and time may stay empty — undecided is a legal state.
     @discardableResult
     public func validate(for target: CardTarget) -> Bool {
@@ -341,7 +341,7 @@ public final class InboxSession {
     public func demoteAndRetry(_ id: NoteID) async {
         guard let pending else { return }
         do {
-            try await model.send(.setStatus(id, .backlog, waiting: nil))
+            try await model.send(.setStatus(id, .someday, waiting: nil))
         } catch let error as GTDError {
             lastError = error
             return
@@ -354,12 +354,12 @@ public final class InboxSession {
         await file(pending.decision, as: pending.target)
     }
 
-    /// The other half of the forced choice: send this card to Backlog instead (never automatic).
-    public func sendToBacklogInstead() async {
+    /// The other half of the forced choice: send this card to Someday instead (never automatic).
+    public func sendToSomedayInstead() async {
         guard let pending else { return }
         self.pending = nil
         sheet = nil
-        await file(Self.demoted(pending.decision), as: .backlog)
+        await file(Self.demoted(pending.decision), as: .someday)
     }
 
     /// Closes a sub-flow sheet without filing anything. The card and its draft stay.
@@ -476,7 +476,7 @@ public final class InboxSession {
         validation = nil
     }
 
-    /// The Backlog version of a refused decision (the cap sheet's second option).
+    /// The Someday version of a refused decision (the cap sheet's second option).
     static func demoted(_ decision: InboxDecision) -> InboxDecision {
         switch decision {
         case let .action(draft):
@@ -493,7 +493,7 @@ public final class InboxSession {
     private static func demoted(_ draft: ActionDraft) -> ActionDraft {
         guard draft.status.countsTowardCap else { return draft }
         var copy = draft
-        copy.status = .backlog
+        copy.status = .someday
         return copy
     }
 }

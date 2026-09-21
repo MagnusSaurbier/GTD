@@ -273,7 +273,7 @@ public struct ProjectDetailView: View {
                         Task {
                             let count = try? await detail.setStatus(status)
                             demotionNotice = (count ?? 0) > 0
-                                ? "\(count ?? 0) \(Copy.next) → \(Copy.backlog)"
+                                ? "\(count ?? 0) \(Copy.next) → \(Copy.someday)"
                                 : nil
                         }
                     }
@@ -453,8 +453,8 @@ private struct OptionArrowShortcut: ViewModifier {
 }
 
 /// The small action-draft form promotion opens from the project detail (P6): contexts + time
-/// chips, status Next or Backlog. Cap handling is simplified from T20: a single "Send to
-/// Backlog instead" retry rather than the full "Next is full" demote sheet.
+/// chips, status Next or Someday. Cap handling is simplified from T20: a single "Send to
+/// Someday instead" retry rather than the full "Next is full" demote sheet.
 private struct PromoteStepSheet: View {
     let detailModel: ProjectDetailModel
     let stepIndex: Int
@@ -487,29 +487,29 @@ private struct PromoteStepSheet: View {
 
             HStack(spacing: Spacing.chipGap) {
                 Chip(Copy.next, state: status == .next ? .confirmed : .unset) { status = .next }
-                Chip(Copy.backlog, state: status == .backlog ? .confirmed : .unset) { status = .backlog }
+                Chip(Copy.someday, state: status == .someday ? .confirmed : .unset) { status = .someday }
             }
 
             if let capMessage {
                 VStack(alignment: .leading, spacing: Spacing.s) {
                     Text(Copy.capSheetTitle).font(Typo.sectionHeader)
                     Text(capMessage).font(Typo.meta).foregroundStyle(Color.textSecondary)
-                    Button(Copy.sendToBacklogInstead) { Task { await promote(toBacklog: true) } }
+                    Button(Copy.sendToSomedayInstead) { Task { await promote(toSomeday: true) } }
                 }
             }
 
             HStack {
                 Spacer()
-                Button(Copy.promote) { Task { await promote(toBacklog: false) } }
+                Button(Copy.promote) { Task { await promote(toSomeday: false) } }
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(Spacing.cardPadding)
     }
 
-    private func promote(toBacklog: Bool) async {
+    private func promote(toSomeday: Bool) async {
         let draft = ActionDraft(
-            title: title, status: toBacklog ? .backlog : status,
+            title: title, status: toSomeday ? .someday : status,
             contexts: contexts, timeEstimate: timeBucket?.minutes)
         do {
             let outcome = try await detailModel.promoteStep(at: stepIndex, draft: draft)
@@ -536,7 +536,7 @@ public struct WhatsNextSheet: View {
     @State private var whatsNextModel: WhatsNextModel?
     @State private var freeText = ""
     @State private var capMessage: String?
-    @State private var pendingBacklogStepIndex: Int?
+    @State private var pendingSomedayStepIndex: Int?
 
     public init(project: NoteID) {
         self.projectID = project
@@ -567,7 +567,7 @@ public struct WhatsNextSheet: View {
             if let capMessage {
                 VStack(alignment: .leading, spacing: Spacing.s) {
                     Text(capMessage).font(Typo.meta).foregroundStyle(Color.textSecondary)
-                    Button(Copy.sendToBacklogInstead) { Task { await retryToBacklog(next) } }
+                    Button(Copy.sendToSomedayInstead) { Task { await retryToSomeday(next) } }
                 }
             }
 
@@ -592,7 +592,7 @@ public struct WhatsNextSheet: View {
             switch try await next.promote(stepIndex: stepIndex) {
             case .success: dismiss()
             case .capReached:
-                pendingBacklogStepIndex = stepIndex
+                pendingSomedayStepIndex = stepIndex
                 capMessage = Copy.capSheetBody
             }
         } catch {
@@ -600,11 +600,11 @@ public struct WhatsNextSheet: View {
         }
     }
 
-    private func retryToBacklog(_ next: WhatsNextModel) async {
-        if let stepIndex = pendingBacklogStepIndex {
-            _ = try? await next.promoteToBacklog(stepIndex: stepIndex)
+    private func retryToSomeday(_ next: WhatsNextModel) async {
+        if let stepIndex = pendingSomedayStepIndex {
+            _ = try? await next.promoteToSomeday(stepIndex: stepIndex)
         } else {
-            _ = try? await next.createActionInBacklog(title: freeText)
+            _ = try? await next.createActionInSomeday(title: freeText)
         }
         dismiss()
     }
@@ -614,7 +614,7 @@ public struct WhatsNextSheet: View {
             switch try await next.createAction(title: freeText) {
             case .success: dismiss()
             case .capReached:
-                pendingBacklogStepIndex = nil
+                pendingSomedayStepIndex = nil
                 capMessage = Copy.capSheetBody
             }
         } catch {
@@ -664,7 +664,7 @@ public struct ConvertToProjectSheet: View {
             if let capMessage {
                 VStack(alignment: .leading, spacing: Spacing.s) {
                     Text(capMessage).font(Typo.meta).foregroundStyle(Color.textSecondary)
-                    Button(Copy.sendToBacklogInstead) { Task { await retryToBacklog(convert) } }
+                    Button(Copy.sendToSomedayInstead) { Task { await retryToSomeday(convert) } }
                 }
             }
 
@@ -704,9 +704,9 @@ public struct ConvertToProjectSheet: View {
         }
     }
 
-    private func retryToBacklog(_ convert: ConvertToProjectModel) async {
+    private func retryToSomeday(_ convert: ConvertToProjectModel) async {
         guard let selectedStepIndex else { dismiss(); return }
-        _ = try? await convert.promoteConvertedStepToBacklog(draft(), stepIndex: selectedStepIndex)
+        _ = try? await convert.promoteConvertedStepToSomeday(draft(), stepIndex: selectedStepIndex)
         dismiss()
     }
 }

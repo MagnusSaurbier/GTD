@@ -87,7 +87,7 @@ struct ReducerInboxTests {
             vault(projects: [project]),
             .fileInbox(capture.id, .existingProject(project.id, actions: [
                 ActionDraft(title: "Call the Hausverwaltung", status: .next),
-                ActionDraft(title: "Order the part", status: .backlog),
+                ActionDraft(title: "Order the part", status: .someday),
             ])),
             env: env)
         #expect(result.snapshot.actions.count == 2)
@@ -207,7 +207,7 @@ struct ReducerInboxTests {
         #expect(queue.first?.created == queue.map(\.created).max())
         let result = try Reducer.reduce(
             Fixtures.sampleSnapshot,
-            .fileInbox(queue[0].id, .action(ActionDraft(title: "Neue Aufgabe", status: .backlog))),
+            .fileInbox(queue[0].id, .action(ActionDraft(title: "Neue Aufgabe", status: .someday))),
             env: Fixtures.reducerEnv())
         #expect(Rules.inboxQueue(result.snapshot).map(\.id) == Array(queue.dropFirst()).map(\.id))
     }

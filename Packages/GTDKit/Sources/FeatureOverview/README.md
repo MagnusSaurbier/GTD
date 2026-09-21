@@ -10,7 +10,7 @@ action editor no other feature target owns.
   `OverviewNavigation` with the menu bar.
 - `OverviewCommands(navigation:model:)` — menu-bar shortcuts `⌘1…7`, `⌘N`, `⌘I`, `⌘Z`
   (STYLEGUIDE §4.5). `⌘F` lives inside the window, because it focuses the filter field.
-- `ActionListView(status:selection:onOpen:)` — Backlog / Maybe, grouped by area/project. On
+- `ActionListView(status:selection:onOpen:)` — Someday, grouped by area/project. On
   macOS a selectable `List`: click or arrow keys call `onOpen`, `selection` is the highlighted row.
   Waiting, Deferred (`FeatureWaiting`) and Projects (`FeatureProjects`) take the same
   `selection:` and behave identically (M2); `OverviewView` passes `navigation.openAction` to the

@@ -23,7 +23,7 @@ public struct ActionGroup: Identifiable, Sendable, Equatable {
     }
 }
 
-/// The generic list of one action status (Backlog / Maybe) — grouping, filtering and badges.
+/// The generic list of one action status (Someday) — grouping, filtering and badges.
 /// No SwiftUI, so the rules are unit-tested on Linux (ARCHITECTURE §5).
 ///
 /// Grouping is **by area / project** (E3). Context and time are *filters*, never groupings.

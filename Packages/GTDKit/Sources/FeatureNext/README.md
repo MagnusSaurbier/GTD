@@ -29,13 +29,17 @@ overdue follow-ups (E1, E2, W2).
   it, independent of the backend's own single-level undo bookkeeping (`⌘Z` keeps working after
   the toast fades). Inline checkboxes for actions with ≥ 2 checkboxes; ticking every one *offers*
   to complete the action (a separate button) rather than doing it automatically.
-- Row context menu (all rows) / iOS swipe (trailing `Done`, leading `Backlog`): done, start
-  (→ in-progress), demote to Backlog, set waiting (`WaitingInfoSheet`), defer (`DateValueChip` in
+- Row context menu (all rows) / iOS swipe (trailing `Done`, leading `Someday`): done, start
+  (→ in-progress), demote to Someday, set waiting (`WaitingInfoSheet`), defer (`DateValueChip` in
   a small sheet). Every swipe action has a context-menu twin — the Mac has no swipes and
   VoiceOver cannot reach one (STYLEGUIDE §8).
-- **Deferring a `next`/`in-progress` row demotes it to Backlog first, as its own
-  explicit command** — the reducer refuses a future `deferDate` on a cap-counting action outright
-  and never demotes for you (ARCHITECTURE §6); `NextListModel.setDefer` does the two-step itself.
+- **Deferring a Next row changes only the date** (R-2, ARCHITECTURE §6): a Next item may carry a
+  future `defer`. It is hidden until then and holds no cap slot while hidden
+  (`Rules.countsTowardCap(_:today:)`); on its date it is back with the `back` badge. Nothing is
+  demoted behind the user's back.
+- **`showsCapSheet`** is the R-2 flag the view acts on: Next can be over the cap when a deferred
+  item returns, and the `Next is full` sheet is then presented **once per foreground**
+  (`enteredForeground()` arms it, `capSheetShown()` puts it down) until something is demoted.
 - Every row command goes through a small `run(_:)` wrapper that turns a thrown `GTDError` into an
   alert instead of a silent `try?` (a refused command must
   reach the person).

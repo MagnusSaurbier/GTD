@@ -12,24 +12,24 @@ struct SidebarRoutingTests {
         #expect(SidebarItem.allCases.allSatisfy { !$0.title.isEmpty && !$0.symbol.isEmpty })
     }
 
-    /// STYLEGUIDE §4.1: Inbox · Next · Backlog · Waiting · Maybe · Projects · Deferred,
-    /// then Review and Routines.
-    @Test func countedSectionsAreTheSevenOfTheStyleGuide() {
-        #expect(SidebarItem.counted == [.inbox, .next, .backlog, .waiting, .maybe, .projects, .deferred])
+    /// STYLEGUIDE §4.1: Inbox · Next · Someday · Waiting · Projects · Deferred, then Review
+    /// and Routines. (Lists joins the counted group in T10.)
+    @Test func countedSectionsAreTheOnesOfTheStyleGuide() {
+        #expect(SidebarItem.counted == [.inbox, .next, .someday, .waiting, .projects, .deferred])
         #expect(SidebarItem.flows == [.review, .routines])
         #expect(Set(SidebarItem.counted).union(SidebarItem.flows) == Set(SidebarItem.allCases))
     }
 
-    /// `⌘1…⌘7` (STYLEGUIDE §4.5) — and the mapping round-trips.
+    /// `⌘1…⌘6` (STYLEGUIDE §4.5) — and the mapping round-trips.
     @Test func shortcutNumbersCoverTheCountedSections() {
-        #expect(SidebarItem.counted.compactMap(\.shortcutNumber) == Array(1...7))
+        #expect(SidebarItem.counted.compactMap(\.shortcutNumber) == Array(1...6))
         #expect(SidebarItem.review.shortcutNumber == nil)
         #expect(SidebarItem.routines.shortcutNumber == nil)
-        for number in 1...7 {
+        for number in 1...6 {
             #expect(SidebarItem(shortcutNumber: number)?.shortcutNumber == number)
         }
         #expect(SidebarItem(shortcutNumber: 0) == nil)
-        #expect(SidebarItem(shortcutNumber: 8) == nil)
+        #expect(SidebarItem(shortcutNumber: 7) == nil)
     }
 
     @Test func everyCountedSectionReadsItsCountAndTheOthersDoNot() {
@@ -42,9 +42,10 @@ struct SidebarRoutingTests {
         #expect(SidebarItem.next.count(counts) == counts.next)
     }
 
-    @Test func onlyBacklogAndMaybeUseTheGenericList() {
-        #expect(SidebarItem.backlog.listedStatus == .backlog)
-        #expect(SidebarItem.maybe.listedStatus == .maybe)
+    /// A3 merged the two old "not now" tiers, so Someday is the only generic status list left.
+    @Test func onlySomedayUsesTheGenericList() {
+        #expect(SidebarItem.someday.listedStatus == .someday)
+        #expect(SidebarItem.allCases.filter { $0.listedStatus != nil } == [.someday])
         #expect(SidebarItem.next.listedStatus == nil)
         #expect(SidebarItem.projects.listedStatus == nil)
     }
@@ -142,7 +143,7 @@ struct SidebarRoutingTests {
         nav.query = "bike"
         nav.isSearching = true
 
-        nav.selection = .backlog
+        nav.selection = .someday
 
         #expect(nav.detail == nil)
         #expect(nav.query.isEmpty)
@@ -150,10 +151,10 @@ struct SidebarRoutingTests {
     }
 
     @Test func selectingTheSameSectionKeepsTheDetailColumn() {
-        let nav = OverviewNavigation(selection: .backlog)
+        let nav = OverviewNavigation(selection: .someday)
         let id = NoteID(path: "Actions/Fix the bike light.md")
         nav.open(action: id)
-        nav.selection = .backlog
+        nav.selection = .someday
         #expect(nav.detail == .action(id))
     }
 

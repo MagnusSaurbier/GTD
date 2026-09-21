@@ -91,11 +91,11 @@ struct PerformanceTests {
         try await Bench.measureAsync("activate + first scan") { try await store.activate() }
 
         let snapshot = await store.currentSnapshot
-        let target = try #require(snapshot.actions.first { $0.status == .backlog })
+        let target = try #require(snapshot.actions.first { $0.status == .someday })
 
         counting.resetCounts()
-        _ = try await Bench.measureAsync("setStatus(.maybe)") {
-            try await backend.perform(.setStatus(target.id, .maybe, waiting: nil))
+        _ = try await Bench.measureAsync("setStatus(.done)") {
+            try await backend.perform(.setStatus(target.id, .done, waiting: nil))
         }
         Bench.report("writes", counting.writes)
         Bench.report("reads (the re-index that follows)", counting.reads)
@@ -171,7 +171,7 @@ struct PerformanceTests {
             encoded = decoded.map { NoteCodec.encode($0) }
         }
         var edited = decoded
-        for index in edited.indices { edited[index].status = .maybe }
+        for index in edited.indices { edited[index].status = .waiting }
         Bench.measure("encode (one field changed)") {
             _ = edited.map { NoteCodec.encode($0) }
         }
@@ -346,10 +346,10 @@ enum GeneratedVault {
 
     /// One action note. `marker` changes the body so the file's fingerprint moves.
     static func actionNote(index: Int, projects: Int, marker: String = "") -> String {
-        let statuses = ["next", "backlog", "backlog", "maybe", "waiting", "in-progress", "done"]
+        let statuses = ["next", "someday", "someday", "someday", "waiting", "in-progress", "done"]
         let status = statuses[index % statuses.count]
         let contexts = [["mac"], ["phone", "calls"], ["home"], ["campus", "deep-work"],
-                        ["errands"], ["reading"], []][index % 7]
+                        ["errands"], ["deep-work"], []][index % 7]
         var frontmatter = """
             status: \(status)
             contexts: [\(contexts.joined(separator: ", "))]

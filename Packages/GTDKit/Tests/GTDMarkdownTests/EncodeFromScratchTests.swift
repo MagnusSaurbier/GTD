@@ -42,9 +42,9 @@ struct EncodeFromScratchTests {
     }
 
     @Test func aNewActionWithNothingDecidedHasNoLyingDefaults() throws {
-        let action = Action(id: NoteID(path: "Actions/X.md"), title: "X", status: .backlog)
+        let action = Action(id: NoteID(path: "Actions/X.md"), title: "X", status: .someday)
         let text = NoteCodec.encode(action, timeZone: zone)
-        #expect(text == "---\nstatus: backlog\n---\n# Why?\n\n# What?\n")
+        #expect(text == "---\nstatus: someday\n---\n# Why?\n\n# What?\n")
         #expect(!text.contains("timeEstimate"))
         #expect(!text.contains("contexts"))
         #expect(!text.contains("project"))
@@ -162,8 +162,8 @@ struct EncodeFromScratchTests {
         let text = NoteCodec.encode(GTDConfig.default)
         #expect(text == """
         ---
-        contexts: [mac, phone, home, campus, errands, calls, reading, deep-work]
-        onTheGoContexts: [phone, errands, calls, reading]
+        contexts: [mac, phone, home, campus, errands, calls, deep-work]
+        onTheGoContexts: [phone, errands, calls]
         nextCap: 15
         ---
         # Config

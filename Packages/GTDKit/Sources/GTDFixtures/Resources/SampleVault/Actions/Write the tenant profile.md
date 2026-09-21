@@ -1,5 +1,5 @@
 ---
-status: backlog
+status: someday
 contexts: [mac]
 timeEstimate: 30
 project: "[[Projects/Wohnungssuche/Wohnungssuche]]"

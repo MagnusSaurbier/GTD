@@ -30,10 +30,14 @@ and then patched the same way.
 
 - `timeEstimate: 0` decodes as *undecided* and is never written (§1 "no lying defaults"); an
   existing `0` in a file is left alone rather than rewritten.
+- **Legacy `status:` words are read, never rewritten** (R-1): `backlog` and `maybe` decode as
+  `.someday`, `trash` as `ActionStatus.legacyTrashed`. Because the encoder patches only lines
+  whose *decoded* value changed, such a file keeps its own word on disk until the status really
+  changes. `ActionStatus.acceptedRawValues` is what the error message lists.
 - `CheckboxList.parseLine` accepts exactly what `GTDModel.Checkbox.scan` accepts (`-`/`*`, a
   space, `[ ]`/`[x]`/`[X]`) — the reducer indexes checkboxes with the model's scanner.
 - Refused rather than guessed (each throws `.unreadable` with path + reason): unknown or missing
-  `status`, invalid YAML, duplicate frontmatter keys, an unknown routine-step `result`, a routine
+  `status` (a word outside `ActionStatus.acceptedRawValues`), invalid YAML, duplicate frontmatter keys, an unknown routine-step `result`, a routine
   log file whose name is not `<yyyy-MM-dd>--<device>.md`, an inbox item without `created`, and
   a routine log whose `entries:` is something other than a list or empty — reading that as
   "no entries" would let the next logged step regenerate the file over the day's history.

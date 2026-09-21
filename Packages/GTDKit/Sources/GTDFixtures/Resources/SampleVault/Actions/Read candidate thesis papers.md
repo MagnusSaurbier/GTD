@@ -1,6 +1,6 @@
 ---
 status: next
-contexts: [reading, deep-work]
+contexts: [deep-work]
 timeEstimate: 90
 project: "[[Projects/Karriereplanung/Masterarbeit/Masterarbeit]]"
 created: 2026-09-10T09:30:00+02:00

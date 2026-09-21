@@ -16,7 +16,7 @@ struct ErrorSurfacingTests {
         var snapshot = VaultSnapshot.empty
         snapshot.actions = (1...15).map {
             Action(id: NoteID(path: "Actions/Next \($0).md"), title: "Next \($0)", status: .next)
-        } + [Action(id: NoteID(path: "Actions/Spare.md"), title: "Spare", status: .backlog)]
+        } + [Action(id: NoteID(path: "Actions/Spare.md"), title: "Spare", status: .someday)]
         return AppModel(backend: InMemoryBackend(snapshot: snapshot), snapshot: snapshot)
     }
 
@@ -24,13 +24,13 @@ struct ErrorSurfacingTests {
 
     @Test func aRefusedCommandLandsInLastErrorInsteadOfVanishing() async throws {
         let model = modelAtCap()
-        #expect(Rules.countsTowardCap(model.snapshot) == 15)
+        #expect(Rules.countsTowardCap(model.snapshot, today: model.today()) == 15)
         let victim = try #require(model.snapshot.action(spare))
 
         let ok = await model.perform(.setStatus(victim.id, .next, waiting: nil))
         #expect(ok == false)
         #expect(model.lastError as? GTDError == .nextCapReached(cap: 15))
-        #expect(model.snapshot.action(victim.id)?.status == .backlog, "and nothing moved")
+        #expect(model.snapshot.action(victim.id)?.status == .someday, "and nothing moved")
     }
 
     @Test func aCommandThatGoesThroughClearsTheLastError() async throws {
@@ -39,10 +39,10 @@ struct ErrorSurfacingTests {
         _ = await model.perform(.setStatus(victim.id, .next, waiting: nil))
         #expect(model.lastError != nil)
 
-        let ok = await model.perform(.setStatus(victim.id, .maybe, waiting: nil))
+        let ok = await model.perform(.setStatus(victim.id, .done, waiting: nil))
         #expect(ok)
         #expect(model.lastError == nil)
-        #expect(model.snapshot.action(victim.id)?.status == .maybe)
+        #expect(model.snapshot.action(victim.id)?.status == .done)
     }
 
     @Test func waitingWithoutTheWhoIsReportedToo() async throws {
@@ -59,12 +59,12 @@ struct ErrorSurfacingTests {
         let victim = try #require(model.snapshot.action(spare))
 
         let ok = await model.report {
-            try await model.send(.setStatus(victim.id, .maybe, waiting: nil))
+            try await model.send(.setStatus(victim.id, .done, waiting: nil))
             try await model.send(.setStatus(victim.id, .next, waiting: nil))   // refused: at cap
         }
         #expect(ok == false)
         #expect(model.lastError as? GTDError == .nextCapReached(cap: 15))
-        #expect(model.snapshot.action(victim.id)?.status == .maybe,
+        #expect(model.snapshot.action(victim.id)?.status == .done,
                 "the first command stands — `report` shows the failure, it does not roll back")
     }
 }

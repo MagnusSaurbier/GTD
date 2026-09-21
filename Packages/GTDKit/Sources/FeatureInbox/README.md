@@ -12,7 +12,7 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 
 - `InboxSession` — `@MainActor @Observable`. Queue, `draft`, `sheet`, counter, validation,
   cap choice, every sub-flow, undo. Views own no decisions; they call `choose(_:)`,
-  `confirm*(...)`, `demoteAndRetry(_:)`, `sendToBacklogInstead()`, `undo()`.
+  `confirm*(...)`, `demoteAndRetry(_:)`, `sendToSomedayInstead()`, `undo()`.
 - `CardTargets.swift` — `CardTarget` (the 8 targets with key, swipe, symbol, title),
   `SwipeDirection`, `DragResolver` (axis lock, thresholds, commitment), `KeyMap` (Mac keys).
   The **single** definition of the swipe/key map (ARCHITECTURE §6).
@@ -25,8 +25,8 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 
 - Nothing is pre-filled and no suggestion is ever persisted: the last-used knowledge folder and
   the +7 d follow-up are **suggested** chips until the user taps them (§1, STYLEGUIDE §3.1).
-- Next/Backlog require a non-empty `What?`; the card shakes and focuses the field — never an alert.
-- The cap is a **forced choice**: demote a Next item or send this card to Backlog. Never automatic.
+- Next/Someday require a non-empty `What?`; the card shakes and focuses the field — never an alert.
+- The cap is a **forced choice**: demote a Next item or send this card to Someday. Never automatic.
 - Undo returns the card to the head of the queue **with its draft restored**.
 - A card being edited is never displaced by a mid-session capture; the capture is queued next.
 - Items deferred to the weekly review leave the queue and never come back to it (I5).

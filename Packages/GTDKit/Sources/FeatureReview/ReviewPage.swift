@@ -35,7 +35,7 @@ public enum ReviewPage: String, Sendable, CaseIterable, Codable, Hashable {
     case sweepWaiting
     case sweepStalled
     case deckNext
-    case deckBacklogMaybe
+    case deckSomeday
     case deckProjects
     case systemsCheck
     case reflection
@@ -44,7 +44,7 @@ public enum ReviewPage: String, Sendable, CaseIterable, Codable, Hashable {
     public var stage: ReviewStage? {
         switch self {
         case .sweepInbox, .sweepDeferred, .sweepWaiting, .sweepStalled: .sweep
-        case .deckNext, .deckBacklogMaybe, .deckProjects: .deck
+        case .deckNext, .deckSomeday, .deckProjects: .deck
         case .systemsCheck: .systemsCheck
         case .reflection: .reflection
         case .summary: nil
@@ -55,7 +55,7 @@ public enum ReviewPage: String, Sendable, CaseIterable, Codable, Hashable {
     public var deckPhase: DeckPhase? {
         switch self {
         case .deckNext: .next
-        case .deckBacklogMaybe: .backlogMaybe
+        case .deckSomeday: .someday
         case .deckProjects: .projects
         default: nil
         }
@@ -69,7 +69,7 @@ public enum ReviewPage: String, Sendable, CaseIterable, Codable, Hashable {
         case .sweepWaiting: ReviewCopy.stepWaiting
         case .sweepStalled: ReviewCopy.stepStalled
         case .deckNext: ReviewCopy.stepDeckNext
-        case .deckBacklogMaybe: ReviewCopy.stepDeckBacklogMaybe
+        case .deckSomeday: ReviewCopy.stepDeckSomeday
         case .deckProjects: ReviewCopy.stepDeckProjects
         case .systemsCheck: ReviewCopy.stageSystemsCheck
         case .reflection: ReviewCopy.stageReflection

@@ -16,7 +16,7 @@ enum MiniVault {
                 "---\ncreated: 2026-09-17T17:33:55+02:00\nreviewReason: needs a think\n---\nmove out?",
             "Actions/Fix the bike light.md":
                 "---\nstatus: next\ncontexts: [home, errands]\n---\n- [ ] buy a bulb",
-            "Actions/Old thing.md": "---\nstatus: backlog\n---\n",
+            "Actions/Old thing.md": "---\nstatus: someday\n---\n",
             "Archive/2026/08/Done long ago.md": "---\nstatus: done\n---\n",
             "GTD/Trash/Thrown away.md": "---\nstatus: trash\n---\n",
             "Projects/Applications/Applications.md": "---\nkind: area\n---\n",

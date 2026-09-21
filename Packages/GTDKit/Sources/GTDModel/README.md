@@ -31,9 +31,14 @@ Compiles and tests on Linux.
 - Waiting needs who **and** follow-up; leaving `waiting` clears both. Closed actions always carry
   a closing date; re-opening clears it. Contexts come from `GTDConfig` (values already in a note
   survive an edit).
-- Only active projects put actions into Next; leaving `active` demotes them to Backlog.
-- A future defer date and a Next slot contradict each other — refused, never auto-resolved. Only
-  *new* contradictions are refused, so a hand-edited vault stays repairable.
+- Only active projects put actions into Next; leaving `active` demotes them to Someday.
+- **A Next item may carry a future `defer`** (R-2). It is hidden until its date and holds no cap
+  slot while hidden; on its date it returns with the `back` badge, even if that puts Next over
+  the cap. Nothing is demoted automatically.
+- **Trash is not a status** (I4c). `trashAction` removes the note from the snapshot and names no
+  path, so the diff emits `.delete`, which `GTDVault` performs as a move into `GTD/Trash/`.
+  `ActionStatus.legacyTrashed` exists only to *read* a pre-rework `status: trash` line: it is
+  closed, hidden, out of `allCases`, and the reducer refuses any move into it.
 - The cap blocks only commands that *increase* Next occupancy.
 - Every `Rules` list has a **total** order (`NoteID` last), so equal snapshots render identically.
 - `Day` never uses `Calendar` for arithmetic; queries converting a `Date` take a `calendar`
@@ -41,9 +46,10 @@ Compiles and tests on Linux.
 
 ## Gotchas
 
-- `countsTowardCap` counts `next` + `in-progress` regardless of defer; with the rule above it
-  equals `nextList(…).count` in any vault the app wrote. `nextList` is never truncated to the
-  cap — an over-cap vault must stay repairable.
+- `countsTowardCap(_:today:)` counts the `next` + `in-progress` actions that are **visible
+  today**: a hidden (future-deferred) one is not a commitment for today (R-2). It therefore needs
+  a `Day`, as do `isAtCap` and `capSignal`. `nextList` is never truncated to the cap — an
+  over-cap vault must stay repairable.
 - `Rules.isUndoable` is the single definition of N6: both backends call it, and the labels live
   in `GTDAppCore/UndoLabel`.
 - Renaming an action moves the file and rewrites `ProjectStep.promotedTo`. Renaming or re-filing

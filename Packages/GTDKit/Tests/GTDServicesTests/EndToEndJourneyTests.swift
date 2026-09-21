@@ -40,7 +40,7 @@ import GTDVault
 
         // ── 2. Process the inbox (I1–I4) ──────────────────────────────────────────────────────
         // Filing to Next takes the vault to the cap exactly: 14 counting + 1 = 15.
-        #expect(Rules.countsTowardCap(model.snapshot) == 14)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 14)
         try await model.send(.fileInbox(captured, .action(ActionDraft(
             title: "Renew the Semesterticket",
             status: .next,
@@ -48,7 +48,7 @@ import GTDVault
             timeEstimate: 30,
             why: "It expires at the end of the month.",
             what: "Pay at the Studierendenwerk counter."))))
-        #expect(Rules.countsTowardCap(model.snapshot) == 15)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 15)
         #expect(try vault.text("Inbox/2026-09-19 093000.md") == nil, "the capture file left the inbox")
         let filed = try #require(try vault.text("Actions/Renew the Semesterticket.md"))
         #expect(filed.contains("status: next"))
@@ -66,9 +66,9 @@ import GTDVault
         #expect(try vault.filesOutsideTheTrash() == bytesAtCap, "a refused command writes nothing")
         #expect(model.snapshot.inbox.contains { $0.id == second.id }, "the card stays in the queue")
 
-        // Backlog is the way out, and it is not capped.
+        // Someday is the way out, and it is not capped.
         try await model.send(.fileInbox(second.id, .action(
-            ActionDraft(title: "Ask Marie about the monitor", status: .backlog))))
+            ActionDraft(title: "Ask Marie about the monitor", status: .someday))))
         #expect(try vault.text("Actions/Ask Marie about the monitor.md") != nil)
 
         // ── 4. Promote a project step (P5) ────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ import GTDVault
         let daad = try #require(model.snapshot.projects.first { $0.title == "DAAD" })
         let stepIndex = try #require(daad.steps.firstIndex { $0.text == "Ask Prof. Weber for a reference" })
         try await model.send(.promoteStep(project: daad.id, stepIndex: stepIndex, ActionDraft(
-            title: "Ask Prof. Weber for a reference", status: .backlog, contexts: ["mac"])))
+            title: "Ask Prof. Weber for a reference", status: .someday, contexts: ["mac"])))
         let daadNote = try #require(try vault.text("Projects/Applications/DAAD/DAAD.md"))
         #expect(daadNote.contains(
             "- [ ] Ask Prof. Weber for a reference → [[Actions/Ask Prof. Weber for a reference]]"),
@@ -97,10 +97,10 @@ import GTDVault
         // ── 6. Undo walks back, byte for byte (N6) ────────────────────────────────────────────
         await model.undo()
         #expect(model.lastError == nil)
-        let backToBacklog = try #require(try vault.text("Actions/Ask Prof. Weber for a reference.md"))
-        #expect(backToBacklog.contains("status: backlog"))
-        #expect(!backToBacklog.contains("waitingFor"))
-        #expect(model.snapshot.action(promoted)?.status == .backlog)
+        let backToSomeday = try #require(try vault.text("Actions/Ask Prof. Weber for a reference.md"))
+        #expect(backToSomeday.contains("status: someday"))
+        #expect(!backToSomeday.contains("waitingFor"))
+        #expect(model.snapshot.action(promoted)?.status == .someday)
 
         // VaultBackend's journal is 20 deep, so ⌘Z keeps going: the promotion goes too.
         await model.undo()
@@ -140,9 +140,9 @@ import GTDVault
         let rescanned = try vault.rescan()
         #expect(rescanned.lastReview?.systemFixNotes == decoded.systemFixNotes)
         #expect(rescanned.actions.first { $0.title == "Renew the Semesterticket" }?.status == .next)
-        #expect(rescanned.actions.first { $0.title == "Ask Marie about the monitor" }?.status == .backlog)
+        #expect(rescanned.actions.first { $0.title == "Ask Marie about the monitor" }?.status == .someday)
         #expect(rescanned.issues.isEmpty, "the whole week left no unreadable file behind")
-        #expect(Rules.countsTowardCap(rescanned) == 15)
+        #expect(Rules.countsTowardCap(rescanned, today: Fixtures.today) == 15)
     }
 
     // MARK: - Archive (A5) — the stale-wikilink bug T16 found
@@ -195,7 +195,7 @@ import GTDVault
         let action = try #require(snapshot.actions.first { $0.status == .next })
         let routine = try #require(snapshot.routines.first)
         let commands: [GTDCommand] = [
-            .setStatus(action.id, .backlog, waiting: nil),
+            .setStatus(action.id, .someday, waiting: nil),
             .updateConfig(snapshot.config),                                   // not undoable
             .logRoutineStep(routine: routine.id, stepID: routine.steps[0].id, .done),  // not undoable
             .createAction(ActionDraft(title: "A brand new action")),

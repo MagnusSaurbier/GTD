@@ -53,7 +53,7 @@ here. Two things are this target's own, and are not in either:
 
 ## Known gaps
 
-- `⌘⏎`, `⌘⇧N/B/M`, `⌘⇧W` (STYLEGUIDE §4.5) act on the focused row and are not in the menu bar:
+- `⌘⏎`, `⌘⇧N/S`, `⌘⇧W` (STYLEGUIDE §4.5) act on the focused row and are not in the menu bar:
   the feature views own them and none of them exposes a focus target to the shell yet
   (`docs/follow-ups/50-mac-keyboard-map.md`).
 - Quick capture is disabled under `-useFixtures` (there is no file system to write to).

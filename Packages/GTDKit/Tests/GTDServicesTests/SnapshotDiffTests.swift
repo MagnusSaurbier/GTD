@@ -18,7 +18,7 @@ struct SnapshotDiffTests {
     @Test func aChangedEntityIsWrittenWithTheCodecsEncoding() throws {
         var next = sample
         let index = try #require(next.actions.firstIndex { $0.title == "Fix the bike light" })
-        next.actions[index].status = .backlog
+        next.actions[index].status = .someday
 
         let ops = try SnapshotDiff.ops(from: sample, to: next, extraOps: [])
         #expect(ops == [.put(
@@ -75,7 +75,7 @@ struct SnapshotDiffTests {
         let index = try #require(next.actions.firstIndex { $0.title == "Learn Portuguese" })
         let old = next.actions[index]
         var renamed = rekey(old, to: NoteID(path: "Actions/Learn Spanish.md"), title: "Learn Spanish")
-        renamed.status = .backlog
+        renamed.status = .next
         next.actions[index] = renamed
         let move = VaultFileOp.move(from: old.id.path, to: renamed.id.path)
 

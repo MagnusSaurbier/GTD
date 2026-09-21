@@ -11,6 +11,33 @@ struct DecodeTests {
 
     // MARK: - Action fields
 
+    // MARK: - R-1: the legacy status words
+
+    /// `backlog` and `maybe` are the pre-2026-09-21 spellings of the single "not now" tier;
+    /// `trash` is the pre-rework closed state. All three are read, none is refused.
+    @Test(arguments: [("backlog", ActionStatus.someday), ("maybe", .someday), ("trash", .legacyTrashed)])
+    func legacyStatusWordsAreDecodedTolerantly(word: String, expected: ActionStatus) throws {
+        let action = try NoteCodec.decodeAction(
+            id: actionID, text: "---\nstatus: \(word)\n---\n# Why?\nx\n")
+        #expect(action.status == expected)
+    }
+
+    /// The tolerant read is not a free-for-all: a word nobody ever wrote is still a `VaultIssue`
+    /// rather than a silent default (N2 — the app never guesses about a note).
+    @Test func anUnknownStatusIsStillRefused() {
+        #expect(throws: NoteCodecError.self) {
+            try NoteCodec.decodeAction(
+                id: actionID, text: "---\nstatus: postponed\n---\n# Why?\nx\n")
+        }
+    }
+
+    /// The hidden legacy state must never reach a status picker (R-1).
+    @Test func theLegacyTrashStateIsNotInAllCases() {
+        #expect(!ActionStatus.allCases.contains(.legacyTrashed))
+        #expect(ActionStatus.allCases == [.next, .someday, .inProgress, .waiting, .done])
+    }
+
+
     @Test func decodesEveryActionField() throws {
         let text = """
         ---
@@ -252,7 +279,7 @@ struct DecodeTests {
     }
 
     @Test func refusesAnUnknownRoutineStepResult() {
-        let text = "---\nentries:\n  - routine: \"M\"\n    step: \"s\"\n    result: maybe\n    at: 2026-09-10T07:05:00+02:00\n---\n"
+        let text = "---\nentries:\n  - routine: \"M\"\n    step: \"s\"\n    result: unsure\n    at: 2026-09-10T07:05:00+02:00\n---\n"
         #expect(throws: NoteCodecError.self) {
             _ = try NoteCodec.decodeRoutineLog(id: NoteID(path: "GTD/RoutineLog/2026-09-10--iPhone.md"), text: text)
         }
@@ -287,6 +314,28 @@ struct DecodeTests {
         #expect(config.onTheGoContexts == GTDConfig.default.onTheGoContexts)
         #expect(config.nextCap == 15)
         #expect(config.layout == .default)
+    }
+
+    /// A4 — the `reading` context left the **defaults**, not the user's vault. A `Config.md`
+    /// that still lists it keeps it: the context list in the file is the user's, and nothing
+    /// rewrites it (the encoder patches only what changed).
+    @Test func aVaultThatStillListsTheReadingContextKeepsIt() throws {
+        #expect(!GTDConfig.default.contexts.contains("reading"))
+        #expect(!GTDConfig.default.onTheGoContexts.contains("reading"))
+
+        let text = """
+        ---
+        contexts: [mac, phone, home, campus, errands, calls, reading, deep-work]
+        onTheGoContexts: [phone, errands, calls, reading]
+        nextCap: 15
+        ---
+        # Config
+
+        """
+        let config = try NoteCodec.decodeConfig(id: NoteID(path: "GTD/Config.md"), text: text)
+        #expect(config.contexts.contains("reading"))
+        #expect(config.onTheGoContexts.contains("reading"))
+        #expect(NoteCodec.encode(config) == text)      // byte for byte — nothing was "fixed"
     }
 
     @Test func configCanOverrideTheLayout() throws {

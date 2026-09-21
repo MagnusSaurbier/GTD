@@ -3,14 +3,14 @@ import GTDModel
 
 /// What the undo toast says the last command was (STYLEGUIDE §3.8, §6.3).
 ///
-/// The wording is the style guide's fixed vocabulary — `Moved to Backlog`, `Filed to Next`,
+/// The wording is the style guide's fixed vocabulary — `Moved to Someday`, `Filed to Next`,
 /// `Completed <title>`. It lives here, in `GTDAppCore`, so `InMemoryBackend` and
 /// `GTDServices.VaultBackend` read the *same* table rather than two copies of it: the toast is
 /// then identical by construction whether a screen runs on fixtures or on the real vault
 /// (T41; `ParityTests.undoLabelsAgree` still pins it after every command).
 ///
 /// T16 was briefed with `Filed 'Call bank' to Next`; STYLEGUIDE §3.8/§6.3 spell the toast
-/// `Moved to Backlog` without the note's title, and the style guide wins on wording
+/// `Moved to Someday` without the note's title, and the style guide wins on wording
 /// (ARCHITECTURE §5). Only `complete` names its note, because both backends already did.
 public enum UndoLabel {
 
@@ -25,6 +25,8 @@ public enum UndoLabel {
             }
         case let .setStatus(_, status, _):
             "Moved to \(tier(status))"
+        case .trashAction:
+            "Moved to Trash"
         case let .complete(id):
             "Completed \(snapshot.action(id)?.title ?? "action")"
         case .createAction: "Created action"
@@ -44,11 +46,10 @@ public enum UndoLabel {
     private static func tier(_ status: ActionStatus) -> String {
         switch status {
         case .next, .inProgress: "Next"
-        case .backlog: "Backlog"
-        case .maybe: "Maybe"
+        case .someday: "Someday"
         case .waiting: "Waiting"
         case .done: "Done"
-        case .trash: "Trash"
+        case .legacyTrashed: "Trash"
         }
     }
 }

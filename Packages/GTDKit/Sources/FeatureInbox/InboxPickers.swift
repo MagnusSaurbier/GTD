@@ -113,10 +113,10 @@ public enum ProjectPicker {
     }
 
     /// The status a *first next action* gets (I4). Only active projects may put actions into Next
-    /// (P3), so a first action for an on-hold or someday project lands in Backlog instead of being
+    /// (P3), so a first action for an on-hold or someday project lands in Someday instead of being
     /// refused.
     public static func statusForFirstAction(in project: Project?) -> ActionStatus {
-        project?.status == .active ? .next : .backlog
+        project?.status == .active ? .next : .someday
     }
 }
 

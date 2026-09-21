@@ -19,7 +19,7 @@ struct CommandOrderTests {
         let id = NoteID(path: "Actions/Thing.md")
         var snapshot = VaultSnapshot.empty
         snapshot.actions = [
-            Action(id: id, title: "Thing", status: .backlog, why: "old why", what: "old what"),
+            Action(id: id, title: "Thing", status: .someday, why: "old why", what: "old what"),
         ]
         let model = AppModel(
             backend: InMemoryBackend(snapshot: snapshot), snapshot: snapshot)

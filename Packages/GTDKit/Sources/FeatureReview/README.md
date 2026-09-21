@@ -33,10 +33,10 @@ Linux-compilable (all the logic, all of it unit-tested):
   is offered (`continueStale()` / `discardStale()`), never silently adopted or dropped. A saved
   review is not resumable. A corrupt file means "no session", never a half-restored wizard.
 - Decided items are remembered by `NoteID.path`, so a card demoted in the Next phase is not dealt
-  again in the Backlog phase, and a relaunch resumes the exact position.
+  again in the Someday phase, and a relaunch resumes the exact position.
 - A refused command lands in `lastError` and leaves the card on the deck — never a silent skip.
 - Captured/processed is an approximation (no filed-at timestamp exists); the screen says so.
-- `resolve` on a waiting item goes to **Backlog**, not Next — it can never fail on the cap.
+- `resolve` on a waiting item goes to **Someday**, not Next — it can never fail on the cap.
 - `drop` is offered only for on-hold projects: a Someday project has nowhere left to drop to.
 
 ## Platform guards (ARCHITECTURE §5)

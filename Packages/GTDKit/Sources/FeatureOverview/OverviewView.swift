@@ -93,7 +93,7 @@ public struct OverviewView: View {
                     SidebarRow(
                         item: item,
                         count: item.count(counts),
-                        capSignal: item == .next ? Rules.capSignal(model.snapshot) : nil,
+                        capSignal: item == .next ? Rules.capSignal(model.snapshot, today: model.today()) : nil,
                         today: model.today())
                         .tag(item)
                 }
@@ -233,13 +233,9 @@ private struct ContentColumn: View {
             NextView(
                 mode: .full, selection: navigation.openAction,
                 onOpen: { navigation.open(action: $0) })
-        case .backlog:
+        case .someday:
             ActionListView(
-                status: .backlog, selection: navigation.openAction,
-                onOpen: { navigation.open(action: $0) })
-        case .maybe:
-            ActionListView(
-                status: .maybe, selection: navigation.openAction,
+                status: .someday, selection: navigation.openAction,
                 onOpen: { navigation.open(action: $0) })
         case .waiting:
             WaitingView(

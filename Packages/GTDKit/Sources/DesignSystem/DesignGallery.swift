@@ -24,15 +24,14 @@ public struct DesignGallery: View {
                 section("ProjectRow") { ProjectRow(row: Self.sampleProjectRow, today: Self.today) }
                 section("ItemCard") { itemCard }
                 section("GlassActionBar") { glassActionBar }
-                section("UndoToast") { UndoToast(label: Copy.movedTo(Copy.backlog), onUndo: {}) }
+                section("UndoToast") { UndoToast(label: Copy.movedTo(Copy.someday), onUndo: {}) }
                 section("Reward moments") { rewardMoments }
                 section("Review pieces") { reviewPieces }
                 section("Key legend") {
                     KeyLegendRow([
-                        .init(key: "←", label: Copy.backlog),
-                        .init(key: "↑", label: Copy.maybe),
+                        .init(key: "←", label: Copy.someday),
                         .init(key: "→", label: Copy.next),
-                        .init(key: "↓", label: Copy.trash),
+                        .init(key: "↓", label: Copy.close),
                         .init(key: "P"), .init(key: "K"), .init(key: "W"), .init(key: "R"),
                     ])
                 }

@@ -91,7 +91,7 @@ Defaults live in `VaultLayout` and are overridable in `GTD/Config.md`.
 | `GTD/Routines/<Name>.md` | routine templates (R1) |
 | `GTD/RoutineLog/<yyyy-MM-dd>--<deviceID>.md` | routine log, one file per day **per device** (R5, N3) |
 | `GTD/Reviews/<yyyy>/KW <ww>.md` | weekly review notes (§10.4) |
-| `GTD/Trash/` | trashed inbox items. The app never hard-deletes a vault file. |
+| `GTD/Trash/` | everything the user threw away — inbox captures **and** actions (I4c). Trash is not a status; the app never hard-deletes and never purges. |
 
 Device-local state (bookmark, undo journal, resumable review wizard state, notification
 bookkeeping, per-device settings) lives in Application Support, **not** in the vault.
@@ -123,6 +123,11 @@ per step, nested items are sub-steps. Step id = slug of the step text. All steps
 only (R4).
 
 Routine log: frontmatter `entries:` list of `{routine, step, result: done|skipped, at}`.
+
+`status` is one of `next`, `someday`, `in-progress`, `waiting`, `done` (A3). The codec also
+*reads* three legacy words without ever writing them back (R-1): `backlog` and `maybe` are the
+pre-2026-09-21 spellings of `someday`, and `trash` is the pre-rework closed state
+(`ActionStatus.legacyTrashed` — hidden, not user-settable, out of `allCases`).
 
 **Round-trip rule (N2):** the codec preserves unknown frontmatter keys, key order and unknown
 body sections byte-for-byte. Empty means absent or empty — never a fake default
@@ -161,7 +166,9 @@ snapshot entities (knowledge notes, the weekly-review note, trash moves). The ru
 them from fighting the diff: **a path named in `extraOps` is owned by `extraOps`** — the diff
 emits nothing for it. So every command that makes a note leave its collection emits its own move
 (inbox filing, archiving, renaming, converting an action into a project), and a removed entity
-that no `extraOp` mentions means "move the file to `GTD/Trash/`".
+that no `extraOp` mentions means "move the file to `GTD/Trash/`". Trashing an action
+(`trashAction`) is exactly that second case: it removes the entity and names no path, so the diff
+emits the `.delete` that `GTDVault` performs as a move into the trash (I4c).
 
 ### GTDMarkdown — the codec (N2)
 
@@ -302,8 +309,8 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 
 | Date | Decision |
 | --- | --- |
-| 2026-09-18 | **Swipe / key mapping** as in STYLEGUIDE §3.6: swipe → Next, ← Backlog, ↑ Maybe, ↓ Trash; buttons Project, Knowledge, Waiting; `⋯` for Defer to review. Mac: arrow keys, `P K W R`, `⌘Z`, `Esc`. Defined once in `FeatureInbox/CardTargets.swift`. |
-| 2026-09-18 | **Next at cap during processing:** forced choice sheet — demote one of the current Next items **or** send the card to Backlog. Never automatic. |
+| 2026-09-18 · rev. 2026-09-21 | **Swipe / key mapping** as in STYLEGUIDE §3.6: swipe → Next, ← Someday, ↓ Trash; buttons Project, Knowledge, Waiting; `⋯` for Defer to review. There is no `↑` target any more — the two "not now" tiers merged (A3), so up files nothing. Mac: arrow keys, `P K W R`, `⌘Z`, `Esc`. Defined once in `FeatureInbox/CardTargets.swift`. (The two-step card of I2–I4c lands in T08/T09.) |
+| 2026-09-18 · rev. 2026-09-21 | **Next at cap during processing:** forced choice sheet — demote one of the current Next items, or cancel (D14). Never automatic. |
 | 2026-09-18 | **`in-progress`** counts toward the cap and is pinned on top of Next. |
 | 2026-09-18 | **Routine log format:** one markdown file per day per device, entries in frontmatter (§3). |
 | 2026-09-18 | **Review stats** are computed on the fly from files. Nothing is persisted except the `KW` note. |
@@ -315,13 +322,13 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-19 | **Weekly review note:** the reducer stores `snapshot.lastReview`; `GTDServices` encodes the `KW` note. `GTDModel` never produces markdown. |
 | 2026-09-19 | **Colour tokens are code-defined**, not asset-catalog-dependent, because the catalog build could not be verified without Xcode (§5). |
 | 2026-09-19 | **Liquid Glass:** `GlassActionBar`/`UndoToast` use `.glassEffect()` behind `if #available(iOS 26, macOS 26, *)` with a `.ultraThinMaterial` fallback. Nobody has compiled the call — `TEST-INSTRUCTIONS.md` "Where to look first" #1. |
-| 2026-09-19 | **Defer × Next:** a future defer date and a Next slot contradict each other. The reducer refuses the combination (`.invalid`) instead of demoting silently; the UI makes the user choose. Only *new* contradictions are refused, so a hand-edited vault stays repairable. |
-| 2026-09-19 | **"Open action" for stalled (P4):** a project is stalled when it has no *visible, non-`maybe`* open action. `maybe` is not a commitment and a deferred action is not now. |
+| 2026-09-19 · reversed 2026-09-21 | **Defer × Next (R-2):** a Next item **may** carry a future `defer`. While hidden it does not occupy a cap slot (`Rules.countsTowardCap(_:today:)`, so the cap queries take a `Day`); on its date it returns to Next with the `back` badge. If Next is then over the cap nothing is demoted automatically: the `16/15` signal shows and `NextListModel.showsCapSheet` asks the view to present `Next is full` once per foreground until the user demotes something. This reverses the earlier "the reducer refuses the combination" decision (D15). |
+| 2026-09-19 · rev. 2026-09-21 | **"Open action" for stalled (P4):** a project is stalled when it has no *visible, non-`someday`* open action. The merged "not now" tier is not a commitment (it replaces the old `maybe` exception) and a deferred action is not now. |
 | 2026-09-19 | **Project rename:** `updateProject` refuses a changed title or area (`.invalid`) — the folder is the project's identity and moving a folder tree is out of v1 scope. Status, outcome, why, steps and log are editable. |
 | 2026-09-19 | **Turn into project:** `convertActionToProject` moves the action note to `GTD/Trash/`, takes its checkboxes as steps and emits `.whatsNext`, so the new project is never born stalled. |
 | 2026-09-19 | **Next list order:** `in-progress` first, then nearest `due`, then oldest capture, then path. The list is **never truncated to the cap** — an over-cap vault must stay repairable; `capSignal` shows `17/15` instead. |
 | 2026-09-19 | **Undo depth:** `VaultBackend` keeps 20 journal entries, so `⌘Z` walks back through a session; `InMemoryBackend` restores one snapshot. Every entry is checked against the files before it is applied. |
-| 2026-09-19 | **Undo toast wording** is STYLEGUIDE §3.8/§6.3's (`Moved to Backlog`, `Filed to Next`), word for word in both backends. |
+| 2026-09-19 · rev. 2026-09-21 | **Undo toast wording** is STYLEGUIDE §3.8/§6.3's (`Moved to Someday`, `Filed to Next`, `Moved to Trash`), word for word in both backends. |
 | 2026-09-19 | **Onboarding hand-off:** only the shell can take onboarding down (`OnboardingView.onFinished`), and the vault opens while it is still on screen so its validation step shows real counts. |
 | 2026-09-19 | **Command order:** `AppModel` serialises commands and offers `send(deriving:)` (§4). This is what fixed `ActionEditModelTests`' intermittent failure — an autosave racing another command, not a flaky test. |
 | 2026-09-19 | **Weekly review on Mac** is the `Review` sidebar section (STYLEGUIDE §4.1) with `ReviewResumeBanner` above the window, not a separate full-window mode. |
@@ -331,6 +338,12 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-19 | **No `AppEntity` for routines:** `StartRoutineIntent.routine` is a string matched against the title. A Shortcuts picker would need the loaded vault from an intent — `docs/follow-ups/52-*.md`. |
 | 2026-09-19 | **`AppComposition.shutdown()` is deliberately unwired:** `scenePhase == .background` is not termination, and process exit releases the security scope. |
 | 2026-09-19 | **The migration script is never run by an agent.** It is dry-run by default, backs up before `--apply`, deletes nothing, and only the user runs it — against a copy first (`docs/MANUAL_TEST.md` §9). |
+| 2026-09-21 | **One "not now" tier (A3, D1/D16).** `ActionStatus` is `next, someday, in-progress, waiting, done`; Backlog and Maybe are gone from the model, the UI and the vocabulary. The sidebar counts `someday` instead of `backlog`/`maybe`, and the review deck has one Someday phase. |
+| 2026-09-21 | **Trash is a move, not a status (I4c, D41).** `GTDCommand.trashAction` removes the note from the snapshot and names no path, so the snapshot diff emits the `.delete` that `GTDVault` performs as a move into `GTD/Trash/` — undoable, never hard-deleted, never purged. No `status: trash` is written anywhere. |
+| 2026-09-21 | **Legacy status words are read, never rewritten (R-1).** `backlog`/`maybe` decode as `.someday`, `trash` as `ActionStatus.legacyTrashed` (closed, hidden, not user-settable, out of `allCases`; the reducer refuses any move *into* it). Because the encoder patches only lines whose decoded value changed, such a file keeps its own word until the status really changes. `archiveCompleted` sends a legacy-trashed note to `GTD/Trash/` instead of `Archive/`. |
+| 2026-09-21 | **No `reading` context (A4).** `GTDConfig.default` drops it from the contexts and the on-the-go set. Only the *default* changed: a vault whose `Config.md` still lists `reading` keeps it, because the list in the file is the user's. |
+| 2026-09-21 | **A legacy-trashed note stays an archive *candidate*, not an immediate move.** `archiveCompleted` keeps the same 30-day threshold for it and only changes the destination (`GTD/Trash/`). Moving such notes at once would touch files the user has not asked about on the first launch after the rework; the requirements are silent, and this is the option that cannot surprise anyone. |
+| 2026-09-21 | **The sample vault keeps one `status: trash` note** (`Actions/Look into that podcast app.md`). `GTDFixtures` is the only writer of that word, on purpose: it is what makes R-1 — hidden state, tolerant decode, archive-to-trash routing — testable end to end against a realistic pre-rework vault. |
 
 ## 7. Sync safety rules (N3) — apply to every change that writes
 

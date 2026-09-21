@@ -80,6 +80,7 @@ struct RulesTests {
         let counts = Rules.sidebarCounts(snapshot, today: today)
         #expect(counts.inbox == 5)
         #expect(counts.next == 14)
+        #expect(counts.someday == 6)      // 8 in the tier, 2 of them deferred
         #expect(counts.waiting == 3)
         #expect(counts.deferred == 2)
         #expect(counts.projects == 4)
@@ -88,19 +89,19 @@ struct RulesTests {
         #expect(counts.waiting == Rules.waitingList(snapshot, today: today).count)
         #expect(counts.inbox == Rules.inboxQueue(snapshot).count)
         #expect(counts.deferred == Rules.deferredList(snapshot, today: today).count)
-        #expect(counts.backlog + counts.deferred
-                == snapshot.actions.count { $0.status == .backlog })
+        #expect(counts.someday + counts.deferred
+                == snapshot.actions.count { $0.status == .someday })
     }
 
     @Test func capSignalOnlyAppearsAtTheCap() {
-        #expect(Rules.capSignal(snapshot) == nil)
+        #expect(Rules.capSignal(snapshot, today: today) == nil)
         var full = snapshot
         full.config.nextCap = 14
-        #expect(Rules.capSignal(full)?.step == .attention)
-        #expect(Rules.capSignal(full)?.kind == .cap(count: 14, cap: 14))
+        #expect(Rules.capSignal(full, today: today)?.step == .attention)
+        #expect(Rules.capSignal(full, today: today)?.kind == .cap(count: 14, cap: 14))
         full.config.nextCap = 13
-        #expect(Rules.capSignal(full)?.step == .overdue)
-        #expect(Rules.isAtCap(full))
+        #expect(Rules.capSignal(full, today: today)?.step == .overdue)
+        #expect(Rules.isAtCap(full, today: today))
     }
 
     @Test func signalsFollowTheStyleGuideTable() throws {
@@ -240,7 +241,7 @@ struct SignalRuleTests {
     }
 
     /// A5 — a closed action shows nothing anywhere, so it carries no signals either.
-    @Test(arguments: [ActionStatus.done, .trash])
+    @Test(arguments: [ActionStatus.done, .legacyTrashed])
     func closedActionsAreSilent(status: ActionStatus) {
         let action = TestVault.action("Erledigt", status, due: TestVault.day(-5), modified: -90, completed: -1)
         #expect(signals(action).isEmpty)
@@ -249,14 +250,14 @@ struct SignalRuleTests {
     // D1 — `back` on the day the item returns, and only then.
     @Test(arguments: [(0, true), (-1, false), (-5, false)])
     func returnedFromDefer(offset: Int, hasBadge: Bool) {
-        let action = TestVault.action("Zurück", .backlog, deferDate: TestVault.day(offset), modified: 0)
+        let action = TestVault.action("Zurück", .someday, deferDate: TestVault.day(offset), modified: 0)
         let badge = Rules.returnedFromDeferBadge(for: action, today: today, calendar: calendar)
         #expect((badge != nil) == hasBadge)
         #expect(badge?.step == (hasBadge ? .neutral : nil))
     }
 
     @Test func aFutureDeferDateCarriesNoBadge() {
-        let action = TestVault.action("Später", .backlog, deferDate: TestVault.day(3), modified: 0)
+        let action = TestVault.action("Später", .someday, deferDate: TestVault.day(3), modified: 0)
         #expect(Rules.returnedFromDeferBadge(for: action, today: today, calendar: calendar) == nil)
     }
 
@@ -277,16 +278,26 @@ struct SignalRuleTests {
         let empty = TestVault.snapshot(projects: [project])
         #expect(Rules.signals(for: project, in: empty, today: today) == [Signal(kind: .stalled, step: .attention)])
 
+        // A Someday action is not a commitment, so the project stays stalled (P4).
+        let parked = TestVault.snapshot(
+            actions: [TestVault.action("Profil schreiben", .someday, project: project.id)],
+            projects: [project])
+        #expect(Rules.signals(for: project, in: parked, today: today)
+                == [Signal(kind: .stalled, step: .attention)])
+
         let busy = TestVault.snapshot(
-            actions: [TestVault.action("Profil schreiben", .backlog, project: project.id)],
+            actions: [TestVault.action("Profil schreiben", .next, project: project.id)],
             projects: [project])
         #expect(Rules.signals(for: project, in: busy, today: today).isEmpty)
     }
 
-    /// P4 — `maybe` and deferred actions are not commitments, so they leave a project stalled.
+    /// P4 — `someday` and deferred actions are not commitments, so they leave a project stalled.
+    /// The `someday` row replaces the old second-tier exception: the merged tier is not a
+    /// commitment either, so an active project whose only action is Someday is stalled
+    /// (ARCHITECTURE §6).
     @Test(arguments: [
-        (ActionStatus.next, false), (.inProgress, false), (.backlog, false), (.waiting, false),
-        (.maybe, true), (.done, true), (.trash, true),
+        (ActionStatus.next, false), (.inProgress, false), (.waiting, false),
+        (.someday, true), (.done, true), (.legacyTrashed, true),
     ])
     func whichActionsKeepAProjectAlive(status: ActionStatus, stalled: Bool) {
         let project = TestVault.project("Wohnungssuche")
@@ -302,7 +313,7 @@ struct SignalRuleTests {
     @Test func aDeferredActionLeavesItsProjectStalled() {
         let project = TestVault.project("Wohnungssuche")
         let vault = TestVault.snapshot(
-            actions: [TestVault.action("Profil", .backlog, project: project.id, deferDate: TestVault.day(9))],
+            actions: [TestVault.action("Profil", .someday, project: project.id, deferDate: TestVault.day(9))],
             projects: [project])
         #expect(Rules.isStalled(project, in: vault, today: today))
     }
@@ -328,7 +339,7 @@ struct SignalRuleTests {
     // D1 — visibility boundary: hidden until the day it names, visible on that day.
     @Test(arguments: [(-1, true), (0, true), (1, false)])
     func deferVisibilityBoundary(offset: Int, visible: Bool) {
-        let action = TestVault.action("Später", .backlog, deferDate: TestVault.day(offset))
+        let action = TestVault.action("Später", .someday, deferDate: TestVault.day(offset))
         let vault = TestVault.snapshot(actions: [action])
         #expect(Rules.isVisible(action, today: today) == visible)
         #expect(Rules.visibleActions(vault, today: today).isEmpty == !visible)

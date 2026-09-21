@@ -313,7 +313,7 @@ private struct ActionDetailEditor: View {
 
     /// `waiting` is reached through `WaitingInfoSheet` (W1), never by tapping a chip.
     private var statusChoices: [ActionStatus] {
-        [.next, .inProgress, .backlog, .maybe, .waiting]
+        [.next, .inProgress, .someday, .waiting]
     }
 
     /// Names already used elsewhere, offered as dashed suggestions in the waiting sheet.
@@ -355,9 +355,9 @@ private struct ActionDetailEditor: View {
                 Text(Copy.capSheetBody)
                     .font(Typo.meta)
                     .foregroundStyle(Color.textSecondary)
-                Button(Copy.sendToBacklogInstead) {
+                Button(Copy.sendToSomedayInstead) {
                     editor.clearError()
-                    editor.setStatus(.backlog)
+                    editor.setStatus(.someday)
                 }
                 .buttonStyle(.plain)
                 .font(Typo.meta)
@@ -385,8 +385,8 @@ private struct ActionDetailEditor: View {
     }
 }
 
-#Preview("Detail · backlog") {
-    ActionDetailPreview(status: .backlog)
+#Preview("Detail · someday") {
+    ActionDetailPreview(status: .someday)
 }
 
 #Preview("Detail · waiting") {

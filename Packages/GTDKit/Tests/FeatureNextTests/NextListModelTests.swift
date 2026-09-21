@@ -121,9 +121,9 @@ struct NextListModelTests {
         #expect(list.capCount == Fixtures.sampleSnapshot.config.nextCap - 1)
         #expect(list.capBadge == nil)
 
-        // Promote one Backlog item — the sample vault sits at cap − 1, so this exactly fills it.
-        let backlogAction = try #require(model.snapshot.actions.first { $0.status == .backlog })
-        try await model.send(.setStatus(backlogAction.id, .next, waiting: nil))
+        // Promote one Someday item — the sample vault sits at cap − 1, so this exactly fills it.
+        let somedayAction = try #require(model.snapshot.actions.first { $0.status == .someday })
+        try await model.send(.setStatus(somedayAction.id, .next, waiting: nil))
 
         #expect(list.capCount == Fixtures.sampleSnapshot.config.nextCap)
         let badge = try #require(list.capBadge)
@@ -187,6 +187,58 @@ struct NextListModelTests {
         #expect(list.capCount == snapshot.config.nextCap + 1)
         #expect(list.capBadge?.text == "16/15")
         #expect(list.capBadge?.step == .overdue)
+    }
+
+    // MARK: - R-2: a deferred Next item comes back into a full list
+
+    /// R-2 — a Next item with a future `defer` is hidden and holds no slot; on its date it is
+    /// back in the list and counts again. Nothing is demoted automatically.
+    @Test func aDeferredNextItemHoldsNoSlotUntilItsDateReturns() async throws {
+        let model = makeModel()
+        let list = NextListModel(model: model, mode: .full, store: InMemoryNextFilterStore())
+        let before = list.capCount
+        let action = try #require(model.snapshot.actions.first { $0.status == .next && $0.deferDate == nil })
+
+        try await list.setDefer(action, to: Fixtures.day(4))
+        #expect(list.capCount == before - 1)
+        #expect(!list.isOverCap)
+        #expect(!list.showsCapSheet)
+    }
+
+    /// The flag the view acts on (the sheet itself is T11): armed once per foreground, and only
+    /// while Next is actually over the cap.
+    @Test func theCapSheetIsOfferedOncePerForegroundUntilSomethingIsDemoted() async throws {
+        var snapshot = Fixtures.sampleSnapshot
+        for i in 1...2 {
+            snapshot.actions.append(Action(
+                id: NoteID(path: "Actions/Extra \(i).md"),
+                title: "Extra \(i)", status: .next, created: Fixtures.date(Fixtures.today, 9, 0)))
+        }
+        let model = makeModel(snapshot: snapshot)
+        let list = NextListModel(model: model, mode: .full, store: InMemoryNextFilterStore())
+
+        #expect(list.isOverCap)
+        #expect(list.showsCapSheet)            // opening the app is the first foreground
+        list.capSheetShown()
+        #expect(!list.showsCapSheet)           // …and not twice in the same foreground
+        list.enteredForeground()
+        #expect(list.showsCapSheet)            // still over the cap: due again
+
+        let victim = try #require(list.items.first { $0.status == .next })
+        try await list.demoteToSomeday(victim)
+        #expect(!list.isOverCap)
+        #expect(!list.showsCapSheet)           // repaired: nothing left to ask about
+        list.enteredForeground()
+        #expect(!list.showsCapSheet)
+    }
+
+    /// Below the cap there is nothing to present, whatever the foreground says.
+    @Test func theCapSheetIsNeverOfferedBelowTheCap() {
+        let list = NextListModel(model: makeModel(), mode: .full, store: InMemoryNextFilterStore())
+        #expect(!list.isOverCap)
+        #expect(!list.showsCapSheet)
+        list.enteredForeground()
+        #expect(!list.showsCapSheet)
     }
 
     // MARK: - Chase (W2)
@@ -282,15 +334,15 @@ struct NextListModelTests {
         #expect(list.capCount == before)
     }
 
-    @Test func demoteToBacklogFreesACapSlot() async throws {
+    @Test func demoteToSomedayFreesACapSlot() async throws {
         let model = makeModel()
         let list = NextListModel(model: model, mode: .full, store: InMemoryNextFilterStore())
         let action = try #require(model.snapshot.actions.first { $0.status == .next })
         let before = list.capCount
 
-        try await list.demoteToBacklog(action)
+        try await list.demoteToSomeday(action)
 
-        #expect(model.snapshot.action(action.id)?.status == .backlog)
+        #expect(model.snapshot.action(action.id)?.status == .someday)
         #expect(list.capCount == before - 1)
     }
 
@@ -316,10 +368,11 @@ struct NextListModelTests {
 
         let updated = try #require(model.snapshot.action(action.id))
         #expect(updated.deferDate == Fixtures.day(5))
-        // The reducer refuses a future `deferDate` on a `next`/`in-progress` action outright and
-        // never demotes it — `setDefer` does that itself, as its own explicit command, first.
-        #expect(updated.status == .backlog)
+        // R-2 — a Next item may carry a future defer. Nothing is demoted behind the user's back:
+        // the row simply leaves the list until its date, and holds no slot while it is hidden.
+        #expect(updated.status == .next)
         #expect(!list.items.contains { $0.id == action.id }, "deferred actions are hidden until the date (D1)")
+        #expect(list.capCount == Rules.countsTowardCap(model.snapshot, today: Fixtures.today))
     }
 
     @Test func setDeferWithoutADateNeedsNoDemotion() async throws {

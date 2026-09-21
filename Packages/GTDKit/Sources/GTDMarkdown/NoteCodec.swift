@@ -79,11 +79,15 @@ public enum NoteCodec {
         guard let statusRaw = doc.scalar("status") else {
             throw NoteCodecError.unreadable(path: id.path, reason: "Missing `status`")
         }
-        guard let status = ActionStatus(rawValue: statusRaw) else {
+        // R-1 — tolerant read: `backlog` and `maybe` are the pre-2026-09-21 spellings of
+        // `someday`, and `trash` is the legacy closed state. Because `encode` patches only the
+        // lines whose *decoded* value changed, such a file keeps its own word on disk until the
+        // status really changes: nothing is silently rewritten.
+        guard let status = ActionStatus(tolerantRawValue: statusRaw) else {
             throw NoteCodecError.unreadable(
                 path: id.path,
                 reason: "Unknown `status` \"\(statusRaw)\" — expected one of "
-                    + ActionStatus.allCases.map(\.rawValue).joined(separator: ", "))
+                    + ActionStatus.acceptedRawValues.joined(separator: ", "))
         }
         let sections = BodySections(lines: doc.bodyLines, terminator: doc.terminator)
         let why = sections.text(of: "Why?")

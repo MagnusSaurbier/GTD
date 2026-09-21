@@ -61,7 +61,7 @@ public final class ProjectDetailModel {
 
     // MARK: - Status
 
-    /// How many Next actions leaving `active` would demote to Backlog (P3) — shown before
+    /// How many Next actions leaving `active` would demote to Someday (P3) — shown before
     /// confirming, not gated behind a dialog (the change is undoable, N6).
     public func demotionCount(forChangingStatusTo newStatus: ProjectStatus) -> Int {
         guard let project, project.status == .active, newStatus != .active else { return 0 }
@@ -127,16 +127,16 @@ public final class ProjectDetailModel {
     // MARK: - Steps: promote
 
     /// P6 — promotes an open step into a real action. Cap handling is simplified from T20's
-    /// full "Next is full" sheet: the caller offers a single "Send to Backlog instead" retry.
+    /// full "Next is full" sheet: the caller offers a single "Send to Someday instead" retry.
     @discardableResult
     public func promoteStep(at index: Int, draft: ActionDraft) async throws -> PromotionOutcome {
         try await sendCapAware(model, .promoteStep(project: projectID, stepIndex: index, draft))
     }
 
     @discardableResult
-    public func promoteStepToBacklog(at index: Int, draft: ActionDraft) async throws -> PromotionOutcome {
-        var backlogDraft = draft
-        backlogDraft.status = .backlog
-        return try await promoteStep(at: index, draft: backlogDraft)
+    public func promoteStepToSomeday(at index: Int, draft: ActionDraft) async throws -> PromotionOutcome {
+        var somedayDraft = draft
+        somedayDraft.status = .someday
+        return try await promoteStep(at: index, draft: somedayDraft)
     }
 }

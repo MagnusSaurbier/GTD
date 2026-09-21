@@ -1,6 +1,6 @@
 ---
-status: maybe
-contexts: [reading]
+status: someday
+contexts: [home]
 created: 2026-06-21T09:30:00+02:00
 ---
 # Why?

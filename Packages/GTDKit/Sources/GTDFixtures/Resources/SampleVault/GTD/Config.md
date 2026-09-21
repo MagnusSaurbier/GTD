@@ -1,6 +1,6 @@
 ---
-contexts: [mac, phone, home, campus, errands, calls, reading, deep-work]
-onTheGoContexts: [phone, errands, calls, reading]
+contexts: [mac, phone, home, campus, errands, calls, deep-work]
+onTheGoContexts: [phone, errands, calls]
 nextCap: 15
 ---
 # Config

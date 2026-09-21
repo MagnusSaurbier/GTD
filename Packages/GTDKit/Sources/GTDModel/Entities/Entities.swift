@@ -291,9 +291,12 @@ public struct GTDConfig: Sendable, Equatable {
         self.passthrough = passthrough
     }
 
+    /// A4 — there is **no `reading` context**: all reading goes to the Read list (§5a).
+    /// Only the *default* changed; a vault whose `Config.md` still lists `reading` keeps it,
+    /// because the config is read from the file and the list is the user's.
     public static let `default` = GTDConfig(
-        contexts: ["mac", "phone", "home", "campus", "errands", "calls", "reading", "deep-work"],
-        onTheGoContexts: ["phone", "errands", "calls", "reading"],
+        contexts: ["mac", "phone", "home", "campus", "errands", "calls", "deep-work"],
+        onTheGoContexts: ["phone", "errands", "calls"],
         nextCap: 15,
         layout: .default)
 }

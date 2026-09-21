@@ -67,7 +67,7 @@ struct VaultBackendScenarioTests {
                 why: "The semester ticket may be deductible.",
                 steps: ["Collect the receipts", "Fill in the forms"]),
             firstActions: [ActionDraft(
-                title: "Collect the tax receipts", status: .backlog, contexts: ["home"])])))
+                title: "Collect the tax receipts", status: .someday, contexts: ["home"])])))
 
         let note = try #require(try vault.text(
             "Projects/Karriereplanung/Steuererklärung/Steuererklärung.md"))
@@ -88,7 +88,7 @@ struct VaultBackendScenarioTests {
         // 5 — an existing project.
         let daad = try #require(start.projects.first { $0.title == "DAAD" })
         _ = try await vault.backend.perform(.fileInbox(toExisting.id, .existingProject(
-            daad.id, actions: [ActionDraft(title: "Buy running shoes", status: .backlog)])))
+            daad.id, actions: [ActionDraft(title: "Buy running shoes", status: .someday)])))
         let shoes = try #require(try vault.text("Actions/Buy running shoes.md"))
         #expect(shoes.contains("project: \"[[Projects/Applications/DAAD/DAAD]]\""))
 
@@ -190,12 +190,12 @@ struct VaultBackendScenarioTests {
 
         var action = try #require(start.actions.first { $0.title == "Cancel the gym membership" })
         action.title = "Cancel the gym contract"
-        action.status = .backlog
+        action.status = .someday
         _ = try await vault.backend.perform(.updateAction(action))
 
         #expect(try vault.text("Actions/Cancel the gym membership.md") == nil)
         let text = try #require(try vault.text("Actions/Cancel the gym contract.md"))
-        #expect(text.contains("status: backlog"))
+        #expect(text.contains("status: someday"))
         #expect(text.contains("Send the cancellation form by email before the 30th."))
     }
 

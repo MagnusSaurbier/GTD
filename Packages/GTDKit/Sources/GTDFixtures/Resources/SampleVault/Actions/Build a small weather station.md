@@ -1,5 +1,5 @@
 ---
-status: maybe
+status: someday
 contexts: [home, deep-work]
 created: 2026-05-22T09:30:00+02:00
 ---

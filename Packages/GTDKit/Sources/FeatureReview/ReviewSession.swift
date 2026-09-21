@@ -165,10 +165,10 @@ public final class ReviewSession {
     // MARK: - The cap
 
     public var cap: Int { model.snapshot.config.nextCap }
-    public var nextCount: Int { Rules.countsTowardCap(model.snapshot) }
+    public var nextCount: Int { Rules.countsTowardCap(model.snapshot, today: today) }
     public var isOverCap: Bool { nextCount > cap }
     /// `15/15` or `17/15` — the live cap count the deck step shows (STYLEGUIDE §2.2).
-    public var capSignal: Signal? { Rules.capSignal(model.snapshot) }
+    public var capSignal: Signal? { Rules.capSignal(model.snapshot, today: today) }
 
     // MARK: - Sweep: inbox (§10.1.1)
 

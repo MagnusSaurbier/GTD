@@ -75,7 +75,7 @@ enum InboxPreviewData {
             actions: [
                 action("Write DAAD motivation letter", .next),
                 action("Return the library books", .next, contexts: ["errands"]),
-                action("Fix the bike light", .backlog, contexts: ["home"]),
+                action("Fix the bike light", .someday, contexts: ["home"]),
             ],
             areas: [area],
             projects: [project],

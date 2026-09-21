@@ -10,7 +10,7 @@ Local notification planning and scheduling (D2, R3, W2, D1). Public types: `Noti
   `[PlannedNotification]` out. Plans `deferReturn` (morning of `deferDate`), `dueApproaching`
   (morning of `due - 1` **and** morning of `due`), `followUp` (morning of `followUpDate`, only
   for `status == .waiting`), `routineStart` (daily-repeating, at the routine's own `time`, not
-  the morning time). `done`/`trash` actions are never planned; a fire date at or before `now` is
+  the morning time). Closed actions (`done`, legacy `trash`) are never planned; a fire date at or before `now` is
   dropped ("past dates ignored"). Non-routine notifications landing on the exact same instant
   collapse into one `.summary` (unless `.summary` is disabled). Ids are
   `"<kind>:<note path>[:<day>]"` — stable across re-planning. Capped at
@@ -37,6 +37,6 @@ on this app's iOS 26/macOS 26 minimum).
 ## Testing
 
 `cd Packages/GTDKit && swift test --filter GTDNotificationsTests` — DST spring-forward/fall-back
-and a fixed-offset zone (explicit `TimeZone`s), past dates, done/trash, collapse, per-kind
+and a fixed-offset zone (explicit `TimeZone`s), past dates, closed actions, collapse, per-kind
 settings, the 64-cap ordering, a full pass over `GTDFixtures.sampleSnapshot`; scheduler diffing
 against a fake port; deep-link round trip.

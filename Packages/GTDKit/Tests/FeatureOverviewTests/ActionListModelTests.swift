@@ -19,7 +19,7 @@ struct ActionListModelTests {
 
     private func action(
         _ title: String,
-        status: ActionStatus = .backlog,
+        status: ActionStatus = .someday,
         project: NoteID? = nil,
         contexts: [String] = [],
         minutes: Int? = nil,
@@ -133,19 +133,19 @@ struct ActionListModelTests {
 
     @Test func listShowsOnlyItsStatusAndHidesDeferredItems() {
         var snapshot = Fixtures.sampleSnapshot
-        snapshot.actions.append(action("Deferred backlog item", deferDate: Fixtures.day(4)))
-        snapshot.actions.append(action("Plain backlog item"))
-        let list = ActionListModel(model: makeModel(snapshot), status: .backlog)
+        snapshot.actions.append(action("Deferred someday item", deferDate: Fixtures.day(4)))
+        snapshot.actions.append(action("Plain someday item"))
+        let list = ActionListModel(model: makeModel(snapshot), status: .someday)
 
         let titles = list.actions.map(\.title)
-        #expect(titles.contains("Plain backlog item"))
-        #expect(!titles.contains("Deferred backlog item"))
-        #expect(list.actions.allSatisfy { $0.status == .backlog })
+        #expect(titles.contains("Plain someday item"))
+        #expect(!titles.contains("Deferred someday item"))
+        #expect(list.actions.allSatisfy { $0.status == .someday })
         #expect(list.isFiltered == false)
     }
 
     @Test func clearFiltersResetsEverything() {
-        let list = ActionListModel(model: makeModel(), status: .maybe)
+        let list = ActionListModel(model: makeModel(), status: .someday)
         list.query = "bike"
         list.contexts = ["mac"]
         list.timeAvailable = 30
@@ -156,7 +156,7 @@ struct ActionListModelTests {
     }
 
     @Test func groupsAndActionsAgree() {
-        let list = ActionListModel(model: makeModel(), status: .backlog)
+        let list = ActionListModel(model: makeModel(), status: .someday)
         #expect(list.groups.reduce(0) { $0 + $1.actions.count } == list.actions.count)
     }
 }

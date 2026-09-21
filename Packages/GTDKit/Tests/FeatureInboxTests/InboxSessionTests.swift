@@ -32,7 +32,7 @@ struct InboxSessionTests {
         #expect(session.counter == "\(total) of \(total) left")
 
         session.draft.what = "Call the Hausverwaltung"
-        await session.choose(.backlog)
+        await session.choose(.someday)
 
         #expect(session.counter == "\(total - 1) of \(total) left")
         #expect(session.processed == 1)
@@ -117,10 +117,10 @@ struct InboxSessionTests {
         session.draft.timeBucket = .upTo10
         session.draft.due = Fixtures.day(3)
 
-        await session.choose(.backlog)
+        await session.choose(.someday)
 
         let action = try! #require(model.snapshot.actions.first { $0.title == "Ring the Hausverwaltung" })
-        #expect(action.status == .backlog)
+        #expect(action.status == .someday)
         #expect(action.why == "The window does not close.")
         #expect(action.contexts == ["calls", "home"])
         #expect(action.timeEstimate == 10)
@@ -146,7 +146,7 @@ struct InboxSessionTests {
 
     // MARK: - Validation (STYLEGUIDE §3.6)
 
-    @Test func nextAndBacklogRequireAWhat() async {
+    @Test func nextAndSomedayRequireAWhat() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let item = try! #require(session.current)
         let actionsBefore = model.snapshot.actions.count
@@ -157,27 +157,33 @@ struct InboxSessionTests {
         #expect(model.snapshot.actions.count == actionsBefore)
 
         let firstNonce = try! #require(session.validation?.nonce)
-        await session.choose(.backlog)
+        await session.choose(.someday)
         #expect(session.validation?.issue == .whatRequired)
         #expect(session.validation?.nonce == firstNonce + 1)   // shakes again
         #expect(model.snapshot.actions.count == actionsBefore)
     }
 
-    @Test func maybeAndTrashDoNotNeedAWhat() async {
+    /// Knowledge and Trash carry no commitment, so they never demand a *What?*.
+    /// (Replaces the old second-tier test: that tier merged into Someday, which *does* require
+    /// a What? — `nextAndSomedayNeedAWhat` covers it.)
+    @Test func knowledgeAndTrashDoNotNeedAWhat() async {
         let (session, model, _) = InboxTestSupport.makeSession()
-        await session.choose(.maybe)
+        let before = model.snapshot.actions.count
+        await session.choose(.knowledge)
         #expect(session.validation == nil)
-        #expect(session.processed == 1)
-        #expect(model.snapshot.actions.contains { $0.status == .maybe && $0.why.isEmpty })
+        #expect(session.sheet == .knowledge)
+        session.sheet = nil
 
         await session.choose(.trash)
-        #expect(session.processed == 2)
+        #expect(session.validation == nil)
+        #expect(session.processed == 1)
+        #expect(model.snapshot.actions.count == before)   // trash creates no action
     }
 
     @Test func contextsAndTimeMayStayEmpty() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         session.draft.what = "Ring the Hausverwaltung"
-        await session.choose(.backlog)
+        await session.choose(.someday)
 
         let action = try! #require(model.snapshot.actions.first { $0.title == "Ring the Hausverwaltung" })
         #expect(action.contexts.isEmpty)
@@ -189,12 +195,12 @@ struct InboxSessionTests {
     @Test func capOffersAForcedChoiceAndKeepsTheDraft() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let cap = model.snapshot.config.nextCap
-        #expect(Rules.countsTowardCap(model.snapshot) == cap - 1)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap - 1)
 
         // One slot left: the first card fits.
         session.draft.what = "Ring the Hausverwaltung"
         await session.choose(.next)
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
         #expect(session.sheet == nil)
 
         // The next one is refused — the card stays, with everything the user typed.
@@ -225,14 +231,14 @@ struct InboxSessionTests {
         await session.demoteAndRetry(victim.id)
 
         #expect(session.sheet == nil)
-        #expect(model.snapshot.action(victim.id)?.status == .backlog)
+        #expect(model.snapshot.action(victim.id)?.status == .someday)
         let filed = try! #require(model.snapshot.actions.first { $0.title == "Write the rename script" })
         #expect(filed.status == .next)
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
         #expect(session.processed == 2)
     }
 
-    @Test func sendToBacklogInsteadIsTheOtherHalfOfTheChoice() async {
+    @Test func sendToSomedayInsteadIsTheOtherHalfOfTheChoice() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let cap = model.snapshot.config.nextCap
         session.draft.what = "Ring the Hausverwaltung"
@@ -241,12 +247,12 @@ struct InboxSessionTests {
         await session.choose(.next)
         #expect(session.sheet == .cap)
 
-        await session.sendToBacklogInstead()
+        await session.sendToSomedayInstead()
 
         #expect(session.sheet == nil)
         let filed = try! #require(model.snapshot.actions.first { $0.title == "Write the rename script" })
-        #expect(filed.status == .backlog)
-        #expect(Rules.countsTowardCap(model.snapshot) == cap)   // nothing was demoted behind the user's back
+        #expect(filed.status == .someday)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)   // nothing was demoted behind the user's back
         #expect(session.processed == 2)
     }
 
@@ -266,7 +272,7 @@ struct InboxSessionTests {
         #expect(model.snapshot.inboxItem(refused.id) != nil)
     }
 
-    /// The cap also guards the project sub-flow, and "Backlog instead" demotes the first actions.
+    /// The cap also guards the project sub-flow, and "Someday instead" demotes the first actions.
     @Test func capAppliesToProjectFirstActionsToo() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         session.draft.what = "Ring the Hausverwaltung"
@@ -278,9 +284,9 @@ struct InboxSessionTests {
             actions: [ActionDraft(title: "Collect the forms", status: .next, what: "Collect the forms")])
         #expect(session.sheet == .cap)
 
-        await session.sendToBacklogInstead()
+        await session.sendToSomedayInstead()
         let filed = try! #require(model.snapshot.actions.first { $0.title == "Collect the forms" })
-        #expect(filed.status == .backlog)
+        #expect(filed.status == .someday)
         #expect(filed.project == project.id)
     }
 
@@ -356,27 +362,27 @@ struct InboxSessionTests {
 
         await session.confirmExistingProject(
             project.id,
-            actions: [ActionDraft(title: "Collect the forms", status: .backlog, what: "Collect the forms")])
+            actions: [ActionDraft(title: "Collect the forms", status: .someday, what: "Collect the forms")])
 
         let action = try! #require(model.snapshot.actions.first { $0.title == "Collect the forms" })
         #expect(action.project == project.id)
         #expect(session.processed == 1)
     }
 
-    /// P3 — a first action for a project that is not active goes to Backlog, not Next.
+    /// P3 — a first action for a project that is not active goes to Someday, not Next.
     @Test func firstActionStatusFollowsTheProjectStatus() {
         let (session, model, _) = InboxTestSupport.makeSession()
         let active = try! #require(model.snapshot.projects.first { $0.status == .active })
         let onHold = try! #require(model.snapshot.projects.first { $0.status != .active })
 
         #expect(ProjectPicker.statusForFirstAction(in: active) == .next)
-        #expect(ProjectPicker.statusForFirstAction(in: onHold) == .backlog)
-        #expect(ProjectPicker.statusForFirstAction(in: nil) == .backlog)
+        #expect(ProjectPicker.statusForFirstAction(in: onHold) == .someday)
+        #expect(ProjectPicker.statusForFirstAction(in: nil) == .someday)
 
         session.draft.what = "Collect the forms"
         #expect(session.firstActionDraft(for: active).project == active.id)
         #expect(session.firstActionDraft(for: active).status == .next)
-        #expect(session.firstActionDraft(for: onHold).status == .backlog)
+        #expect(session.firstActionDraft(for: onHold).status == .someday)
     }
 
     @Test func deferToReviewNeedsAReasonAndLeavesTheQueue() async {
@@ -408,7 +414,7 @@ struct InboxSessionTests {
         session.draft.due = Fixtures.day(3)
         let filed = session.draft
 
-        await session.choose(.backlog)
+        await session.choose(.someday)
         #expect(session.current?.id != item.id)
         #expect(session.processed == 1)
         #expect(session.canUndo)
@@ -444,8 +450,8 @@ struct InboxSessionTests {
         #expect(session.undoToastLabel == nil)
 
         session.draft.what = "Ring the Hausverwaltung"
-        await session.choose(.backlog)
-        #expect(session.undoToastLabel == "Moved to Backlog")   // STYLEGUIDE §6.3
+        await session.choose(.someday)
+        #expect(session.undoToastLabel == "Moved to Someday")   // STYLEGUIDE §6.3
 
         await session.choose(.trash)
         #expect(session.undoToastLabel == "Moved to Trash")
@@ -473,17 +479,17 @@ struct InboxSessionTests {
         #expect(!session.isFinished)
 
         session.draft.what = "Ring the Hausverwaltung"
-        await session.choose(.backlog)
+        await session.choose(.someday)
         await session.choose(.trash)
 
         #expect(session.isFinished)
         #expect(session.current == nil)
         #expect(session.processed == 2)
         let counts = Dictionary(uniqueKeysWithValues: session.summaryCounts.map { ($0.target, $0.count) })
-        #expect(counts[.backlog] == 1)
+        #expect(counts[.someday] == 1)
         #expect(counts[.trash] == 1)
         #expect(counts[.next] == 0)
-        #expect(InboxCopy.targetBreakdown(session.summaryCounts) == "1 Backlog · 1 Trash")
+        #expect(InboxCopy.targetBreakdown(session.summaryCounts) == "1 Someday · 1 Trash")
         #expect(session.elapsedMinutes == 0)
     }
 
@@ -492,7 +498,7 @@ struct InboxSessionTests {
         session.draft.why = "because"
         session.draft.what = "Ring the Hausverwaltung"
         session.draft.contexts = ["calls"]
-        await session.choose(.backlog)
+        await session.choose(.someday)
 
         let next = try! #require(session.current)
         #expect(session.draft.isPristine(for: next))

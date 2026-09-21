@@ -5,7 +5,7 @@ import GTDAppCore
 /// The result of any command that can be refused by the Next cap (I4, A3). Every promotion path
 /// in this target (`ProjectDetailModel`, `WhatsNextModel`, `ConvertToProjectModel`) returns this
 /// instead of throwing on `GTDError.nextCapReached`, so the view can offer the simplified
-/// fallback from the brief ("cap error handled like in T20 but simplified: offer Backlog")
+/// fallback from the brief ("cap error handled like in T20 but simplified: offer Someday")
 /// without re-deriving the cap from the error by hand.
 public enum PromotionOutcome: Sendable, Equatable {
     case success

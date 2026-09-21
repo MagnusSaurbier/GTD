@@ -1,5 +1,5 @@
 ---
-status: backlog
+status: someday
 contexts: [home, deep-work]
 created: 2026-07-21T09:30:00+02:00
 ---

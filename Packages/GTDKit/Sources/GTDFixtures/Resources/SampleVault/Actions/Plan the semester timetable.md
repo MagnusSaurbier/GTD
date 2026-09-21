@@ -1,5 +1,5 @@
 ---
-status: backlog
+status: someday
 contexts: [mac]
 timeEstimate: 60
 defer: 2026-10-09

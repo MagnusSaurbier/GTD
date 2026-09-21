@@ -15,13 +15,13 @@ struct ReviewSessionTests {
         #expect(ReviewPage.allCases.first == .sweepInbox)
         #expect(ReviewPage.allCases.last == .summary)
         #expect(ReviewStage.sweep.pages == [.sweepInbox, .sweepDeferred, .sweepWaiting, .sweepStalled])
-        #expect(ReviewStage.deck.pages == [.deckNext, .deckBacklogMaybe, .deckProjects])
+        #expect(ReviewStage.deck.pages == [.deckNext, .deckSomeday, .deckProjects])
         #expect(ReviewPage.summary.stage == nil)
         #expect(ReviewPage.summary.previous == nil)      // the note is already written
     }
 
     @Test func railMarksEarlierStagesDoneAndTheCurrentOneCurrent() {
-        let rail = ReviewRailItem.rail(for: .deckBacklogMaybe)
+        let rail = ReviewRailItem.rail(for: .deckSomeday)
         #expect(rail.count == 4)
         #expect(rail[0].isComplete)                       // sweep
         #expect(rail[1].isCurrent)                        // deck

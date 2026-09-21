@@ -2,17 +2,17 @@ import Foundation
 import GTDModel
 import DesignSystem
 
-/// The three phases of the deck (§10.2): Next, then Backlog and Maybe, then the projects that
+/// The three phases of the deck (§10.2): Next, then Someday, then the projects that
 /// are not active. Declaration order is the order the wizard walks them in.
 public enum DeckPhase: String, Sendable, CaseIterable, Codable, Hashable {
     case next
-    case backlogMaybe
+    case someday
     case projects
 
     public var title: String {
         switch self {
         case .next: ReviewCopy.deckNextTitle
-        case .backlogMaybe: ReviewCopy.deckBacklogMaybeTitle
+        case .someday: ReviewCopy.deckSomedayTitle
         case .projects: ReviewCopy.deckProjectsTitle
         }
     }
@@ -20,7 +20,7 @@ public enum DeckPhase: String, Sendable, CaseIterable, Codable, Hashable {
     public var page: ReviewPage {
         switch self {
         case .next: .deckNext
-        case .backlogMaybe: .deckBacklogMaybe
+        case .someday: .deckSomeday
         case .projects: .deckProjects
         }
     }
@@ -65,7 +65,7 @@ public enum DeckChoice: String, Sendable, CaseIterable, Codable, Hashable, Ident
         case .demote: ReviewSymbols.demote
         case .promote, .activate: ReviewSymbols.promote
         case .trash: ReviewSymbols.trash
-        case .drop: ReviewSymbols.maybe
+        case .drop: ReviewSymbols.someday
         }
     }
 
@@ -73,7 +73,7 @@ public enum DeckChoice: String, Sendable, CaseIterable, Codable, Hashable, Ident
     public var changesAnything: Bool { self != .keep }
 }
 
-/// One card in the deck: an action in the Next/Backlog/Maybe phases, a project in the last one.
+/// One card in the deck: an action in the Next and Someday phases, a project in the last one.
 public struct DeckCard: Sendable, Equatable, Identifiable {
     public enum Subject: Sendable, Equatable {
         case action(Action)
@@ -122,22 +122,19 @@ public enum ReviewDeck {
     ///
     /// - `.next` reuses `Rules.nextList` so the deck order matches the Next view the user knows
     ///   (`in-progress` first, then nearest `due`, then oldest capture).
-    /// - `.backlogMaybe` deals Backlog before Maybe — the promotion candidates first — each
-    ///   oldest capture first, so the things that have sat longest get decided first.
+    /// - `.someday` deals the Someday tier oldest capture first, so the things that have sat
+    ///   longest get decided first.
     /// - `.projects` deals on-hold before someday, by title.
     public static func cards(for phase: DeckPhase, in s: VaultSnapshot, today: Day) -> [DeckCard] {
         switch phase {
         case .next:
             return Rules.nextList(s, today: today)
                 .map { DeckCard(subject: .action($0), choices: [.keep, .demote]) }
-        case .backlogMaybe:
-            let byStatus: [ActionStatus] = [.backlog, .maybe]
-            return byStatus.flatMap { status in
-                s.actions
-                    .filter { $0.status == status }
-                    .sorted(by: oldestFirst)
-                    .map { DeckCard(subject: .action($0), choices: [.promote, .keep, .trash]) }
-            }
+        case .someday:
+            return s.actions
+                .filter { $0.status == .someday }
+                .sorted(by: oldestFirst)
+                .map { DeckCard(subject: .action($0), choices: [.promote, .keep, .trash]) }
         case .projects:
             let byStatus: [ProjectStatus] = [.onHold, .someday]
             return byStatus.flatMap { status in
@@ -161,17 +158,17 @@ public enum ReviewDeck {
     }
 
     /// The command a choice turns into, or `nil` for `keep` (which writes nothing).
-    /// Trashing an action sets `status: trash`; the file itself is never hard-deleted (§2, N-rule).
+    /// Trashing an action moves its note to `GTD/Trash/` (I4c); nothing is ever hard-deleted.
     public static func command(for choice: DeckChoice, card: DeckCard) -> GTDCommand? {
         switch (choice, card.subject) {
         case (.keep, _):
             return nil
         case let (.demote, .action(action)):
-            return .setStatus(action.id, .backlog, waiting: nil)
+            return .setStatus(action.id, .someday, waiting: nil)
         case let (.promote, .action(action)):
             return .setStatus(action.id, .next, waiting: nil)
         case let (.trash, .action(action)):
-            return .setStatus(action.id, .trash, waiting: nil)
+            return .trashAction(action.id)
         case let (.activate, .project(project)):
             return projectStatus(project, .active)
         case let (.drop, .project(project)):

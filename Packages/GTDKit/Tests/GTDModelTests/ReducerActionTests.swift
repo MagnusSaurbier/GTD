@@ -24,8 +24,8 @@ struct ReducerActionTests {
         CapCase(occupied: 15, cap: 15, status: .next, refused: true),    // exactly at the cap
         CapCase(occupied: 15, cap: 15, status: .inProgress, refused: true),
         CapCase(occupied: 16, cap: 15, status: .next, refused: true),    // hand-edited, still refused
-        CapCase(occupied: 15, cap: 15, status: .backlog, refused: false),
-        CapCase(occupied: 15, cap: 15, status: .maybe, refused: false),
+        CapCase(occupied: 15, cap: 15, status: .someday, refused: false),
+        CapCase(occupied: 15, cap: 15, status: .done, refused: false),
         CapCase(occupied: 15, cap: 15, status: .waiting, refused: false),
         CapCase(occupied: 0, cap: 1, status: .next, refused: false),
         CapCase(occupied: 1, cap: 1, status: .next, refused: true),
@@ -41,15 +41,15 @@ struct ReducerActionTests {
 
     @Test func demotingIsAlwaysAllowedEvenAboveTheCap() throws {
         let vault = TestVault.nextOccupied(17)      // only reachable by editing files
-        #expect(Rules.capSignal(vault)?.step == .overdue)
+        #expect(Rules.capSignal(vault, today: env.today)?.step == .overdue)
         let id = TestVault.actionID("Next 0")
-        let result = try Reducer.reduce(vault, .setStatus(id, .backlog, waiting: nil), env: env)
-        #expect(Rules.countsTowardCap(result.snapshot) == 16)
+        let result = try Reducer.reduce(vault, .setStatus(id, .someday, waiting: nil), env: env)
+        #expect(Rules.countsTowardCap(result.snapshot, today: env.today) == 16)
     }
 
-    @Test func promotingFromBacklogAtTheCapIsRefused() {
+    @Test func promotingFromSomedayAtTheCapIsRefused() {
         var vault = TestVault.nextOccupied(15)
-        vault.actions.append(TestVault.action("Später", .backlog))
+        vault.actions.append(TestVault.action("Später", .someday))
         let error = TestVault.error(vault, .setStatus(TestVault.actionID("Später"), .next, waiting: nil), env: env)
         #expect(error == .nextCapReached(cap: 15))
     }
@@ -71,7 +71,7 @@ struct ReducerActionTests {
         #expect(action.followUpDate == TestVault.day(7))
     }
 
-    @Test(arguments: [ActionStatus.next, .backlog, .maybe, .done, .trash])
+    @Test(arguments: [ActionStatus.next, .someday, .done])
     func leavingWaitingClearsBothHalves(status: ActionStatus) throws {
         let waiting = TestVault.action(
             "Reference letter", .waiting,
@@ -83,20 +83,46 @@ struct ReducerActionTests {
         #expect(action.followUpDate == nil)
     }
 
-    // MARK: - D1: defer
+    // MARK: - D1 × R-2: defer and Next
 
-    @Test func aDeferredActionCannotOccupyANextSlot() {
-        let vault = TestVault.snapshot(actions: [TestVault.action("Plan the timetable", .backlog)])
+    /// R-2 (reverses the 2026-09-19 refusal): a Next item may carry a future `defer`. It is
+    /// hidden until its date and does not occupy a slot while hidden.
+    @Test func aDeferredActionMayOccupyANextSlotAndIsHiddenUntilItsDate() throws {
+        let vault = TestVault.snapshot(actions: [TestVault.action("Plan the timetable", .someday)])
         let id = TestVault.actionID("Plan the timetable")
-        var deferred = vault.action(id)!
+        var deferred = try #require(vault.action(id))
         deferred.deferDate = TestVault.day(10)
         deferred.status = .next
 
-        #expect(TestVault.error(vault, .updateAction(deferred), env: env)
-                == .invalid("A deferred action cannot sit in Next"))
-        #expect(TestVault.error(vault, .createAction(ActionDraft(
+        let result = try Reducer.reduce(vault, .updateAction(deferred), env: env)
+        let stored = try #require(result.snapshot.action(id))
+        #expect(stored.status == .next)
+        #expect(stored.deferDate == TestVault.day(10))
+        #expect(!Rules.isVisible(stored, today: env.today))
+        #expect(Rules.nextList(result.snapshot, today: env.today).isEmpty)
+        #expect(Rules.countsTowardCap(result.snapshot, today: env.today) == 0)
+        // …and on its date it is back in Next, with the `back` badge.
+        let onTheDay = TestVault.day(10)
+        #expect(Rules.nextList(result.snapshot, today: onTheDay).map(\.id) == [id])
+        #expect(Rules.countsTowardCap(result.snapshot, today: onTheDay) == 1)
+        #expect(Rules.returnedFromDeferBadge(for: stored, today: onTheDay) != nil)
+    }
+
+    /// R-2 — a full Next plus a deferred Next item is legal: the hidden one holds no slot.
+    /// When it returns, Next is simply over the cap; nothing is demoted automatically.
+    @Test func aDeferredNextItemDoesNotConsumeASlotUntilItReturns() throws {
+        let vault = TestVault.nextOccupied(15)
+        let result = try Reducer.reduce(vault, .createAction(ActionDraft(
             title: "Später", status: .next, deferDate: TestVault.day(3))), env: env)
-                == .invalid("A deferred action cannot sit in Next"))
+        #expect(Rules.countsTowardCap(result.snapshot, today: env.today) == 15)
+        #expect(Rules.capSignal(result.snapshot, today: env.today)?.step == .attention)
+
+        let afterwards = TestVault.day(3)
+        #expect(Rules.countsTowardCap(result.snapshot, today: afterwards) == 16)
+        #expect(Rules.capSignal(result.snapshot, today: afterwards)
+                == Signal(kind: .cap(count: 16, cap: 15), step: .overdue))
+        // The over-cap list is never truncated — it must stay repairable.
+        #expect(Rules.nextList(result.snapshot, today: afterwards).count == 16)
     }
 
     @Test func aDeferDateInThePastOrTodayIsFineInNext() throws {
@@ -118,8 +144,8 @@ struct ReducerActionTests {
         let result = try Reducer.reduce(vault, .updateAction(edited), env: env)
         #expect(result.snapshot.action(stray.id)?.why == "Repaired in the app")
         // …and demoting it works.
-        let demoted = try Reducer.reduce(vault, .setStatus(stray.id, .backlog, waiting: nil), env: env)
-        #expect(demoted.snapshot.action(stray.id)?.status == .backlog)
+        let demoted = try Reducer.reduce(vault, .setStatus(stray.id, .someday, waiting: nil), env: env)
+        #expect(demoted.snapshot.action(stray.id)?.status == .someday)
     }
 
     // MARK: - A4: contexts are a closed list
@@ -137,7 +163,7 @@ struct ReducerActionTests {
 
     /// A migrated note may carry a context the config does not know; editing it must not fail.
     @Test func contextsAlreadyInTheNoteSurviveAnEdit() throws {
-        let legacy = TestVault.action("Alt", .backlog, contexts: ["tum-stammgelände"])
+        let legacy = TestVault.action("Alt", .someday, contexts: ["tum-stammgelände"])
         let vault = TestVault.snapshot(actions: [legacy])
         var edited = legacy
         edited.contexts = ["tum-stammgelände", "mac"]
@@ -283,21 +309,53 @@ struct ReducerActionTests {
     func completingInAnInactiveProjectStillLogsButDoesNotPrompt(status: ProjectStatus) throws {
         var vault = projectVault()
         vault.projects[0].status = status
-        vault.actions[0].status = .backlog          // P3: it could not be in Next anyway
+        vault.actions[0].status = .someday          // P3: it could not be in Next anyway
         let result = try Reducer.reduce(vault, .complete(vault.actions[0].id), env: env)
         #expect(result.prompts.isEmpty)
         #expect(result.snapshot.projects[0].log.count == 1)
     }
 
-    @Test func trashingClosesTheActionAndReopeningClearsTheDate() throws {
-        let vault = TestVault.snapshot(actions: [TestVault.action("Podcast app", .maybe)])
-        let id = TestVault.actionID("Podcast app")
-        let trashed = try Reducer.reduce(vault, .setStatus(id, .trash, waiting: nil), env: env)
-        #expect(trashed.snapshot.action(id)?.completedDate == env.now)     // A5: it has a closing date
-        #expect(!Rules.visibleActions(trashed.snapshot, today: env.today).contains { $0.id == id })
+    // MARK: - I4c: trash is a move, not a status
 
-        let reopened = try Reducer.reduce(trashed.snapshot, .setStatus(id, .backlog, waiting: nil), env: env)
-        #expect(reopened.snapshot.action(id)?.completedDate == nil)        // no lying date
+    /// The note leaves the snapshot and nobody names its path, so the diff turns that into a
+    /// `.delete`, which `GTDVault` performs as a move into `GTD/Trash/` (ARCHITECTURE §4).
+    /// No `status: trash` is written anywhere.
+    @Test func trashingAnActionRemovesItFromTheSnapshotAndWritesNoStatus() throws {
+        let vault = TestVault.snapshot(actions: [TestVault.action("Podcast app", .someday)])
+        let id = TestVault.actionID("Podcast app")
+        let trashed = try Reducer.reduce(vault, .trashAction(id), env: env)
+        #expect(trashed.snapshot.action(id) == nil)
+        #expect(trashed.extraOps.isEmpty)      // the removed-entity rule owns the move
+        #expect(TestVault.error(trashed.snapshot, .trashAction(id), env: env) == .notFound(id))
+    }
+
+    /// A promoted step must not keep pointing at a note that is now in the trash (T41).
+    @Test func trashingAPromotedActionClearsTheStepLink() throws {
+        var vault = projectVault()
+        let action = vault.actions[0]
+        vault.projects[0].steps = [ProjectStep(text: "Erste Schritte", promotedTo: action.id)]
+        let result = try Reducer.reduce(vault, .trashAction(action.id), env: env)
+        #expect(result.snapshot.projects[0].steps[0].promotedTo == nil)
+    }
+
+    /// R-1 — `status: trash` is a legacy state only. It can be read, it hides the note, and it
+    /// can be repaired; nothing may move *into* it.
+    @Test func theLegacyTrashStatusIsHiddenAndNotUserSettable() throws {
+        let legacy = TestVault.action("Podcast app", .legacyTrashed, completed: -30)
+        let vault = TestVault.snapshot(actions: [legacy])
+        #expect(!Rules.visibleActions(vault, today: env.today).contains { $0.id == legacy.id })
+        #expect(!ActionStatus.allCases.contains(.legacyTrashed))
+
+        // Nothing may move *into* it: an ordinary action cannot be given the legacy status.
+        let open = TestVault.action("Noch offen", .someday)
+        let mixed = TestVault.snapshot(actions: [legacy, open])
+        #expect(TestVault.error(mixed, .setStatus(open.id, .legacyTrashed, waiting: nil), env: env)
+                == .invalid("Trash is not a status — trashing moves the note to GTD/Trash/"))
+
+        // Repairing it is allowed, and re-opening clears the closing date (A5, no lying date).
+        let reopened = try Reducer.reduce(vault, .setStatus(legacy.id, .someday, waiting: nil), env: env)
+        #expect(reopened.snapshot.action(legacy.id)?.status == .someday)
+        #expect(reopened.snapshot.action(legacy.id)?.completedDate == nil)
     }
 
     // MARK: - A2: checkboxes
@@ -330,6 +388,7 @@ struct ReducerActionTests {
         let commands: [GTDCommand] = [
             .updateAction(TestVault.action("Ghost")),
             .setStatus(ghost, .next, waiting: nil),
+            .trashAction(ghost),
             .complete(ghost),
             .toggleCheckbox(ghost, index: 0),
             .convertActionToProject(ghost, ProjectDraft(title: "P")),
@@ -344,12 +403,12 @@ struct ReducerActionTests {
     @Test func theSampleVaultSitsOneBelowTheCapAndFillsUpExactlyOnce() throws {
         let env = Fixtures.reducerEnv()
         let vault = Fixtures.sampleSnapshot
-        #expect(Rules.countsTowardCap(vault) == vault.config.nextCap - 1)
+        #expect(Rules.countsTowardCap(vault, today: env.today) == vault.config.nextCap - 1)
 
         let filled = try Reducer.reduce(
             vault, .createAction(ActionDraft(title: "Fifteenth", status: .next)), env: env)
-        #expect(Rules.countsTowardCap(filled.snapshot) == vault.config.nextCap)
-        #expect(Rules.capSignal(filled.snapshot)?.step == .attention)
+        #expect(Rules.countsTowardCap(filled.snapshot, today: env.today) == vault.config.nextCap)
+        #expect(Rules.capSignal(filled.snapshot, today: env.today)?.step == .attention)
 
         #expect(TestVault.error(filled.snapshot,
                                 .createAction(ActionDraft(title: "Sixteenth", status: .next)), env: env)

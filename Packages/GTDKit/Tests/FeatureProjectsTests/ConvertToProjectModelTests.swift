@@ -100,7 +100,7 @@ struct ConvertToProjectModelTests {
     private func makeCappedSnapshot() -> (VaultSnapshot, convertible: Action, filler: Action) {
         let filler = Action(id: layout.actionPath(title: "Filler"), title: "Filler", status: .next)
         let convertible = Action(
-            id: layout.actionPath(title: "Two-step task"), title: "Two-step task", status: .backlog,
+            id: layout.actionPath(title: "Two-step task"), title: "Two-step task", status: .someday,
             what: "- [ ] Step one\n- [ ] Step two")
         let config = GTDConfig(contexts: [], onTheGoContexts: [], nextCap: 1, layout: layout)
         let snapshot = VaultSnapshot(actions: [filler, convertible], config: config)
@@ -122,7 +122,7 @@ struct ConvertToProjectModelTests {
         #expect(project.steps[0].promotedTo == nil)              // the promotion was refused
     }
 
-    @Test func fallingBackToBacklogAfterTheCapSucceeds() async throws {
+    @Test func fallingBackToSomedayAfterTheCapSucceeds() async throws {
         let (snapshot, convertible, _) = makeCappedSnapshot()
         let model = makeModel(snapshot: snapshot)
         let convert = ConvertToProjectModel(action: convertible.id, model: model)
@@ -131,12 +131,12 @@ struct ConvertToProjectModelTests {
         let capped = try await convert.convert(draft, promoteStepIndex: 0)
         #expect(capped == .capReached(cap: 1))
 
-        let fallback = try await convert.promoteConvertedStepToBacklog(draft, stepIndex: 0)
+        let fallback = try await convert.promoteConvertedStepToSomeday(draft, stepIndex: 0)
         #expect(fallback == .success)
 
         let project = try #require(model.snapshot.project(convert.projectID(for: draft)))
         let created = try #require(model.snapshot.action(project.steps[0].promotedTo!))
-        #expect(created.status == .backlog)
-        #expect(Rules.countsTowardCap(model.snapshot) == 1)   // still just the filler
+        #expect(created.status == .someday)
+        #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 1)   // still just the filler
     }
 }

@@ -20,7 +20,7 @@ struct SnapshotEmissionTests {
         #expect(first.actions.contains { $0.title == "Write DAAD motivation letter" })
 
         _ = try await backend.perform(
-            .createAction(ActionDraft(title: "Buy a desk lamp", status: .backlog)))
+            .createAction(ActionDraft(title: "Buy a desk lamp", status: .someday)))
 
         // The store never re-indexed and never published: this can only be the reduced snapshot.
         let optimistic = try #require(await snapshots.next()).snapshot
@@ -33,7 +33,7 @@ struct SnapshotEmissionTests {
         let store = PassiveStore(snapshot: Fixtures.sampleSnapshot)
         let backend = try await makeBackend(store)
         _ = try await backend.perform(
-            .createAction(ActionDraft(title: "Buy a desk lamp", status: .backlog)))
+            .createAction(ActionDraft(title: "Buy a desk lamp", status: .someday)))
 
         // The watcher fires: another device added a note while we were working.
         var scanned = await backend.currentSnapshot()

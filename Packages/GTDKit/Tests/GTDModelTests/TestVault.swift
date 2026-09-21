@@ -36,7 +36,7 @@ enum TestVault {
 
     static func action(
         _ title: String,
-        _ status: ActionStatus = .backlog,
+        _ status: ActionStatus = .someday,
         contexts: [String] = [],
         timeEstimate: Int? = nil,
         project: NoteID? = nil,

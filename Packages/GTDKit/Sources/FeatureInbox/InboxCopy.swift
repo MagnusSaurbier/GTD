@@ -34,7 +34,7 @@ public enum InboxCopy {
     // MARK: Hint overlay (first session only)
 
     public static let hintTitle = "Swipe to file"
-    public static let hintBody = "Right Next · left Backlog · up Maybe · down Trash"
+    public static let hintBody = "Right Next · left Someday · down Trash"
     public static let hintDismiss = "Got it"
 
     // MARK: Knowledge sheet
@@ -73,7 +73,7 @@ public enum InboxCopy {
         Copy.processedSummary(processed: processed, minutes: minutes)
     }
 
-    /// `6 Next · 3 Backlog · 1 Trash` — the per-target breakdown under the summary.
+    /// `6 Next · 3 Someday · 1 Trash` — the per-target breakdown under the summary.
     public static func targetBreakdown(_ counts: [(target: CardTarget, count: Int)]) -> String {
         counts.filter { $0.count > 0 }
             .map { "\($0.count) \($0.target.title)" }

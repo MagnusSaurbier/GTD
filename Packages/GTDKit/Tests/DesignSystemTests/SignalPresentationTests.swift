@@ -61,7 +61,7 @@ struct SignalPresentationTests {
 
     @Test func canonicalCopy() {
         #expect(Copy.counter(remaining: 3, total: 14) == "3 of 14 left")
-        #expect(Copy.movedTo(Copy.backlog) == "Moved to Backlog")
+        #expect(Copy.movedTo(Copy.someday) == "Moved to Someday")
         #expect(Copy.whatsNext(project: "DAAD") == "What's next for DAAD?")
         #expect(Copy.timeBucket(.over60) == "60+")
         #expect(Copy.capSheetTitle == "Next is full")

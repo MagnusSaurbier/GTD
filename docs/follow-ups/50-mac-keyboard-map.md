@@ -23,7 +23,7 @@ These are **not**:
 | Shortcut | Action |
 | --- | --- |
 | `⌘⏎` | mark the focused action done |
-| `⌘⇧N` / `⌘⇧B` / `⌘⇧M` | move the focused action to Next / Backlog / Maybe |
+| `⌘⇧N` / `⌘⇧S` | move the focused action to Next / Someday |
 | `⌘⇧W` | set the focused action to waiting (opens `WaitingInfoSheet`, W1) |
 | `Space` | toggle the focused chip or checkbox |
 

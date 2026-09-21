@@ -7,7 +7,7 @@ import DesignSystem
 /// so every one of them lives here — the same split `FeatureInbox.InboxCopy` uses.
 ///
 /// Wording follows §6.1: English, sentence case, verb-first buttons, no praise, no exclamation
-/// marks, and the fixed GTD vocabulary wherever one exists (`Next`, `Backlog`, `Maybe`,
+/// marks, and the fixed GTD vocabulary wherever one exists (`Next`, `Someday`,
 /// `Promote`, `Demote`, `Chase`, `Stalled`, `Weekly review`).
 public enum ReviewCopy {
 
@@ -50,7 +50,7 @@ public enum ReviewCopy {
     public static let stepWaiting = "Waiting"
     public static let stepStalled = "Stalled projects"
     public static let stepDeckNext = "Next"
-    public static let stepDeckBacklogMaybe = "Backlog and Maybe"
+    public static let stepDeckSomeday = "Someday"
     public static let stepDeckProjects = "Projects on hold"
 
     // MARK: Gates
@@ -80,7 +80,7 @@ public enum ReviewCopy {
     public static let resolve = "Resolve"
     public static let chaseHint = "Chased today — pick the next follow-up."
     public static let bumpHint = "Not chasing — push the follow-up out."
-    public static let resolveHint = "The wait is over — moves to Backlog."
+    public static let resolveHint = "The wait is over — moves to Someday."
 
     public static let addNextAction = "Add next action"
     public static let putOnHold = "Put on hold"
@@ -94,7 +94,7 @@ public enum ReviewCopy {
     // MARK: Deck
 
     public static let deckNextTitle = "Keep or demote"
-    public static let deckBacklogMaybeTitle = "Promote, keep or trash"
+    public static let deckSomedayTitle = "Promote, keep or trash"
     public static let deckProjectsTitle = "Activate, keep or drop"
     public static let activateChoice = "Activate"
     public static let dropChoice = "Drop"
@@ -228,10 +228,10 @@ public enum ReviewSymbols {
     public static let chase = Symbols.chase
     public static let inbox = Symbols.inbox
     public static let promote = Symbols.promoteStep
-    public static let demote = Symbols.backlog
+    public static let demote = Symbols.someday
     public static let keep = Symbols.next
     public static let trash = Symbols.trash
     public static let projects = Symbols.projects
-    public static let maybe = Symbols.maybe
+    public static let someday = Symbols.someday
     public static let done = Symbols.done
 }

@@ -20,7 +20,7 @@ struct ActionEditModelTests {
 
     private func fixture(
         title: String = "Draft action",
-        status: ActionStatus = .backlog,
+        status: ActionStatus = .someday,
         why: String = "old why",
         what: String = "old what"
     ) -> Action {
@@ -211,19 +211,19 @@ struct ActionEditModelTests {
         // The sample vault sits one below the cap; fill the last slot.
         snapshot.actions.append(fixture(title: "Fills the cap", status: .next))
         let (model, editor) = make(fixture(title: "One too many"), snapshot: snapshot)
-        #expect(Rules.isAtCap(model.snapshot))
+        #expect(Rules.isAtCap(model.snapshot, today: Fixtures.today))
 
         editor.setStatus(.next)
         await editor.waitForPendingSave()
 
         #expect(editor.lastError is GTDError)
-        #expect(model.snapshot.action(editor.id)?.status == .backlog)
+        #expect(model.snapshot.action(editor.id)?.status == .someday)
         #expect(editor.hasUnsavedEdits)
 
         // It does not hammer the backend: a repeated save without a new edit does nothing.
         editor.clearError()
         await editor.waitForPendingSave()
-        #expect(model.snapshot.action(editor.id)?.status == .backlog)
+        #expect(model.snapshot.action(editor.id)?.status == .someday)
     }
 
     /// W1 — waiting is only ever written together with who and a follow-up date.
@@ -244,11 +244,11 @@ struct ActionEditModelTests {
         editor.setWaiting(WaitingInfo(who: "Lena", followUp: Fixtures.day(7)))
         await editor.waitForPendingSave()
 
-        editor.setStatus(.backlog)
+        editor.setStatus(.someday)
         await editor.waitForPendingSave()
 
         let saved = try #require(model.snapshot.action(editor.id))
-        #expect(saved.status == .backlog)
+        #expect(saved.status == .someday)
         #expect(saved.waitingFor == nil)
         #expect(saved.followUpDate == nil)
     }
@@ -356,11 +356,16 @@ struct ActionEditModelTests {
         #expect(model.snapshot.action(expected)?.status == .done)
     }
 
-    @Test func trashIsAStatusNotADeletion() async {
+    /// I4c — trashing moves the note to `GTD/Trash/`: it leaves the snapshot, and no
+    /// `status: trash` is written. Nothing is hard-deleted, so undo brings it back.
+    @Test func trashIsAMoveNotAStatusAndNotADeletion() async {
         let (model, editor) = make(fixture())
+        let id = editor.id
         #expect(await editor.trash())
-        #expect(model.snapshot.action(editor.id)?.status == .trash)
+        #expect(model.snapshot.action(id) == nil)
         #expect(editor.isClosed)
+        await model.undo()
+        #expect(model.snapshot.action(id) != nil)
     }
 
     @Test func undoReopensAClosedAction() async {
@@ -369,7 +374,7 @@ struct ActionEditModelTests {
         await model.undo()
         editor.refresh()
         #expect(editor.isClosed == false)
-        #expect(editor.status == .backlog)
+        #expect(editor.status == .someday)
     }
 
     /// A refused edit must not be thrown away by ticking the action off.
@@ -382,7 +387,7 @@ struct ActionEditModelTests {
 
         #expect(await editor.complete() == false)
         #expect(editor.lastError is GTDError)
-        #expect(model.snapshot.action(editor.id)?.status == .backlog)
+        #expect(model.snapshot.action(editor.id)?.status == .someday)
     }
 
     // MARK: - A2

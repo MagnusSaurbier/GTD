@@ -188,7 +188,7 @@ public struct ReviewWizardRail: View {
 }
 
 /// The quiet key-legend row under the Mac inbox card and review deck (STYLEGUIDE §3.6, §3.10):
-/// `← Backlog  ↑ Maybe  → Next  ↓ Trash    P Project · K Knowledge · W Waiting · R Review`.
+/// `← Someday  → Next  ↓ Collapse    P Project · K Knowledge · W Waiting · R Review`.
 public struct KeyLegendRow: View {
     public struct Entry: Identifiable, Sendable {
         public var id: String { key }

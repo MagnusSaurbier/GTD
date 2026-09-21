@@ -1,5 +1,5 @@
 ---
-status: backlog
+status: someday
 contexts: [home]
 timeEstimate: 90
 created: 2026-08-16T09:30:00+02:00
