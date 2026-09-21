@@ -680,6 +680,111 @@ struct InboxSessionTests {
         #expect(mac.processed == 0, "More… opens a sheet, it does not file")
     }
 
+    // MARK: - More… › New list… (I4b, L2)
+
+    /// A vault whose `Lists/` folder is empty — what a fresh vault looks like.
+    private var snapshotWithoutLists: VaultSnapshot {
+        var snapshot = Fixtures.sampleSnapshot
+        snapshot.lists = []
+        snapshot.listItems = []
+        snapshot.config.favouriteLists = nil
+        return snapshot
+    }
+
+    /// With no list the navbar is `Knowledge · More…` and the sheet must not be a dead end.
+    @Test func aVaultWithoutListsSaysSoInsteadOfShowingAnEmptySheet() async {
+        let (session, _, _) = InboxTestSupport.makeSession(snapshot: snapshotWithoutLists)
+        await session.take(.openKeep)
+        #expect(session.navbarSlots.map(\.kind) == [.knowledge, .more])
+        #expect(session.hasNoLists)
+        #expect(session.listsFolderName == "Lists")
+
+        let (sample, _, _) = InboxTestSupport.makeSession()
+        #expect(!sample.hasNoLists)
+    }
+
+    /// `New list…` creates the list and files the card into it, like picking an existing list.
+    @Test func aNewListIsCreatedAndTheCardFiledIntoIt() async {
+        let (session, model, _) = InboxTestSupport.makeSession(snapshot: snapshotWithoutLists)
+        let item = try! #require(session.current)
+        await session.take(.openKeep)
+        session.draft.notes = "Marie empfiehlt es."
+        await session.take(.more)
+
+        let created = await session.createListAndFile(name: "  Read ")
+
+        #expect(created)
+        #expect(model.snapshot.lists.map(\.name) == ["Read"])
+        #expect(model.snapshot.inboxItem(item.id) == nil)
+        let filed = try! #require(model.snapshot.listItems.first { $0.list == "Read" })
+        #expect(filed.title == filedTitle)
+        #expect(filed.notes == "Marie empfiehlt es.")
+        #expect(session.undoToastLabel == "Added to Read")
+        #expect(session.sheet == nil)
+        #expect(session.processed == 1)
+        #expect(session.step == .step1)
+        #expect(!session.hasNoLists)
+        // No favourites chosen: the new list is a navbar slot for the next card (R-5).
+        #expect(session.navbarSlots.map(\.kind) == [.knowledge, .list(name: "Read"), .more])
+    }
+
+    /// The reducer's name rules apply: a list that exists (in any case), nothing, and `Done`.
+    @Test func aDuplicateOrInvalidListNameIsRefusedInTheSheet() async {
+        let (session, model, _) = InboxTestSupport.makeSession()
+        let item = try! #require(session.current)
+        let before = model.snapshot.lists
+        await session.take(.openKeep)
+        await session.take(.more)
+
+        #expect(await session.createListAndFile(name: "read") == false)
+        #expect(session.newListRefusal == "A list named \"Read\" already exists.")
+        #expect(session.sheet == .more, "the sheet stays open on a refusal")
+
+        session.clearNewListRefusal()
+        #expect(session.newListRefusal == nil)
+
+        #expect(await session.createListAndFile(name: "   ") == false)
+        #expect(session.newListRefusal == "A list name is required")
+        #expect(await session.createListAndFile(name: "Done") == false)
+        #expect(session.newListRefusal != nil)
+
+        #expect(model.snapshot.lists == before)
+        #expect(model.snapshot.inboxItem(item.id) != nil)
+        #expect(session.processed == 0)
+
+        session.cancelSheet()
+        #expect(session.newListRefusal == nil)
+    }
+
+    /// Like every list exit, `New list…` belongs to the Knowledge / List card only.
+    @Test func aNewListCannotBeCreatedFromAnotherStep() async {
+        let (session, model, _) = InboxTestSupport.makeSession()
+        #expect(await session.createListAndFile(name: "Buy") == false)
+        #expect(session.refusal?.reason == .notAvailable(.more, in: .step1))
+        #expect(model.snapshot.list(named: "Buy") == nil)
+    }
+
+    /// R-9 — undo takes the card back out of the new list, onto the opened keep card with its
+    /// notes. The list stays: `createList` has no inverse, and an empty folder costs nothing.
+    @Test func undoAfterANewListReturnsTheCardAndKeepsTheList() async {
+        let (session, model, _) = InboxTestSupport.makeSession(snapshot: snapshotWithoutLists)
+        let item = try! #require(session.current)
+        await session.take(.openKeep)
+        session.draft.notes = "Second-hand is fine."
+        await session.take(.more)
+        await session.createListAndFile(name: "Wish")
+
+        await session.undo()
+
+        #expect(session.current?.id == item.id)
+        #expect(session.step == .keepCard)
+        #expect(session.draft.notes == "Second-hand is fine.")
+        #expect(session.processed == 0)
+        #expect(model.snapshot.inboxItem(item.id) != nil)
+        #expect(model.snapshot.listItems.isEmpty)
+        #expect(model.snapshot.lists.map(\.name) == ["Wish"])
+    }
+
     /// W1/D39 — the follow-up date is required, who is optional, and `What?` is still asked for.
     @Test func waitingNeedsWhatAndAFollowUpDateButNotWho() async {
         let (session, model, _) = await InboxTestSupport.openedActionCard()

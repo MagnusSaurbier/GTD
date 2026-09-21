@@ -358,22 +358,44 @@ struct CapSheet: View {
 // MARK: - More… (I4b)
 
 /// The navbar's last slot: every list, not only the favourites. Tapping one files the card.
+/// `New list…` creates a list and files the card into it; with no list at all the sheet says
+/// what a list is instead of showing an empty table. Decisions are `InboxSession`'s.
 struct MoreListsSheet: View {
     @Bindable var session: InboxSession
     @Environment(\.dismiss) private var dismiss
 
+    @State private var newListName = ""
+    @State private var isAddingList = false
+    @FocusState private var isNameFocused: Bool
+
     var body: some View {
         NavigationStack {
-            List(session.allLists) { list in
-                Button {
-                    dismiss()
-                    Task { await session.take(.list(list.name)) }
-                } label: {
-                    Label(list.name, systemImage: Symbols.list(named: list.name))
-                        .font(Typo.body)
-                        .foregroundStyle(Color.ink)
+            Group {
+                if session.hasNoLists && !isAddingList {
+                    ContentUnavailableView {
+                        Label(InboxCopy.noListsTitle, systemImage: Symbols.listBullet)
+                    } description: {
+                        Text(InboxCopy.noListsBody(folder: session.listsFolderName))
+                    } actions: {
+                        Button(InboxCopy.newList) { startAdding() }
+                            .tint(Color.gtdAccent)
+                    }
+                } else {
+                    List {
+                        ForEach(session.allLists) { list in
+                            Button {
+                                dismiss()
+                                Task { await session.take(.list(list.name)) }
+                            } label: {
+                                Label(list.name, systemImage: Symbols.list(named: list.name))
+                                    .font(Typo.body)
+                                    .foregroundStyle(Color.ink)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        newListRow
+                    }
                 }
-                .buttonStyle(.plain)
             }
             .navigationTitle(Copy.lists)
             .toolbar {
@@ -385,6 +407,45 @@ struct MoreListsSheet: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder private var newListRow: some View {
+        if isAddingList {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack {
+                    TextField(InboxCopy.newListPlaceholder, text: $newListName)
+                        .textFieldStyle(.plain)
+                        .focused($isNameFocused)
+                        .submitLabel(.done)
+                        .onSubmit { create() }
+                        .onChange(of: newListName) { session.clearNewListRefusal() }
+                    Button(InboxCopy.createList) { create() }
+                        .disabled(newListName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if let refusal = session.newListRefusal {
+                    Text(refusal).font(Typo.meta).foregroundStyle(Color.signalAttention)
+                }
+            }
+        } else {
+            Button {
+                startAdding()
+            } label: {
+                Label(InboxCopy.newList, systemImage: Symbols.addValue)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.gtdAccent)
+        }
+    }
+
+    private func startAdding() {
+        isAddingList = true
+        isNameFocused = true
+    }
+
+    /// The session closes the sheet once the card is filed; a refused name keeps it open.
+    private func create() {
+        let name = newListName
+        Task { await session.createListAndFile(name: name) }
     }
 }
 #endif

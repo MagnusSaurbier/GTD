@@ -102,6 +102,10 @@ public final class InboxSession {
     /// invalidates the view — the defaults flag behind it is not observable.
     public private(set) var isSwipeHintVisible: Bool = false
 
+    /// Why `New list…` said no (`createListAndFile(name:)`), shown under the name field of the
+    /// `More…` sheet. `nil` once the name changes, the list is made or the sheet is cancelled.
+    public private(set) var newListRefusal: String?
+
     private let model: AppModel
     private let defaults: any InboxDefaultsStore
     private let now: () -> Date
@@ -228,6 +232,13 @@ public final class InboxSession {
 
     /// Every list, for the `More…` sheet (§5a).
     public var allLists: [GTDList] { Rules.lists(model.snapshot) }
+
+    /// True when the vault has no list at all — `Lists/` is empty or missing. The `More…` sheet
+    /// then explains what a list is and offers `New list…` instead of an empty table.
+    public var hasNoLists: Bool { allLists.isEmpty }
+
+    /// The vault folder whose subfolders are the lists (L2) — named in the empty state.
+    public var listsFolderName: String { model.snapshot.config.layout.lists }
 
     /// The favourite lists' names, in the user's order — what the navbar's fixed slots are
     /// built from (`DesignSystem.KnowledgeListNavbar`/`NavbarLayout`). Kept here so the view
@@ -489,6 +500,41 @@ public final class InboxSession {
             toastLabel: CardTarget.list.undoToastLabel(listName: name))
     }
 
+    /// `More…` › `New list…` — creates the list (L2: the folder `Lists/<name>/`) and files the
+    /// card into it, exactly as picking an existing list does. The reducer owns what a valid
+    /// name is (empty, the reserved `Done`, a list that already exists); its refusal stays in
+    /// the sheet as `newListRefusal`, next to the field, and the card does not move.
+    ///
+    /// Undo takes the card back out of the list; the list itself stays, because `createList`
+    /// has no inverse (`Rules.isUndoable`) — an empty folder costs nothing.
+    @discardableResult
+    public func createListAndFile(name: String) async -> Bool {
+        guard step == .keepCard, current != nil else {
+            refuse(current == nil ? .noCard : .notAvailable(.more, in: step))
+            return false
+        }
+        do {
+            try await model.send(.createList(name: name))
+        } catch let error as GTDError {
+            newListRefusal = InboxCopy.newListRefusal(for: error)
+            return false
+        } catch {
+            newListRefusal = Copy.actionFailed
+            return false
+        }
+        newListRefusal = nil
+        // The reducer sanitises the name; file into the list it actually made.
+        let created = model.snapshot.list(named: VaultLayout.sanitize(name))?.name
+            ?? VaultLayout.sanitize(name)
+        await confirmList(name: created)
+        // A filing that failed has said so on the card (`lastError`); the sheet is done either way.
+        sheet = nil
+        return true
+    }
+
+    /// Typing again takes the refusal away — it described the previous name.
+    public func clearNewListRefusal() { newListRefusal = nil }
+
     /// W1/D39 — the follow-up date is required, who is optional; both arrive confirmed.
     public func confirmWaiting(_ info: WaitingInfo) async {
         guard step == .actionCard else {
@@ -575,6 +621,7 @@ public final class InboxSession {
     /// Closes a sub-flow sheet without filing anything. The card, its step and its draft stay.
     public func cancelSheet() {
         sheet = nil
+        newListRefusal = nil
         card.clearCap()
     }
 

@@ -53,7 +53,7 @@ Source: [[GTD my own setup]], scan of `Actions/` + `Actions_legacy/`, research o
 - I4b. **Knowledge or List** → an empty, **optional notes panel** opens (content goes to the note body). The **bottom navbar** holds all targets in a **fixed row with stable positions**:
   - **Knowledge** → folder picker with my categories + **free folder tree browsing/creating** in `Knowledge/`, last-used preselected. The picker **also lists active projects' folders**, so project reference material is filed here (the Action branch is for actions only).
   - **Each favourite list** (favourites selectable in settings) → files the item instantly into that list (§5a).
-  - Trailing **"More…"** → sheet with all lists.
+  - Trailing **"More…"** → sheet with all lists, ending in **"New list…"**: a name creates the list (L2) and files the item into it. With no list at all the sheet says so — a list is a subfolder of `Lists/` — and offers the same "New list…" instead of an empty table. The app never seeds lists on its own.
 - I4c. **Trash** → the file is **moved to `GTD/Trash/`**, never deleted, so undo keeps working and iCloud sync can't lose a file irrecoverably. **The app never hard-deletes a vault file and does not purge the trash**; I empty `GTD/Trash/` by hand when I want to.
 - I5. **Defer to weekly review**: escape hatch for items that don't fit the process. Available in **step 1 only** (from an opened card: collapse first). App **asks for a reason** why it doesn't fit; item + reason appear in the weekly review so the system gap can be fixed.
 - I6. Counter ("3 of 14 left"), undo last card. Undo after a tier swipe / list filing returns to the **opened card with the entered fields intact**; undo after step-1 Trash or Defer brings back the small card.

@@ -84,6 +84,11 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 - A card being worked on — **opened, or with something typed** — is never displaced by a
   mid-session capture; the capture is queued next.
 - Items deferred to the weekly review leave the queue and never come back to it (I5).
+- **`More…` is never a dead end.** `hasNoLists` turns the sheet into an empty state naming
+  `listsFolderName`, and `createListAndFile(name:)` sends `createList` then files the card like
+  any list exit. The reducer owns the name rules; its refusal is `newListRefusal` (inline, the
+  sheet stays open). Undo returns the card to the keep card; the list stays (`createList` has no
+  inverse). The session never creates a list the user did not name.
 
 ### Invariants this rework replaced (T08)
 
@@ -150,7 +155,7 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 113 tests, all Linux-compilable.
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 118 tests, all Linux-compilable.
 
 `InboxSessionTests` pins one transition or one refusal at a time: the LIFO queue, every step
 change, every exit of STYLEGUIDE §3.6's three tables, the validation flags and the asterisk

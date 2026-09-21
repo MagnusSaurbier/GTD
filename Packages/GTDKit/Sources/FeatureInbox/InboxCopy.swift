@@ -43,6 +43,30 @@ public enum InboxCopy {
     public static let newFolderPlaceholder = "Folder name"
     public static let knowledgeRoot = "Knowledge"
 
+    // MARK: More… sheet (I4b, L2)
+
+    public static let newList = "New list…"
+    public static let newListPlaceholder = "List name"
+    /// Creates the list and files the card into it — verb-first (§6.1).
+    public static let createList = "Create"
+    public static let noListsTitle = "No lists yet"
+    /// L2 — says what a list *is*, so the empty sheet is not a dead end.
+    /// `folder` is the vault's lists folder (`VaultLayout.lists`), which the config can rename.
+    public static func noListsBody(folder: String) -> String {
+        "A list is a folder under \(folder)/, such as Read, Watch or Wish. "
+            + "Create one to file this capture into it."
+    }
+
+    /// The reducer's refusal of a list name, in the sheet's words. Same wording as Settings ›
+    /// Lists, which refuses the same names for the same reasons.
+    public static func newListRefusal(for error: GTDError) -> String {
+        switch error {
+        case let .invalid(reason): reason
+        case let .titleCollision(name): "A list named \"\(name)\" already exists."
+        case .notFound, .nextCapReached, .missingFields: Copy.actionFailed
+        }
+    }
+
     // MARK: Project picker (I4a)
 
     public static let pickProject = "Pick a project"
