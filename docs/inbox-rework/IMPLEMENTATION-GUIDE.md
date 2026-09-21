@@ -376,7 +376,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T08 | done | b7a59d2 | Opus | 1 | worktree; merge conflicts only in docs (manager resolved); gate green (1199 tests, Inbox 107); both app builds green. `InboxStep`/`InboxExit`/`take(_:)`, `ActionCardEngine` shared with `MakeActionModel` (L4); old README invariants consciously replaced (table in `FeatureInbox/README.md`); views only adapted mechanically — T09 |
 | T09 | **in progress** (started 2026-09-21, worktree, ∥ T11) | | Sonnet | 1 | |
 | T10 | | | | | |
-| T11 | **in progress** (started 2026-09-21, worktree, ∥ T08/T12) | | Sonnet | 1 | |
+| T11 | done | e285909 | Sonnet | 1 | worktree; doc conflicts resolved by the manager; gate green (1207 tests; Next 32, Waiting 23, Projects 71); both app builds green and now **warning-free** (the `NextView` separatorInset warning is fixed). Only compiled + unit-tested + one launch screenshot: Someday list, Waiting rows, area picker and the R-2 cap sheet were **not** clicked through — T15 must |
 | T12 | done | a88bb96 | Sonnet | 1 | worktree, merged clean; gate green (1148 tests, Review 91); both app builds green. Open wiring for T13: the deck's `onEditAction` hook and the stored `KeyBindings` are not yet passed in by the shell; nobody has driven the deck on screen yet (T15) |
 | T13 | | | | | |
 | T14 | done | 828b678 | Sonnet | 1 | worktree; 42 pytest green from a scratch venv (manager re-ran); script never writes `reading`/`backlog`/`maybe` |
@@ -403,3 +403,5 @@ _(one line each: date · task · decision · why — and the ARCHITECTURE §6 ro
 - 2026-09-21 · T05 · a stale `area:` key inside `Projects/no_area/` is reported as a `VaultIssue`, not corrected; `Projects/no_area/` is not a required folder (created by the first area-less project) · never rewrite a note unasked · ARCHITECTURE §6.
 - 2026-09-21 · T12 · Someday deck order uses `Action.modified` as "untouched" (never-touched = stalest); the deck has its own `Next is full` sheet; a stored pre-rework `deckBacklogMaybe` page resumes at the Someday deck · ARCHITECTURE §6.
 - 2026-09-21 · T08 · a wrong-step exit is a refusal, not a no-op; undo restores the step (R-9); an asterisk follows the draft, not the refusal; a mid-session capture never displaces an *opened* card; `escape()` reports blur/collapsed/quit and the view owns focus · ARCHITECTURE §6.
+- 2026-09-21 · T11 · `Send to Someday instead` is gone from the editor's cap refusal (that is the Next-cap sheet, D14) but stays in the project step-promotion sheets as a separate explicit choice, so a project is never left stalled · ARCHITECTURE §6.
+- 2026-09-21 · T11 · `Next is full` for R-2 is a local `NextCapSheet` in `FeatureNext` built from DesignSystem pieces (FeatureNext may not depend on FeatureInbox) · ARCHITECTURE §6.
