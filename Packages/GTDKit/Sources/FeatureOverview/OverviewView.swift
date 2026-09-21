@@ -324,6 +324,7 @@ private struct ContentColumn: View {
 /// column the review wizard was ~130 pt wide, next to a detail pane with nothing to show.
 private struct FlowColumn: View {
     let navigation: OverviewNavigation
+    @Environment(\.keyBindings) private var keyBindings
 
     var body: some View {
         Group {
@@ -331,7 +332,14 @@ private struct FlowColumn: View {
             case .routines:
                 RoutinesHomeView()
             case .review:
-                WeeklyReviewView(onFinished: { navigation.select(.next) })
+                WeeklyReviewView(
+                    bindings: keyBindings,
+                    // The deck's `Edit` (R-3): the review stays resumable behind its banner.
+                    onEditAction: { id in
+                        navigation.select(.someday)
+                        navigation.open(action: id)
+                    },
+                    onFinished: { navigation.select(.next) })
             default:
                 EmptyView()
             }

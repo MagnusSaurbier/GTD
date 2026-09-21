@@ -380,7 +380,8 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T12 | done | a88bb96 | Sonnet | 1 | worktree, merged clean; gate green (1148 tests, Review 91); both app builds green. Open wiring for T13: the deck's `onEditAction` hook and the stored `KeyBindings` are not yet passed in by the shell; nobody has driven the deck on screen yet (T15) |
 | T13 | done | 3af0e87 | Sonnet | 1 (interrupted by a session restart, resumed) | worktree, merged clean; gate green (1249 tests, Settings 73); both app builds warning-free. Seen on screen: the Keyboard pane with the I9 defaults. **Not** clicked: Lists/Favourites sections, remove-list dialog, an actual rebind/reset — T15. Shell wiring of the stored `KeyBindings` into inbox + deck and the deck's `onEditAction` is still open (manager, after T09/T10) |
 | T14 | done | 828b678 | Sonnet | 1 | worktree; 42 pytest green from a scratch venv (manager re-ran); script never writes `reading`/`backlog`/`maybe` |
-| T15 | | | | | |
+| wiring | done | (this commit) | manager | 1 | `EnvironmentValues.keyBindings` (DesignSystem) set by `App/RootView` from `DeviceSettings`; read by `InboxProcessingView`, `MakeActionSheet` and the review deck (via `OverviewView`); the deck's `Edit` opens the action under Someday. Gate + both builds green |
+| T15 | **in progress** (started 2026-09-21: manager drives the UI on simulator + Mac; a subagent writes journeys + docs) | | Opus + manager | 1 | |
 
 ### Decisions taken beyond §3
 

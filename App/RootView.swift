@@ -27,6 +27,7 @@ struct RootView: View {
             // inherit the presenting view's environment.
             .environment(composition.model)
             .environment(\.vaultRootPath, composition.vaultRootPath)
+            .environment(\.keyBindings, composition.deviceSettings.keyBindings)
     }
 
     @ViewBuilder private var phaseContent: some View {

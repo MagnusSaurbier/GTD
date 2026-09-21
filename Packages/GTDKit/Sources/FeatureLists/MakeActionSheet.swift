@@ -13,6 +13,7 @@ import FeatureInbox
 public struct MakeActionSheet: View {
     @State private var makeAction: MakeActionModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.keyBindings) private var keyBindings
 
     public init(model: AppModel, item: ListItem) {
         _makeAction = State(initialValue: MakeActionModel(model: model, item: item))
@@ -21,6 +22,9 @@ public struct MakeActionSheet: View {
     public var body: some View {
         NavigationStack {
             MakeActionCardView(model: makeAction) { dismiss() }
+        }
+        .onChange(of: keyBindings, initial: true) { _, bindings in
+            makeAction.keyBindings = bindings
         }
     }
 }

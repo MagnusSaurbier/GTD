@@ -117,3 +117,6 @@ holds none of them. Adding is normal, renaming is a cross-target change.
 ## Testing
 
 `cd Packages/GTDKit && swift test --filter DesignSystemTests`.
+
+`Interaction/KeyBindingsEnvironment.swift` — `EnvironmentValues.keyBindings` (R-10): the shell sets it from
+`DeviceSettings.keyBindings`; the inbox card, `MakeActionSheet` and the review deck read it.

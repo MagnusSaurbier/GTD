@@ -12,6 +12,7 @@ public struct InboxProcessingView: View {
     private let onFinished: () -> Void
     private let showsChrome: Bool
     @Environment(AppModel.self) private var model
+    @Environment(\.keyBindings) private var keyBindings
     @State private var session: InboxSession?
 
     /// `showsChrome: false` is for a host that brings its own counter and exit (the weekly
@@ -29,7 +30,11 @@ public struct InboxProcessingView: View {
             }
         }
         .task {
-            if session == nil { session = InboxSession(model: model) }
+            if session == nil { session = InboxSession(model: model, bindings: keyBindings) }
+        }
+        // A rebind in Settings › Keyboard reaches a running session at once (R-10).
+        .onChange(of: keyBindings) { _, bindings in
+            session?.keyBindings = bindings
         }
         // A capture made on another device (or by the Shortcut) joins the queue (I7).
         .onChange(of: model.snapshot.inbox.count) { _, _ in
