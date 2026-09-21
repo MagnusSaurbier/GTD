@@ -1,0 +1,4 @@
+---
+kind: area
+---
+# Karriereplanung

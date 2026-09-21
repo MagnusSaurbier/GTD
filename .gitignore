@@ -17,3 +17,6 @@ migration-report.md
 GTD-migration-backup-*/
 # agent worktrees
 .worktrees/
+.claude/worktrees/
+App/Info.plist
+App/GTD.entitlements

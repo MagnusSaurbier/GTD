@@ -1,0 +1,246 @@
+import Foundation
+import GTDModel
+import GTDAppCore
+import DesignSystem
+
+/// The three phases of the deck (§10.2): Next, then Someday, then the projects that
+/// are not active. Declaration order is the order the wizard walks them in.
+public enum DeckPhase: String, Sendable, CaseIterable, Codable, Hashable {
+    case next
+    case someday
+    case projects
+
+    public var title: String {
+        switch self {
+        case .next: ReviewCopy.deckNextTitle
+        case .someday: ReviewCopy.deckSomedayTitle
+        case .projects: ReviewCopy.deckProjectsTitle
+        }
+    }
+
+    public var page: ReviewPage {
+        switch self {
+        case .next: .deckNext
+        case .someday: .deckSomeday
+        case .projects: .deckProjects
+        }
+    }
+}
+
+/// What the user can do with a deck card. Keys are fixed by STYLEGUIDE §3.10:
+/// `K` keep · `D` demote · `P` promote · `T` trash. `activate`/`drop` are the project-shaped
+/// versions of promote/trash and reuse their keys — a card never offers both.
+public enum DeckChoice: String, Sendable, CaseIterable, Codable, Hashable, Identifiable {
+    case keep
+    case demote
+    case promote
+    case trash
+    case activate
+    case drop
+
+    public var id: String { rawValue }
+
+    public var key: String {
+        switch self {
+        case .keep: "K"
+        case .demote: "D"
+        case .promote, .activate: "P"
+        case .trash, .drop: "T"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .keep: ReviewCopy.keep
+        case .demote: Copy.demote
+        case .promote: Copy.promote
+        case .trash: Copy.trash
+        case .activate: ReviewCopy.activateChoice
+        case .drop: ReviewCopy.dropChoice
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .keep: ReviewSymbols.keep
+        case .demote: ReviewSymbols.demote
+        case .promote, .activate: ReviewSymbols.promote
+        case .trash: ReviewSymbols.trash
+        case .drop: ReviewSymbols.someday
+        }
+    }
+
+    /// `keep` writes nothing, so it can never fail and never counts as a change.
+    public var changesAnything: Bool { self != .keep }
+
+    /// The rebindable command this choice answers to (STYLEGUIDE §3.10, R-10). `activate`/`drop`
+    /// share `promote`/`trash`'s command exactly as they share their key: a card never offers
+    /// both members of a pair, so there is never a collision to resolve.
+    public var keyCommand: KeyCommand {
+        switch self {
+        case .keep: .deckKeep
+        case .demote: .deckDemote
+        case .promote, .activate: .deckPromote
+        case .trash, .drop: .deckTrash
+        }
+    }
+}
+
+/// One card in the deck: an action in the Next and Someday phases, a project in the last one.
+public struct DeckCard: Sendable, Equatable, Identifiable {
+    public enum Subject: Sendable, Equatable {
+        case action(Action)
+        case project(Project)
+    }
+
+    public var subject: Subject
+    public var choices: [DeckChoice]
+
+    public var id: NoteID {
+        switch subject {
+        case let .action(action): action.id
+        case let .project(project): project.id
+        }
+    }
+
+    public var title: String {
+        switch subject {
+        case let .action(action): action.title
+        case let .project(project): project.title
+        }
+    }
+
+    public var action: Action? {
+        if case let .action(action) = subject { return action }
+        return nil
+    }
+
+    public var project: Project? {
+        if case let .project(project) = subject { return project }
+        return nil
+    }
+
+    public init(subject: Subject, choices: [DeckChoice]) {
+        self.subject = subject
+        self.choices = choices
+    }
+}
+
+/// The deck's pure half: which cards a phase shows, in which order, and which command a choice
+/// turns into. Every decision here is a function of the snapshot, so resuming mid-deck after a
+/// relaunch rebuilds exactly the same list (minus the cards already decided).
+public enum ReviewDeck {
+
+    /// Cards for `phase`, in the order the wizard deals them.
+    ///
+    /// - `.next` reuses `Rules.nextList` so the deck order matches the Next view the user knows
+    ///   (`in-progress` first, then nearest `due`, then oldest capture).
+    /// - `.someday` deals the Someday tier **stalest first, project-linked before unlinked**
+    ///   (§10.2, STYLEGUIDE §3.10) — a total order, see `stalestFirst`.
+    /// - `.projects` deals on-hold before someday, by title.
+    public static func cards(
+        for phase: DeckPhase, in s: VaultSnapshot, today: Day, calendar: Calendar = .current
+    ) -> [DeckCard] {
+        switch phase {
+        case .next:
+            return Rules.nextList(s, today: today)
+                .map { DeckCard(subject: .action($0), choices: [.keep, .demote]) }
+        case .someday:
+            return s.actions
+                .filter { $0.status == .someday }
+                .sorted { stalestFirst($0, $1, today: today, calendar: calendar) }
+                .map { DeckCard(subject: .action($0), choices: [.promote, .keep, .trash]) }
+        case .projects:
+            let byStatus: [ProjectStatus] = [.onHold, .someday]
+            return byStatus.flatMap { status in
+                s.projects
+                    .filter { $0.status == status }
+                    .sorted { ($0.title, $0.id.path) < ($1.title, $1.id.path) }
+                    .map { DeckCard(subject: .project($0), choices: choices(for: status)) }
+            }
+        }
+    }
+
+    /// An on-hold project can be dropped a step further (to Someday); one that is already there
+    /// has nowhere left to drop to — the app never deletes, and "drop" must not quietly mean
+    /// "done" (§1 "no lying UI"). So the choice is hidden rather than shown disabled.
+    static func choices(for status: ProjectStatus) -> [DeckChoice] {
+        switch status {
+        case .onHold: [.activate, .keep, .drop]
+        case .someday: [.activate, .keep]
+        case .active, .done: [.keep]
+        }
+    }
+
+    /// The command a choice turns into, or `nil` for `keep` (which writes nothing).
+    /// Trashing an action moves its note to `GTD/Trash/` (I4c); nothing is ever hard-deleted.
+    public static func command(for choice: DeckChoice, card: DeckCard) -> GTDCommand? {
+        switch (choice, card.subject) {
+        case (.keep, _):
+            return nil
+        case let (.demote, .action(action)):
+            return .setStatus(action.id, .someday, waiting: nil)
+        case let (.promote, .action(action)):
+            return .setStatus(action.id, .next, waiting: nil)
+        case let (.trash, .action(action)):
+            return .trashAction(action.id)
+        case let (.activate, .project(project)):
+            return projectStatus(project, .active)
+        case let (.drop, .project(project)):
+            return projectStatus(project, .someday)
+        default:
+            return nil      // a choice a card does not offer
+        }
+    }
+
+    private static func projectStatus(_ project: Project, _ status: ProjectStatus) -> GTDCommand? {
+        guard project.status != status else { return nil }
+        var updated = project
+        updated.status = status
+        return .updateProject(updated)
+    }
+
+    // MARK: - Staleness (§10.2, STYLEGUIDE §2.2/§3.10)
+
+    /// Days since `action` was last touched — STYLEGUIDE §2.2's "file modification date or last
+    /// status change, whichever is later". `GTDVault` fills `Action.modified` in from the file's
+    /// mtime on every scan, and the reducer's `normalize` sets it to `env.now` on every mutation
+    /// (`Reducer.swift`), so the one field already **is** the later of the two — no second query
+    /// exists to combine them, and this is what `Rules.signals(for:today:)` reads for the same
+    /// badge. A note that has never been touched by either (no `modified` at all) is treated as
+    /// the most stale of all: claiming it is recent would be exactly the lying default §1 forbids.
+    static func untouchedDays(_ action: Action, today: Day, calendar: Calendar) -> Int {
+        guard let modified = action.modified else { return .max }
+        return today.days(since: Day(modified, calendar: calendar))
+    }
+
+    /// Someday order (§10.2, STYLEGUIDE §3.10): stalest first, then project-linked before
+    /// unlinked, then by path. A total order — nothing here relies on `sorted`'s stability, so
+    /// two cards that tie on every criterion above the path still compare unequal until the path
+    /// itself breaks the tie.
+    static func stalestFirst(_ lhs: Action, _ rhs: Action, today: Day, calendar: Calendar) -> Bool {
+        let l = untouchedDays(lhs, today: today, calendar: calendar)
+        let r = untouchedDays(rhs, today: today, calendar: calendar)
+        if l != r { return l > r }                          // more days untouched sorts first
+
+        let lLinked = lhs.project != nil
+        let rLinked = rhs.project != nil
+        if lLinked != rLinked { return lLinked && !rLinked } // project-linked before unlinked
+
+        return lhs.id.path < rhs.id.path
+    }
+
+    /// The Someday header's `untouched > 30 days` count (STYLEGUIDE §3.10) — over every Someday
+    /// action in the snapshot, not just the cards still left to decide: it describes the size of
+    /// the pile, not progress through it, so it does not shrink as cards get handled.
+    public static func untouchedOver30DaysCount(
+        in s: VaultSnapshot,
+        today: Day,
+        policy: StalenessPolicy = .default,
+        calendar: Calendar = .current
+    ) -> Int {
+        s.actions.count {
+            $0.status == .someday && untouchedDays($0, today: today, calendar: calendar) > policy.actionAttentionDays
+        }
+    }
+}

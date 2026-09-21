@@ -1,0 +1,13 @@
+---
+time: "22:00"
+---
+- [ ] Work done by 22:00
+- [ ] Brush teeth
+- [ ] Reflect on day
+    - [ ] Main plot
+    - [ ] Look at dayplan
+    - [ ] 3 achievements
+    - [ ] 3 gratitude
+    - [ ] 1 will-do-better
+- [ ] Read 30 min
+- [ ] Sleep by 23:30

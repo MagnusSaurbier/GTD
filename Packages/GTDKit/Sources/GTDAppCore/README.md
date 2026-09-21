@@ -1,0 +1,83 @@
+# GTDAppCore
+
+The seam between the UI and whatever stores the data. Depends on `GTDModel` only.
+No SwiftUI (only `Observation`), so it compiles and tests on Linux.
+
+## Public API
+
+- `GTDBackend` — `snapshots() -> AsyncStream<SnapshotUpdate>`, `currentUpdate()`,
+  `perform(_:) -> [AppPrompt]`, `undo()`, `undoLabel()`; `currentSnapshot()` is an extension
+  over `currentUpdate()`.
+- `SnapshotUpdate` — one published state: the `VaultSnapshot` and the `RenameMap` of the command
+  that produced it.
+- `NavigationRemap` — `path(_:renames:exists:)` / `selection(_:renames:exists:)`: follow a
+  rename, then drop what is gone. Both shells navigate by it.
+- `AppModel` — `@MainActor @Observable`. `snapshot`, `renames`/`consumeRenames()`, `undoLabel`,
+  `prompt`, `lastError`,
+  `today: () -> Day`; `send(_:) async throws`, `send(deriving:) async throws`,
+  `perform(_:) async -> Bool`, `report(_:) async -> Bool`, `undo() async`, `start()`/`stop()`.
+  Views get it with `@Environment(AppModel.self)`.
+- `InMemoryBackend` — `actor`, reducer only, single-level undo by keeping the previous snapshot.
+  `init(snapshot:)` plus `deviceID:`/`env:` for deterministic tests.
+- `KeyBindings` (R-10, N7/I9) — the device-local, `Codable` table *command → key* behind the Mac
+  keyboard: `KeyScreen` (the four screens that each refuse duplicates independently),
+  `KeyCommand` (one case per rebindable single-key command, grouped by screen; `.defaultKey` is
+  the I9/STYLEGUIDE §3.6/§3.10 factory map), `KeyStroke` (a displayable letter/digit/arrow, plus
+  the four fixed tokens `.escape`/`.tab`/`.commandZ`/`.commandReturn` and the reserved
+  `.digit`/`.shiftedDigit` action-card keys). `key(for:)` reads with fallback to the default;
+  `rebind(_:to:)` throws `RebindError.fixed`/`.reserved`/`.duplicate(KeyCommand)`; `reset()` /
+  `reset(_:)` restore defaults; `legend(for:titles:)`/`legendString(for:titles:)` build a Mac
+  legend row from the current bindings and caller-supplied labels (no UI strings live here — this
+  target has no `DesignSystem` dependency). Lives here rather than in `FeatureSettings` (which
+  owns *persisting* one inside `DeviceSettings`) because `FeatureInbox.KeyMap` and
+  `FeatureReview.ReviewSession` both resolve keys through it and neither may depend on the other's
+  feature target or on `FeatureSettings` (ARCHITECTURE §2) — `GTDAppCore` is the one target all
+  three already depend on.
+
+## Invariants
+
+- **Commands run one at a time, in call order.** `send(deriving:)` builds its command
+  only when its turn comes, from the snapshot as it is then — that is what a caller writing a
+  whole entity back (`FeatureOverview.ActionEditModel`'s autosave) must use, or it reverts the
+  fields of a command that was still in flight when it built its payload. `undo()` queues too.
+- `AppModel.send` refreshes `snapshot` and `undoLabel` **before returning**, both on success and
+  on a thrown `GTDError`, so a caller can read them straight after `await`. That is why
+  `GTDBackend` has `currentSnapshot()`.
+- **A rename is published with the snapshot it produced, never separately.** A note's id is its
+  file name (A1), so a renamed note's old id is as absent from the new snapshot as a deleted
+  one's; nothing downstream could tell the two apart on its own. Both paths to the UI — the
+  stream and `currentUpdate()` — carry the same `SnapshotUpdate`, and `AppModel` accumulates the
+  renames until the shell calls `consumeRenames()`, so no update can be seen without them and
+  none is lost when two arrive between two looks. The shell then remaps before it prunes
+  (`NavigationRemap`); doing it the other way round pops the detail of the note being renamed.
+- `GTDError` is rethrown for the UI to handle (cap sheet, waiting sheet). `undo()` never throws;
+  a refused undo lands in `lastError`.
+- **A refused command always reaches the person.** A view either has a flow of its own
+  for the error — and then uses `send` — or it uses `perform(_:)`/`report(_:)`, which put the
+  error in `lastError` for the shell's one alert. `try? await model.send(…)` in a view is a bug:
+  the person taps and nothing happens (STYLEGUIDE §1 "no lying UI"). A command that goes through
+  clears `lastError`, exactly as `undo()` does.
+- `snapshots()` is synchronous on purpose, so an actor backend must implement it `nonisolated`.
+  `SnapshotHub` does the fan-out under an `NSLock` — the one justified `@unchecked Sendable`
+  in this target. Its first element is always the current snapshot.
+- `InMemoryBackend` does not make config edits, routine logs, review saves or archiving undoable
+  (same rule as `GTDServices.UndoJournal`).
+
+## Two backends, one behaviour
+
+`GTDServices.VaultBackend` is the second implementation of `GTDBackend`, and the two must stay
+observably identical: `GTDServicesTests/ParityTests` drives both through the same commands and
+compares the result, and the undo rule and its labels have one definition each
+(`Rules.isUndoable`, `UndoLabel`). `UndoLabel` is STYLEGUIDE §3.8/§6.3's wording verbatim,
+including the list toasts: `Added to <list>` when a capture is filed into one, `Done` when an
+item is checked off (and when a card is filed by the 2-minute rule, I4/D13), and
+`Filed to Next`/`Filed to Someday` when one is made into an action.
+
+## Testing
+
+`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — 51 tests. The acceptance scenario (file an
+inbox item to Next, hit the cap, complete a project action (prompt), undo), the command-order
+tests, `ErrorSurfacingTests` for `perform`/`report`, and `KeyBindingsTests` (defaults, rebind
+happy path, duplicate-within-screen refusal naming the conflicting command, same key on a
+different screen, fixed/reserved keys, reset, Codable round-trip incl. a missing/unknown command,
+legends).
