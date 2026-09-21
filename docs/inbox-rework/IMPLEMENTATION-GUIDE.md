@@ -373,7 +373,7 @@ build verified them), `docs/follow-ups/50-mac-keyboard-map.md` reconciled with t
 | T05 | **in progress** (started 2026-09-21, worktree, ∥ T06/T07) | | Opus | 1 | |
 | T06 | done | 38f8797 | Sonnet | 1 | worktree, merged clean; gate green (1113 tests, DesignSystem 46); both app builds green. New: `StepOneBar`, `ActionCardBar`, `KnowledgeListNavbar`, `NavbarLayout`, `SectionLabel`, `ListItemRow`, `shake(trigger:)`. Left for T09: `ItemCard`/`CollapsibleText` still truncates with `Show all` (§3.5 says the step-1 card scrolls instead) |
 | T07 | done | e1616bc | Sonnet | 1 | worktree; merge conflicts with T04 in `CardTargets`/`InboxProcessingView` resolved by the manager (`P` opens the project sheet); gate green. `KeyBindings` lives in `GTDAppCore` (all three consumers depend on it; no Package.swift change). Legacy single-card letters still resolve via `CardTarget.key` until T08/T09 |
-| T08 | | | | | |
+| T08 | **in progress** (started 2026-09-21, worktree, ∥ T05 — disjoint paths) | | Opus | 1 | |
 | T09 | | | | | |
 | T10 | | | | | |
 | T11 | | | | | |
