@@ -796,6 +796,8 @@ private struct RoutineTimeRow: View {
 /// Files the app refuses to guess about (N3 §7). **Owned by T26.**
 public struct VaultIssuesView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.vaultRootPath) private var vaultRootPath
+    @Environment(\.openURL) private var openURL
 
     public init() {}
 
@@ -810,7 +812,9 @@ public struct VaultIssuesView: View {
                         Text(issue.message).font(Typo.meta).foregroundStyle(Color.textSecondary)
                         HStack(spacing: Spacing.l) {
                             Button("Reveal") { reveal(issue.path) }
-                            Button("Open in Obsidian") { openInObsidian(issue.path) }
+                            if let url = ObsidianLink.url(forVaultPath: issue.path, vaultRoot: vaultRootPath) {
+                                Button("Open in Obsidian") { openURL(url) }
+                            }
                         }
                         .buttonStyle(.plain)
                         .font(Typo.meta)
@@ -832,17 +836,6 @@ public struct VaultIssuesView: View {
         NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
         #endif
         // No Files-app equivalent on iOS without a resolvable URL.
-    }
-
-    private func openInObsidian(_ path: String) {
-        guard let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-              let url = URL(string: "obsidian://open?path=\(encoded)")
-        else { return }
-        #if canImport(AppKit)
-        NSWorkspace.shared.open(url)
-        #elseif canImport(UIKit)
-        UIApplication.shared.open(url)
-        #endif
     }
 }
 

@@ -6,19 +6,6 @@ import DesignSystem
 import FeatureProjects
 import GTDFixtures
 
-/// Where the vault lives on disk, for "Open in Obsidian". The app shell (T40) sets it; feature
-/// targets never touch the file system themselves.
-private struct VaultRootPathKey: EnvironmentKey {
-    static let defaultValue: String? = nil
-}
-
-public extension EnvironmentValues {
-    var vaultRootPath: String? {
-        get { self[VaultRootPathKey.self] }
-        set { self[VaultRootPathKey.self] = newValue }
-    }
-}
-
 /// The note editor of the right-hand column (E3) — also the iPhone's action detail.
 ///
 /// Editing autosaves; there are no Save buttons (STYLEGUIDE §4.4). All of the autosave logic
@@ -211,16 +198,17 @@ private struct ActionDetailEditor: View {
                 .foregroundStyle(Color.gtdAccent)
                 #endif
 
-                Button {
-                    if let url = ObsidianLink.url(for: editor.id, vaultRoot: vaultRootPath) {
+                // No vault root (fixtures) means no link Obsidian could resolve: no button.
+                if let url = ObsidianLink.url(for: editor.id, vaultRoot: vaultRootPath) {
+                    Button {
                         openURL(url)
+                    } label: {
+                        Label(OverviewCopy.openInObsidian, systemImage: OverviewSymbols.openExternally)
                     }
-                } label: {
-                    Label(OverviewCopy.openInObsidian, systemImage: OverviewSymbols.openExternally)
+                    .buttonStyle(.plain)
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.textSecondary)
                 }
-                .buttonStyle(.plain)
-                .font(Typo.meta)
-                .foregroundStyle(Color.textSecondary)
             }
             .padding(Spacing.screenMargin)
             .frame(maxWidth: .infinity, alignment: .leading)

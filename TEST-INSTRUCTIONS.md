@@ -277,8 +277,9 @@ judgement call someone with the real toolchain (or the user) should make.
 8. `FeatureSettings.RoutineTimeRow` seeds `@State` from the routine in `init`, so a routine time
    changed on another device while Settings is open does not move the picker. Harmless; listed
    so it is not mistaken for a sync bug.
-9. `VaultIssuesView`'s "Open in Obsidian" builds `obsidian://open?path=<vault-relative path>`.
-   That probably needs the vault name or root; the target cannot resolve one by contract.
+9. "Open in Obsidian" (action detail, a project's reference files, Vault issues) is built by
+   `GTDAppCore.ObsidianLink`: `path=<absolute path>` on the Mac, `vault=<folder name>&file=…` on
+   iOS. Unit-tested only — never clicked against a real vault (`docs/MANUAL_TEST.md` §4).
 10. `FeatureProjects`' views materialise their model in `.task` on first appearance. A tap
     between the first render and that task would mutate a throwaway instance (T22's note).
     Watch for it; it should be unreachable in practice.

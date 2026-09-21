@@ -27,10 +27,10 @@ action editor no other feature target owns.
   `navigation.open(listItem:)`, `OverviewNavigation.apply` follows a rename through
   `NavigationRemap`). `⌘1…7` now covers all seven counted sections in STYLEGUIDE §4.1 order.
 - `SidebarItem`, `OverviewNavigation`, `OverviewDetail`, `ActionListModel`, `ActionGroup`,
-  `ActionEditModel`, `ActionField`, `ObsidianLink`, `EnvironmentValues.vaultRootPath`.
+  `ActionEditModel`, `ActionField`.
 
 Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `ActionListModel`,
-`ActionEditModel`, `ObsidianLink`, `OverviewCopy`, `OverviewMacCopy` / `OverviewLayout`.
+`ActionEditModel`, `OverviewCopy`, `OverviewMacCopy` / `OverviewLayout`.
 
 ## Invariants
 
@@ -69,7 +69,8 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
   other features' lists ignore it until they read that environment value.
 - `OverviewNavigation.isCaptureRequested` is a request to the app shell: capture writes through
   `GTDVault`, which feature targets must not import.
-- `ObsidianLink` needs `\.vaultRootPath` (set by the app shell) for an absolute path.
+- "Open in Obsidian" is `GTDAppCore.ObsidianLink` fed by `\.vaultRootPath` (`DesignSystem`, set
+  by the app shell); without a root (fixtures) the button is not shown.
 - Both sheets this view presents bring their own navigation container: `InboxProcessingView`
   needs one for its toolbar, and `VaultIssuesView` needs a `Done` button or the Mac sheet cannot
   be closed at all.
@@ -78,7 +79,7 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureOverviewTests` — 61 tests.
+`cd Packages/GTDKit && swift test --filter FeatureOverviewTests` — 59 tests.
 The SwiftUI files (`OverviewView`, `ActionListView`, `ActionDetailView`, `OverviewCommands`,
 `OverviewCalendarStrip`) are
 compiled only on a Mac — see the task's Result for what to check there.
