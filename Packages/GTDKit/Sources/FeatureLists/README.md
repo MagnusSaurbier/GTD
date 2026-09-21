@@ -17,11 +17,8 @@ Lists home, one list's items, the title+notes item editor and **Make action** (�
   row (STYLEGUIDE §4.1): every list as a `Section` (name + open count header, `Show done` at the
   end when it has finished items), a stock selectable `List` exactly like
   `FeatureOverview.ActionListView`'s macOS list.
-- `MakeActionSheet(model:item:)` — L4: the opened action card as a sheet, driven end to end by
-  `FeatureInbox.MakeActionModel`. See the note at the top of `MakeActionSheet.swift`: `FeatureInbox`
-  had no public reusable card view yet at this target's base commit, so this file hosts the model
-  with the thinnest view built from public `DesignSystem`/`FeatureInbox` pieces — replace its body
-  with T09's view once published; the `init(model:item:)` signature should not need to change.
+- `MakeActionSheet(model:item:)` — L4: hosts `FeatureInbox.MakeActionCardView` in a sheet, driven end to end by
+  `FeatureInbox.MakeActionModel`. It holds no view code of its own — the card is the inbox's.
 - `ListsModel(model:)` — rows with counts (`Rules.listRows`), a list's open/finished items,
   `complete`/`trash` (both go through `AppModel.perform`, so a refusal reaches the shell's alert),
   and `makeActionModel(for:)`.
