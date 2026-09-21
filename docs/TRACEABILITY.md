@@ -122,19 +122,19 @@ consequence of the app being written on Linux without an Apple SDK (`CLAUDE.md`)
 ## §11 Migration (one-time)
 
 All six live in `Tools/migrate/migrate.py`, dry-run by default, backup before `--apply`, nothing
-ever deleted. Tests are `Tools/migrate/tests/` (40 tests: `python3 -m pytest -q`).
+ever deleted. Tests are `Tools/migrate/tests/` (42 tests: `python3 -m pytest -q`).
 
 | ID | Requirement | Status |
 | --- | --- | --- |
-| M1 | Normalize `Actions/` frontmatter (contexts → enum, `timeEstimate: 0` → empty, drop `priority`/`type`/`scheduled`, `to-do` → next/backlog) | **done** — an unknown context is never guessed; it goes to "needs a decision". |
-| M2 | Import `Actions_legacy/03_Waiting` → `waiting` and `04_Maybe` → `maybe`, strip boilerplate | **done** — who/follow-up are deliberately left empty for the first review (W1's values are not inventable). |
+| M1 | Normalize `Actions/` frontmatter (contexts → enum without `reading`, `timeEstimate: 0` → empty, drop `priority`/`type`/`scheduled`, `to-do` → `someday` fallback); `readlist` notes move to `Lists/Read/` as list items instead | **done** — an unknown context is never guessed; it goes to "needs a decision". `someday`/`backlog`/`maybe` are never written except the one `someday` fallback (R-1). |
+| M2 | Import `Actions_legacy/03_Waiting` → `waiting`, strip boilerplate; `04_Maybe` items become inbox captures (body = old title + old body) run through the new inbox flow, not `status: maybe` | **done** — who/follow-up are deliberately left empty for the first review (W1's values are not inventable). |
 | M3 | Remove the duplicates in `01_Next_Actions`; keep `02_Done` read-only | **done** — "removed" means "only in the backup". |
 | M4 | `Inbox.md` lines → one file each; resolve the dangling links | **done** — a dangling link is reported, never guessed. |
 | M5 | Classify `Projects/` into areas vs projects, create project notes | **done** — proposes, never decides: the user writes `projects.decisions.yaml`. |
 | M6 | Four empty-body action notes go back to the inbox | **done** |
 
 **In the gate, when `pytest` is installed.** `scripts/check.sh` runs `Tools/migrate/tests`
-(40 tests) if it finds a `pytest` on `PATH` or in `~/.local/bin`, and prints `SKIPPED` with the
+(42 tests) if it finds a `pytest` on `PATH` or in `~/.local/bin`, and prints `SKIPPED` with the
 command to run by hand otherwise. Run them either way before pointing the script at real data —
 `docs/MANUAL_TEST.md` §9 step 3.
 

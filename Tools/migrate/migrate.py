@@ -45,10 +45,11 @@ CONTEXT_MAP = {
     "Phone": "phone",
     "Home": "home",
     "tum-stammgelände": "campus",
-    "readlist": "reading",
     "conversations": "calls",
 }
-KNOWN_CONTEXTS = {"mac", "phone", "home", "campus", "errands", "calls", "reading", "deep-work"}
+KNOWN_CONTEXTS = {"mac", "phone", "home", "campus", "errands", "calls", "deep-work"}
+READLIST_CONTEXT = "readlist"  # legacy word; never in KNOWN_CONTEXTS — routed to Lists/Read/ instead (A4, M1)
+READLIST_TARGET_DIR = "Lists/Read"
 REMOVE_KEYS = ("priority", "type", "tags", "Ressources")
 BOILERPLATE_MARKERS = {"", "...", "tbd", "todo", "n/a", "-"}
 CLEAN_ACTION_BODY = "# Why?\n\n# What?\n"
@@ -56,8 +57,8 @@ PROJECT_BODY = "# Outcome\n\n# Why?\n\n# Steps\n\n# Log\n"
 AFFECTED_FOR_BACKUP = ["Actions", "Actions_legacy", "Projects", "Inbox.md"]
 EMPTY_FOLDERS = ["Archive", "Knowledge", "Inbox", "GTD/Reviews", "GTD/RoutineLog", "GTD/Trash", "GTD/Routines"]
 DEFAULT_CONFIG_FM = [
-    "contexts: [mac, phone, home, campus, errands, calls, reading, deep-work]",
-    "onTheGoContexts: [phone, errands, calls, reading]",
+    "contexts: [mac, phone, home, campus, errands, calls, deep-work]",
+    "onTheGoContexts: [phone, errands, calls]",
     "nextCap: 15",
 ]
 ROUTINE_SPECS = {
@@ -288,9 +289,11 @@ def strip_default_scheduled(fm: Frontmatter) -> bool:
 
 
 def normalize_todo_status(fm: Frontmatter) -> bool:
+    # `someday` is the only fallback word the script ever writes (never `backlog`/`maybe`,
+    # A3/R-1) — the real Next-vs-Someday call is still made in the first weekly review.
     if fm.get_scalar("status") == "to-do":
-        fm.set_scalar("status", "backlog")
-        fm.set_scalar("reviewReason", "migrated from to-do — decide Next vs Backlog")
+        fm.set_scalar("status", "someday")
+        fm.set_scalar("reviewReason", "migrated from to-do — decide Next vs Someday")
         return True
     return False
 
@@ -307,18 +310,34 @@ def normalize_action_frontmatter(fm: Frontmatter, report: Report, relp: str, rul
 LEGACY_IMPORT_SPECS = (
     # (subdir, status, reviewReason, needs waitingFor/followUpDate)
     ("Actions_legacy/03_Waiting", "waiting", "migrated from Actions_legacy/03_Waiting — fill in who/follow-up", True),
-    ("Actions_legacy/04_Maybe", "maybe", "migrated from Actions_legacy/04_Maybe — review", False),
 )
+# Actions_legacy/04_Maybe is handled separately (see plan_maybe_captures): those 45 items are
+# imported as plain inbox captures and run through the new inbox flow (REQUIREMENTS §11 M2),
+# not as `status: maybe` actions — `maybe` is a legacy word this script never writes.
+
+
+@dataclass
+class ListItemDoc:
+    """An Actions/ note being routed to a list folder (currently only `readlist` -> Lists/Read/)
+    instead of staying an action: stripped to what a list item carries (L1 — optional `created`
+    only), title = filename, body kept verbatim."""
+
+    created: Optional[str]
+    body: str
+    target_relpath: str
+    source_relpath: str
 
 
 @dataclass
 class ActionDoc:
     """One note that will end up in (or be routed out of) Actions/, fully normalized in memory.
 
-    M1 (normalize existing notes), M2 (import waiting/maybe) and M6 (empty body -> inbox) all
-    operate on the *same* in-memory pass so a note that only becomes empty after M2's boilerplate
-    strip is routed straight to Inbox/ in this run, instead of round-tripping through Actions/
-    first — that would otherwise take two `--apply` runs to settle and break idempotency.
+    M1 (normalize existing notes) and M2 (import Actions_legacy/03_Waiting) and M6 (empty body ->
+    inbox) all operate on the *same* in-memory pass so a note that only becomes empty after M2's
+    boilerplate strip is routed straight to Inbox/ in this run, instead of round-tripping through
+    Actions/ first — that would otherwise take two `--apply` runs to settle and break idempotency.
+    04_Maybe no longer goes through this pass at all (see `plan_maybe_captures`): it becomes a
+    plain inbox capture, not an action.
     """
 
     fm: Frontmatter
@@ -331,8 +350,11 @@ class ActionDoc:
     import_status: Optional[str] = None
 
 
-def collect_action_documents(vault: Path, report: Report) -> list[ActionDoc]:
+def collect_action_documents(
+    vault: Path, report: Report
+) -> tuple[list[ActionDoc], list[ListItemDoc]]:
     docs: list[ActionDoc] = []
+    list_docs: list[ListItemDoc] = []
     seen_targets: set[str] = set()
 
     actions_dir = vault / "Actions"
@@ -345,6 +367,16 @@ def collect_action_documents(vault: Path, report: Report) -> list[ActionDoc]:
                 report.add_unresolved("M1", relp, "no frontmatter found — skipped")
                 continue
             fm, body = parsed
+            if READLIST_CONTEXT in fm.get_list("contexts"):
+                list_docs.append(
+                    ListItemDoc(
+                        created=fm.get_scalar("created"),
+                        body=body,
+                        target_relpath=f"{READLIST_TARGET_DIR}/{path.name}",
+                        source_relpath=relp,
+                    )
+                )
+                continue
             _, removed = normalize_action_frontmatter(fm, report, relp, "M1")
             normalize_todo_status(fm)
             docs.append(
@@ -384,7 +416,38 @@ def collect_action_documents(vault: Path, report: Report) -> list[ActionDoc]:
             )
             seen_targets.add(target_relpath)
 
-    return docs
+    return docs, list_docs
+
+
+def plan_list_items(report: Report, ops: list[Op], docs: list[ListItemDoc]) -> None:
+    for doc in docs:
+        fm_lines = [f"created: {doc.created}"] if doc.created is not None else []
+        ops.append(Op("write", doc.target_relpath, write_note(Frontmatter.parse(fm_lines), doc.body)))
+        ops.append(Op("delete", doc.source_relpath))
+        report.add_change(
+            "M1", doc.source_relpath, f"readlist context — moved to {doc.target_relpath} as a Read list item"
+        )
+
+
+def plan_maybe_captures(vault: Path, report: Report, ops: list[Op], namer: InboxNamer) -> None:
+    """04_Maybe items become plain inbox captures (REQUIREMENTS §11 M2): the script no longer
+    guesses `status: maybe` for them — each runs through the new inbox flow by hand instead."""
+    src_dir = vault / "Actions_legacy" / "04_Maybe"
+    if not src_dir.is_dir():
+        return
+    for path in sorted(src_dir.glob("*.md")):
+        relp = relpath(vault, path)
+        text = path.read_text(encoding="utf-8")
+        parsed = read_note(text)
+        title = path.stem
+        body = parsed[1] if parsed is not None else text
+        capture_body = f"{title}\n\n{body.strip()}\n" if body.strip() else f"{title}\n"
+        dt = namer.next()
+        target_rel = f"Inbox/{dt:%Y-%m-%d %H%M%S}.md"
+        capture_fm = Frontmatter.parse([f"created: {dt.isoformat()}"])
+        ops.append(Op("write", target_rel, write_note(capture_fm, capture_body)))
+        ops.append(Op("delete", relp))
+        report.add_change("M2", relp, f"04_Maybe item — imported to {target_rel} as an inbox capture")
 
 
 def plan_actions(vault: Path, report: Report, ops: list[Op], docs: list[ActionDoc], namer: InboxNamer) -> None:
@@ -597,9 +660,11 @@ def plan(vault: Path, now: datetime, decisions_path: Optional[Path] = None) -> t
     decisions_path = decisions_path or (vault / "projects.decisions.yaml")
 
     plan_inbox_split(vault, report, ops, namer)
+    plan_maybe_captures(vault, report, ops, namer)
 
-    action_docs = collect_action_documents(vault, report)
+    action_docs, list_docs = collect_action_documents(vault, report)
     plan_actions(vault, report, ops, action_docs, namer)
+    plan_list_items(report, ops, list_docs)
 
     plan_duplicates(vault, report, ops)
 

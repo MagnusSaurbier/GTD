@@ -29,7 +29,7 @@ cd Packages/GTDKit && swift build
 cd Packages/GTDKit && swift test
 cd Packages/GTDKit && swift test --filter GTDModelTests               # one test target
 cd Packages/GTDKit && swift test --filter "RulesTests/sidebarCounts"  # one test
-cd Tools/migrate && pytest -q                # the migration script's 40 tests
+cd Tools/migrate && pytest -q                # the migration script's 42 tests
 scripts/benchmark.sh                         # performance numbers (1 000 notes; takes an argument)
 cd Packages/GTDKit && GTD_EXPORT_SAMPLE_VAULT="$PWD/Sources/GTDFixtures/Resources/SampleVault" swift test --filter exportSampleVault
 ```

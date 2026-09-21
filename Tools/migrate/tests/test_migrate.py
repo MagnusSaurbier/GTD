@@ -63,8 +63,8 @@ def test_m1_maps_contexts_drops_live_and_cleans_keys(vault):
     assert fm.get_scalar("timeEstimate") is None  # was 0 -> removed
     for key in ("priority", "type", "tags", "Ressources", "scheduled"):
         assert not fm.has(key)
-    assert fm.get_scalar("status") == "backlog"
-    assert fm.get_scalar("reviewReason") == "migrated from to-do — decide Next vs Backlog"
+    assert fm.get_scalar("status") == "someday"
+    assert fm.get_scalar("reviewReason") == "migrated from to-do — decide Next vs Someday"
     assert "Molar hurts." in body  # body untouched
 
 
@@ -88,6 +88,30 @@ def test_m1_already_clean_file_is_untouched(vault):
     migrate.run(vault, apply=True, now=NOW)
     after = read(vault, "Actions/Write report.md")
     assert before == after
+
+
+def test_m1_readlist_context_moves_note_to_read_list(vault):
+    report = migrate.run(vault, apply=True, now=NOW)
+    assert not (vault / "Actions/Read some book.md").exists()
+    fm, body = note(vault, "Lists/Read/Read some book.md")
+    # stripped to what a list item carries: optional `created` only
+    assert [e.key for e in fm.entries if e.kind == "key"] == ["created"]
+    assert fm.get_scalar("created") == "2026-01-06T08:00:00+01:00"
+    assert not fm.has("contexts")
+    assert not fm.has("status")
+    assert not fm.has("timeEstimate")
+    assert "Recommended by a friend." in body  # body kept as-is
+    assert "Finish chapter 3" in body
+    assert any(
+        rule == "M1" and path == "Actions/Read some book.md" for rule, path, _ in report.changes
+    )
+
+
+def test_m1_readlist_context_is_never_left_in_config_or_known_contexts(vault):
+    migrate.run(vault, apply=True, now=NOW)
+    fm, _ = note(vault, "GTD/Config.md")
+    assert "reading" not in fm.get_list("contexts")
+    assert "reading" not in fm.get_list("onTheGoContexts")
 
 
 # --------------------------------------------------------------------------
@@ -118,12 +142,23 @@ def test_m2_boilerplate_body_is_stripped_and_then_routed_to_inbox_by_m6(vault):
     assert "Empty waiting" in bodies
 
 
-def test_m2_imports_maybe_without_waiting_fields(vault):
-    migrate.run(vault, apply=True, now=NOW)
-    fm, _ = note(vault, "Actions/Maybe someday.md")
-    assert fm.get_scalar("status") == "maybe"
-    assert not fm.has("waitingFor")
-    assert fm.get_list("contexts") == ["home"]
+def test_m2_maybe_items_become_inbox_captures_not_maybe_actions(vault):
+    report = migrate.run(vault, apply=True, now=NOW)
+    assert not (vault / "Actions_legacy/04_Maybe/Maybe someday.md").exists()
+    assert not (vault / "Actions/Maybe someday.md").exists()  # never imported as an action
+    captures = {
+        f: read_note(f.read_text(encoding="utf-8")) for f in (vault / "Inbox").glob("*.md")
+    }
+    match = [(fm, body) for fm, body in captures.values() if "Maybe someday" in body]
+    assert len(match) == 1
+    fm, body = match[0]
+    assert fm.get_scalar("created") is not None
+    assert not fm.has("status")  # never written by the script
+    # body = old title + old body
+    assert body.strip().startswith("Maybe someday")
+    assert "Might redo the garden someday." in body
+    assert "Plan garden layout" in body
+    assert any(rule == "M2" and "Maybe someday.md" in path for rule, path, _ in report.changes)
 
 
 # --------------------------------------------------------------------------
@@ -167,9 +202,10 @@ def test_m4_splits_inbox_lines_into_files(vault):
     migrate.run(vault, apply=True, now=NOW)
     assert not (vault / "Inbox.md").exists()
     # 3 lines from Inbox.md (M4) + 2 captures from empty-body actions (M6: "Empty task" and
-    # the imported-then-boilerplate-stripped "Empty waiting")
+    # the imported-then-boilerplate-stripped "Empty waiting") + 1 capture from 04_Maybe (M2:
+    # "Maybe someday")
     files = sorted((vault / "Inbox").glob("*.md"))
-    assert len(files) == 5
+    assert len(files) == 6
     bodies = []
     for f in files:
         fm, body = read_note(f.read_text(encoding="utf-8"))
@@ -254,8 +290,8 @@ def test_m6_moves_empty_body_action_to_inbox(vault):
 def test_config_created_with_defaults(vault):
     migrate.run(vault, apply=True, now=NOW)
     fm, _ = note(vault, "GTD/Config.md")
-    assert fm.get_list("contexts") == ["mac", "phone", "home", "campus", "errands", "calls", "reading", "deep-work"]
-    assert fm.get_list("onTheGoContexts") == ["phone", "errands", "calls", "reading"]
+    assert fm.get_list("contexts") == ["mac", "phone", "home", "campus", "errands", "calls", "deep-work"]
+    assert fm.get_list("onTheGoContexts") == ["phone", "errands", "calls"]
     assert fm.get_scalar("nextCap") == "15"
 
 

@@ -174,7 +174,7 @@ reorder it: steps 1–3 are reversible only because of step 1.
 3. **Migration dry run** — `Tools/migrate/README.md`, step 1:
    ```sh
    cd Tools/migrate
-   pytest -q                                         # the script's own tests, first (40)
+   pytest -q                                         # the script's own tests, first (42)
    python3 migrate.py --vault /path/to/your/vault    # writes only migration-report.md
    ```
    - [ ] Read `migration-report.md` **end to end**, not just the counts.
@@ -194,9 +194,12 @@ reorder it: steps 1–3 are reversible only because of step 1.
    - [ ] Quit and relaunch: it opens straight in, no second folder prompt.
    - [ ] Settings → any vault issues listed are ones you recognise (conflict copies, files iCloud
          has not pulled yet). The app never fixes them by itself.
-6. **The first weekly review is the real migration.** M1 put every ambiguous `to-do` into Backlog
-   with a `reviewReason`, and M2 imported waiting items with no who and no follow-up date —
-   deliberately, because neither is inventable. The review is where you settle them.
+6. **The first weekly review is the real migration.** M1 put every ambiguous `to-do` into Someday
+   with a `reviewReason` (the fallback word is always `someday`, never `backlog`/`maybe`), and M2
+   imported waiting items with no who and no follow-up date — deliberately, because neither is
+   inventable. The review is where you settle them. `readlist` notes are not part of this: they
+   went straight to `Lists/Read/` as list items, and the old `04_Maybe` items arrived as plain
+   inbox captures, so they show up in **inbox processing**, not the deck.
    - [ ] Sweep: the review-deferred items appear **with their reason**; decide each one.
    - [ ] Waiting: fill in who and a follow-up date for every imported item (W1).
    - [ ] Deck: bring Next down to 15 or fewer. Expect this to take a while the first time.
