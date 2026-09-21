@@ -76,7 +76,7 @@ and then patched the same way.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDMarkdownTests` (139 tests, Linux-clean).
+`cd Packages/GTDKit && swift test --filter GTDMarkdownTests` (145 tests, Linux-clean).
 `RoundTripTests` covers every `GTDFixtures.SampleVault` file plus ~40 hand-written nasty cases;
 `FidelityTests` covers the other direction (what is written reads back unchanged);
 `FuzzRoundTripTests` generates ~1 800 notes from a seeded PRNG — shuffled key order, block

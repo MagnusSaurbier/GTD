@@ -3,7 +3,7 @@ import Foundation
 /// Mirrors `GTDNotifications.NotificationKind`'s cases and raw values so the notification-toggle
 /// section can be built without importing `GTDNotifications` (features depend on `GTDAppCore` +
 /// `DesignSystem` only, per ARCHITECTURE §2). `DeviceSettings.notificationKinds` is keyed by
-/// `rawValue`. **Keep in sync if T13 adds or renames a kind** — `GTDNotificationsTests` and
+/// `rawValue`. **Keep the two in sync** when a kind is added or renamed — `GTDNotificationsTests` and
 /// `FeatureSettingsTests` both cover it, so a mismatch shows up as a failing test on either side.
 public enum NotificationKindOption: String, CaseIterable, Sendable, Identifiable {
     case deferReturn

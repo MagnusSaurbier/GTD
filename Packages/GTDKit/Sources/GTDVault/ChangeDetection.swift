@@ -24,7 +24,7 @@ public struct SystemVaultClock: VaultClock {
 /// fire `interval` after the last signal, but never later than `maxDelay` after the first, so a
 /// continuous trickle of events still produces snapshots.
 public struct DebounceState: Sendable, Equatable {
-    /// Quiet period after the last change. T15 default: 300 ms.
+    /// Quiet period after the last change. Default: 300 ms.
     public var interval: TimeInterval
     /// Ceiling on coalescing, so a continuous stream still updates the UI.
     public var maxDelay: TimeInterval

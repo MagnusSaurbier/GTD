@@ -4,8 +4,10 @@ import GTDModel
 /// The canonical user-facing strings of STYLEGUIDE §6.3 and the fixed vocabulary of §6.2.
 /// Feature code contains no user-facing string literals — it references these.
 ///
-/// T12 turns them into `LocalizedStringResource`s backed by each target's
-/// `Resources/Localizable.xcstrings`; the keys stay the same, so call sites do not change.
+/// They are plain `String`s, so they compile and are tested on Linux (ARCHITECTURE §5). The app
+/// is English-only, so nothing resolves them through a catalog; turning them into
+/// `LocalizedStringResource`s backed by each target's `Resources/Localizable.xcstrings` would
+/// keep the same keys and change no call site.
 public enum Copy {
 
     // MARK: Fixed vocabulary (§6.2) — never use a synonym

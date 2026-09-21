@@ -36,7 +36,7 @@ on this app's iOS 26/macOS 26 minimum).
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDNotificationsTests` — DST spring-forward/fall-back
+`cd Packages/GTDKit && swift test --filter GTDNotificationsTests` — 28 tests: DST spring-forward/fall-back
 and a fixed-offset zone (explicit `TimeZone`s), past dates, closed actions, collapse, per-kind
 settings, the 64-cap ordering, a full pass over `GTDFixtures.sampleSnapshot`; scheduler diffing
 against a fake port; deep-link round trip.

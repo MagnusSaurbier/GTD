@@ -8,8 +8,6 @@ import Foundation
 ///
 /// Conversions from `Date` to `Day` take a `calendar` parameter that defaults to `.current`;
 /// the reducer passes `env.calendar` so its results never depend on the machine's time zone.
-///
-/// Owned by **T11**.
 public enum Rules {
 
     // MARK: - Inbox

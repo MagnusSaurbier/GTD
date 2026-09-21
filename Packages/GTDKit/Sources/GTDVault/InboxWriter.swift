@@ -10,8 +10,8 @@ import GTDModel
 /// It renders its own two-key frontmatter rather than calling `NoteCodec.encode`. A fresh
 /// capture has no unknown keys and no body sections to preserve, so there is nothing for the
 /// round-trip rule (N2) to protect — and the writer stays usable when nothing else is loaded.
-/// `InboxWriterTests.captureRoundTripsThroughTheCodec` pins the format to the codec's once T10
-/// lands.
+/// `InboxWriterTests.captureRoundTripsThroughTheCodec` pins the format to the codec's, so the two
+/// writers cannot drift apart.
 public struct InboxWriter: Sendable {
     public var layout: VaultLayout
     public var bookmark: VaultBookmark

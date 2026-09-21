@@ -17,10 +17,10 @@ public enum KeyScreen: String, Sendable, CaseIterable, Codable, Hashable {
 /// all three need it and none of the other three may depend on each other (ARCHITECTURE §2);
 /// `GTDAppCore` is the one target every one of them already depends on.
 ///
-/// This is deliberately **not** `FeatureInbox.CardTarget`: T04 is reworking that enum's targets
-/// concurrently (removing the inbox "Project" filing target), and the Mac `P` key on the action
-/// card is a command (open the project chip/picker) rather than a place the card can be filed —
-/// modelling it here keeps `KeyMap` from depending on `CardTarget.project` at all.
+/// This is deliberately **not** `FeatureInbox.CardTarget`: the Mac `P` key on the action card is
+/// a **command** (open the project chip/picker), not a place the card can be filed — R-8 removed
+/// the inbox's "Project" filing target altogether, and modelling `P` here means `KeyMap` never
+/// depended on it.
 public enum KeyCommand: String, Sendable, CaseIterable, Codable, Hashable {
     // Step 1 — small card, buttons only (STYLEGUIDE §3.6).
     case stepAction
@@ -158,8 +158,8 @@ public struct KeyStroke: Sendable, Equatable, Hashable {
 
 /// The device-local table *command → key* (R-10, N7). Pure, `Codable`, and the single place
 /// `FeatureInbox.KeyMap` and `FeatureReview.ReviewSession.choice(forKey:)` resolve a key press
-/// through — both take it as a defaulted parameter so existing call sites keep working until a
-/// caller passes the stored value (T08/T09/T12/T13). `FeatureSettings.DeviceSettings` carries one
+/// through — both take it as a defaulted parameter, and the shell passes the device's stored
+/// value in through `EnvironmentValues.keyBindings`. `FeatureSettings.DeviceSettings` carries one
 /// per device; `FeatureSettings.DeviceSettingsStore` persists it exactly as it does every other
 /// field, so a missing or corrupt record already falls back to `.default` at that layer.
 public struct KeyBindings: Sendable, Equatable {

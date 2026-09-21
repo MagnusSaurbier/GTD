@@ -7,7 +7,7 @@ import Foundation
 /// app re-scans once too often or is one poll interval late.
 ///
 /// Implementations: `PresenterVaultWatcher` (`NSFilePresenter`, iOS/macOS) and
-/// `PollingVaultWatcher` (mtime polling — the fallback the brief asks for, and the only one that
+/// `PollingVaultWatcher` (mtime polling — ARCHITECTURE §7's fallback, and the only one that
 /// exists on Linux).
 public protocol VaultWatcher: Sendable {
     func start(onChange: @escaping @Sendable () -> Void)
@@ -23,8 +23,8 @@ public struct NullVaultWatcher: VaultWatcher {
 
 /// Polls the file listing and reports a change when any fingerprint, path or count differs.
 ///
-/// The documented fallback (ARCHITECTURE §7, T15 brief: "poll mtime every 5 s while
-/// foregrounded"), and the mechanism used on Linux. Cheap: one recursive listing per interval,
+/// The documented fallback (ARCHITECTURE §7: poll mtime every 5 s while foregrounded), and the
+/// mechanism used on Linux. Cheap: one recursive listing per interval,
 /// no file contents are read.
 public final class PollingVaultWatcher: VaultWatcher, @unchecked Sendable {
     private let fileSystem: any VaultFileSystem

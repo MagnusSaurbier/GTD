@@ -408,8 +408,8 @@ public final class ReviewSession {
     }
 
     /// Mac keys of STYLEGUIDE §3.10: `K` keep · `D` demote · `P` promote · `T` trash — rebindable
-    /// (R-10). `bindings` defaults to `KeyBindings.defaults` so existing call sites are
-    /// unaffected until a caller passes the device's stored value (T12/T13).
+    /// (R-10). `bindings` defaults to `KeyBindings.defaults`; the shell hands the device's stored
+    /// table down through `EnvironmentValues.keyBindings`, so a rebind reaches the deck too.
     public func choice(
         forKey key: String, on card: DeckCard, bindings: KeyBindings = .defaults
     ) -> DeckChoice? {

@@ -4,9 +4,10 @@ import Foundation
 /// do not (yet) carry. Same pattern as `DesignSystem.Copy`: feature code never inlines a
 /// user-facing string or an SF Symbol name, it references a constant.
 ///
-/// T12 owns `DesignSystem`; when it adds these there (or turns `Copy` into
-/// `LocalizedStringResource`s backed by `Resources/Localizable.xcstrings`), this file folds into
-/// it without changing call sites.
+/// These are Mac-shell-local on purpose: `DesignSystem.Copy` carries the fixed vocabulary of
+/// STYLEGUIDE §6.2, and none of the strings below is part of it. If `Copy` ever grows them (or
+/// becomes `LocalizedStringResource`s backed by `Resources/Localizable.xcstrings`), this file
+/// folds into it without changing a call site.
 enum OverviewCopy {
 
     // Sidebar section names: the plural forms of STYLEGUIDE §4.1, which `Copy` has only in
@@ -51,7 +52,7 @@ enum OverviewCopy {
 }
 
 /// SF Symbols the shell needs beyond `DesignSystem.Symbols` (STYLEGUIDE §7 is exhaustive for
-/// concepts; these are plain chrome affordances). Folds into `Symbols` when T12 adds them.
+/// concepts; these are plain chrome affordances, so they stay out of the §7 map).
 enum OverviewSymbols {
     static let filter = "line.3.horizontal.decrease.circle"
     static let issues = "exclamationmark.triangle"

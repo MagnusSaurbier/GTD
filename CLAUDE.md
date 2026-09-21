@@ -1,10 +1,12 @@
 # Instructions for agents working in this repo
 
 A personal GTD app for macOS and iOS whose data store is the markdown notes in the user's
-Obsidian vault. Every `#if canImport(SwiftUI)` file and all of `App/` were **written blind, on
-Linux**; they first compiled and launched on fixtures on 2026-09-19 (Xcode 27), but vault access on
-a device is still untested. `TEST-INSTRUCTIONS.md` has the three gates and their log; keep that
-file until Gate 3 is in it.
+Obsidian vault. The pre-2026-09-21 code was **written blind, on Linux**; it first compiled and
+launched on fixtures on 2026-09-19 (Xcode 27). Since then this Mac has Xcode 27, so new UI code
+is compiled and some of it has been driven on screen — but **vault access on a device is still
+untested**. `TEST-INSTRUCTIONS.md` has the three gates and their log; keep that file until Gate 3
+is in it. The 2026-09-21 inbox rework is `docs/inbox-rework/IMPLEMENTATION-GUIDE.md` (§1 is the
+delta, §3 the rulings R-1…R-10 every module now follows).
 
 ## Where things are
 
@@ -13,7 +15,7 @@ file until Gate 3 is in it.
 - `docs/CONTRIBUTING-AGENTS.md` — the route through the code for a typical change.
 - `docs/TRACEABILITY.md` — every requirement → its module, tests, status. Fix the row your change moves.
 - `docs/KNOWN_ISSUES.md` — what is missing, deliberate or merely assumed. Read it before filing a bug.
-- `docs/MANUAL_TEST.md` — the checks only a real Mac/iPhone can do; §9 is the first-real-use checklist.
+- `docs/MANUAL_TEST.md` — the checks only a real Mac/iPhone can do (§1–§3 = the reworked flow); §9 is the first-real-use checklist.
 - `docs/follow-ups/` — briefs for work nobody has started · `docs/history/` — how the app was built; not instructions.
 - `Packages/GTDKit/Sources/<Target>/README.md` — per-module notes. Read the one for the module you touch.
 - `App/README.md` — the app shell: composition root, routing, lifecycle.
@@ -26,7 +28,7 @@ From the repo root. Verified on Linux with Swift 6.4, and on macOS with Xcode 27
 scripts/check.sh                             # the gate: build + test + docs check + migration tests
 scripts/check.sh --app                       # additionally xcodegen + build the app
 cd Packages/GTDKit && swift build
-cd Packages/GTDKit && swift test
+cd Packages/GTDKit && swift test              # 1 280 tests across 19 test targets
 cd Packages/GTDKit && swift test --filter GTDModelTests               # one test target
 cd Packages/GTDKit && swift test --filter "RulesTests/sidebarCounts"  # one test
 cd Tools/migrate && pytest -q                # the migration script's 42 tests
@@ -85,7 +87,7 @@ README untrue, fix that statement in the same commit.**
 | Learned a non-obvious gotcha (build quirk, platform trap, flaky test) | the module README; here only if it hits *every* task |
 | The requirements or style guide note changed in the vault | re-copy it, then check ARCHITECTURE §5–§6 still agree |
 
-Keep it short (< ~80 lines): an index plus invariants, detail in `docs/` or a module README.
+Keep it short (< ~90 lines): an index plus invariants, detail in `docs/` or a module README.
 Only write what you verified — commands must have been run, and backticked paths must exist
 (`scripts/check-docs.sh` checks them here, in README.md, in ARCHITECTURE and in module READMEs).
 State what is true now, not history or plans; delete rather than hedge.

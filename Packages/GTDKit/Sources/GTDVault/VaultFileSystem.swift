@@ -3,7 +3,7 @@ import Foundation
 /// What the store knows about one file in the vault.
 ///
 /// `size` + `modified` are the incremental index's cache key: when neither changed, the cached
-/// decode is reused (T15 performance budget: incremental update < 50 ms).
+/// decode is reused (performance budget: incremental update < 50 ms).
 public struct VaultFileInfo: Sendable, Equatable, Hashable {
     /// Vault-relative, "/"-separated, no leading slash.
     public var path: String

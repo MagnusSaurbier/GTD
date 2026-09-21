@@ -5,7 +5,8 @@ import GTDModel
 /// The incremental index: one decoded entity per file, cached on `path + size + mtime`.
 ///
 /// A full scan decodes everything; every later refresh re-decodes only the files whose
-/// fingerprint changed and drops the ones that disappeared (T15 budget: < 50 ms incremental).
+/// fingerprint changed and drops the ones that disappeared (budget: < 50 ms incremental —
+/// `scripts/benchmark.sh` measures it, `docs/follow-ups/55-incremental-reindex.md` is the gap).
 /// Foundation-only, so all of it runs under `swift test` on Linux.
 public struct VaultIndex: Sendable {
     public let layout: VaultLayout

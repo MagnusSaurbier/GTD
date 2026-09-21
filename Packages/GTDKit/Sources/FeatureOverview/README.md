@@ -78,7 +78,7 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureOverviewTests`
+`cd Packages/GTDKit && swift test --filter FeatureOverviewTests` — 61 tests.
 The SwiftUI files (`OverviewView`, `ActionListView`, `ActionDetailView`, `OverviewCommands`,
 `OverviewCalendarStrip`) are
 compiled only on a Mac — see the task's Result for what to check there.

@@ -1,7 +1,7 @@
 #if os(iOS) || os(macOS)
 import Foundation
 
-/// `NSFilePresenter` on the vault root — the mechanism ARCHITECTURE §7 and the T15 brief name.
+/// `NSFilePresenter` on the vault root — the mechanism ARCHITECTURE §7 names.
 ///
 /// A presenter registered on a *directory* is told about changes to anything below it, including
 /// the ones iCloud makes when a sibling device syncs, which is exactly what the store needs.

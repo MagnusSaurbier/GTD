@@ -4,24 +4,32 @@ What is wrong, missing or merely assumed, collected from every build-out task's 
 `docs/TRACEABILITY.md`. Check this file before filing a bug: most of what looks broken below is
 either deliberate or already written up.
 
-## 1. Compiled once, barely run, and never on a real vault
+## 1. Barely run by hand, and never on a real vault
 
-The app was built in a Linux container with Swift but no Xcode. Every file behind
-`#if canImport(SwiftUI)` / `UserNotifications` / `AppIntents`, all of `App/`, `AppTests/` and
-`AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the macOS app and the
-iOS-simulator app built, all package tests (852 now) and the app's own test bundles passed, and the app
-launched on fixtures on both platforms. **No view has been walked through by hand beyond that, and
-no real vault has been opened.**
+Everything up to 2026-09-19 was built in a Linux container with Swift but no Xcode: every file
+behind `#if canImport(SwiftUI)` / `UserNotifications` / `AppIntents`, all of `App/`, `AppTests/`
+and `AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the macOS app and the
+iOS-simulator app built, all package tests and the app's own test bundles passed, and the app
+launched on fixtures on both platforms.
 
-This is not a list of suspected bugs, it is the absence of hands-on testing. `TEST-INSTRUCTIONS.md`
-is the script and the log for it: Gate 1 (package builds and tests), Gate 2 (the app
-builds, launches and smoke-tests on fixtures), Gate 3 (vault access on a real device), and a
-prioritised list of the nine places most likely to break. While that file exists, its
-**"Unresolved"** section is the live list of judgement calls that need a Mac or the user; whoever
-deletes the file after the log is filled moves whatever is still open into this one.
+The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 280 package
+tests pass and both scratch app builds are warning-free — and parts of it have been driven on
+screen: the two-step card's step 1, the opened action card with its asterisk refusal, a swipe to
+Next, Trash with its toast, the project picker, the keep card's navbar, the Mac per-step key
+legends, the Lists sidebar row and the Settings Keyboard pane. **Everything else is compiled and
+unit-tested only, and no real vault has been opened.** `docs/MANUAL_TEST.md` is what to walk
+through; §4 of the list below says which surfaces are still unclicked.
 
-`docs/TRACEABILITY.md` marks such code **done (blind)** and is the per-requirement view of the
-same fact.
+This section is not a list of suspected bugs, it is the absence of hands-on testing.
+`TEST-INSTRUCTIONS.md` is the script and the log for it: Gate 1 (package builds and tests),
+Gate 2 (the app builds, launches and smoke-tests on fixtures), Gate 3 (vault access on a real
+device), and a prioritised list of the nine places most likely to break. While that file exists,
+its **"Unresolved"** section is the live list of judgement calls that need a Mac or the user;
+whoever deletes the file after the log is filled moves whatever is still open into this one.
+
+`docs/TRACEABILITY.md` marks blind-written code **done (blind)** and rework code that compiles but
+nobody has watched **done (compiled + unit-tested, not clicked)**; it is the per-requirement view
+of the same fact.
 
 ## 2. Partly met requirements — each has a brief in `docs/follow-ups/`
 
@@ -33,9 +41,9 @@ same fact.
 | N3 | An ordinary command has no staleness guard. A device whose snapshot predates a rename writes the old path and the vault ends up with **two** notes — nothing is lost, but nothing warns either. Pinned by `GTDServicesTests/SyncScenarioTests`. | `53-stale-write-guard.md` |
 | §10.3 | "Captured vs processed" in the weekly review is an approximation: the vault records when a note was created and completed, never when it was filed out of the inbox. `WeeklyStats.compute` documents it and the review presents it honestly. | `54-filed-at-record.md` |
 | I4/D12 (R-3) | The inbox card, "Make action" and the review deck's `Promote` turn `GTDError.missingFields` into an inline, per-card notice; the action editor's status chip names the fields inline (T11). `⌘⇧N` and "What's next?" still route it through `perform`/`report`, so the **shell's alert** names the fields (`Still missing: Why?, Context, Time`) instead of marking them. Acceptable for v1, and deliberate: the reducer is the single authority either way. | — |
-| L1/L3–L5 (T10) | `FeatureLists`'s views (`ListsHomeView`/`ListItemsView`/`ListItemEditorView`/`ListsSectionsView`/`MakeActionSheet`) compile warning-free on both scratch app builds and one Mac launch screenshot was taken (§9 checklist previews exist for every state), but none of the flows have been clicked through on a device or the iOS Simulator — same caveat T09's inbox views carry. | — (T15 walkthrough) |
-| I4b (T09) | The Knowledge/List navbar (`DesignSystem.KnowledgeListNavbar`, wired into `InboxProcessingView`) renders correctly (verified on screen: `Knowledge · Read · Watch · Wish · More…`), but tapping a navbar slot was not confirmed by an on-screen interaction in the T09 session — the simulator automation used that run could not reliably hit that specific button row (the identical `GlassActionBar` row worked for the step-1 and action-card bars in the same session). Code path is unchanged from the action-card bar's (`session.take(_:)`) and covered by `InboxSessionTests`. | — (next UI pass should click through it once) |
-| N7/I9 (T09) | The Mac per-step legend renders correctly from `KeyBindings` (seen on screen for step 1 and the action card), but the full Mac keyboard path (arrows, single-key commands, `⌘Z`, `⌘↩`) was not driven end-to-end on screen in the T09 session — the computer-use automation available could open the sheet and click bordered buttons, but could not reliably type into the card's borderless `TextField`s in the background-app mode it was granted. `FeatureInboxTests`/`GTDAppCoreTests` cover the key resolution logic. | — (T15 QA pass drives it live) |
+| L1/L3–L5 | `FeatureLists`'s views (`ListsHomeView`/`ListItemsView`/`ListItemEditorView`/`ListsSectionsView`/`MakeActionSheet`) compile warning-free on both scratch app builds, every state has a `#Preview`, and the Mac sidebar's `Lists` row has been seen on screen. Nothing below it has been clicked: the iPhone tab's push stack, the `Done` swipe, `Show done`, the item editor and `Make action`. The models under them (`ListsModel`, `ListItemEditModel`, `MakeActionModel`) are unit-tested. | — `docs/MANUAL_TEST.md` §2 |
+| I4b | The Knowledge/List navbar (`DesignSystem.KnowledgeListNavbar`, wired into `InboxProcessingView`) renders correctly — `Knowledge · Read · Watch · Wish · More…` was read off a simulator screen — but **tapping a navbar slot has never been confirmed on screen**: the simulator automation available at the time could not reliably hit that particular button row, though the identical `GlassActionBar` row worked for the step-1 and action-card bars in the same session. The code path is the same `session.take(_:)` those bars use and is covered by `InboxSessionTests`. | — `docs/MANUAL_TEST.md` §1.5 |
+| N7/I9 | The Mac per-step legend renders correctly from `KeyBindings` (step 1 and the action card were read off a Mac build). The **full Mac keyboard path has never been driven end to end**: arrows, the single-key commands, `⌘Z` and `⌘↩` were not exercised on screen, because the automation available could click bordered buttons but could not reliably type into the card's borderless `TextField`s. `FeatureInboxTests`/`GTDAppCoreTests` cover the key resolution itself. | — `docs/MANUAL_TEST.md` §1.7 |
 | performance | Every command re-lists and re-assembles the whole vault (~235 ms of a 276 ms `setStatus` at 1 000 notes, debug build on Linux). Measured by `scripts/benchmark.sh`. | `55-incremental-reindex.md` |
 
 50, 51 and 52 need Gate 2 green first — all three touch files nobody has compiled.
@@ -78,15 +86,13 @@ same fact.
 
 ## 4. Smaller things worth knowing
 
-- **Lists have a domain and a Settings section, but no browsing UI yet (§5a).** T03 built the
-  whole Lists domain — the folder layout, the item note, the classifier, the eight commands and
-  the `Rules` queries; T13 added Settings' Lists section (add, rename, remove with a
-  `confirmationDialog`) and Favourites section (choose/order, capped at 8, "Mac only" past the
-  iPhone's four). The iPhone tab and the Mac sidebar row that *browse* a list's items are still
-  T10. Until then a user can create/rename/remove lists and pick favourites, but nothing in the
-  app can file a capture into a list or check an item off, and a user who makes `Lists/Read/` by
-  hand in Obsidian gets a vault the app reads correctly and cannot yet browse.
-  `docs/TRACEABILITY.md` §5a says the same per ID.
+- **Lists are complete end to end (§5a), but only their Mac sidebar row has been seen running.**
+  The domain (folder layout, item note, classifier, the eight commands, the `Rules` queries), the
+  Settings sections (add / rename / remove with a `confirmationDialog`; favourites capped at 8,
+  "Mac only" past the iPhone's four), the iPhone `Lists` tab and the Mac `Lists` sidebar row with
+  its content and detail columns all exist and compile warning-free. What nobody has clicked:
+  the iPhone tab's push stack, the `Done` swipe and `Show done`, the item editor, and
+  `Make action` from either platform. `docs/TRACEABILITY.md` §5a says the same per ID.
 - **`createList` is not undoable, on purpose.** A list is a folder, and the only inverse of
   creating one would be removing a directory — the hard delete this vault never does. ⌘Z after
   creating a list therefore undoes the command *before* it. Same for choosing favourites, which
@@ -99,10 +105,11 @@ same fact.
 - **A `.moveFolder` on a real iCloud vault has still never run** (T02's note, unchanged by T03):
   removing and renaming a list are the first two commands that emit one, and both are covered
   only by `PlainFileSystem` and `InMemoryFileSystem` tests here.
-- **`InboxSessionView` still implements its own card drag geometry and fly-out** instead of
+- **`InboxProcessingView` still implements its own card drag geometry and fly-out** instead of
   `DesignSystem`'s `CardFilingController` + `.cardSwipeFiling`. The GTD semantics
-  (`CardTarget`, `KeyMap`, `DragResolver`) are unit-tested and stay in `FeatureInbox` either way;
-  only the presentation would move. Worth doing once those files have compiled at least once.
+  (`InboxExit`, `KeyMap`, `DragResolver`) are unit-tested and stay in `FeatureInbox` either way;
+  only the presentation would move. The files compile now, so this is doable whenever the inbox
+  views are next opened — it is duplication, not a defect.
 - **Only a *command's* rename is followed by the navigation.** The reducer reports a rename in
   `Reduction.renames`, it rides with the snapshot, and the shell remaps before it prunes, so
   editing a title keeps the detail open (ARCHITECTURE §4). Undo replays inverse **file ops**
@@ -111,13 +118,13 @@ same fact.
   under its other name. Nothing is lost.
 - **`FeatureSettings.RoutineTimeRow` seeds its `@State` in `init`**, so a routine time changed on
   another device while Settings is open does not move the picker. Harmless; not a sync bug.
-- **The Settings Lists/Favourites sections and the Keyboard pane's rebind flow were not clicked
-  through on a device or simulator** (T13): both scratch app builds are warning-free on macOS and
-  the iOS Simulator, and the Keyboard pane's *rendering* (row grouping, key legends) was confirmed
-  by a screenshot on fixtures, but the Lists section, the remove `confirmationDialog`, the
-  favourites `Menu` and the key-recorder's actual capture were only compiled + unit-tested +
-  code-reviewed in this session. `docs/TRACEABILITY.md` N7/L2/I4b note the same; T15 should drive
-  both sections on screen.
+- **The Settings Lists/Favourites sections and the Keyboard pane's rebind flow have not been
+  clicked through.** Both scratch app builds are warning-free on macOS and the iOS Simulator, and
+  the Keyboard pane's *rendering* (row grouping, key legends) was confirmed by a screenshot on
+  fixtures. The Lists section, the remove `confirmationDialog`, the favourites `Menu` and the
+  key-recorder's actual capture are compiled, unit-tested and code-reviewed only.
+  `docs/TRACEABILITY.md` N7/L2 say the same per requirement; `docs/MANUAL_TEST.md` §3.5 is the
+  script for driving them.
 - **`VaultIssuesView`'s "Open in Obsidian"** builds `obsidian://open?path=<vault-relative path>`.
   That probably needs the vault name or root, which the target cannot resolve by contract.
 - **`FeatureProjects`' views materialise their model in `.task` on first appearance.** A tap
@@ -144,5 +151,12 @@ area-vs-project decisions) is **reported, never guessed** — that report is the
 working through it is step 3 of `docs/MANUAL_TEST.md` §9.
 
 Two migration outcomes are deliberately incomplete and are settled in the first weekly review:
-ambiguous `to-do` actions land in Backlog with a `reviewReason`, and imported waiting items have
-no "who" and no follow-up date (W1's values are not inventable).
+ambiguous `to-do` actions land in **Someday** with a `reviewReason` (the fallback word is always
+`someday` — the script never writes `backlog` or `maybe`, R-1), and imported waiting items have
+no follow-up date and no "who" (W1's values are not inventable; since D39 only the date is
+required, so the review has one field to fill per item rather than two).
+
+Two more things the rework changed, so expect them in the report: `readlist` notes go straight to
+`Lists/Read/` as list items (M1) and the old `04_Maybe` items arrive as plain **inbox captures**
+rather than `status: maybe` actions (M2), so they reach you through inbox processing and not
+through the deck.

@@ -99,4 +99,4 @@ not compile on Linux; build them on a Mac (`scripts/check.sh --app`).
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureNextTests`
+`cd Packages/GTDKit && swift test --filter FeatureNextTests` — 32 tests.

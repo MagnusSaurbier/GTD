@@ -27,7 +27,7 @@ Foundation-only, no SwiftUI. `Calendar` is only used to turn a `Date` (`created`
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDStatsTests` — `ISOWeekTests` (year-boundary weeks),
+`cd Packages/GTDKit && swift test --filter GTDStatsTests` — 33 tests. `ISOWeekTests` (year-boundary weeks),
 `WeeklyStatsTests` (synthetic snapshots, one per field), `RoutineAuditTests` (grid shape, template
 drift, multi-device merge, trend), `FixturesSmokeTests` (both `compute`s over
 `GTDFixtures.sampleSnapshot`).

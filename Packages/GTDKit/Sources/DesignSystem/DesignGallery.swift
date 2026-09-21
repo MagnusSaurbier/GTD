@@ -69,7 +69,7 @@ public struct DesignGallery: View {
     private var chipGroups: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             ContextChipGroup(
-                contexts: ["mac", "phone", "home", "campus", "errands", "calls", "errands", "deep-work"],
+                contexts: ["mac", "phone", "home", "campus", "errands", "calls", "deep-work"],
                 selection: $contexts)
             TimeBucketChipGroup(selection: $bucket)
             DateValueChip(label: Copy.deferLabel, value: $deferDate, today: Self.today)

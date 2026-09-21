@@ -57,4 +57,4 @@ cases are exact).
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureWaitingTests`
+`cd Packages/GTDKit && swift test --filter FeatureWaitingTests` — 23 tests.

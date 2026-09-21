@@ -5,7 +5,7 @@ import GTDModel
 ///
 /// Obsidian links are written without the `.md` extension and may be bare titles
 /// (`[[DAAD]]`) rather than full paths. Resolving a bare title against the vault is the
-/// *index's* job (T15) — the codec only reports what the link says.
+/// *index's* job (`GTDVault.VaultIndex`) — the codec only reports what the link says.
 public struct Wikilink: Sendable, Equatable {
     /// The link target exactly as written, without `[[`, `]]`, the alias and any `#heading`.
     public var target: String

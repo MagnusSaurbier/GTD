@@ -45,6 +45,11 @@ favourites, so the sample vault exercises R-5's derived default.
 - The renderer in `SampleVault.swift` is fixtures-only. If the codec changes a note format, change it
   here too and re-export.
 
+## Testing
+
+`cd Packages/GTDKit && swift test --filter GTDFixturesTests` — 6 tests, guarding the snapshot's
+own shape and the committed vault's fidelity to it.
+
 ## Regenerating the committed vault
 
 ```bash

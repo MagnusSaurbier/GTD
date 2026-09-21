@@ -57,11 +57,23 @@ Foundation-only — every file here compiles and is tested on Linux.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDServicesTests`. `ParityTests` drives 21
+`cd Packages/GTDKit && swift test --filter GTDServicesTests` — 77 tests. `ParityTests` drives 21
 commands through `InMemoryBackend` and `VaultBackend` and compares a fresh scan of the vault with
 the in-memory snapshot after every step; `SnapshotShape` says which fields are compared and why.
 `FolderMoveTests` is the one suite here that uses `@testable`: the collision policy is a private
-step of `perform`. `ListJourneyTests` is the §5a counterpart end to end on a temp copy of the
+step of `perform`.
+
+`InboxFlowJourneyTests` is the 2026-09-21 rework's acceptance suite, on a temp copy of the sample
+vault: an action card refused first for R-3's required fields and then by the cap (writing
+**nothing** either time), demote-and-file, the note renamed to the capture text with the full
+dictation kept above `# Why?` (R-4); a capture into a list, completed, undone and then promoted
+into Someday (L3/L4); a Knowledge note filed into an **active project's folder** (I4b/D36); trash
+and undo, for a capture and for an action, byte for byte (I4c); the `+ project` chip creating an
+area-less project and linking it in one command, then that project moving into an area and back
+(R-8 + R-6/R-7); and a hand-written `status: backlog` note that a whole session leaves
+byte-identical until its status really changes (R-1).
+
+`ListJourneyTests` is the §5a counterpart end to end on a temp copy of the
 sample vault — capture → filed into a list → finished → undone → "Make action" refused at the cap
 → demote → Next, plus create / rename / remove of the folders themselves — and every assertion is
 about the **files**, not about the snapshot the backend happens to hold.

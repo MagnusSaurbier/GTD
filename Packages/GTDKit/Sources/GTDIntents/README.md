@@ -48,6 +48,6 @@ outside that guard, so `swift test` covers it without Xcode.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDIntentsTests`. The `NoteCodec.decodeInboxItem`
+`cd Packages/GTDKit && swift test --filter GTDIntentsTests` — 22 tests. The `NoteCodec.decodeInboxItem`
 round-trip suite (`CaptureCodecRoundTripTests`) self-gates on a local `codecIsImplemented` probe
 (mirroring `GTDVaultTests`), which the finished codec satisfies, so they run.

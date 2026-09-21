@@ -52,4 +52,4 @@ Linux-compilable (and therefore tested): `ListsModel`, `ListItemEditModel`, `Lis
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureListsTests`
+`cd Packages/GTDKit && swift test --filter FeatureListsTests` — 18 tests.

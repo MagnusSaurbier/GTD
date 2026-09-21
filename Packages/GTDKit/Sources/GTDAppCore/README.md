@@ -75,7 +75,7 @@ item is checked off (and when a card is filed by the 2-minute rule, I4/D13), and
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — the acceptance scenario (file an
+`cd Packages/GTDKit && swift test --filter GTDAppCoreTests` — 51 tests. The acceptance scenario (file an
 inbox item to Next, hit the cap, complete a project action (prompt), undo), the command-order
 tests, `ErrorSurfacingTests` for `perform`/`report`, and `KeyBindingsTests` (defaults, rebind
 happy path, duplicate-within-screen refusal naming the conflicting command, same key on a

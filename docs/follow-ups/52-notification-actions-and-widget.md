@@ -27,7 +27,7 @@ that reads the vault is a second reader of the user's files.
 
 `GTDNotifications/`, `App/NotificationService.swift`, `project.yml`, a new
 `Widgets/` directory if the widget is built, `GTDIntents/`, `Shortcuts/README.md`,
-`docs/MANUAL_TEST.md` §4.
+`docs/MANUAL_TEST.md` §6.
 
 ## Deliverables
 
@@ -51,7 +51,7 @@ that reads the vault is a second reader of the user's files.
    `String` matched against the title, so Shortcuts shows a text field instead of a picker. Fine
    for two routines, wrong as soon as there are five. The entity query needs the routine list
    without loading the whole vault; if that turns out to be impossible, leave it and say so.
-5. `docs/MANUAL_TEST.md` §4: one line per new action, the widget, and the Shortcuts picker.
+5. `docs/MANUAL_TEST.md` §6: one line per new action, the widget, and the Shortcuts picker.
 
 ## Acceptance
 

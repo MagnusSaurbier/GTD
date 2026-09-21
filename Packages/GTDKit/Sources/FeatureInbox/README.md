@@ -150,4 +150,18 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` (108 tests).
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 111 tests, all Linux-compilable.
+
+`InboxSessionTests` pins one transition or one refusal at a time: the LIFO queue, every step
+change, every exit of STYLEGUIDE §3.6's three tables, the validation flags and the asterisk
+lifecycle, the cap's demote-or-cancel, the sub-flows, undo per R-9 and the per-step keys and
+legend. `CardTargetsTests` covers the pure vocabulary — `InboxExit`'s step ownership, `KeyMap`
+resolution per screen, `DragResolver`, the pickers.
+
+`InboxSessionJourneyTests` is the other shape: a **whole session**, card after card, the way
+`docs/MANUAL_TEST.md` §1 asks a person to drive it — inbox zero through every exit with the
+summary adding up, the field-refusal → cap-sheet → demote → undo run in one go, five wrong-step
+refusals leaving the vault untouched, and collapse-and-reopen keeping the draft. It is the
+session-layer twin of `GTDServicesTests/InboxFlowJourneyTests`, which walks the same journeys
+down to the bytes on disk; this target may not import `GTDVault`/`GTDServices` (ARCHITECTURE §2),
+so the two halves live apart on purpose.

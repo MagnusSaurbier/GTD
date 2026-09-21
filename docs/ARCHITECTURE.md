@@ -8,11 +8,14 @@ and reads* (binding for all UI — §5); this file says *how it is built*. Requi
 rules that no single signature can show. Where it disagrees with the code, the code is right and
 this file is a bug — fix it (`CLAUDE.md` → "Keeping this file current").
 
-**Nothing here was written with an Apple SDK.** The whole app was written in a Linux container
-with Swift but no Xcode, so every file behind `#if canImport(SwiftUI)` / `UserNotifications` /
-`AppIntents`, and all of `App/`, was written blind. It builds and launches on fixtures (Xcode 27,
-2026-09-19); `TEST-INSTRUCTIONS.md` is the first Mac session's script and log, and
-`docs/TRACEABILITY.md` marks such code **done (blind)**.
+**Most of this was written without an Apple SDK.** Everything up to 2026-09-19 was written in a
+Linux container with Swift but no Xcode, so every file behind `#if canImport(SwiftUI)` /
+`UserNotifications` / `AppIntents`, and all of `App/`, was written blind; it builds and launches
+on fixtures (Xcode 27, 2026-09-19). `docs/TRACEABILITY.md` marks such code **done (blind)**. The
+2026-09-21 inbox rework (`docs/inbox-rework/IMPLEMENTATION-GUIDE.md`) was built on a Mac with
+Xcode 27, so its UI code compiles here — but compiling is not running, and a row is only **done**
+once somebody watched it work. `TEST-INSTRUCTIONS.md` is the Mac sessions' script and log;
+`docs/MANUAL_TEST.md` is what to walk through by hand.
 
 ## 1. Stack
 
@@ -152,10 +155,38 @@ only (R4).
 
 Routine log: frontmatter `entries:` list of `{routine, step, result: done|skipped, at}`.
 
+### Frontmatter schema
+
+Every key the app writes, and what "absent" means. **Absent is never a default value** (§1 "no
+lying defaults"): a key the user has not decided is simply not in the file.
+
+| Key | On | Values | Absent means |
+| --- | --- | --- | --- |
+| `status` | action | `next` · `someday` · `in-progress` · `waiting` · `done` (A3) | unreadable — an action note must say what it is |
+| `contexts` | action | a list drawn from `GTD/Config.md`'s `contexts` (no `reading` since A4) | no context chosen; Next refuses the note (R-3) |
+| `timeEstimate` | action | minutes, > 0 (chips write 10/30/60/90; `0` is **forbidden**) | no estimate; Next refuses the note (R-3) |
+| `project` | action | wikilink to a project note | the action belongs to no project |
+| `waitingFor` | action | who is being waited on — **optional** (W1/D39) | nobody named; the follow-up date alone carries the wait |
+| `followUpDate` | action | `yyyy-MM-dd`; **required** for `status: waiting` (R-3) | not waiting, or an unrepaired legacy note |
+| `defer` / `due` | action | `yyyy-MM-dd` | not deferred / no deadline. A deferred Next item holds no cap slot (R-2) |
+| `created` | any | ISO 8601 with offset; survives every move (C3) | a note somebody typed by hand |
+| `completedDate` | action | ISO 8601 | not finished |
+| `kind` | project / area note | `project` · `area` | not a project or area note |
+| `area` | project | wikilink to the area note | **no area** — and the folder says so too: the project is in `Projects/no_area/` (R-6) |
+| `reviewReason` | inbox capture | free text (I5) | not deferred to the weekly review |
+| `contexts` / `onTheGoContexts` / `nextCap` / `favouriteLists` / routine times | `GTD/Config.md` | synced settings | the built-in default; `favouriteLists` absent ⇒ first four lists alphabetically, and is **not written back** until the user chooses (R-5) |
+| `time` | routine template | `"HH:mm"` | the routine has no scheduled time |
+| `entries` | routine log | list of `{routine, step, result, at}` | an empty day |
+
+A **list item** (`Lists/<List>/<Item>.md`) carries at most `created` — nothing else, because it is
+not a commitment (L1). A **Knowledge note** carries whatever it arrived with. Neither has a
+`status`.
+
 `status` is one of `next`, `someday`, `in-progress`, `waiting`, `done` (A3). The codec also
 *reads* three legacy words without ever writing them back (R-1): `backlog` and `maybe` are the
 pre-2026-09-21 spellings of `someday`, and `trash` is the pre-rework closed state
-(`ActionStatus.legacyTrashed` — hidden, not user-settable, out of `allCases`).
+(`ActionStatus.legacyTrashed` — hidden, not user-settable, out of `allCases`). **Trash is not a
+status** (I4c): a note the user throws away is *moved* to `GTD/Trash/`, never marked.
 
 **Round-trip rule (N2):** the codec preserves unknown frontmatter keys, key order and unknown
 body sections byte-for-byte. Empty means absent or empty — never a fake default
@@ -169,7 +200,8 @@ together. Public signatures are **not** repeated here — read the source and th
 
 ### GTDModel — the domain, and all GTD semantics
 
-`Core/` (`NoteID`, `Day`, `DayTime`, `VaultLayout`), `Entities/` (`Action`, `Project`, `Area`,
+`Core/` (`NoteID`, `Day`, `DayTime`, `VaultLayout`, `RenameMap`, `CaptureText` — R-4's title and
+body rule), `Entities/` (`Action`, `Project`, `Area`,
 `InboxItem`, `GTDList`, `ListItem`, `Routine`, `RoutineLogEntry`, `GTDConfig`, `WeeklyReview`,
 `VaultSnapshot`, `NotePassthrough`), `Commands/` (`GTDCommand`, the drafts, `InboxDecision`, `GTDError`,
 `AppPrompt`, `VaultFileOp`), `Reducer/` and `Rules/`.
@@ -288,6 +320,12 @@ onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
 - `SnapshotDiff` diffs `listItems` next to the other entity collections, so one list-item note is
   one file exactly as one action note is, and writes `Reduction.filedNotes` (the Knowledge note of
   an inbox filing) in the same commit, after the move that put the file there.
+- **The journey suites are the acceptance tests of this target**, each on a temp copy of the
+  sample vault, each asserting on files rather than on the snapshot: `EndToEndJourneyTests` (one
+  week end to end), `InboxFlowJourneyTests` (the two-step flow — required-field refusal, cap,
+  demote, R-4's title and preamble, Knowledge into a project folder, trash + undo, the project
+  chip, and a legacy `status: backlog` note surviving a session untouched), `ListJourneyTests`
+  (§5a) and `ProjectAreaJourneyTests` (R-6/R-7).
 
 ### GTDAppCore — what the UI sees
 

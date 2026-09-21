@@ -7,12 +7,19 @@
 
 ## Why this file exists
 
-This app was written by agents in a **Linux container with Swift 6.4 and no Xcode**.
-Everything Foundation-only was compiled and unit-tested there. Everything that needs an Apple SDK
-(SwiftUI, AppKit/UIKit, UserNotifications, AppIntents, `NSFileCoordinator`, security-scoped
-bookmarks, `#Preview`, the app target, the iOS-simulator build) was written **without ever being
-compiled**. Your job is to run the real toolchain, report what breaks, and fix the mechanical
-things (wrong API names, missing `import`, availability annotations) without changing behaviour.
+This app was written by agents in a **Linux container with Swift 6.4 and no Xcode** up to
+2026-09-19. Everything Foundation-only was compiled and unit-tested there. Everything that needs
+an Apple SDK (SwiftUI, AppKit/UIKit, UserNotifications, AppIntents, `NSFileCoordinator`,
+security-scoped bookmarks, `#Preview`, the app target, the iOS-simulator build) was written
+**without ever being compiled**. Your job is to run the real toolchain, report what breaks, and
+fix the mechanical things (wrong API names, missing `import`, availability annotations) without
+changing behaviour.
+
+**Since 2026-09-21 that is only half true.** The inbox rework
+(`docs/inbox-rework/IMPLEMENTATION-GUIDE.md`) was built on a Mac with Xcode 27, so its UI code
+compiles and some of it has been driven on a simulator. Compiling is still not running: the log
+at the bottom says exactly what anybody has watched work, and `docs/TRACEABILITY.md` marks the
+rest **done (compiled + unit-tested, not clicked)**.
 
 The three gates are the order to do it in. They are about *building and launching*; what to then
 check by hand is `docs/MANUAL_TEST.md`, and this file does not repeat it.
@@ -106,7 +113,7 @@ Behaviours T41 changed blind and could not run — check them in the app, not ju
   instead of a fixed `height`. At the default text size they must look exactly as before; at the
   accessibility sizes they must grow rather than clip. `@ScaledMetric` in these three files is
   new and unverified.
-- **`docs/MANUAL_TEST.md` §6** is the full accessibility sweep those changes are meant to pass.
+- **`docs/MANUAL_TEST.md` §8.1** is the full accessibility sweep those changes are meant to pass.
 
 ## Gate 2 — the app builds and launches
 
@@ -122,18 +129,20 @@ launch argument **`-useFixtures`** replaces that whole chain with `InMemoryBacke
 (Product → Scheme → Edit Scheme → Arguments → `-useFixtures`).
 
 The gate is: it launches on both platforms without crashing — Mac sidebar · list · detail at a
-minimum window of 900×560, iPhone three tabs (Inbox · Next · Routines, opening on Next). Then
-**walk `docs/MANUAL_TEST.md` §1**, which is the fixtures checklist (what each list should contain, the
-cap's forced choice, undo, "What's next?", the menu-bar shortcuts). Do not re-derive it here.
+minimum window of 900×560, iPhone **four** tabs (Inbox · Next · Lists · Routines, opening on
+Next). Then **walk `docs/MANUAL_TEST.md` §1–§3**, which is the fixtures checklist: the two-step
+inbox card and every one of its exits (§1), Lists (§2), and everything else the 2026-09-21 rework
+touched — Someday, the R-2 cap sheet, the optional who, the area picker, Settings and the review
+deck (§3). Do not re-derive any of it here.
 
-Two things §1 cannot check from inside the app:
+Two things §1–§3 cannot check from inside the app:
 
 - **Deep links:** `xcrun simctl openurl booted gtd://inbox` starts processing; `gtd://waiting`
   opens the waiting list; `gtd://routine/GTD/Routines/Morning.md` opens that routine's runner.
 - **The app's own test bundles:** `AppTests` and `AppUITests` build with the project and run with
   `⌘U`; the UI tests pass `-useFixtures` themselves.
 
-After Gate 3, `docs/MANUAL_TEST.md` §2–§8 are the real-vault (on a **copy**), two-device,
+After Gate 3, `docs/MANUAL_TEST.md` §4–§8 are the real-vault (on a **copy**), two-device,
 notification, accessibility and performance checks no simulator can cover, and its §9 is the
 first-real-use checklist — the only part of this repo meant to touch the actual vault.
 
@@ -156,7 +165,7 @@ If step 2 fails on iOS, that is the "no-go" case from
 `docs/history/build-out/01-spike-vault-access.md`: record it and stop — the fallback (an
 app-owned iCloud container, the vault relocated or symlinked) is a design change for the user.
 
-`docs/MANUAL_TEST.md` §2 is the rest of it: that an outside edit reaches the app, that the app's
+`docs/MANUAL_TEST.md` §4 is the rest of it: that an outside edit reaches the app, that the app's
 own writes leave unknown frontmatter and body sections byte-identical, and that a rename moves
 the file and the links together.
 
@@ -193,6 +202,10 @@ xcodegen 2.46.0. Run by an agent; the person was away for part of it (see Gate 2
 | 2026-09-19 | 2 | **partial pass** | `scripts/check.sh --app` succeeds; macOS and iOS-simulator apps build with no errors or warnings. `GTDTests` 11/11 on macOS and on iPhone 18 Pro (iOS 27.0); `GTDUITests` 4/4 on the simulator (not run on macOS — the screen was locked). **Mac, `-useFixtures`:** launches, sidebar · list · detail, sidebar order and live counts as in MANUAL_TEST §1, `Go` menu navigates, Inbox lists 5 captures (the sixth is parked for the review) with `Process inbox (5)`, `⌘I` opens processing, validation focuses "What?", `Undo`/`Done` render, `Done` closes. **iPhone:** launches, three tabs, inbox badge 5, gear and `+` on Next. **Not checked** (person away, screen locked mid-run): filing cards, undo toast, "What's next?", `⌘1…⌘7`/`⌘N`/`⌘,`, Settings, the cap's forced choice, a routine run, dark mode / Dynamic Type, `RewardMoment`, the Waiting error alert, the Next row's `Done` menu item, the Mac issues sheet, `@ScaledMetric` growth. Deep links: `AppRouteTests`/`AppRouterTests` pass and `simctl openurl gtd://inbox` reaches the app's "Open in GTD?" prompt, which nobody was there to confirm. |
 | 2026-09-19 | 3 | **step 1 failed, fixed, retest pending** | The user picked a vault copy (`…/iCloud~md~obsidian/Documents/Magnus_GTD`) in onboarding on the Mac: `could not bookmark: NSCocoaErrorDomain Code=256 "Could not open() the item"`. Cause and fix below (`VaultBookmark.save`). Steps 1–3 still to be re-run with the fix. Step 3 needs a physical iPhone signed into iCloud. Note for whoever runs it: build signed (at least `CODE_SIGN_IDENTITY=-`) — `scripts/check.sh --app` passes `CODE_SIGNING_ALLOWED=NO`, which drops the sandbox entitlements, so that build proves nothing about security-scoped bookmarks. |
 | 2026-09-19 | migrate | **pass** | `pytest -q` in `Tools/migrate`: 40 passed (pytest from a throwaway venv). The dry run against a vault copy was not done — it is the user's step. |
+| 2026-09-21 | 1 | **pass** | The 2026-09-21 inbox rework (`docs/inbox-rework/IMPLEMENTATION-GUIDE.md`), on `feature/inbox-rework`. `scripts/check.sh`: `swift build` clean, **1 280 package tests pass** (Model 223, Markdown 145, Vault 152, Services 77, AppCore 51, Inbox 111, Review 91, Settings 73, Lists 18, Overview 61, Projects 71, Next 32, Waiting 23, DesignSystem 46, Notifications 28, Stats 33, Intents 22, Routines 17, Fixtures 6), `check-docs.sh` ok, iOS-simulator `xcodebuild` of the package ok. New in this run: `GTDServicesTests/InboxFlowJourneyTests` (6 journeys over the real stack on a temp vault copy) and `FeatureInboxTests/InboxSessionJourneyTests` (4 whole-session journeys). Both were verified to **fail** when R-4's preamble and R-1's tolerant decode were deliberately broken. |
+| 2026-09-21 | migrate | **pass** | `"$TMPDIR/gtd-rework/venv/bin/python" -m pytest -q` in `Tools/migrate`: **42 passed** (pytest from a throwaway venv; it is still not on this machine's PATH, so `scripts/check.sh` SKIPs it). The script was never run outside its tests. The dry run against a vault copy remains the user's step — `docs/MANUAL_TEST.md` §9.3. |
+| 2026-09-21 | 2 | **partial pass** | Both scratch app builds (macOS + iOS Simulator, own `derivedDataPath`, walkthrough bundle id) are green and warning-free throughout the rework. Driven on screen on fixtures during it: inbox step 1, the opened action card, the required-field refusal with all four asterisks, a swipe to Next with its toast, `Trash` with its toast, the project picker, the Knowledge/List card with its navbar rendered, the Mac per-step key legends, the Mac `Lists` sidebar row, and the Settings Keyboard pane's rendering. **Not driven on screen:** the cap sheet, the `⋯` menu, the Waiting sheet, tapping a navbar slot, the Undo button, the full Mac keyboard path, every Lists flow below the sidebar row, the area picker, the Settings Lists/Favourites sections, an actual rebind, and the whole review deck. `docs/MANUAL_TEST.md` was rewritten for the new flow and is the script for all of it; `docs/TRACEABILITY.md` marks each of those rows **done (compiled + unit-tested, not clicked)**. |
+| 2026-09-21 | 3 | **not attempted** | No real vault was opened, by rule. A `.moveFolder` — which removing or renaming a list and changing a project's area all emit — has still never run against a live iCloud vault; it is covered only by `PlainFileSystem`/`InMemoryFileSystem` tests. `docs/MANUAL_TEST.md` §5 is the two-device script for it. |
 
 ### Fixes applied
 

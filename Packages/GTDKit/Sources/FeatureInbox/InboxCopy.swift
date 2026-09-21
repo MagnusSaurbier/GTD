@@ -6,21 +6,19 @@ import DesignSystem
 /// vocabulary of §6.2 live in `DesignSystem.Copy`; this is the inbox-local complement, kept here
 /// because every UI target owns its own string catalog (ARCHITECTURE §5).
 ///
-/// Same shape as `DesignSystem.Copy`: plain `String` constants today, so they compile and test on
-/// Linux; T12's `LocalizedStringResource` conversion does not change the call sites.
+/// Same shape as `DesignSystem.Copy`: plain `String` constants, so they compile and are tested on
+/// Linux (ARCHITECTURE §5).
 /// Sentence case, verb-first buttons, no praise, no exclamation marks (§6.1).
 public enum InboxCopy {
 
     // MARK: Card
 
-    public static let titleLabel = "Title"
-    public static let titlePlaceholder = "What was captured"
+    /// R-4 — the capture text **is** the title, so the card has one text field, not two: this is
+    /// its prompt. (There is no separate `Title` label any more.)
     public static let rawTextPlaceholder = "What was captured"
-    public static let showAll = "Show all"
     public static let checklist = "Checklist"
     public static let contextGroupLabel = "Context"
     public static let timeGroupLabel = "Time"
-    public static let quit = "Quit"
     /// Leaves a sub-flow sheet without filing the card.
     public static let cancel = "Cancel"
     public static let keyLegendLabel = "Keys"
@@ -28,8 +26,6 @@ public enum InboxCopy {
     /// `Defer to review` under an action-bar icon and in the Mac key legend, where the full
     /// wording does not fit.
     public static let reviewShort = "Review"
-    /// The iPhone action bar's `⋯` menu: the four swipe targets as buttons.
-    public static let fileMenuLabel = "File to"
 
     // MARK: Hint overlay (first session only)
 
@@ -53,8 +49,6 @@ public enum InboxCopy {
     public static let clearProject = "No project"
     /// STYLEGUIDE §6.3 — the picker's create row, word for word.
     public static func createProject(_ name: String) -> String { "Create project \"\(name)\"" }
-    public static let noProjectsYet = "No project yet"
-    public static let noProjectsYetBody = "Create one for this item."
 
     // MARK: Defer to review sheet
 
@@ -62,13 +56,9 @@ public enum InboxCopy {
 
     // MARK: Session summary (STYLEGUIDE §5, reward moment)
 
-    /// `14 processed · 6 min`. One wording, owned by `DesignSystem` — `RewardMoment.inboxZero`
-    /// renders the same line in the §5.1 moment itself (T41).
-    public static func sessionSummary(processed: Int, minutes: Int) -> String {
-        Copy.processedSummary(processed: processed, minutes: minutes)
-    }
-
-    /// `6 Next · 3 Someday · 1 Trash` — the per-target breakdown under the summary.
+    /// `6 Next · 3 Someday · 1 Trash` — the per-target breakdown under the summary. The
+    /// `14 processed · 6 min` line above it is `DesignSystem.Copy.processedSummary`, which
+    /// `RewardMoment.inboxZero` renders directly.
     public static func targetBreakdown(_ counts: [(target: CardTarget, count: Int)]) -> String {
         counts.filter { $0.count > 0 }
             .map { "\($0.count) \($0.target.title)" }

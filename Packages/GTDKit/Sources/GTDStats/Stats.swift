@@ -1,7 +1,7 @@
 import Foundation
 import GTDModel
 
-/// Live numbers for the weekly review's systems check (§10.3). **Owned by T14.**
+/// Live numbers for the weekly review's systems check (§10.3).
 /// Pure: everything is computed from the snapshot, nothing is persisted (ARCHITECTURE §6).
 public struct WeeklyStats: Sendable, Equatable {
     public var year: Int
@@ -168,7 +168,7 @@ public struct ISOWeek: Sendable, Equatable, Hashable {
     public var previous: ISOWeek { ISOWeek(containing: monday.adding(days: -7)) }
 }
 
-/// Per-step 7-day heatmap for one routine (§10.3). **Owned by T14.**
+/// Per-step 7-day heatmap for one routine (§10.3).
 public struct RoutineAudit: Sendable, Equatable {
     public struct Cell: Sendable, Equatable {
         public var day: Day

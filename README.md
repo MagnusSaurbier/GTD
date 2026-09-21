@@ -7,17 +7,19 @@ in Obsidian.
 
 ## Status
 
-**Feature-complete on paper, unverified on a device.** Every module of `Packages/GTDKit` is
-implemented and tested — 852 tests — and the app shell wires them together: the vault backend
-behind onboarding, the iPhone tabs and the Mac window, deep links, notifications and background
-refresh. The whole app was written on Linux with no Xcode; every SwiftUI file and all of
-`App/` compiled and launched on fixtures for the first time on 2026-09-19, and **no real vault has
-been opened yet**. The tests cover the models, the codec, the vault, the
-reducer and the rules; they cover no view at all.
+**Feature-complete, partly verified on screen, never pointed at a real vault.** Every module of
+`Packages/GTDKit` is implemented and tested — 1 280 tests — and the app shell wires them together:
+the vault backend behind onboarding, the iPhone tabs and the Mac window, deep links, notifications
+and background refresh. Everything up to 2026-09-19 was written on Linux with no Xcode and first
+compiled and launched on fixtures that day; the 2026-09-21 inbox rework was built on a Mac with
+Xcode 27, and parts of it (the two-step card, the Mac key legends, the Lists sidebar row, the
+Settings keyboard pane) have been driven on a simulator or a Mac build on fixtures. **No real
+vault has been opened yet.** The tests cover the models, the codec, the vault, the reducer, the
+rules and every feature's view model; they cover no view's rendering.
 
-So the next step is not a feature. It is `TEST-INSTRUCTIONS.md`: the script for the first machine
-with Xcode — build the package, build and launch the app on fixtures, then check that a
-security-scoped bookmark into the Obsidian folder really survives a relaunch.
+So the next step is not a feature. It is `TEST-INSTRUCTIONS.md` Gate 3 and `docs/MANUAL_TEST.md`:
+walk the app by hand, then check that a security-scoped bookmark into the Obsidian folder really
+survives a relaunch.
 
 - `docs/TRACEABILITY.md` — where every requirement stands, per requirement, with its tests.
 - `docs/KNOWN_ISSUES.md` — what is missing, what is deliberate, what is only assumed.
@@ -26,11 +28,17 @@ security-scoped bookmark into the Obsidian folder really survives a relaunch.
 ## What it does
 
 Capture in under three seconds from anywhere (Shortcut or App Intent, app need not be running) →
-process the inbox one card at a time, LIFO, no skipping → a hard cap of 15 Next actions → areas
-and projects as folders, with outcome, steps and a log → waiting-for with a follow-up date that
-chases you → defer and due dates with local notifications → morning and bedtime routines run
-step by step and logged per day per device → and a weekly review that sweeps the inbox, walks the
-deck down to 15, shows the week's real numbers and saves a `KW xx.md` note.
+process the inbox one card at a time, LIFO, no skipping, in **two steps**: decide what the capture
+*is* (Action · Knowledge / List · Trash), then where it goes → a hard cap of 15 Next actions, with
+one "not now" tier called **Someday** → lists (`Read`, `Watch`, …) as plain folders for the things
+that are not commitments → areas and projects as folders, with outcome, steps and a log →
+waiting-for with a required follow-up date that chases you → defer and due dates with local
+notifications → morning and bedtime routines run step by step and logged per day per device → and
+a weekly review that sweeps the inbox, walks the deck down to 15, shows the week's real numbers
+and saves a `KW xx.md` note.
+
+Nothing is ever hard-deleted: what you throw away moves to `GTD/Trash/`, and the last change is
+always undoable.
 
 `docs/REQUIREMENTS.md` is the full version; `docs/STYLEGUIDE.md` is how it should look and feel.
 
@@ -79,7 +87,7 @@ first-real-use checklist for the day the app is pointed at the actual one, migra
 ```
 App/                  the app shell (@main); the Xcode project is generated from project.yml
 AppTests/ AppUITests/ the shell's unit tests, and launch-and-navigate smoke tests (always -useFixtures)
-Packages/GTDKit/      all the code, in 18 small targets — see docs/ARCHITECTURE.md §2
+Packages/GTDKit/      all the code, in 19 small targets — see docs/ARCHITECTURE.md §2
 Tools/migrate/        the one-time Python migration from the old vault layout
 Shortcuts/            capture Shortcut recipes
 scripts/              check.sh (the gate), check-docs.sh, benchmark.sh

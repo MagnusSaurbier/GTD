@@ -50,8 +50,9 @@ public struct Checkbox: Sendable, Equatable, Hashable, Codable {
 extension Checkbox {
     /// Simple line scan used by `Action.checkboxes`.
     ///
-    /// T00-level parsing: leading whitespace, `-` or `*`, `[ ]`/`[x]`/`[X]`. The full parser
-    /// (nesting, `→ [[Action]]` suffixes, tabs) lives in `GTDMarkdown` and is owned by T10.
+    /// Deliberately shallow: leading whitespace, `-` or `*`, `[ ]`/`[x]`/`[X]`. The full parser
+    /// (nesting, `→ [[Action]]` suffixes, tabs) is `GTDMarkdown.CheckboxList` — `GTDModel` has no
+    /// codec, so this is the most an entity may do with its own body text.
     public static func scan(_ markdown: String) -> [Checkbox] {
         markdown.split(separator: "\n", omittingEmptySubsequences: false).compactMap { rawLine in
             var line = Substring(rawLine)

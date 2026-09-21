@@ -233,7 +233,7 @@ public actor VaultBackend: GTDBackend {
     /// the day is recorded only on success, so a vault that was busy, read-only or half-synced is
     /// retried at the next launch instead of being skipped until tomorrow. The app shell runs the
     /// same command once a day through `AppModel.perform`, which is where a failure reaches the
-    /// person (T15: a `rollbackFailed` is never silent).
+    /// person — a `rollbackFailed` is never silent.
     private func runHousekeeping() async {
         let today = makeEnv().today
         guard await housekeeping.shouldArchive(on: today) else { return }
@@ -258,8 +258,8 @@ public actor VaultBackend: GTDBackend {
     ///
     /// Everywhere else a taken destination is the user's problem to solve, not ours to rename
     /// around: it becomes `GTDError.titleCollision`, which the UI already knows how to show.
-    /// Internal rather than private so `FolderMoveTests` can pin the policy for a folder move:
-    /// no command emits one until T03/T05, and the rule must hold before the first one does.
+    /// Internal rather than private so `FolderMoveTests` can pin the policy for a folder move —
+    /// `removeList` and a project's area change (R-5/R-7) are the commands that emit one.
     func resolveCollisions(
         _ ops: [VaultFileOp], layout: VaultLayout
     ) async throws -> [VaultFileOp] {

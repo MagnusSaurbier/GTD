@@ -256,7 +256,7 @@ public enum Reducer {
 
     /// I4a/R-8 — the project an action draft names: an existing one, or one created here from
     /// `newProjectTitle` (name only, area-less — P1/D35). The **one** place a project is born
-    /// from an action draft, so T05's `Projects/no_area/` change lands in `addProject` alone.
+    /// from an action draft, which is why `Projects/no_area/` (R-6) lives in `addProject` alone.
     private static func resolveProject(
         for draft: ActionDraft, in s: inout VaultSnapshot
     ) throws(GTDError) -> NoteID? {

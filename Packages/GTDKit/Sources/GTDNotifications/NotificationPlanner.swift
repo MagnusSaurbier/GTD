@@ -64,7 +64,7 @@ public struct DeviceNotificationSettings: Sendable, Equatable, Codable {
     public static let `default` = DeviceNotificationSettings()
 }
 
-/// **Owned by T13.** Pure: snapshot in, notifications out. Respects the iOS limit of 64 pending
+/// Pure: snapshot in, notifications out. Respects the iOS limit of 64 pending
 /// requests (routines first, then soonest first; same-morning items collapse into a summary).
 ///
 /// Kinds planned, one call covers all of them (D1, D2, R3, W2):
@@ -253,7 +253,7 @@ public enum NotificationRoute: Sendable, Equatable {
 }
 
 /// Talks to `UNUserNotificationCenter` behind a protocol so the planner stays testable.
-/// The real centre lives in a `#if canImport(UserNotifications)` file. **Owned by T13.**
+/// The real centre lives in a `#if canImport(UserNotifications)` file.
 public protocol NotificationCenterPort: Sendable {
     func requestAuthorization() async throws -> Bool
     func pendingIdentifiers() async -> [String]
@@ -261,7 +261,7 @@ public protocol NotificationCenterPort: Sendable {
     func remove(identifiers: [String]) async
 }
 
-/// Diffs the plan against what is pending and applies only the delta. **Owned by T13.**
+/// Diffs the plan against what is pending and applies only the delta.
 public struct NotificationScheduler: Sendable {
     private let center: any NotificationCenterPort
 

@@ -4,9 +4,11 @@ import GTDModel
 /// `Fixtures.sampleSnapshot` as real markdown files.
 ///
 /// The rendering below is a **fixtures-only** writer — deliberately not `GTDMarkdown.NoteCodec`,
-/// because `GTDFixtures` must not depend on the codec (it is what T10 and T15 test *against*).
-/// The formats follow ARCHITECTURE §3 exactly; if T10 changes a format, change it here too and
-/// re-export the committed copy (see `Sources/GTDFixtures/README.md`).
+/// because `GTDFixtures` must not depend on the codec — the sample vault is what
+/// `GTDMarkdownTests` and `GTDVaultTests` check the codec *against*, so rendering it through the
+/// codec would make both suites tautologies. The formats follow ARCHITECTURE §3 exactly; a change
+/// to a note format belongs here too, followed by a re-export of the committed copy (see
+/// `Sources/GTDFixtures/README.md`).
 public enum SampleVault {
 
     /// Every file of the sample vault: vault-relative path → contents.

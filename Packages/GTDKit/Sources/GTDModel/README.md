@@ -108,5 +108,5 @@ Compiles and tests on Linux.
 
 Everything here is domain code: no `import SwiftUI`, no I/O, no markdown. A change to a rule or
 to the reducer is a change to what the app *means* — read `docs/CONTRIBUTING-AGENTS.md` first.
-`swift test --filter GTDModelTests` — `TestVault` builds tiny snapshots for the rule tables,
+`swift test --filter GTDModelTests` — 223 tests. `TestVault` builds tiny snapshots for the rule tables,
 `GTDFixtures.sampleSnapshot` is used where a rule needs a whole system.

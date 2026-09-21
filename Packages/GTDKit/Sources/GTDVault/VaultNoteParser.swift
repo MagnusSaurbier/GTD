@@ -2,7 +2,7 @@ import Foundation
 import GTDMarkdown
 import GTDModel
 
-/// The seam between the scanner and `GTDMarkdown.NoteCodec` (T10).
+/// The seam between the scanner and `GTDMarkdown.NoteCodec`.
 ///
 /// The store never calls `NoteCodec` directly: everything goes through this protocol, so the
 /// index, the snapshot assembly and the transaction logic can be tested with a stub parser while
@@ -62,12 +62,12 @@ public struct NoteCodecParser: VaultNoteParser {
         try NoteCodec.decodeWeeklyReview(id: id, text: text)
     }
 
-    /// Whether T10's codec is implemented in this build.
+    /// Whether `GTDMarkdown`'s codec is implemented in this build. It is — this probe is the
+    /// scaffold-era guard that survives because it is cheap and it is what several integration
+    /// suites are `.enabled(if:)` on.
     ///
-    /// Until it lands every decode throws `NoteCodecError.notImplemented`, and a scan of a real
-    /// vault would produce nothing but issues. The integration tests are gated on this, and
-    /// `FileVaultStore` turns a `notImplemented` into one clearly-worded `VaultIssue` per file
-    /// instead of pretending the note is corrupt.
+    /// Were a decode ever to throw `NoteCodecError.notImplemented` again, `FileVaultStore` turns
+    /// it into one clearly-worded `VaultIssue` per file instead of pretending the note is corrupt.
     public static let codecIsImplemented: Bool = {
         let probe = "---\ncreated: 2026-01-01T00:00:00+01:00\n---\nprobe\n"
         do {
