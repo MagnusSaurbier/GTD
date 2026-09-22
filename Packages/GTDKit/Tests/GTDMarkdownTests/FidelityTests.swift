@@ -63,10 +63,10 @@ struct FidelityTests {
     @Test(arguments: awkwardStrings)
     func inboxTextSurvivesEncoding(_ value: String) throws {
         let item = InboxItem(
-            id: NoteID(path: "Inbox/x.md"), text: value, created: Date(timeIntervalSince1970: 1_790_000_000))
+            id: NoteID(path: "Inbox/x.md"), body: value, created: Date(timeIntervalSince1970: 1_790_000_000))
         let encoded = NoteCodec.encode(item, timeZone: zone)
         let back = try NoteCodec.decodeInboxItem(id: item.id, text: encoded, timeZone: zone)
-        #expect(back.text == value)
+        #expect(back.body == value)
         #expect(back.created == item.created)
     }
 

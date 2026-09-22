@@ -5,12 +5,12 @@ import GTDFixtures
 
 /// I1, I4, I5 — every way a capture can leave the inbox, and every way it can be refused.
 ///
-/// The three rulings this suite pins: **R-3** (required fields per tier), **R-4** (the capture
-/// text is the title, and nothing dictated is lost) and **R-8** (the project chip, including the
-/// project it creates).
+/// The rulings this suite pins: **R-3** (required fields per tier), **C3/R-4** (an inbox note's
+/// title is its file name, renaming it is a move, and nothing dictated is lost) and **R-8** (the
+/// project chip, including the project it creates).
 struct ReducerInboxTests {
     private let env = TestVault.env()
-    private let capture = TestVault.inboxItem("2026-09-19 081204", "call the Hausverwaltung", created: 0)
+    private let capture = TestVault.inboxItem("call the Hausverwaltung", created: 0)
 
     private func vault(
         inbox: [InboxItem]? = nil,
@@ -27,7 +27,7 @@ struct ReducerInboxTests {
     /// A card that carries everything Next asks for (R-3).
     private func complete(_ status: ActionStatus = .next, waiting: WaitingInfo? = nil) -> ActionDraft {
         ActionDraft(
-            title: "ignored — R-4 takes the title from the capture",
+            title: "ignored — the note keeps the inbox note's file name",
             status: status,
             contexts: ["calls"],
             timeEstimate: 10,
@@ -42,7 +42,7 @@ struct ReducerInboxTests {
         let result = try Reducer.reduce(vault(), .fileInbox(capture.id, .action(complete())), env: env)
 
         #expect(result.snapshot.inbox.isEmpty)
-        // R-4 — the note is named after the capture text, not after the draft's title.
+        // C3 — the note keeps the inbox note's file name, not the draft's title.
         let action = try #require(result.snapshot.action(TestVault.actionID("call the Hausverwaltung")))
         #expect(action.status == .next)
         #expect(action.contexts == ["calls"])
@@ -240,24 +240,78 @@ struct ReducerInboxTests {
             == .missingFields([.why, .context, .timeEstimate]))
     }
 
-    // MARK: - R-4: the capture text is the title
+    // MARK: - C3/R-4: the file name is the title
 
     @Test func umlautsAreCountedAsCharactersNotBytes() throws {
-        let long = TestVault.inboxItem(
-            "2026-09-19 090000",
-            "Prüfungsanmeldung für Mathe über das Portal erledigen bevor")   // exactly 59 characters
-        #expect(long.text.count == 59)
+        let text = "Prüfungsanmeldung für Mathe über das Portal erledigen bevor"  // exactly 59 characters
+        let long = TestVault.inboxItem(text)
+        #expect(text.count == 59)
+        #expect(long.title == text, "59 characters fit, whatever they weigh in bytes")
+        #expect(long.body.isEmpty)
         let result = try Reducer.reduce(
             vault(inbox: [long]), .fileInbox(long.id, .action(complete(.someday))), env: env)
         let action = try #require(result.snapshot.actions.first)
-        #expect(action.title == long.text, "59 characters fit, whatever they weigh in bytes")
+        #expect(action.title == text)
         #expect(action.preamble.isEmpty)
+    }
+
+    /// The trigger of the 2026-09-22 decision: a note made in Obsidian from the user's template
+    /// has only the empty Why/What skeleton as its body. Its title is its file name — never the
+    /// body's first line ("# Why? -").
+    @Test func aSkeletonOnlyNoteIsTitledByItsFileName() {
+        let note = TestVault.inboxNote("test task", body: "# Why?\n- \n\n# What?\n- [ ] ")
+        #expect(note.title == "test task")
+        #expect(note.id.path == "Inbox/test task.md")
+    }
+
+    /// …and filing it neither copies the skeleton into the action above its own `# Why?` /
+    /// `# What?` nor into a Knowledge note's or list item's notes.
+    @Test func aSkeletonBodyDoesNotLeakIntoTheFiledNote() throws {
+        let note = TestVault.inboxNote("test task", body: "# Why?\n- \n\n# What?\n- [ ] \n")
+        let snapshot = vault(inbox: [note])
+
+        let asAction = try Reducer.reduce(snapshot, .fileInbox(note.id, .action(complete())), env: env)
+        let action = try #require(asAction.snapshot.actions.first)
+        #expect(action.title == "test task")
+        #expect(action.id.path == "Actions/test task.md")
+        #expect(action.preamble.isEmpty, "the skeleton is not content")
+        #expect(action.why == complete().why)
+        #expect(action.what == complete().what)
+
+        let asKnowledge = try Reducer.reduce(
+            snapshot, .fileInbox(note.id, .knowledge(.folder(""), notes: "")), env: env)
+        #expect(asKnowledge.filedNotes.first?.body == "")
+        let withNotes = try Reducer.reduce(
+            snapshot, .fileInbox(note.id, .knowledge(.folder(""), notes: "Marie")), env: env)
+        #expect(withNotes.filedNotes.first?.body == "Marie")
+
+        let asListItem = try Reducer.reduce(
+            snapshot, .fileInbox(note.id, .list(name: "Read", notes: "")), env: env)
+        #expect(asListItem.snapshot.listItems.first?.notes == "")
+    }
+
+    /// A body the user actually wrote comes along, above the notes panel.
+    @Test func aRealBodyIsCarriedAboveTheNotes() throws {
+        let note = TestVault.inboxNote("Umzug", body: "# Why?\n- die Miete steigt\n")
+        let result = try Reducer.reduce(
+            vault(inbox: [note]), .fileInbox(note.id, .list(name: "Read", notes: "bis Oktober")),
+            env: env)
+        #expect(result.snapshot.listItems.first?.notes == "# Why?\n- die Miete steigt\n\nbis Oktober")
+    }
+
+    /// The name the user gave a note is kept whole — only a capture's name is cut to 60.
+    @Test func aLongFileNameIsNotCutOnFiling() throws {
+        let name = String(repeating: "Wohnung ", count: 10).trimmingCharacters(in: .whitespaces)
+        let note = TestVault.inboxNote(name)
+        let result = try Reducer.reduce(
+            vault(inbox: [note]), .fileInbox(note.id, .action(complete(.someday))), env: env)
+        #expect(result.snapshot.actions.first?.title == name)
     }
 
     @Test func aLongDictationIsCutAtAWordBoundaryAndKeptInTheBody() throws {
         let text = "Beim Studierendenwerk nachfragen, ob die Kaution für das Zimmer "
             + "schon überwiesen wurde"
-        let long = TestVault.inboxItem("2026-09-19 090000", text)
+        let long = TestVault.inboxItem(text)
         let result = try Reducer.reduce(
             vault(inbox: [long]), .fileInbox(long.id, .action(complete())), env: env)
         let action = try #require(result.snapshot.actions.first)
@@ -272,7 +326,7 @@ struct ReducerInboxTests {
 
     @Test func aMultiLineCaptureIsTitledByItsFirstLineAndKeepsTheRest() throws {
         let text = "Mail an den Vermieter\nKaution\nNebenkosten"
-        let multi = TestVault.inboxItem("2026-09-19 090000", text)
+        let multi = TestVault.inboxItem(text)
         let result = try Reducer.reduce(
             vault(inbox: [multi]), .fileInbox(multi.id, .action(complete())), env: env)
         let action = try #require(result.snapshot.actions.first)
@@ -283,7 +337,7 @@ struct ReducerInboxTests {
     /// The same rule for a Knowledge note and a list item: the full text above the notes.
     @Test func aCutCaptureKeepsItsFullTextAboveTheNotes() throws {
         let text = "Der Artikel über Wohnungsmärkte in München, den Marie in der Gruppe geteilt hat"
-        let item = TestVault.inboxItem("2026-09-19 090000", text)
+        let item = TestVault.inboxItem(text)
         let listResult = try Reducer.reduce(
             vault(inbox: [item]), .fileInbox(item.id, .list(name: "Read", notes: "Vor Montag")),
             env: env)
@@ -294,16 +348,63 @@ struct ReducerInboxTests {
         #expect(knowledgeResult.filedNotes.first?.body == text)
     }
 
-    @Test func aTitleOfOnlyWhitespaceIsRefused() {
-        let blank = TestVault.inboxItem("2026-09-19 090000", "   \n\t  ")
-        for decision: InboxDecision in [
-            .action(ActionDraft(title: "x", status: .done)),
-            .knowledge(.folder(""), notes: ""),
-            .list(name: "Read", notes: ""),
-        ] {
-            #expect(TestVault.error(vault(inbox: [blank]), .fileInbox(blank.id, decision), env: env)
-                    == .invalid("A title is required"), "\(decision)")
+    // MARK: - C3: renaming the card renames the file
+
+    @Test func renamingMovesTheFileWithinTheInbox() throws {
+        let result = try Reducer.reduce(
+            vault(), .renameInboxItem(capture.id, title: "Mail the Hausverwaltung"), env: env)
+        let target = NoteID(path: "Inbox/Mail the Hausverwaltung.md")
+        let renamed = try #require(result.snapshot.inboxItem(target))
+        #expect(renamed.title == "Mail the Hausverwaltung")
+        #expect(renamed.created == capture.created)
+        #expect(renamed.body == capture.body)
+        #expect(renamed.passthrough == capture.passthrough)
+        #expect(result.snapshot.inboxItem(capture.id) == nil)
+        #expect(result.extraOps == [.move(from: capture.id.path, to: target.path)])
+        #expect(result.renames.resolve(capture.id) == target)
+    }
+
+    /// A new name is sanitised and cut like a capture's; its lines are joined, nothing dropped.
+    @Test func aRenamedTitleIsSanitisedLikeACapture() throws {
+        let result = try Reducer.reduce(
+            vault(), .renameInboxItem(capture.id, title: "  call: the\nHausverwaltung "), env: env)
+        #expect(result.snapshot.inbox.map(\.title) == ["call the Hausverwaltung"])
+        #expect(result.snapshot.inbox.first?.id == capture.id, "the same name is no rename")
+        #expect(result.extraOps.isEmpty)
+    }
+
+    @Test func renamingToANameThatIsTakenIsACollision() {
+        let other = TestVault.inboxItem("Mail the Hausverwaltung")
+        let snapshot = vault(inbox: [capture, other])
+        #expect(TestVault.error(
+            snapshot, .renameInboxItem(capture.id, title: "Mail the Hausverwaltung"), env: env)
+            == .titleCollision("Mail the Hausverwaltung"))
+    }
+
+    @Test func renamingToAnEmptyTitleIsRefused() {
+        for blank in ["", "   ", "\n\t "] {
+            #expect(TestVault.error(vault(), .renameInboxItem(capture.id, title: blank), env: env)
+                    == .invalid("A title is required"))
         }
+    }
+
+    /// Filing after a rename files under the new name.
+    @Test func aRenamedCardIsFiledUnderItsNewName() throws {
+        let renamed = try Reducer.reduce(
+            vault(), .renameInboxItem(capture.id, title: "Mail the Hausverwaltung"), env: env)
+        let id = NoteID(path: "Inbox/Mail the Hausverwaltung.md")
+        let filed = try Reducer.reduce(renamed.snapshot, .fileInbox(id, .action(complete())), env: env)
+        #expect(filed.snapshot.actions.first?.id.path == "Actions/Mail the Hausverwaltung.md")
+    }
+
+    @Test func editingTheBodyKeepsTheNameAndEverythingElse() throws {
+        let result = try Reducer.reduce(
+            vault(), .editInboxBody(capture.id, "The handle on the left window."), env: env)
+        let item = try #require(result.snapshot.inboxItem(capture.id))
+        #expect(item.body == "The handle on the left window.")
+        #expect(item.title == capture.title)
+        #expect(item.created == capture.created)
+        #expect(result.extraOps.isEmpty)
     }
 
     @Test func aTitleThatAlreadyExistsIsACollision() {
@@ -396,9 +497,10 @@ struct ReducerInboxTests {
     }
 
     @Test func filingAnUnknownCaptureIsNotFound() {
-        let ghost = TestVault.layout.inboxPath(stamp: "2000-01-01 000000")
+        let ghost = TestVault.layout.inboxPath(title: "ghost")
         #expect(TestVault.error(vault(), .fileInbox(ghost, .trash), env: env) == .notFound(ghost))
-        #expect(TestVault.error(vault(), .editInboxText(ghost, "x"), env: env) == .notFound(ghost))
+        #expect(TestVault.error(vault(), .renameInboxItem(ghost, title: "x"), env: env) == .notFound(ghost))
+        #expect(TestVault.error(vault(), .editInboxBody(ghost, "x"), env: env) == .notFound(ghost))
         #expect(TestVault.error(vault(), .deferInboxToReview(ghost, reason: "x"), env: env) == .notFound(ghost))
     }
 
@@ -426,13 +528,6 @@ struct ReducerInboxTests {
     @Test func deferToReviewNeedsAReason() {
         #expect(TestVault.error(vault(), .deferInboxToReview(capture.id, reason: "   "), env: env)
                 == .invalid("Defer to review needs a reason"))
-    }
-
-    @Test func editingTheCaptureTextKeepsEverythingElse() throws {
-        let result = try Reducer.reduce(vault(), .editInboxText(capture.id, "call the Hausverwaltung today"), env: env)
-        let item = try #require(result.snapshot.inboxItem(capture.id))
-        #expect(item.text == "call the Hausverwaltung today")
-        #expect(item.created == capture.created)
     }
 
     // MARK: - I1 against the realistic vault

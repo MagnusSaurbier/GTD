@@ -1,17 +1,23 @@
 import Foundation
 
-/// R-4 — what a capture becomes when it is filed: its title, and the body that keeps whatever
-/// the title could not hold.
+/// R-4 — what a capture is called and what its body keeps.
 ///
-/// The capture text **is** the title (I2, D27/D30): the file keeps its timestamp name while it
-/// sits in `Inbox/` and is renamed on filing. A title is a file name, so it is sanitised
+/// A capture is **named after its text when it is written** (C3, 2026-09-22): the file is
+/// `Inbox/<title>.md`, and the title is the first line with something on it, sanitised
 /// (`VaultLayout.sanitize`) and cut at a word boundary to ≤ 60 **characters** — characters, not
 /// bytes, so a dictation full of umlauts is cut where it reads, not where UTF-8 happens to end.
+/// From then on the file name *is* the title, in the inbox and after filing alike; nothing ever
+/// derives a title from the body again.
 ///
 /// Nothing the user dictated is ever dropped: whenever the trimmed capture text and the title
 /// are not the same string — because it was cut, because it had more lines, or because
-/// sanitising changed it — the **full text** is written as the note's first paragraph, above
-/// `# Why?` (actions) or above the notes (Knowledge and list items).
+/// sanitising changed it — the **full text** is the capture's body (`body(capture:title:notes:)`),
+/// and filing carries that body above `# Why?` (actions) or above the notes (Knowledge and list
+/// items).
+///
+/// A note made in Obsidian from the user's template carries a body that is nothing but the
+/// empty `# Why?` / `# What?` skeleton. That body says nothing, so filing treats it as empty
+/// (`isEmptyBody`) instead of copying the skeleton into the filed note.
 public enum CaptureText {
 
     /// The most a file name may carry of the capture (R-4, I2 "~60 chars").
@@ -21,9 +27,20 @@ public enum CaptureText {
     /// a name is refused rather than filed as "Untitled" (§1 "no lying defaults").
     public static func title(of text: String) -> String? {
         guard let line = firstContentLine(text) else { return nil }
+        // Only symbols the sanitiser strips (`###`, `[[]]`) leave no name — `sanitize` would
+        // answer "Untitled", which is exactly the lying default this refuses.
+        guard line.contains(where: { !$0.isWhitespace && !VaultLayout.illegalNameCharacters.contains($0) })
+        else { return nil }
         let sanitised = VaultLayout.sanitize(line)
-        guard !sanitised.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return cut(sanitised, to: titleLimit)
+    }
+
+    /// The name a title field renames a note to: its lines joined with spaces (a title has
+    /// one line, and nothing typed is dropped), then cut and sanitised like a capture's title.
+    /// `nil` when only whitespace is left.
+    public static func renamedTitle(_ input: String) -> String? {
+        let oneLine = input.split(whereSeparator: \.isNewline).joined(separator: " ")
+        return title(of: oneLine)
     }
 
     /// True when `title` does not carry everything `text` said, so the full text belongs in the
@@ -41,6 +58,54 @@ public enum CaptureText {
         if lead.isEmpty { return rest }
         if rest.isEmpty { return lead }
         return lead + "\n\n" + rest
+    }
+
+    // MARK: - Capture
+
+    /// The name and body a capture of `text` is written with, or `nil` when `text` is only
+    /// whitespace — an empty capture is refused, never saved under a made-up name (§1 "no lying
+    /// defaults").
+    public static func note(for text: String) -> (title: String, body: String)? {
+        guard let title = title(of: text) else { return nil }
+        return (title, body(capture: text, title: title, notes: ""))
+    }
+
+    // MARK: - Filing
+
+    /// What a filed note's body carries over from the inbox item: the item's body — unless it
+    /// says nothing (`isEmptyBody`) — then the notes panel (I4b). No stray blank lines at the ends.
+    public static func filedBody(body: String, notes: String) -> String {
+        let lead = content(ofBody: body)
+        let rest = trimmed(notes)
+        if lead.isEmpty { return rest }
+        if rest.isEmpty { return lead }
+        return lead + "\n\n" + rest
+    }
+
+    /// The body trimmed, or `""` when it says nothing (`isEmptyBody`).
+    public static func content(ofBody body: String) -> String {
+        isEmptyBody(body) ? "" : trimmed(body)
+    }
+
+    /// True when `body` holds nothing the user wrote: only whitespace, or only the Obsidian
+    /// template skeleton — the headings `# Why?` / `# What?` (any heading level, any case) with
+    /// nothing under them but empty bullets (`-`, `*`, `+`), empty checkboxes (`- [ ]`) and blank
+    /// lines. One word anywhere, a filled bullet or any other heading makes it content.
+    public static func isEmptyBody(_ body: String) -> Bool {
+        body.split(whereSeparator: \.isNewline).allSatisfy { line in
+            isSkeletonLine(line.trimmingCharacters(in: .whitespaces))
+        }
+    }
+
+    private static func isSkeletonLine(_ line: String) -> Bool {
+        if line.isEmpty { return true }
+        if line.hasPrefix("#") {
+            let heading = line.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces).lowercased()
+            return line.prefix { $0 == "#" }.count <= 6 && (heading == "why?" || heading == "what?")
+        }
+        guard let marker = line.first, "-*+".contains(marker) else { return false }
+        let rest = line.dropFirst().trimmingCharacters(in: .whitespaces)
+        return rest.isEmpty || rest == "[ ]" || rest == "[]"
     }
 
     // MARK: - Pieces

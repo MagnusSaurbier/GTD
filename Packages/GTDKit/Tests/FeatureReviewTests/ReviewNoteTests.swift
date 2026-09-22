@@ -52,7 +52,7 @@ struct ReviewNoteTests {
         let notes = session.buildReview().systemFixNotes
         #expect(notes.count == 3)
         #expect(notes[0] == ReviewCopy.systemFixNote(
-            item: item.text, reason: reason, fix: "Decisions get their own queue"))
+            item: item.title, reason: reason, fix: "Decisions get their own queue"))
         #expect(notes[1].hasPrefix(ReviewCopy.promptTrust))
         #expect(notes[1].hasSuffix("Nothing slipped."))
         #expect(notes[2].hasPrefix(ReviewCopy.promptRoutines))

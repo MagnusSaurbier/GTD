@@ -28,7 +28,7 @@ struct SnapshotShape: Equatable {
 
     init(_ s: VaultSnapshot) {
         inbox = s.inbox.map {
-            "\($0.id) | \($0.text) | created \(stamp($0.created)) | review \($0.reviewReason ?? "-")"
+            "\($0.id) | \($0.body) | created \(stamp($0.created)) | review \($0.reviewReason ?? "-")"
         }.sorted()
 
         actions = s.actions.map { action in

@@ -25,7 +25,7 @@ struct ReviewSweepTests {
     }
 
     @Test func draftPlusTargetBecomesTheSameDecisionTheInboxCardWouldMake() {
-        var draft = InboxSession.Draft(text: "Decide on the thesis chair")
+        var draft = InboxSession.Draft(title: "Decide on the thesis chair")
         draft.what = "Mail three chairs"
         draft.why = "The topic depends on it"
         draft.contexts = ["mac"]
@@ -34,7 +34,7 @@ struct ReviewSweepTests {
         guard case let .action(action)? = DeferredSweep.decision(target: .someday, draft: draft)
         else { Issue.record("expected an action decision"); return }
         #expect(action.status == .someday)
-        // R-4 — the capture text is the title; the reducer cuts and sanitises it.
+        // The card's title rides along; the reducer files under the note's file name.
         #expect(action.title == "Decide on the thesis chair")
         #expect(action.contexts == ["mac"])
         #expect(action.timeEstimate == 30)
@@ -43,7 +43,7 @@ struct ReviewSweepTests {
     }
 
     @Test func targetsNeedingAPickerProduceNoDecisionUntilItIsAnswered() {
-        let draft = InboxSession.Draft(text: "Something", what: "Do it")
+        let draft = InboxSession.Draft(title: "Something", what: "Do it")
         #expect(DeferredSweep.decision(target: .waiting, draft: draft) == nil)
         #expect(DeferredSweep.decision(target: .knowledge, draft: draft) == nil)
         // Parking it in the review again would make the escape hatch a loop.
@@ -65,7 +65,7 @@ struct ReviewSweepTests {
     /// R-3 — the review asks for exactly what the inbox card asks for, because it is the same
     /// filing: Next wants all four, Someday only `What?`, Knowledge and Trash nothing.
     @Test func theDeckAsksForTheSameFieldsTheInboxCardDoes() {
-        let empty = InboxSession.Draft(text: "Raw capture")
+        let empty = InboxSession.Draft(title: "Raw capture")
         #expect(DeferredSweep.missingFields(empty, for: .next)
                 == [.why, .what, .context, .timeEstimate])
         #expect(DeferredSweep.missingFields(empty, for: .someday) == [.what])
@@ -73,7 +73,7 @@ struct ReviewSweepTests {
         #expect(DeferredSweep.isComplete(empty, for: .trash))
         #expect(DeferredSweep.isComplete(empty, for: .done))
 
-        var filled = InboxSession.Draft(text: "Raw capture", what: "Write it down")
+        var filled = InboxSession.Draft(title: "Raw capture", what: "Write it down")
         #expect(DeferredSweep.isComplete(filled, for: .someday))
         #expect(!DeferredSweep.isComplete(filled, for: .next))
         filled.why = "It keeps coming back"
@@ -97,10 +97,32 @@ struct ReviewSweepTests {
         #expect(session.state.changes.deferredHandled == 1)
         #expect(session.state.systemFixNotes == [
             ReviewCopy.systemFixNote(
-                item: item.text, reason: reason, fix: "Give decisions their own queue"),
+                item: item.title, reason: reason, fix: "Give decisions their own queue"),
         ])
         #expect(session.state.systemFixNotes[0].contains(reason))
         #expect(session.snapshot.inboxItem(item.id) == nil)
+    }
+
+    /// C3 — the title field is the file name: a changed title renames the inbox note first, and
+    /// the item is filed under its new name.
+    @Test func aChangedTitleRenamesTheNoteBeforeItIsFiled() async throws {
+        let session = ReviewTest.session()
+        let item = try #require(session.currentDeferredItem)
+        await session.fileDeferred(
+            item, decision: .knowledge(.folder(""), notes: ""), systemFix: "a fix",
+            title: "Erasmus or DAAD: decide")
+        #expect(session.lastError == nil)
+        #expect(session.deferredItems.isEmpty)
+        #expect(session.snapshot.inboxItem(item.id) == nil)
+        #expect(session.state.systemFixNotes.first?.hasPrefix("Erasmus or DAAD decide") == true)
+    }
+
+    @Test func anEmptyTitleIsRefusedAndNothingIsFiled() async throws {
+        let session = ReviewTest.session()
+        let item = try #require(session.currentDeferredItem)
+        await session.fileDeferred(item, decision: .trash, systemFix: "", title: "   ")
+        #expect(session.lastError == .invalid("A title is required"))
+        #expect(session.deferredItems.contains { $0.id == item.id })
     }
 
     @Test func anEmptySystemFixWritesNoLine() async throws {

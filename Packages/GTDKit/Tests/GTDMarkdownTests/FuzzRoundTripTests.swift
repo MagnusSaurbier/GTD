@@ -114,10 +114,10 @@ struct FuzzRoundTripTests {
                     "seed \(seed) — \(firstDifference(note, NoteCodec.encode(item, timeZone: vaultTimeZone)))")
 
             var edited = item
-            edited.text = "rewritten by the user\nwith a second line"
+            edited.body = "rewritten by the user\nwith a second line"
             let rewritten = NoteCodec.encode(edited, timeZone: vaultTimeZone)
             let reread = try NoteCodec.decodeInboxItem(id: id, text: rewritten, timeZone: vaultTimeZone)
-            #expect(reread.text == edited.text, "seed \(seed) — edited text")
+            #expect(reread.body == edited.body, "seed \(seed) — edited body")
             #expect(reread.created == item.created, "seed \(seed) — created must survive an edit (I1)")
             #expect(reread.reviewReason == item.reviewReason, "seed \(seed) — reviewReason")
             for key in Fuzz.unknownKeyNames where note.contains("\n\(key):") || note.hasPrefix("\(key):") {

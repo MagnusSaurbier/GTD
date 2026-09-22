@@ -26,7 +26,7 @@ struct ExternalWriteLatencyTests {
             atomically: true, encoding: .utf8)
 
         let arrived = try await eventually {
-            await store.currentSnapshot.inbox.contains { $0.text == "call the dentist" }
+            await store.currentSnapshot.inbox.contains { $0.title == "From a script" && $0.body == "call the dentist" }
         }
         let latency = arrived - started
         #expect(latency < .milliseconds(1_000), "took \(latency) — the 5 s poll would be the only other way")

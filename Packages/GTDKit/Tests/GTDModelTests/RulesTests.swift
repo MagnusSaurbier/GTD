@@ -278,7 +278,7 @@ struct SignalRuleTests {
     // inbox: older than 7 days ⇒ aging
     @Test(arguments: [(7, false), (8, true), (30, true)])
     func inboxAge(age: Int, hasSignal: Bool) {
-        let item = TestVault.inboxItem("2026-09-01 080000", "alt", created: -age)
+        let item = TestVault.inboxItem("alt", created: -age)
         let signals = Rules.signals(for: item, today: today, calendar: calendar)
         #expect((signals.first != nil) == hasSignal)
         if let signal = signals.first {

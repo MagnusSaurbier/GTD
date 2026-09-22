@@ -168,7 +168,7 @@ private struct InboxTabContent: View {
                     List {
                         ForEach(items) { item in
                             HStack(alignment: .top, spacing: Spacing.m) {
-                                Text(item.text)
+                                Text(item.title)
                                     .font(Typo.body)
                                     .foregroundStyle(Color.ink)
                                     .lineLimit(3)

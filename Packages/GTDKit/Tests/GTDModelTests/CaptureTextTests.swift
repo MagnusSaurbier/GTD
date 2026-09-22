@@ -6,6 +6,14 @@ import GTDModel
 /// (`ReducerInboxTests` covers that); this is the table behind them.
 struct CaptureTextTests {
 
+    @Test func aCaptureOfOnlyStrippedSymbolsHasNoTitle() {
+        // Not "Untitled": an empty capture is refused, not given a made-up name.
+        #expect(CaptureText.title(of: "###") == nil)
+        #expect(CaptureText.title(of: "  [[]] \n") == nil)
+        #expect(CaptureText.renamedTitle("#") == nil)
+        #expect(CaptureText.title(of: "# buy milk") == "buy milk")
+    }
+
     @Test func aShortCaptureIsItsOwnTitle() {
         #expect(CaptureText.title(of: "call the Hausverwaltung") == "call the Hausverwaltung")
         #expect(!CaptureText.carriesMore("call the Hausverwaltung", than: "call the Hausverwaltung"))
@@ -55,11 +63,9 @@ struct CaptureTextTests {
     @Test func onlyWhitespaceHasNoTitle() {
         #expect(CaptureText.title(of: "") == nil)
         #expect(CaptureText.title(of: "   \n\t ") == nil)
-        // A capture of punctuation alone is *not* whitespace: it keeps `VaultLayout.sanitize`'s
-        // fallback name, exactly as every other title in the app does — and because the title
-        // then says less than the capture, the capture itself is kept in the body.
-        #expect(CaptureText.title(of: "///") == "Untitled")
-        #expect(CaptureText.body(capture: "///", title: "Untitled", notes: "") == "///")
+        // Punctuation the sanitiser strips leaves no name either: refused, never "Untitled"
+        // (2026-09-22 — the file name is the title, and there is no fallback name).
+        #expect(CaptureText.title(of: "///") == nil)
     }
 
     @Test func theNotesPanelGoesBelowTheCaptureText() {
@@ -70,5 +76,74 @@ struct CaptureTextTests {
         // Nothing to keep: the notes stand alone, with no stray blank lines.
         #expect(CaptureText.body(capture: "Sapiens", title: "Sapiens", notes: "  Marie's copy ")
                 == "Marie's copy")
+    }
+
+    // MARK: - Capture (C3, 2026-09-22)
+
+    @Test func aCaptureIsNamedAfterItsTextAndKeepsABodyOnlyWhenNeeded() throws {
+        let short = try #require(CaptureText.note(for: "  buy milk \n"))
+        #expect(short.title == "buy milk")
+        #expect(short.body == "")
+
+        let multi = try #require(CaptureText.note(for: "\nbuy milk\nthe oat one"))
+        #expect(multi.title == "buy milk")
+        #expect(multi.body == "buy milk\nthe oat one")
+
+        let sanitised = try #require(CaptureText.note(for: "idea: rename scans"))
+        #expect(sanitised.title == "idea rename scans")
+        #expect(sanitised.body == "idea: rename scans")
+    }
+
+    /// No timestamp fallback: there is no name for an empty capture, so there is no note.
+    @Test(arguments: ["", " ", "\n\t\n  "])
+    func anEmptyCaptureHasNoNote(_ text: String) {
+        #expect(CaptureText.note(for: text) == nil)
+    }
+
+    @Test func aRenamedTitleJoinsItsLinesAndIsCutLikeACapture() {
+        #expect(CaptureText.renamedTitle("call\nmum") == "call mum")
+        #expect(CaptureText.renamedTitle("  a: b  ") == "a b")
+        #expect(CaptureText.renamedTitle(String(repeating: "word ", count: 20))?.count ?? 99 <= 60)
+        #expect(CaptureText.renamedTitle(" \n ") == nil)
+    }
+
+    // MARK: - The template skeleton (2026-09-22)
+
+    /// The body of a note made in Obsidian from the user's template, exactly as found in the
+    /// vault (`Inbox/note.md`, `Inbox/test task.md`), and the shapes it takes after editing.
+    @Test(arguments: [
+        "# Why?\n- \n\n# What?\n- [ ] ",
+        "# Why?\n-\n\n# What?\n- [ ]\n",
+        "# Why?\r\n- \r\n\r\n# What?\r\n- [ ] \r\n",
+        "## why?\n* \n\n### WHAT?\n+ [ ]",
+        "# What?\n- [ ]\n- [ ]\n",
+        "",
+        "  \n\n",
+    ])
+    func theEmptySkeletonIsAnEmptyBody(_ body: String) {
+        #expect(CaptureText.isEmptyBody(body))
+        #expect(CaptureText.content(ofBody: body) == "")
+        #expect(CaptureText.filedBody(body: body, notes: "") == "")
+        #expect(CaptureText.filedBody(body: body, notes: " Marie ") == "Marie")
+    }
+
+    @Test(arguments: [
+        "# Why?\n- because\n\n# What?\n- [ ] ",
+        "# Why?\n- \n\n# What?\n- [ ] call her",
+        "# Why?\n- \n\n# What?\n- [x] ",
+        "# Why?\n- \n\n# Notes\n",
+        "#tag",
+        "- [ ] \nsome words",
+        "buy milk",
+    ])
+    func anythingTheUserWroteIsContent(_ body: String) {
+        #expect(!CaptureText.isEmptyBody(body))
+        #expect(CaptureText.content(ofBody: body) == body.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    @Test func aFiledBodyPutsTheItemsBodyAboveTheNotes() {
+        #expect(CaptureText.filedBody(body: "\nbuy milk\n", notes: "\nthe oat one\n")
+                == "buy milk\n\nthe oat one")
+        #expect(CaptureText.filedBody(body: "buy milk", notes: "  ") == "buy milk")
     }
 }

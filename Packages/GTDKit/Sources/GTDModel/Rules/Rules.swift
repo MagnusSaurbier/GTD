@@ -619,7 +619,7 @@ public enum Rules {
         // empty folder, so it is not offered as an undo at all.
         case .createList:
             false
-        case .editInboxText, .fileInbox, .deferInboxToReview, .createAction, .updateAction,
+        case .renameInboxItem, .editInboxBody, .fileInbox, .deferInboxToReview, .createAction, .updateAction,
              .setStatus, .trashAction, .complete, .toggleCheckbox, .convertActionToProject,
              .createArea, .createProject, .updateProject, .promoteStep,
              .renameList, .removeList, .updateListItem, .completeListItem, .trashListItem,

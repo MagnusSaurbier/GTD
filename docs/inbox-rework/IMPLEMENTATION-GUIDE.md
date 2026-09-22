@@ -118,7 +118,11 @@ its task lands (the old rows they replace are edited, not kept alongside).
   defer rule). The inbox and Make-action cards handle the error themselves (shake + asterisks,
   STYLEGUIDE §3.6); every other caller uses `perform`/`report`, so the shell's alert names the
   missing fields — acceptable for v1, note it in `docs/KNOWN_ISSUES.md`.
-- **R-4 Title and body on filing.** The note's title is the (edited) capture text: first line,
+- **R-4 Title and body on filing.** *(Amended 2026-09-22, ARCHITECTURE §6: an inbox note's title
+  is its **file name** — captures are named after their text when written, the card's title field
+  renames the file, filing keeps the name, and an empty Why/What skeleton body is not carried
+  over. The cut and the "full text in the body" rule below now apply when the capture is written.)*
+  The note's title is the (edited) capture text: first line,
   sanitised by `VaultLayout.sanitize`, cut at a word boundary to ≤ 60 characters. If anything was
   cut, the full capture text is written as the first paragraph of the body, above `# Why?`
   (actions) or above the notes (Knowledge / list items), so nothing the user dictated is lost.

@@ -359,7 +359,7 @@ struct ReducerListTests {
     // MARK: - InboxDecision.list (I4b)
 
     private var capture: InboxItem {
-        TestVault.inboxItem("2026-09-19 081204", "Sapiens by Yuval Noah Harari", created: 0)
+        TestVault.inboxItem("Sapiens by Yuval Noah Harari", created: 0)
     }
 
     @Test func filingACaptureToAListMovesTheCaptureFile() throws {
@@ -393,13 +393,6 @@ struct ReducerListTests {
         #expect(TestVault.error(
             vault(inbox: [item]), .fileInbox(item.id, .list(name: "Wish", notes: "")))
             == .invalid("Unknown list: Wish"))
-    }
-
-    @Test func filingACaptureOfOnlyWhitespaceToAListIsRefused() {
-        let item = TestVault.inboxItem("2026-09-19 081204", "   ")
-        #expect(TestVault.error(
-            vault(inbox: [item]), .fileInbox(item.id, .list(name: "Read", notes: "")))
-            == .invalid("A title is required"))
     }
 
     @Test func filingOntoAnExistingItemIsRefused() {

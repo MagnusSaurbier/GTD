@@ -2,7 +2,7 @@ import Foundation
 import GTDFixtures
 import GTDModel
 
-/// A long, ordinary working session: 21 commands covering every case of `GTDCommand`.
+/// A long, ordinary working session: 22 commands covering every case of `GTDCommand`.
 ///
 /// Each step is built from the *current* snapshot, because most of them act on notes an earlier
 /// step created or renamed. The script is written so that no step is refused — the Next cap is
@@ -15,9 +15,13 @@ enum CommandScript {
     }
 
     static let steps: [Step] = [
-        Step(name: "edit a capture") { s in
+        Step(name: "rename a capture") { s in
             guard let item = capture("call the Hausverwaltung", in: s) else { return nil }
-            return .editInboxText(item.id, "call the Hausverwaltung — a mail would do as well")
+            return .renameInboxItem(item.id, title: "call the Hausverwaltung — a mail would do")
+        },
+        Step(name: "edit a capture's body") { s in
+            guard let item = capture("buy new running shoes", in: s) else { return nil }
+            return .editInboxBody(item.id, "The ones from the shop near the Uni.")
         },
         Step(name: "file a card to Next (last free slot)") { s in
             guard let item = capture("call the Hausverwaltung", in: s) else { return nil }
@@ -30,7 +34,7 @@ enum CommandScript {
                 what: "Describe the damage and ask for a repair date.")))
         },
         Step(name: "file a card to Someday") { s in
-            guard let item = capture("idea: a script", in: s) else { return nil }
+            guard let item = capture("idea a script", in: s) else { return nil }
             return .fileInbox(item.id, .action(ActionDraft(
                 title: "Script that renames scanned PDFs",
                 status: .someday,
@@ -172,6 +176,6 @@ enum CommandScript {
     /// The capture whose text starts like this — steps name their card instead of relying on
     /// the queue order, so the script reads like the session it describes.
     private static func capture(_ prefix: String, in s: VaultSnapshot) -> InboxItem? {
-        s.inbox.first { $0.text.hasPrefix(prefix) }
+        s.inbox.first { $0.title.hasPrefix(prefix) }
     }
 }

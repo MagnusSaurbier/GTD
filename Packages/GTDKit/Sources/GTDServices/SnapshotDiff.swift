@@ -109,7 +109,7 @@ public enum SnapshotDiff {
         for note in notes {
             let item = InboxItem(
                 id: note.id,
-                text: note.body,
+                body: note.body,
                 created: note.created,
                 passthrough: note.source)
             puts.append(.put(path: note.id.path, text: NoteCodec.encode(item, timeZone: timeZone)))

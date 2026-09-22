@@ -11,7 +11,8 @@ public struct CaptureRequest: Sendable, Equatable {
         self.text = text
     }
 
-    /// Empty captures are rejected; leading/trailing whitespace is trimmed, line breaks kept.
+    /// Empty captures are rejected — there is nothing to name the note after (C3) — and
+    /// leading/trailing whitespace is trimmed, line breaks kept.
     public func normalized() throws(CaptureError) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw .emptyText }
@@ -27,6 +28,8 @@ public struct CaptureRequest: Sendable, Equatable {
             return try writer.capture(text: text, at: now)
         } catch let error as VaultError {
             throw CaptureError(vaultError: error)
+        } catch InboxWriter.CaptureRefusal.empty {
+            throw .emptyText
         } catch {
             throw .writeFailed("\(error)")
         }
@@ -66,18 +69,5 @@ extension CaptureError: LocalizedError {
         case .writeFailed(let reason):
             return "Could not save the capture: \(reason)"
         }
-    }
-}
-
-/// `yyyy-MM-dd HHmmss` — the capture file-name stamp (C3). Written by hand so the format is
-/// identical on every platform and in every locale.
-public enum CaptureStamp {
-    public static func string(for date: Date, calendar: Calendar = .current) -> String {
-        let c = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
-        func pad(_ value: Int?, _ width: Int = 2) -> String {
-            let s = String(value ?? 0)
-            return s.count >= width ? s : String(repeating: "0", count: width - s.count) + s
-        }
-        return "\(pad(c.year, 4))-\(pad(c.month))-\(pad(c.day)) \(pad(c.hour))\(pad(c.minute))\(pad(c.second))"
     }
 }

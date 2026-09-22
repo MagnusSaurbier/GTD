@@ -37,10 +37,16 @@ swipes, Mac with keys. Open it with the `Process inbox` button, `⌘I`, or `gtd:
 
 ### 1.1 Step 1 — the small card
 
-- [ ] The card shows **only** the capture timestamp (and an age badge if the capture is old) and
-      the **whole capture text**. No `Why?`, no `What?`, no chips, no `Show all` link. A capture
-      longer than the card **scrolls inside the card**; it is never truncated.
-- [ ] Tapping the text makes it editable in place — this text **is** the note's title.
+- [ ] The card shows **only** the capture timestamp (and an age badge if the capture is old),
+      the note's **title — its file name** — and, when the note has one, its body underneath
+      (a long capture's whole text). No `Why?`, no `What?`, no chips, no `Show all` link. A card
+      longer than the card area **scrolls inside the card**; it is never truncated.
+- [ ] A note made in Obsidian from the Why/What template (`Inbox/test task.md`) shows
+      **`test task`**, not `# Why? -`, and no skeleton body under it; the inbox list shows the
+      same name.
+- [ ] Tapping the title makes it editable in place. Change it and file the card: the file is
+      renamed in `Inbox/` first, and the filed note has the new name. A name another inbox note
+      already has is refused on the card and nothing moves.
 - [ ] The bar has three **equal, neutral** buttons: `Action` · `Knowledge / List` · `Trash`.
       None of them is accent-filled or looks preselected.
 - [ ] `Defer to review` is a quiet text button between the card and the bar, not a fourth button.
@@ -307,12 +313,15 @@ Run **without** `-useFixtures`.
 
 - [ ] Onboarding: pick `~/Desktop/GTD Test Vault`. The counts it shows match the folder.
 - [ ] Quit and relaunch: it opens straight into the app — no second folder prompt (Gate 3).
-- [ ] File an inbox card to Next: the **capture file is renamed**, not copied —
-      `Inbox/<timestamp>.md` is gone and `Actions/<the capture text>.md` is there, with the
-      capture's own `created:` stamp, `status: next` and the text under `# What?`.
-- [ ] Dictate (or paste) a capture far longer than a file name can hold and file it: the file
-      name is the text **cut at a word boundary at ~60 characters**, and the **whole** text is the
-      note's first paragraph, above `# Why?`. Nothing is lost.
+- [ ] Capture `buy milk` twice: `Inbox/buy milk.md` and `Inbox/buy milk 2.md`, neither
+      overwritten. An empty capture writes nothing.
+- [ ] File an inbox card to Next: the **capture file is moved**, not copied —
+      `Inbox/<name>.md` is gone and `Actions/<name>.md` is there, with the capture's own
+      `created:` stamp and `status: next`. File an Obsidian template note (`test task`) the same
+      way: `Actions/test task.md` has one `# Why?` / `# What?` pair, no copy of the skeleton above.
+- [ ] Dictate (or paste) a capture far longer than a file name can hold: `Inbox/` gets a file
+      named after the text **cut at a word boundary at ~60 characters**, with the **whole** text
+      as its body; filed, the whole text is the note's first paragraph, above `# Why?`.
 - [ ] Nothing else in the file changed (`diff` against a backup) — unknown frontmatter keys and
       body sections must be byte-identical (N2).
 - [ ] Put a note with `status: backlog` into `Actions/` by hand. The app shows it under
@@ -361,7 +370,8 @@ Run **without** `-useFixtures`.
 ## 7. Capture under three seconds (C1)
 
 - [ ] With the app **not running**, run the capture Shortcut (`Shortcuts/README.md`, recipe A)
-      and stopwatch it: text prompt → saved, under 3 s, one new file in `Inbox/`.
+      and stopwatch it: text prompt → saved, under 3 s, one new file in `Inbox/` named after the
+      text's first line. Silence (empty dictation) writes no file.
 - [ ] Same with the `Capture to Inbox` App Intent (recipe B), app suspended. If it fails, note it:
       the intent may need `openAppWhenRun = true` (documented in `GTDIntents`' README).
 - [ ] `Start Routine` and `Process inbox` intents open the app **on that screen** (they leave a

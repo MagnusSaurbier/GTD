@@ -44,10 +44,16 @@ Compiles and tests on Linux.
   Waiting note for `What?`, Waiting always for its follow-up date, and Done/lists/Knowledge/Trash
   for nothing. A note already in its tier is left alone and **demoting is never refused** — the
   vault has to stay repairable.
-- **The capture text is the title (R-4).** Filing renames the capture file to
-  `CaptureText.title(of:)` (first line, sanitised, cut at a word boundary to ≤ 60 characters) and
-  *moves* it; whatever the title could not hold becomes the note's first paragraph
-  (`Action.preamble`) or the head of a Knowledge/list note's body. Only whitespace is refused.
+- **An inbox note's title is its file name (C3/R-4, 2026-09-22).** `InboxItem.title` is
+  `id.title`; `body` is everything below the frontmatter and may be empty. A capture is named
+  `CaptureText.title(of:)` when it is written (first line, sanitised, cut at a word boundary to
+  ≤ 60 characters); its body holds the full text only when the name could not
+  (`CaptureText.note(for:)`). `renameInboxItem` moves the file within `Inbox/`
+  (`.titleCollision` when taken, `.invalid` when empty); `editInboxBody` edits the body only.
+  Filing keeps the file name as the note's title and *moves* the file; the body comes along as
+  `Action.preamble` or the head of a Knowledge/list note's body — unless it is only the empty
+  Why/What template skeleton, which counts as empty (`CaptureText.isEmptyBody`, the one place
+  that knows the skeleton).
 - **The project chip is a draft field (R-8).** `ActionDraft.newProjectTitle` creates the project
   it links, area-less and in the same command; naming an existing one as well is `.invalid`.
   There is no inbox Project *target* any more.

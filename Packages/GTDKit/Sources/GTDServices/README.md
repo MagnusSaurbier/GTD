@@ -83,7 +83,7 @@ step of `perform`.
 
 `InboxFlowJourneyTests` is the 2026-09-21 rework's acceptance suite, on a temp copy of the sample
 vault: an action card refused first for R-3's required fields and then by the cap (writing
-**nothing** either time), demote-and-file, the note renamed to the capture text with the full
+**nothing** either time), demote-and-file, the note keeping its inbox file name with the full
 dictation kept above `# Why?` (R-4); a capture into a list, completed, undone and then promoted
 into Someday (L3/L4); a Knowledge note filed into an **active project's folder** (I4b/D36); trash
 and undo, for a capture and for an action, byte for byte (I4c); the `+ project` chip creating an

@@ -111,6 +111,8 @@ public final class InboxSession {
     private let now: () -> Date
     private let startedAt: Date
     private var draftItemID: NoteID?
+    /// Renames the title field made this session, original id → current id (`persistEdits`).
+    private var renamedIDs: [NoteID: NoteID] = [:]
     private var counts: [CardTarget: Int] = [:]
     /// True until the hint has been shown once on this device.
     private var hintPending: Bool
@@ -411,6 +413,15 @@ public final class InboxSession {
         syncDraft()
     }
 
+    /// True when the card shows the note's body under its title: the stored body has something
+    /// in it — the empty Why/What template skeleton of an Obsidian-made note does not count
+    /// (`CaptureText.isEmptyBody`). Decided on the stored body, not the draft, so the field does
+    /// not vanish while the user clears it.
+    public var showsBody: Bool {
+        guard let current else { return false }
+        return !CaptureText.isEmptyBody(current.body)
+    }
+
     private var isWorkingOnCurrentCard: Bool {
         guard let current else { return false }
         return step.isOpened || !draft.isPristine(for: current)
@@ -428,17 +439,19 @@ public final class InboxSession {
         }
         let filedStep = step
         let filedCard = card
+        // The title field may rename the file first; from then on the card is the renamed note.
+        var filedID = item.id
         let result = await ActionCardEngine.file(
             state: card, status: status, waiting: waiting, model: model,
-            send: { [weak self] payload in
-                guard let self else { return }
-                try await self.persistTextEdit(for: item.id)
-                try await self.model.send(.fileInbox(item.id, .action(payload)))
+            send: { payload in
+                filedID = try await self.persistEdits(for: item.id)
+                try await self.model.send(.fileInbox(filedID, .action(payload)))
             })
-        adopt(result.state, for: item)
+        let filed = item.renamed(to: filedID)
+        adopt(result.state, for: filed)
         switch result.outcome {
         case .filed:
-            finish(item: item, card: filedCard, step: filedStep, target: target,
+            finish(item: filed, card: filedCard, step: filedStep, target: target,
                    toastLabel: target.undoToastLabel())
         case let .refused(reason):
             present(reason)
@@ -456,11 +469,11 @@ public final class InboxSession {
         let filedStep = step
         let filedCard = card
         do {
-            try await persistTextEdit(for: item.id)
-            try await model.send(.fileInbox(item.id, decision))
+            let filedID = try await persistEdits(for: item.id)
+            try await model.send(.fileInbox(filedID, decision))
             card.clearFlags()
             card.clearCap()
-            finish(item: item, card: filedCard, step: filedStep, target: target,
+            finish(item: item.renamed(to: filedID), card: filedCard, step: filedStep, target: target,
                    toastLabel: toastLabel ?? target.undoToastLabel())
         } catch let error as GTDError {
             card.lastError = error
@@ -472,13 +485,36 @@ public final class InboxSession {
         }
     }
 
-    /// The raw text is editable on the card (I2). For Knowledge the capture file *becomes* the
-    /// note and for Trash it is moved as is, so an edit has to reach the file before it moves.
-    /// Re-read from the snapshot, so a cap retry does not send the same edit twice.
-    private func persistTextEdit(for id: NoteID) async throws {
-        let edited = draft.text
-        guard let stored = model.snapshot.inboxItem(id)?.text, edited != stored else { return }
-        try await model.send(.editInboxText(id, edited))
+    /// The title and the body are editable on the card. The filed note keeps the inbox note's
+    /// file name and body, so both edits have to reach the file before it is filed: the body
+    /// first (`editInboxBody`), then the title, which **renames** the file within `Inbox/`
+    /// (`renameInboxItem`; a taken name is a `.titleCollision`, an empty one is refused).
+    ///
+    /// Returns the id the note has now. Re-read from the snapshot and resolved through the
+    /// renames this session made, so a cap retry neither sends an edit twice nor files under the
+    /// old name. The queue follows the rename at once, so a `refresh()` — the cap sheet, a
+    /// failed filing — keeps the card and its draft instead of treating the renamed note as new.
+    private func persistEdits(for original: NoteID) async throws -> NoteID {
+        let id = renamedIDs[original] ?? original
+        guard let stored = model.snapshot.inboxItem(id) else { return id }
+        if draft.body != stored.body {
+            try await model.send(.editInboxBody(id, draft.body))
+        }
+        guard CaptureText.renamedTitle(draft.title) != stored.title else { return id }
+        try await model.send(.renameInboxItem(id, title: draft.title))
+        // The reducer refused anything it could not name, so the name exists here.
+        let target = model.snapshot.config.layout.inboxPath(
+            title: CaptureText.renamedTitle(draft.title) ?? stored.title)
+        follow(id, to: target)
+        renamedIDs[original] = target
+        return target
+    }
+
+    /// Points the queue and the card at a renamed note, keeping its place and its draft.
+    private func follow(_ old: NoteID, to new: NoteID) {
+        guard let renamed = model.snapshot.inboxItem(new) else { return }
+        queue = queue.map { $0.id == old ? renamed : $0 }
+        if draftItemID == old { draftItemID = new }
     }
 
     // MARK: - Sub-flows
@@ -576,9 +612,9 @@ public final class InboxSession {
         }
         let filedCard = card
         do {
-            try await persistTextEdit(for: item.id)
-            try await model.send(.deferInboxToReview(item.id, reason: trimmed))
-            finish(item: item, card: filedCard, step: .step1, target: .deferToReview,
+            let deferredID = try await persistEdits(for: item.id)
+            try await model.send(.deferInboxToReview(deferredID, reason: trimmed))
+            finish(item: item.renamed(to: deferredID), card: filedCard, step: .step1, target: .deferToReview,
                    toastLabel: CardTarget.deferToReview.undoToastLabel())
         } catch let error as GTDError {
             card.lastError = error
@@ -598,22 +634,23 @@ public final class InboxSession {
         guard let item = current, card.pending != nil else { return }
         let filedStep = step
         let filedCard = card
+        var filedID = item.id
         guard let result = await ActionCardEngine.demoteAndRetry(
             state: card, demoting: id, model: model,
-            send: { [weak self] payload in
-                guard let self else { return }
-                try await self.persistTextEdit(for: item.id)
-                try await self.model.send(.fileInbox(item.id, .action(payload)))
+            send: { payload in
+                filedID = try await self.persistEdits(for: item.id)
+                try await self.model.send(.fileInbox(filedID, .action(payload)))
             })
         else { return }
-        adopt(result.state, for: item)
+        let filed = item.renamed(to: filedID)
+        adopt(result.state, for: filed)
         switch result.outcome {
         case let .filed(payload):
             sheet = nil
             let target: CardTarget = payload.status == .waiting
                 ? .waiting
                 : (CardTarget.allCases.first { $0.status == payload.status } ?? .next)
-            finish(item: item, card: filedCard, step: filedStep, target: target,
+            finish(item: filed, card: filedCard, step: filedStep, target: target,
                    toastLabel: target.undoToastLabel())
         case let .refused(reason):
             present(reason)
@@ -880,5 +917,15 @@ public final class InboxSession {
         draftItemID = current?.id
         refusal = nil
         step = .step1
+    }
+}
+
+private extension InboxItem {
+    /// The same note under the id a rename gave it.
+    func renamed(to id: NoteID) -> InboxItem {
+        guard id != self.id else { return self }
+        return InboxItem(
+            id: id, body: body, created: created, reviewReason: reviewReason,
+            passthrough: passthrough)
     }
 }

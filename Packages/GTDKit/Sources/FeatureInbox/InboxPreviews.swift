@@ -41,18 +41,20 @@ enum InboxPreviewData {
         outcome: "Application submitted",
         steps: [ProjectStep(text: "Write the motivation letter")])
 
+    /// Named after their text, like every capture (C3). The last one was made in Obsidian from
+    /// the user's template: its body is the empty skeleton, and the card still shows its name.
     static let inbox: [InboxItem] = [
         InboxItem(
-            id: NoteID(path: "Inbox/2026-09-19 081204.md"),
-            text: "call the Hausverwaltung about the broken window handle",
+            id: NoteID(path: "Inbox/call the Hausverwaltung about the broken window handle.md"),
+            body: "",
             created: date(today, 8, 12)),
         InboxItem(
-            id: NoteID(path: "Inbox/2026-09-18 221501.md"),
-            text: "idea: a script that renames the scanned pdfs by their date",
+            id: NoteID(path: "Inbox/idea a script that renames the scanned pdfs by their date.md"),
+            body: "idea: a script that renames the scanned pdfs by their date",
             created: date(today.adding(days: -1), 22, 15)),
         InboxItem(
-            id: NoteID(path: "Inbox/2026-09-08 071233.md"),
-            text: "buy new running shoes before the knee gets worse",
+            id: NoteID(path: "Inbox/buy new running shoes.md"),
+            body: "# Why?\n- \n\n# What?\n- [ ] ",
             created: date(today.adding(days: -11), 7, 12)),
     ]
 

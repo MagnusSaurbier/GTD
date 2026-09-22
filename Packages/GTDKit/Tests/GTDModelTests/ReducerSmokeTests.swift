@@ -17,7 +17,8 @@ struct ReducerSmokeTests {
         let step = try #require(routine.steps.first)
 
         let commands: [GTDCommand] = [
-            .editInboxText(inbox.id, "edited"),
+            .renameInboxItem(inbox.id, title: "edited"),
+            .editInboxBody(inbox.id, "edited"),
             .fileInbox(inbox.id, .trash),
             .deferInboxToReview(inbox.id, reason: "needs thinking"),
             .createAction(ActionDraft(

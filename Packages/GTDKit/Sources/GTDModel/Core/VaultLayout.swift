@@ -52,10 +52,11 @@ public struct VaultLayout: Sendable, Equatable, Codable {
 
     // MARK: Path builders
 
-    /// `Inbox/<yyyy-MM-dd HHmmss>[-n].md` (C3).
-    public func inboxPath(stamp: String, collision: Int = 0) -> NoteID {
-        let suffix = collision > 0 ? "-\(collision)" : ""
-        return NoteID(path: "\(inbox)/\(stamp)\(suffix).md")
+    /// `Inbox/<Title>[ n].md` (C3) — a capture is named after its text (`CaptureText.title`),
+    /// and a second capture with the same name gets ` 2`, ` 3`, … like `actionPath`.
+    public func inboxPath(title: String, collision: Int = 0) -> NoteID {
+        let suffix = collision > 1 ? " \(collision)" : ""
+        return NoteID(path: "\(inbox)/\(VaultLayout.sanitize(title))\(suffix).md")
     }
 
     /// `Actions/<Title>.md` (A1).
@@ -193,11 +194,13 @@ public struct VaultLayout: Sendable, Equatable, Codable {
         return NoteID(path: "\(base)/\(VaultLayout.sanitize(title)).md")
     }
 
+    /// Characters `sanitize` replaces with a space.
+    public static let illegalNameCharacters = Set("/\\:*?\"<>|[]#^\n\r\t")
+
     /// Replaces characters that are illegal in file names on iOS/macOS and in wikilinks.
     /// Keeps umlauts and spaces — the vault already contains them.
     public static func sanitize(_ title: String) -> String {
-        let illegal = Set("/\\:*?\"<>|[]#^\n\r\t")
-        let cleaned = String(title.map { illegal.contains($0) ? " " : $0 })
+        let cleaned = String(title.map { illegalNameCharacters.contains($0) ? " " : $0 })
         let collapsed = cleaned.split(separator: " ").joined(separator: " ")
         let trimmed = collapsed.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Untitled" : String(trimmed.prefix(120))

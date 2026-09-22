@@ -34,6 +34,7 @@ public enum NoteCodec {
 
     // MARK: - Inbox
 
+    /// The title is not read from the text: it is the file name (`InboxItem.title`, from `id`).
     ///
     /// `fileDate` is for a capture the app did not write — a note typed in Obsidian, a script's
     /// `echo > Inbox/x.md`: it has no `created`, and the honest answer to "when was this
@@ -54,7 +55,7 @@ public enum NoteCodec {
         }
         return InboxItem(
             id: id,
-            text: RawText.text(doc.bodyLines),
+            body: RawText.text(doc.bodyLines),
             created: created,
             reviewReason: doc.scalar("reviewReason"),
             passthrough: passthrough(text))
@@ -71,8 +72,8 @@ public enum NoteCodec {
             doc.setValue("created", YAMLScalar.timestamp(item.created, timeZone: timeZone), canonicalOrder: order)
         }
         setOptionalText("reviewReason", item.reviewReason, reference?.reviewReason, &doc, order)
-        if reference?.text != item.text {
-            doc.setBody(RawText.block(item.text, terminator: doc.terminator))
+        if reference?.body != item.body {
+            doc.setBody(RawText.block(item.body, terminator: doc.terminator))
         }
         return doc.text
     }

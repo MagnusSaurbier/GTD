@@ -36,7 +36,7 @@ struct StubNoteParser: VaultNoteParser {
         try check(id)
         return InboxItem(
             id: id,
-            text: body(text),
+            body: body(text),
             created: Self.date(Frontmatter.scalar("created", in: text)) ?? Date(timeIntervalSince1970: 0),
             reviewReason: Frontmatter.scalar("reviewReason", in: text))
     }

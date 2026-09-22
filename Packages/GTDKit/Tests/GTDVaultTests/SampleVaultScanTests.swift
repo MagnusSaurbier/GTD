@@ -33,7 +33,7 @@ struct SampleVaultScanTests {
         #expect(scanned.issues.isEmpty, "unexpected issues: \(scanned.issues)")
 
         #expect(scanned.inbox.map(\.id).sorted() == expected.inbox.map(\.id).sorted())
-        #expect(Set(scanned.inbox.map(\.text)) == Set(expected.inbox.map(\.text)))
+        #expect(Set(scanned.inbox.map(\.body)) == Set(expected.inbox.map(\.body)))
         #expect(scanned.inbox.compactMap(\.reviewReason).count
             == expected.inbox.compactMap(\.reviewReason).count)
 

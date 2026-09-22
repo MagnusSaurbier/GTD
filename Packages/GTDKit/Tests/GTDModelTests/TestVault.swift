@@ -83,10 +83,19 @@ enum TestVault {
             log: log)
     }
 
-    static func inboxItem(_ stamp: String, _ text: String, created: Int = 0, reviewReason: String? = nil) -> InboxItem {
+    /// A capture of `text`, named and bodied exactly as `InboxWriter` writes one (C3).
+    static func inboxItem(_ text: String, created: Int = 0, reviewReason: String? = nil) -> InboxItem {
+        let note = CaptureText.note(for: text) ?? (title: text, body: "")
+        return inboxNote(note.title, body: note.body, created: created, reviewReason: reviewReason)
+    }
+
+    /// Any note in `Inbox/`, named `name` — e.g. one the user made in Obsidian from a template.
+    static func inboxNote(
+        _ name: String, body: String = "", created: Int = 0, reviewReason: String? = nil
+    ) -> InboxItem {
         InboxItem(
-            id: layout.inboxPath(stamp: stamp),
-            text: text,
+            id: layout.inboxPath(title: name),
+            body: body,
             created: date(created, hour: 8),
             reviewReason: reviewReason)
     }

@@ -33,15 +33,26 @@ import GTDVault
         let writer = InboxWriter(fileSystem: PlainFileSystem(root: root), calendar: Fixtures.calendar)
         let captured = try writer.capture(text: "renew the Semesterticket",
                                           at: Fixtures.date(Fixtures.today, 9, 30))
-        #expect(captured.path == "Inbox/2026-09-19 093000.md")
+        // C3 — the capture is named after its text, and the title carried all of it.
+        #expect(captured.path == "Inbox/renew the Semesterticket.md")
+        #expect(try vault.text(captured.path) == "---\ncreated: 2026-09-19T09:30:00+02:00\n---\n")
         await vault.store.simulateChangeForTesting()
         let arrived = await settle(model) { snapshot in snapshot.inbox.contains { $0.id == captured } }
         #expect(arrived, "an external capture reaches the app without a restart")
+        #expect(model.snapshot.inboxItem(captured)?.title == "renew the Semesterticket")
+
+        // The card's title is the file name: editing it renames the file within `Inbox/`.
+        try await model.send(.renameInboxItem(captured, title: "renew the Semesterticket online"))
+        let renamed = NoteID(path: "Inbox/renew the Semesterticket online.md")
+        #expect(try vault.text(captured.path) == nil)
+        #expect(try vault.text(renamed.path)?.contains("created: 2026-09-19T09:30:00+02:00") == true)
+        #expect(model.snapshot.inboxItem(renamed) != nil)
+        #expect(model.undoLabel == "Renamed")
 
         // ── 2. Process the inbox (I1–I4) ──────────────────────────────────────────────────────
         // Filing to Next takes the vault to the cap exactly: 14 counting + 1 = 15.
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 14)
-        try await model.send(.fileInbox(captured, .action(ActionDraft(
+        try await model.send(.fileInbox(renamed, .action(ActionDraft(
             title: "Renew the Semesterticket",
             status: .next,
             contexts: ["campus"],
@@ -49,9 +60,9 @@ import GTDVault
             why: "It expires at the end of the month.",
             what: "Pay at the Studierendenwerk counter."))))
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 15)
-        #expect(try vault.text("Inbox/2026-09-19 093000.md") == nil, "the capture file left the inbox")
-        // R-4 — the note is named after the capture text, not after the draft's title.
-        let filed = try #require(try vault.text("Actions/renew the Semesterticket.md"))
+        #expect(try vault.text(renamed.path) == nil, "the capture file left the inbox")
+        // C3 — the note keeps the inbox note's file name, not the draft's title.
+        let filed = try #require(try vault.text("Actions/renew the Semesterticket online.md"))
         #expect(filed.contains("status: next"))
         #expect(filed.contains("created: 2026-09-19T09:30:00+02:00"),
                 "the capture's own created stamp survives filing (I1)")
@@ -60,7 +71,7 @@ import GTDVault
         // ── 3. The cap refuses the next one, and changes nothing (I4/A3) ──────────────────────
         let bytesAtCap = try vault.filesOutsideTheTrash()
         let second = try #require(model.snapshot.inbox.first {
-            $0.reviewReason == nil && $0.text.hasPrefix("ask Marie")
+            $0.reviewReason == nil && $0.title.hasPrefix("ask Marie")
         })
         await #expect(throws: GTDError.nextCapReached(cap: 15)) {
             try await model.send(.fileInbox(second.id, .action(ActionDraft(
@@ -149,8 +160,8 @@ import GTDVault
         // ── 8. A cold re-scan agrees with the app ─────────────────────────────────────────────
         let rescanned = try vault.rescan()
         #expect(rescanned.lastReview?.systemFixNotes == decoded.systemFixNotes)
-        // R-4 — both notes are named after their capture text.
-        #expect(rescanned.actions.first { $0.title == "renew the Semesterticket" }?.status == .next)
+        // C3 — both notes kept the file names they had in the inbox.
+        #expect(rescanned.actions.first { $0.title == "renew the Semesterticket online" }?.status == .next)
         #expect(rescanned.actions.first {
             $0.title == "ask Marie whether she still needs the monitor"
         }?.status == .someday)

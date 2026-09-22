@@ -26,14 +26,14 @@ struct TargetedRefreshTests {
         var index = try scanned(fs)
         let before = index.snapshot(today: Fixtures.today).inbox.count
 
-        fs.writeIgnoringFailures("from a script\n", to: "Inbox/2026-09-22 101500.md")
+        fs.writeIgnoringFailures("from a script\n", to: "Inbox/From a script.md")
         let report = try #require(try index.refresh(
-            paths: ["Inbox/2026-09-22 101500.md"], using: fs))
+            paths: ["Inbox/From a script.md"], using: fs))
 
         #expect(report.added == 1)
         let snapshot = index.snapshot(today: Fixtures.today)
         #expect(snapshot.inbox.count == before + 1)
-        #expect(snapshot.inbox.contains { $0.text == "from a script" },
+        #expect(snapshot.inbox.contains { $0.title == "From a script" && $0.body == "from a script" },
                 "a plain file with no frontmatter is a capture, dated by the file")
         #expect(snapshot.issues == (try cold(InMemoryFileSystem(files: SampleVault.files))).issues)
         #expect(snapshot == (try cold(fs)))

@@ -194,15 +194,31 @@ public final class ReviewSession {
     /// Files one deferred item and records the system fix it taught us (I5). The fix note is
     /// optional — an item that merely needed a decision is not a system failure, and an empty
     /// field must not write an empty line into the review note.
-    public func fileDeferred(_ item: InboxItem, decision: InboxDecision, systemFix: String) async {
-        guard await send(.fileInbox(item.id, decision)) else { return }
+    ///
+    /// `title` is the card's title field. The title is the note's file name (C3), so a changed
+    /// one renames the inbox file first (`renameInboxItem`) and the item is filed under its new
+    /// name; a refused rename (empty, taken) files nothing.
+    public func fileDeferred(
+        _ item: InboxItem, decision: InboxDecision, systemFix: String, title: String? = nil
+    ) async {
+        var id = item.id
+        var name = item.title
+        if let title, let renamed = CaptureText.renamedTitle(title), renamed != item.title {
+            guard await send(.renameInboxItem(item.id, title: title)) else { return }
+            id = model.snapshot.config.layout.inboxPath(title: renamed)
+            name = renamed
+        } else if let title, CaptureText.renamedTitle(title) == nil {
+            // Let the reducer say why an empty title is refused, in the one place errors show.
+            guard await send(.renameInboxItem(item.id, title: title)) else { return }
+        }
+        guard await send(.fileInbox(id, decision)) else { return }
         let fix = systemFix.trimmingCharacters(in: .whitespacesAndNewlines)
         mutate { state in
             if !fix.isEmpty {
                 state.systemFixNotes.append(ReviewCopy.systemFixNote(
-                    item: item.text, reason: item.reviewReason ?? "", fix: fix))
+                    item: name, reason: item.reviewReason ?? "", fix: fix))
             }
-            state.handledDeferred.append(item.id.path)
+            state.handledDeferred.append(id.path)
             state.changes.deferredHandled += 1
         }
     }
