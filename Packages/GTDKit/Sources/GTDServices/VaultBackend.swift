@@ -14,21 +14,35 @@ import GTDVault
 /// is the one exception, and it is shown, never retried — T15-1). That is why renaming an action
 /// and rewriting the project steps that link to it cannot come apart.
 ///
+/// ### The UI never waits for a file
+/// `perform` returns as soon as the rules have spoken: the reduced snapshot is published and the
+/// file operations join a serial queue (`drain`). A coordinated write into an iCloud folder can
+/// take seconds while the sync daemon is busy, and the re-index after it walks the whole vault —
+/// none of that is on the path of a tap any more. "Written" means the **local** file is written;
+/// the upload is iCloud's business and nothing here waits for it. A write that is refused takes
+/// the queue behind it down with it, the vault is re-read and published, and the refusal goes
+/// out on `writeFailures()` — `AppModel` shows it. `WritePolicy.awaited` keeps the old
+/// behaviour (the write's error is thrown from `perform`) for tests and tools that read the
+/// files straight after a command.
+///
 /// ### Optimistic emission vs. the watcher echo
 /// `snapshots()` is this backend's own stream. It carries two kinds of value:
-/// * the **reduced** snapshot, published as soon as the commit succeeded, so the UI never waits
+/// * the **reduced** snapshot, published before anything is written, so the UI never waits
 ///   for a file system round trip, and
 /// * the **scanned** snapshot the store publishes after re-indexing — the authoritative one,
 ///   with fresh modification dates and fresh `NotePassthrough`s.
-/// The store's value wins whenever it is there: if it already arrived while we were committing,
-/// the optimistic publish is skipped, and the next change replaces what we published. Logically
+/// The store's value wins whenever the queue is empty: `drain` takes it after the last write,
+/// and the watcher's events are ignored while writes are still waiting. Logically
 /// the two agree; the scan is only more precise about the fields that come from the file system
 /// (`Action.modified`, `NotePassthrough`, `VaultIssue`s).
 ///
 /// ### Housekeeping
 /// `start()` (also run lazily before the first command) creates the folder skeleton
-/// `VaultLayout` requires, scans, starts watching and runs `archiveCompleted` once per day —
-/// the day of the last run is remembered next to the undo journal, outside the vault.
+/// `VaultLayout` requires if it is missing, scans and starts watching. `archiveCompleted` runs
+/// once per day **behind the first write the person causes** — never at launch, never on a
+/// timer — and the day of the last run is remembered next to the undo journal, outside the
+/// vault. (`WritePolicy.awaited` archives inside `start()`, which is what the file-asserting
+/// suites expect.)
 public actor VaultBackend: GTDBackend {
 
     private let store: any VaultStore
@@ -52,6 +66,15 @@ public actor VaultBackend: GTDBackend {
     private var forwarding: Task<Void, Never>?
     private var started = false
 
+    private let writes: WritePolicy
+    private let failures = WriteFailureHub()
+    /// Commands whose snapshot is published and whose files are not written yet, oldest first.
+    private var pending: [PendingWrite] = []
+    private var drainTask: Task<Void, Never>?
+    private var flushWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Counts refused writes, so `undo()` can tell that one happened while it waited.
+    private var failureCount = 0
+
     /// The contract initialiser (ARCHITECTURE §4).
     public init(store: any VaultStore, deviceID: String) {
         self.init(store: store, deviceID: deviceID, journal: UndoJournal())
@@ -64,8 +87,10 @@ public actor VaultBackend: GTDBackend {
         deviceID: String,
         journal: UndoJournal,
         stateDirectory: URL? = UndoJournal.defaultDirectory,
-        env: (@Sendable () -> ReducerEnv)? = nil
+        env: (@Sendable () -> ReducerEnv)? = nil,
+        writes: WritePolicy = .queued
     ) {
+        self.writes = writes
         self.store = store
         self.deviceID = deviceID
         self.journal = journal
@@ -79,59 +104,190 @@ public actor VaultBackend: GTDBackend {
 
     nonisolated public func snapshots() -> AsyncStream<SnapshotUpdate> { hub.stream() }
 
+    nonisolated public func writeFailures() -> AsyncStream<WriteFailure> { failures.stream() }
+
     public func currentUpdate() -> SnapshotUpdate {
         latestUpdate
     }
 
     public func perform(_ command: GTDCommand) async throws -> [AppPrompt] {
+        try await perform(command, awaitingWrite: writes == .awaited)
+    }
+
+    /// The command up to the point where the rules have spoken, then the queue.
+    ///
+    /// Nothing between reading `latest` and enqueueing suspends, so two commands can never
+    /// reduce against the same base: the second one always sees the first one's snapshot.
+    private func perform(
+        _ command: GTDCommand, awaitingWrite: Bool, housekeepingDay: Day? = nil
+    ) async throws -> [AppPrompt] {
         try await startIfNeeded()
         let env = makeEnv()
         let old = latest
         let reduction = try Reducer.reduce(old, command, env: env)
 
-        let ops = try await resolveCollisions(
-            try SnapshotDiff.ops(
-                from: old,
-                to: reduction.snapshot,
-                extraOps: reduction.extraOps,
-                filedNotes: reduction.filedNotes,
-                timeZone: env.calendar.timeZone),
-            layout: old.config.layout)
+        let ops = try SnapshotDiff.ops(
+            from: old,
+            to: reduction.snapshot,
+            extraOps: reduction.extraOps,
+            filedNotes: reduction.filedNotes,
+            timeZone: env.calendar.timeZone)
+
+        // The reduced snapshot is what the person sees from here on — the files follow.
+        publish(reduction.snapshot, renames: reduction.renames)
 
         guard !ops.isEmpty else {
             // Nothing to write (e.g. a status set to the value it already had). The reduced
             // snapshot is still published so the UI and `InMemoryBackend` behave alike.
-            publish(reduction.snapshot, renames: reduction.renames)
+            if let housekeepingDay { await housekeeping.didArchive(on: housekeepingDay) }
             return reduction.prompts
         }
 
-        let inverse = try await store.commit(ops)
-
-        if Rules.isUndoable(command) {
-            await journal.push(UndoJournal.Entry(
-                label: UndoLabel.of(command, in: old),
-                inverseOps: inverse,
-                hashes: try await hashes(touchedBy: inverse)))
-        }
-
-        // `FileVaultStore` re-indexes inside `commit`, so its snapshot is both newer and more
-        // precise than the reduced one (fresh modification dates and passthroughs) — take it
-        // when it has moved since we last looked, and publish the reduced snapshot when it has
-        // not, which is what makes the UI immediate. Asking the store here, instead of waiting
-        // for its stream, is what keeps the two paths from racing.
-        let scanned = await storeSnapshot()
-        if let scanned, !scanned.isEmptyVault, scanned != lastFromStore {
-            lastFromStore = scanned
-            publish(scanned, renames: reduction.renames)
+        let write = PendingWrite(
+            ops: ops,
+            layout: old.config.layout,
+            label: UndoLabel.of(command, in: old),
+            isUndoable: Rules.isUndoable(command),
+            renames: reduction.renames,
+            housekeepingDay: housekeepingDay)
+        if awaitingWrite {
+            try await withCheckedThrowingContinuation { waiter in
+                enqueue(write, waiter: waiter)
+            }
         } else {
-            publish(reduction.snapshot, renames: reduction.renames)
+            enqueue(write, waiter: nil)
         }
         return reduction.prompts
     }
 
+    // MARK: - The write queue
+
+    /// One command's file operations, waiting for their turn.
+    private struct PendingWrite {
+        var ops: [VaultFileOp]
+        var layout: VaultLayout
+        var label: String
+        var isUndoable: Bool
+        var renames: RenameMap
+        /// Set on the daily archive: the day to record once its files really moved (A5).
+        var housekeepingDay: Day?
+        /// Set when somebody awaits this very write (`WritePolicy.awaited`, housekeeping): the
+        /// failure is thrown to them instead of being announced on `writeFailures()`.
+        var waiter: CheckedContinuation<Void, any Error>?
+    }
+
+    private func enqueue(_ write: PendingWrite, waiter: CheckedContinuation<Void, any Error>?) {
+        var write = write
+        write.waiter = waiter
+        pending.append(write)
+        guard drainTask == nil else { return }
+        drainTask = Task { [weak self] in await self?.drain() }
+    }
+
+    /// Commits the queue front to back, then takes the store's scanned snapshot.
+    ///
+    /// Only this task removes from `pending`, and only it starts a commit, so writes reach the
+    /// vault one at a time and in the order the commands ran.
+    private func drain() async {
+        repeat {
+            while let write = pending.first {
+                do {
+                    try await commit(write)
+                    pending.removeFirst()
+                    write.waiter?.resume()
+                    if let day = write.housekeepingDay {
+                        await housekeeping.didArchive(on: day)
+                        lastHousekeepingError = nil
+                    } else {
+                        await queueHousekeepingIfDue()
+                    }
+                } catch {
+                    await abandonQueue(after: error)
+                }
+            }
+            // Optimistic then authoritative (README §5): the scan has the fresh modification
+            // dates and passthroughs. `pullFromStore` drops itself if a command ran meanwhile —
+            // then the loop goes round again and the next idle moment reconciles. Only a
+            // snapshot that **moved** counts: a store whose re-index failed (or that does not
+            // re-index on commit) still holds the state from before these writes, and
+            // publishing that would take them back off the screen although they are on disk.
+            await pullFromStore(onlyIfMoved: true)
+        } while !pending.isEmpty
+        drainTask = nil
+        let waiters = flushWaiters
+        flushWaiters = []
+        for waiter in waiters { waiter.resume() }
+    }
+
+    /// The file-system half of a command: collisions, the one transaction, the undo journal.
+    private func commit(_ write: PendingWrite) async throws {
+        let ops = try await resolveCollisions(write.ops, layout: write.layout)
+        let inverse = try await store.commit(ops)
+        if write.isUndoable {
+            await journal.push(UndoJournal.Entry(
+                label: write.label,
+                inverseOps: inverse,
+                hashes: try await hashes(touchedBy: inverse)))
+        }
+    }
+
+    /// A write was refused. The snapshot the person is looking at promised it — and every write
+    /// queued behind it was reduced on top of that promise — so all of them are dropped, the
+    /// vault is read again and **that** is published: the UI goes back to what the files say.
+    /// Then the person is told (`writeFailures()`), or whoever awaited the write is.
+    private func abandonQueue(after error: any Error) async {
+        failureCount += 1
+        var dropped: [PendingWrite] = []
+        var truth: VaultSnapshot?
+        repeat {
+            // A command that slips in while the vault is being re-read was reduced on the same
+            // broken promise; it goes too.
+            dropped += pending
+            pending.removeAll()
+            // A failed commit does not re-index, and after `rollbackFailed` the files may be in
+            // a mixed state — scan rather than trust the last snapshot.
+            try? await store.activate()
+            truth = await storeSnapshot()
+        } while !pending.isEmpty
+
+        if let truth, !(truth.isEmptyVault && !latest.isEmptyVault) {
+            lastFromStore = truth
+            let undone = dropped.reversed().reduce(RenameMap.empty) {
+                $0.merging($1.renames.inverted)
+            }
+            publish(truth, renames: undone)
+        }
+
+        guard let first = dropped.first else { return }
+        if first.housekeepingDay != nil { lastHousekeepingError = error }
+        if let waiter = first.waiter {
+            waiter.resume(throwing: error)
+        } else {
+            failures.publish(WriteFailure(
+                label: first.label, reason: error, discarded: dropped.count - 1))
+        }
+        for later in dropped.dropFirst() {
+            later.waiter?.resume(throwing: ServiceError.writeDiscarded)
+        }
+    }
+
+    /// Returns once every queued write has reached the vault (or was refused). The app calls it
+    /// before it lets go of the vault and when it is sent to the background.
+    public func flush() async {
+        guard drainTask != nil else { return }
+        await withCheckedContinuation { flushWaiters.append($0) }
+    }
+
     /// N6 — replays the inverse ops of the last undoable command, unless the vault moved on.
+    ///
+    /// The journal entry of a command exists only once its write landed, so undo waits for the
+    /// queue. If a write was refused in the meantime, the thing the person meant to undo is
+    /// already gone — undoing the entry *below* it would revert something they did not ask for.
     public func undo() async throws {
         try await startIfNeeded()
+        let failuresBefore = failureCount
+        await flush()
+        guard failureCount == failuresBefore else { throw ServiceError.writeDiscarded }
         guard let entry = await journal.peek() else { throw ServiceError.nothingToUndo }
         try await checkUnchanged(entry.hashes)
         _ = try await store.commit(entry.inverseOps)
@@ -144,8 +300,11 @@ public actor VaultBackend: GTDBackend {
         }
     }
 
+    /// A queued command is undoable the moment it ran, so its label is offered before its
+    /// journal entry exists.
     public func undoLabel() async -> String? {
-        await journal.peek()?.label
+        if let queued = pending.last(where: \.isUndoable) { return queued.label }
+        return await journal.peek()?.label
     }
 
     // MARK: - Lifecycle
@@ -156,8 +315,11 @@ public actor VaultBackend: GTDBackend {
         try await startIfNeeded()
     }
 
-    /// Stops forwarding snapshots. The store is left alone — the app owns it.
-    public func stop() {
+    /// Lets the queued writes land, then stops forwarding snapshots. The store is left alone —
+    /// the app owns it.
+    public func stop() async {
+        await flush()
+        failures.finish()
         forwarding?.cancel()
         forwarding = nil
         hub.finish()
@@ -172,7 +334,9 @@ public actor VaultBackend: GTDBackend {
         // placeholder a store publishes before its first scan.
         await pullFromStore()
         startForwarding()
-        await runHousekeeping()
+        // Queued policy: opening the vault writes **nothing**. The archive rides behind the
+        // first change the person makes that day (`queueHousekeepingIfDue`).
+        if writes == .awaited { await runHousekeeping() }
     }
 
     private func startForwarding() {
@@ -209,10 +373,21 @@ public actor VaultBackend: GTDBackend {
     /// Reading the store suspends, and a command can run in that gap. Its snapshot is by
     /// construction the newer one (it just committed and asked the store itself), so a read that
     /// started earlier is dropped instead of walking the app backwards.
-    private func pullFromStore() async {
+    ///
+    /// And never while writes are queued: the store cannot know about them yet, so its snapshot
+    /// — the watcher's echo of write 1 while write 2 waits — would take back what the person
+    /// just did. `drain` pulls once the queue is empty.
+    private func pullFromStore(onlyIfMoved: Bool = false) async {
+        guard pending.isEmpty else { return }
         let issuedAt = generation
         guard let snapshot = await storeSnapshot() else { return }
-        guard generation == issuedAt else { return }
+        guard generation == issuedAt, pending.isEmpty else { return }
+        guard !(onlyIfMoved && snapshot == lastFromStore) else { return }
+        // Every publish re-renders the app; one that says what the app already shows is noise.
+        guard snapshot != latest else {
+            lastFromStore = snapshot
+            return
+        }
         // `.empty` is what a store publishes before its first scan; it must never erase a
         // snapshot we already have.
         guard !(snapshot.isEmptyVault && !latest.isEmptyVault) else { return }
@@ -238,12 +413,34 @@ public actor VaultBackend: GTDBackend {
         let today = makeEnv().today
         guard await housekeeping.shouldArchive(on: today) else { return }
         do {
-            _ = try await perform(.archiveCompleted)
+            _ = try await perform(.archiveCompleted, awaitingWrite: true)
             await housekeeping.didArchive(on: today)
         } catch {
             lastHousekeepingError = error
         }
     }
+
+    /// The production path of A5. The vault is only ever written when the person acts on an item,
+    /// so the daily archive does not get a write of its own at launch or on a timer: it joins the
+    /// queue right behind the first write of the day that landed — the queue is writing anyway,
+    /// and nobody waits for either. A Mac that stays open over midnight is covered by the same
+    /// check. A refused archive is reported like any refused write; the day is not recorded, so
+    /// the next launch tries again.
+    private func queueHousekeepingIfDue() async {
+        guard writes == .queued else { return }
+        let today = makeEnv().today
+        guard housekeepingCheckedOn != today else { return }
+        housekeepingCheckedOn = today
+        guard await housekeeping.shouldArchive(on: today) else { return }
+        do {
+            _ = try await perform(.archiveCompleted, awaitingWrite: false, housekeepingDay: today)
+        } catch {
+            lastHousekeepingError = error
+        }
+    }
+
+    /// The day `queueHousekeepingIfDue` last looked, so it asks once per day and process.
+    private var housekeepingCheckedOn: Day?
 
     /// Why the last automatic archive did not run, for the settings screen and for tests.
     /// `nil` once one succeeds.
@@ -405,6 +602,51 @@ final class BackendSnapshotHub: @unchecked Sendable {
         let targets = Array(continuations.values)
         lock.unlock()
         for continuation in targets { continuation.yield(update) }
+    }
+
+    func finish() {
+        lock.lock()
+        let targets = Array(continuations.values)
+        continuations.removeAll()
+        lock.unlock()
+        for continuation in targets { continuation.finish() }
+    }
+}
+
+/// Whether `VaultBackend.perform` returns before or after its files are written.
+public enum WritePolicy: Sendable {
+    /// Production: publish, queue the write, return. A refusal arrives on `writeFailures()`.
+    case queued
+    /// `perform` returns once the write landed and throws its error.
+    case awaited
+}
+
+/// Fans refused writes out to `writeFailures()` subscribers. Unlike a snapshot a failure has no
+/// "current value": a subscriber gets the ones that happen while it listens.
+final class WriteFailureHub: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuations: [UUID: AsyncStream<WriteFailure>.Continuation] = [:]
+
+    func stream() -> AsyncStream<WriteFailure> {
+        AsyncStream { continuation in
+            let id = UUID()
+            lock.lock()
+            continuations[id] = continuation
+            lock.unlock()
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                lock.lock()
+                continuations[id] = nil
+                lock.unlock()
+            }
+        }
+    }
+
+    func publish(_ failure: WriteFailure) {
+        lock.lock()
+        let targets = Array(continuations.values)
+        lock.unlock()
+        for continuation in targets { continuation.yield(failure) }
     }
 
     func finish() {

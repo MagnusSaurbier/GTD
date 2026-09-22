@@ -101,6 +101,9 @@ public enum Reducer {
         case let .setFavouriteLists(names):
             return try setFavouriteLists(s, names: names)
 
+        case .pruneFavouriteLists:
+            return pruneFavouriteLists(s)
+
         case let .updateListItem(id, title, notes):
             return try updateListItem(s, id: id, title: title, notes: notes)
 
@@ -686,7 +689,8 @@ public enum Reducer {
             extraOps: [.createFolder(path: s.config.layout.listFolder(clean))])
     }
 
-    /// L2 — renaming a list renames its folder, and every item travels with it (R-5). The items
+    /// L2 — renaming a list renames its folder, and every item and its favourite slot travel
+    /// with it (R-5). The items
     /// keep their contents; only their `NoteID`s change, which is what `renames` reports so an
     /// open item editor follows the note instead of concluding it is gone (ARCHITECTURE §4).
     private static func renameList(
@@ -716,6 +720,13 @@ public enum Reducer {
             let moved = NoteID(path: newFolder + item.id.path.dropFirst(oldFolder.count))
             next.listItems[index] = rekey(item, to: moved, list: clean)
             renames.record(item.id, as: moved)
+        }
+        // A favourite is a list name, so it follows the rename — otherwise it would name a
+        // folder that is gone and drop out of the navbar.
+        if let favourites = next.config.favouriteLists {
+            next.config.favouriteLists = favourites.map {
+                GTDList.sameName($0, list.name) ? clean : $0
+            }
         }
         return Reduction(
             snapshot: next,
@@ -755,6 +766,21 @@ public enum Reducer {
         }
         var next = s
         next.config.favouriteLists = chosen
+        return Reduction(snapshot: next)
+    }
+
+    /// R-5 — the cleanup behind launch and the inbox's Knowledge / List card: a stored favourite
+    /// whose folder is gone is dropped from `GTD/Config.md`. Kept as it is when nothing is stale,
+    /// and when the vault shows no list at all — that is far likelier a `Lists/` folder not yet
+    /// indexed or synced than every list gone, and pruning would throw the whole choice away.
+    private static func pruneFavouriteLists(_ s: VaultSnapshot) -> Reduction {
+        guard let stored = s.config.favouriteLists, !s.lists.isEmpty else {
+            return Reduction(snapshot: s)
+        }
+        let kept = stored.filter { s.list(named: $0) != nil }
+        guard kept.count < stored.count else { return Reduction(snapshot: s) }
+        var next = s
+        next.config.favouriteLists = kept
         return Reduction(snapshot: next)
     }
 

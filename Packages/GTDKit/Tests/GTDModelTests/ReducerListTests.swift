@@ -122,6 +122,56 @@ struct ReducerListTests {
         #expect(result.snapshot.config.favouriteLists == ["Watch"])
     }
 
+    // MARK: - renameList and favourites (R-5)
+
+    @Test func renamingAFavouriteListRenamesTheFavouriteInPlace() throws {
+        var config = GTDConfig.default
+        config.favouriteLists = ["Watch", "Read"]
+        let result = try Reducer.reduce(
+            vault(config: config), .renameList(from: "read", to: "Books"), env: env)
+        // Same slot, new name — the navbar keeps the list where the user put it.
+        #expect(result.snapshot.config.favouriteLists == ["Watch", "Books"])
+    }
+
+    @Test func renamingAListLeavesAnUnchosenFavouritesSettingUnset() throws {
+        let result = try Reducer.reduce(vault(), .renameList(from: "Read", to: "Books"), env: env)
+        #expect(result.snapshot.config.favouriteLists == nil)
+    }
+
+    // MARK: - pruneFavouriteLists (R-5)
+
+    @Test func pruningDropsFavouritesWhoseFolderIsGoneAndKeepsTheOrder() throws {
+        var config = GTDConfig.default
+        config.favouriteLists = ["Watch", "Gone", "read"]
+        let result = try Reducer.reduce(vault(config: config), .pruneFavouriteLists, env: env)
+        #expect(result.snapshot.config.favouriteLists == ["Watch", "read"])
+        #expect(result.extraOps.isEmpty)
+    }
+
+    @Test func pruningChangesNothingWhenEveryFavouriteExists() throws {
+        var config = GTDConfig.default
+        config.favouriteLists = ["Watch", "Read"]
+        let start = vault(config: config)
+        #expect(try Reducer.reduce(start, .pruneFavouriteLists, env: env).snapshot == start)
+    }
+
+    @Test func pruningLeavesAnUnchosenSettingUnset() throws {
+        let start = vault()
+        #expect(try Reducer.reduce(start, .pruneFavouriteLists, env: env).snapshot == start)
+    }
+
+    /// No list at all is far likelier an unsynced `Lists/` than every list gone — keep the choice.
+    @Test func pruningKeepsEverythingWhenTheVaultShowsNoListAtAll() throws {
+        var config = GTDConfig.default
+        config.favouriteLists = ["Read", "Watch"]
+        let start = vault(lists: [], config: config)
+        #expect(try Reducer.reduce(start, .pruneFavouriteLists, env: env).snapshot == start)
+    }
+
+    @Test func pruningIsNotUndoable() {
+        #expect(!Rules.isUndoable(.pruneFavouriteLists))
+    }
+
     @Test func removingAnUnknownListIsRefused() {
         #expect(TestVault.error(vault(), .removeList(name: "Wish"))
             == .invalid("Unknown list: Wish"))

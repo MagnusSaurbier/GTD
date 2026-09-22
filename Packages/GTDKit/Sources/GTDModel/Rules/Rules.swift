@@ -612,7 +612,7 @@ public enum Rules {
     public static func isUndoable(_ command: GTDCommand) -> Bool {
         switch command {
         case .updateConfig, .logRoutineStep, .setRoutineTime, .saveWeeklyReview, .archiveCompleted,
-             .setFavouriteLists:
+             .setFavouriteLists, .pruneFavouriteLists:
             false
         // `createList` only creates a folder, and undoing it would mean removing a directory —
         // the hard delete this app never does (ARCHITECTURE §6). Nothing is lost by leaving an

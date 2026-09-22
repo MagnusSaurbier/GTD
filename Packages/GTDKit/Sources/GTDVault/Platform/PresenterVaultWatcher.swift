@@ -24,7 +24,7 @@ public final class PresenterVaultWatcher: VaultWatcher, @unchecked Sendable {
         self.fallback = fallback
     }
 
-    public func start(onChange: @escaping @Sendable () -> Void) {
+    public func start(onChange: @escaping @Sendable (VaultChange) -> Void) {
         lock.lock()
         if presenter == nil {
             let presenter = Presenter(url: root, onChange: onChange)
@@ -50,9 +50,9 @@ public final class PresenterVaultWatcher: VaultWatcher, @unchecked Sendable {
     private final class Presenter: NSObject, NSFilePresenter, @unchecked Sendable {
         let presentedItemURL: URL?
         let presentedItemOperationQueue: OperationQueue
-        private let onChange: @Sendable () -> Void
+        private let onChange: @Sendable (VaultChange) -> Void
 
-        init(url: URL, onChange: @escaping @Sendable () -> Void) {
+        init(url: URL, onChange: @escaping @Sendable (VaultChange) -> Void) {
             self.presentedItemURL = url
             self.onChange = onChange
             let queue = OperationQueue()
@@ -62,18 +62,31 @@ public final class PresenterVaultWatcher: VaultWatcher, @unchecked Sendable {
             super.init()
         }
 
-        func presentedItemDidChange() { onChange() }
+        func presentedItemDidChange() { onChange(.unknown) }
 
-        func presentedSubitemDidChange(at url: URL) { onChange() }
+        func presentedSubitemDidChange(at url: URL) { onChange(hint([url])) }
 
-        func presentedSubitem(at oldURL: URL, didMoveTo newURL: URL) { onChange() }
+        func presentedSubitem(at oldURL: URL, didMoveTo newURL: URL) {
+            onChange(hint([oldURL, newURL]))
+        }
 
-        func presentedSubitemDidAppear(at url: URL) { onChange() }
+        func presentedSubitemDidAppear(at url: URL) { onChange(hint([url])) }
+
+        /// The URLs as vault-relative paths; `.unknown` as soon as one cannot be placed.
+        private func hint(_ urls: [URL]) -> VaultChange {
+            guard let root = presentedItemURL else { return .unknown }
+            var paths: Set<String> = []
+            for url in urls {
+                guard let path = VaultPath.relative(url, to: root) else { return .unknown }
+                paths.insert(path)
+            }
+            return .paths(paths)
+        }
 
         func accommodatePresentedSubitemDeletion(
             at url: URL, completionHandler: @escaping ((any Error)?) -> Void
         ) {
-            onChange()
+            onChange(hint([url]))
             completionHandler(nil)
         }
     }

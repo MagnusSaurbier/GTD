@@ -83,11 +83,11 @@ private struct GlobalFlows: ViewModifier {
             .sheet(isPresented: $router.isCapturePresented) {
                 QuickCaptureSheet { text in
                     router.isCapturePresented = false
-                    guard composition.capture(text: text) != nil else { return }
                     // One presentation at a time: let the capture sheet finish dismissing before
                     // processing takes the screen, and give the vault scan a moment to pick the
                     // new file up so the session opens *on that card* (I7, LIFO).
                     Task {
+                        guard await composition.capture(text: text) != nil else { return }
                         try? await Task.sleep(for: .milliseconds(350))
                         router.isProcessingInbox = true
                     }
@@ -122,7 +122,7 @@ private struct GlobalFlows: ViewModifier {
     /// Shell failures and `AppModel.lastError` (a refused undo, a failed rollback — T16) share
     /// one alert: a failure the person cannot see is a lying UI (§1).
     private var currentError: AppError? {
-        composition.error ?? model.lastError.map(AppError.init)
+        composition.error ?? model.writeFailure.map(AppError.init) ?? model.lastError.map(AppError.init)
     }
 
     private var errorPresented: Binding<Bool> {
@@ -154,6 +154,8 @@ private struct Lifecycle: ViewModifier {
                 }
                 await composition.bootstrap()
                 if composition.phase == .ready {
+                    // R-5 — a list removed or renamed outside the app leaves a stale favourite.
+                    await composition.model.pruneFavouriteLists()
                     await notifications.requestAuthorizationIfNeeded()
                     await notifications.replanNow(
                         snapshot: composition.model.snapshot,
@@ -171,7 +173,6 @@ private struct Lifecycle: ViewModifier {
                 case .active:
                     Task {
                         await composition.refreshFromDisk()
-                        await composition.runDailyHousekeeping()
                         router.consumePendingRoute(
                             composition.pendingRoute, snapshot: composition.model.snapshot)
                         await notifications.replanNow(
@@ -180,6 +181,7 @@ private struct Lifecycle: ViewModifier {
                     }
                 case .background:
                     BackgroundRefresh.schedule()
+                    Task { await composition.flushWritesBeforeSuspension() }
                 default:
                     break
                 }

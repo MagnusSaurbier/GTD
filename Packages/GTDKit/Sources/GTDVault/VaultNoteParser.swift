@@ -20,6 +20,15 @@ public protocol VaultNoteParser: Sendable {
     func routineLog(id: NoteID, text: String) throws -> [RoutineLogEntry]
     func config(id: NoteID, text: String) throws -> GTDConfig
     func weeklyReview(id: NoteID, text: String) throws -> WeeklyReview
+    /// An inbox note read from a file whose date is known — see `NoteCodec.decodeInboxItem`'s
+    /// `fileDate`. Defaults to the plain decode.
+    func inboxItem(id: NoteID, text: String, fileDate: Date) throws -> InboxItem
+}
+
+extension VaultNoteParser {
+    public func inboxItem(id: NoteID, text: String, fileDate: Date) throws -> InboxItem {
+        try inboxItem(id: id, text: text)
+    }
 }
 
 /// The production parser: a thin forward to `GTDMarkdown.NoteCodec`.
@@ -28,6 +37,10 @@ public struct NoteCodecParser: VaultNoteParser {
 
     public func inboxItem(id: NoteID, text: String) throws -> InboxItem {
         try NoteCodec.decodeInboxItem(id: id, text: text)
+    }
+
+    public func inboxItem(id: NoteID, text: String, fileDate: Date) throws -> InboxItem {
+        try NoteCodec.decodeInboxItem(id: id, text: text, fileDate: fileDate)
     }
 
     public func action(id: NoteID, text: String) throws -> Action {

@@ -78,14 +78,19 @@ Compiles and tests on Linux.
   closed, hidden, out of `allCases`, and the reducer refuses any move into it.
 - **A list is a folder** (§5a): `Lists/<name>/` is the list, an item is a note with a title, an
   optional `created` and free notes, and `Lists/<name>/Done/` is the finished log. `Done` is a
-  reserved name, list names are compared case-insensitively (the file system is), and the six list
+  reserved name, list names are compared case-insensitively (the file system is), and the list
   commands are `createList` / `renameList` / `removeList` / `setFavouriteLists` /
+  `pruneFavouriteLists` /
   `updateListItem` / `completeListItem` / `trashListItem` / `promoteListItem`.
 - **A list item is never an action**: no `Rules` query for actions, no stat, no notification and
   no review card can see one, and `promoteListItem` is the only door between the two — it goes
   through the same `makeAction` + `checkCap` as an inbox filing.
 - `GTDConfig.favouriteLists` is `Optional` on purpose: `nil` means "never chosen" and
   `Rules.favouriteLists` derives the first four lists alphabetically, which is never written back.
+  A stored favourite follows its list: `renameList` renames it in place, `removeList` drops it,
+  and `Rules.favouriteLists` skips a name whose folder vanished outside the app until
+  `pruneFavouriteLists` (launch, the inbox's Knowledge / List card) drops it from the file — a
+  no-op when nothing is stale or when the vault shows no list at all.
 - The cap blocks only commands that *increase* Next occupancy.
 - Every `Rules` list has a **total** order (`NoteID` last), so equal snapshots render identically.
 - `Day` never uses `Calendar` for arithmetic; queries converting a `Date` take a `calendar`

@@ -10,6 +10,9 @@ import GTDVault
 /// `InMemoryFileSystem` (fast, deterministic mtimes, injectable write failures), `onDisk` copies
 /// the sample vault into a temp directory and drives `PlainFileSystem` over it. Neither ever
 /// touches the real vault.
+///
+/// `writes` defaults to `.awaited` — these suites read the files straight after a command.
+/// `QueuedWriteTests` is the one that runs the production policy.
 struct TestVault {
     let fileSystem: any VaultFileSystem
     let store: FileVaultStore
@@ -22,9 +25,11 @@ struct TestVault {
 
     static func inMemory(
         files: [String: String] = SampleVault.files,
-        deviceID: String = "test-device"
+        deviceID: String = "test-device",
+        writes: WritePolicy = .awaited
     ) -> TestVault {
-        make(fileSystem: InMemoryFileSystem(files: files), deviceID: deviceID, root: nil)
+        make(fileSystem: InMemoryFileSystem(files: files), deviceID: deviceID, root: nil,
+             writes: writes)
     }
 
     static func onDisk(deviceID: String = "test-device") throws -> TestVault {
@@ -33,7 +38,8 @@ struct TestVault {
     }
 
     private static func make(
-        fileSystem: any VaultFileSystem, deviceID: String, root: URL?
+        fileSystem: any VaultFileSystem, deviceID: String, root: URL?,
+        writes: WritePolicy = .awaited
     ) -> TestVault {
         let store = FileVaultStore(
             fileSystem: fileSystem,
@@ -49,7 +55,8 @@ struct TestVault {
                 deviceID: deviceID,
                 journal: journal,
                 stateDirectory: stateDirectory,
-                env: { Fixtures.reducerEnv(deviceID: deviceID) }),
+                env: { Fixtures.reducerEnv(deviceID: deviceID) },
+                writes: writes),
             journal: journal,
             stateDirectory: stateDirectory,
             root: root)

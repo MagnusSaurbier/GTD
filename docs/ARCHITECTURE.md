@@ -302,8 +302,8 @@ stand-in they fall back to off Apple platforms.
 ### GTDServices — reducer to files, and undo
 
 `VaultBackend` (actor, conforms to `GTDBackend`) = `Reducer.reduce` → diff old/new snapshot →
-`NoteCodec.encode` the changed entities → `VaultStore.commit(ops + extraOps)` → push the inverse
-onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
+`NoteCodec.encode` the changed entities → **publish the reduced snapshot and return** → on a
+serial write queue: `VaultStore.commit(ops + extraOps)` → push the inverse onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
 
 - **One command is one commit**, so a rename and the project steps linking to the renamed note
   cannot come apart.
@@ -312,8 +312,15 @@ onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
   `ServiceError.undoStale` when any of them changed since (N3) — for a `.moveFolder`, that is
   every file **inside** the folder, because those are what the undo carries back. It keeps 20
   entries and is persisted in Application Support.
-- A successful command publishes the reduced snapshot immediately; the store's scanned snapshot
-  replaces it when it arrives.
+- **The UI never waits for a file.** `perform` returns once the rules have spoken; the writes
+  follow in command order on one queue, and the store's scanned snapshot replaces the reduced one
+  when the queue is empty (store events are ignored while it is not). "Written" means the local
+  file — nothing waits for iCloud's upload. A refused write drops the writes queued behind it
+  (they were reduced on top of it), re-reads the vault, publishes that, and reports a
+  `WriteFailure` on `writeFailures()`. `undo()` waits for the queue; `flush()`/`stop()` let it
+  land. **Only the person acting on an item writes to the vault:** opening it writes nothing, no
+  timer writes, and the daily `archiveCompleted` joins the queue behind the first write of the
+  day that landed. `WritePolicy.awaited` (tests) makes `perform` wait and throw instead.
 - Collisions in `Archive/` and `GTD/Trash/` get a free name (app-owned folders); anywhere else a
   taken destination is `GTDError.titleCollision`. Folder moves included: "remove list" is a
   `.moveFolder` into `GTD/Trash/`.
@@ -330,7 +337,7 @@ onto `UndoJournal`. `Housekeeping` runs the daily `archiveCompleted`.
 ### GTDAppCore — what the UI sees
 
 `GTDBackend` (the protocol every backend implements: `snapshots()`, `currentUpdate()`,
-`perform(_:)`, `undo()`, `undoLabel()`), `SnapshotUpdate`, `NavigationRemap`, `AppModel` (`@MainActor @Observable`, handed to views
+`perform(_:)`, `undo()`, `undoLabel()`, `writeFailures()`), `SnapshotUpdate`, `WriteFailure`, `NavigationRemap`, `AppModel` (`@MainActor @Observable`, handed to views
 through `@Environment(AppModel.self)`), `InMemoryBackend` (reducer only — previews and tests),
 `UndoLabel` (one label table, shared by both backends) and `KeyBindings` (R-10/N7: the device-local
 *command → key* table the Mac keyboard resolves through, §6 "R-10 key bindings").
@@ -348,7 +355,9 @@ its command only once it is that command's turn: a caller that derives a whole e
 `snapshot` — the autosaving action editor — **must** use it, or it will put an in-flight command's
 fields back. `send` throws `GTDError` for flows that handle the refusal themselves (the cap sheet,
 the waiting sheet); `perform`/`report` route it to `lastError`, which the shell shows in one alert.
-Nothing is swallowed with `try?`.
+Nothing is swallowed with `try?`. What `send` throws is what the **rules** refuse; a refusal by the
+**file system** arrives later, on `writeFailures()`, and `AppModel.writeFailure` holds it for the
+same alert until the person dismisses it.
 
 ### The rest
 
@@ -489,7 +498,11 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-21 · T11 | **The chase row's title is built, not just displayed.** STYLEGUIDE §3.3's `Chase: <who> — <what>` was never actually produced — `NextRow` showed the plain `action.title` for a chase row too. `NextListModel.chaseTitle(for:)` (and the pure `chaseTitle(who:what:)` it wraps) now builds it, omitting the "— " entirely when `who` is empty/nil (W1/D39); `NextRow` gained a `title` field so a caller can override what the row displays and speaks, defaulting to `action.title` for a plain Next row. |
 | 2026-09-21 · T10/T09 | **`MakeActionSheet` is a host, not a copy of the card.** `FeatureLists/MakeActionSheet.swift` presents `FeatureInbox.MakeActionCardView` over `FeatureInbox.MakeActionModel` in a `NavigationStack`; the card body, bar, sub-sheets and every decision are the inbox's (L4). |
 | 2026-09-21 · T10 | **The Lists tab's push stack needs two kinds of route, so it is not `[NoteID]`.** `FeatureLists.ListsRoute` (`.list(String)` / `.item(NoteID)`) is `AppRouter.listsPath`'s element type; `AppRouter.apply(snapshot:renames:)` remaps it with a small local helper (`.list` entries pass through, `.item` entries follow a rename/prune exactly as `NavigationRemap.path` does for `[NoteID]`) rather than generalising `NavigationRemap` itself for a single two-case caller. |
+| 2026-09-21 | **Vault writes are queued behind the UI.** On the real iCloud vault every command waited for coordinated writes plus a whole-vault re-index before anything moved on screen. `VaultBackend.perform` now publishes the reduced snapshot and returns; one serial queue writes the files. The price, accepted: a file-system refusal (disk, permissions, a collision with a file the index does not know, e.g. in `Knowledge/`) is no longer thrown from `send` — the snapshot reverts and the shell shows a `WriteFailure` alert naming the change and how many later ones went with it. Rule refusals (cap, missing fields, collisions inside the snapshot) are still synchronous. The shell flushes the queue on iOS backgrounding (background assertion), on ⌘Q (`ShellAppDelegate`) and before closing a vault. |
+| 2026-09-22 | **The vault is written only when the person acts on an item, and never on the thread that draws.** Launch and foregrounding write nothing: the daily archive (A5) rides the write queue behind the first change of the day instead of running inside `start()` (which launch awaited) or on foreground. The editors no longer autosave on a 600 ms typing pause — typed text is held until the field blurs, the editor closes, or the shell calls `AppModel.flushHeldEdits()` (iOS backgrounding, ⌘Q); chips, pickers and status changes still save at once. The price: a crash or force-quit mid-typing loses the text of the field being typed in. The device-local review-progress file is written on a background queue too. |
 | 2026-09-21 | **"Open in Obsidian" has one builder, `GTDAppCore.ObsidianLink`.** Obsidian's `path=` takes an absolute path only, so the three hand-rolled `path=<vault-relative>` links failed with "Vault not found". The Mac sends `path=<absolute>` (unambiguous, and right even when the picked folder sits inside a larger vault); iOS sends `vault=<picked folder's name>&file=<relative>`, because the path its bookmark resolves to is not known to match Obsidian's sandbox. The root reaches views through `\.vaultRootPath` in `DesignSystem`; no root, no link. |
+| 2026-09-22 | **File changes are picked up at once, like Obsidian.** The presenter only hears coordinated writes, so a plain external write waited for the 5 s poll plus a 300 ms debounce. macOS now runs `FSEventsVaultWatcher` beside the presenter and the poll; watchers pass a `VaultChange.paths` hint, the store re-indexes just those files (`VaultIndex.refresh(paths:)`, falling back to a walk for folders, unseen folders and bursts > 64), the debounce is 50 ms quiet / 500 ms ceiling, and a refresh that changed nothing publishes nothing. Measured ~100 ms from a plain write to the store's snapshot. The store's own commits use the same targeted path. A file in `Inbox/` with no `created` is a capture dated by the file, so anything that drops a note there shows up. iOS has no FSEvents: the presenter (iCloud and other apps coordinate) plus the poll. |
+| 2026-09-22 | **Stale favourites are pruned at launch and when the inbox opens its Knowledge / List card (R-5).** The user's call, and the one exception to "launch writes nothing": `GTDCommand.pruneFavouriteLists` drops a `favouriteLists` name whose folder is gone (renamed or removed in Finder/Obsidian), and writes `GTD/Config.md` only when there is one. A vault showing no list at all is left alone — an unsynced `Lists/` must not wipe the choice. In-app renames rename the favourite in place (`renameList`); in-app removals already dropped it. |
 
 ## 7. Sync safety rules (N3) — apply to every change that writes
 

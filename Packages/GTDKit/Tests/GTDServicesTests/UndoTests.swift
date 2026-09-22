@@ -175,7 +175,8 @@ struct UndoTests {
             deviceID: "test-device",
             journal: UndoJournal(directory: vault.stateDirectory),
             stateDirectory: vault.stateDirectory,
-            env: { Fixtures.reducerEnv(deviceID: "test-device") })
+            env: { Fixtures.reducerEnv(deviceID: "test-device") },
+            writes: .awaited)
 
         #expect(await relaunched.undoLabel() == "Moved to Someday")
         try await relaunched.undo()

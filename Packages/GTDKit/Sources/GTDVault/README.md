@@ -26,7 +26,9 @@ The only module that touches the file system.
   `VaultNoteParser` / `NoteCodecParser` (its `listItem(id:text:layout:)` is the seam for §5a),
   `VaultClassifier.listFolderName(of:)` / `misplacedListReason(of:)` /
   `isNoAreaFolder(of:)` / `noAreaNoteReason()` / `areaLessProjectHasAreaReason(_:)` (R-6),
-  `VaultWatcher` / `PollingVaultWatcher` / `NullVaultWatcher`,
+  `VaultWatcher` / `VaultChange` (`.unknown` or a `.paths` hint) / `PollingVaultWatcher` /
+  `CompositeVaultWatcher` / `NullVaultWatcher`, `VaultIndex.refresh(paths:using:)` (the targeted
+  re-index behind a hint or a commit; `nil` = "this needs a walk"),
   `DebounceState` / `ChangeDebouncer`, `VaultClock`, `VaultError`.
 
 ## Invariants
@@ -68,10 +70,11 @@ The only module that touches the file system.
 
 ## Platform split (ARCHITECTURE §5)
 
-Everything above is Foundation-only and runs on Linux. `Platform/` holds the four files wrapped
+Everything above is Foundation-only and runs on Linux. `Platform/` holds the files wrapped
 entirely in `#if os(iOS) || os(macOS)`: `CoordinatedFileSystem` (`NSFileCoordinator`, iCloud
 downloads), `SecurityScopedBookmarkStore`, `PresenterVaultWatcher` (`NSFilePresenter` + polling
-safety net) and `VaultPlatform+Apple`; `VaultPlatform+Portable` is their non-Apple counterpart.
+safety net), `VaultPlatform+Apple`, and — `#if os(macOS)` — `FSEventsVaultWatcher`, the only
+mechanism that hears an **uncoordinated** write (Obsidian, a script) when it happens; `VaultPlatform+Portable` is their non-Apple counterpart.
 They compile on a Mac (`swift build` and the iOS-simulator step of `scripts/check.sh`); nothing
 in them has run against a real iCloud vault yet. `CoordinatedFileSystem.moveFolder` is the one to
 watch: it coordinates the *directory* with `.forMoving` and then announces the move with
@@ -79,8 +82,22 @@ watch: it coordinates the *directory* with `.forMoving` and then announces the m
 
 ## Gotchas
 
-- Change detection reports only *that* something changed; the index decides what to re-read, so a
-  missed or duplicated event costs at most one extra scan.
+- **An external write is on screen in ~100 ms on the Mac** (`ExternalWriteLatencyTests`, a plain
+  write into a temp vault): FSEvents (50 ms latency, per-file events) → `.paths` hint → debounce
+  (50 ms quiet, 500 ms ceiling) → `VaultIndex.refresh(paths:)` re-stats those files only. iOS
+  has no FSEvents; there the presenter hears iCloud's and other apps' (coordinated) writes and
+  passes their URLs as the hint. The 5 s poll stays underneath both.
+- A change hint is never trusted: the index compares fingerprints for every hinted path and
+  returns `nil` — walk the vault — for a folder, a file in a folder it has not seen (the folder
+  list feeds lists and Knowledge), or more than 64 paths. `TargetedRefreshTests` fuzzes random
+  external edits and compares against a cold scan after every step. A missed or duplicated
+  event costs at most one extra scan; a refresh that found nothing publishes nothing.
+- `commit` re-indexes through the same targeted path with the paths of its own ops (folder ops
+  walk), so a write no longer costs a walk of the vault either.
+- **A file in `Inbox/` without `created`** — typed in Obsidian, written by a script — is a
+  capture dated by the file's modification date (`NoteCodec.decodeInboxItem(fileDate:)`), not a
+  `VaultIssue`. The file is not touched; a `created` that is present but unreadable still is an
+  issue.
 - The index cache key is `size + mtime`. A second-granularity file system can hide a same-size
   edit within one second; the watcher's next poll picks it up.
 - `Projects/X/X.md` is an area or a project depending on its `kind:` key — `Frontmatter.scalar`
@@ -93,7 +110,7 @@ watch: it coordinates the *directory* with `.forMoving` and then announces the m
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter GTDVaultTests` (152 tests, never the real vault).
+`cd Packages/GTDKit && swift test --filter GTDVaultTests` (158 tests, never the real vault).
 `FileVaultStoreTests.scansAThousandNotesAndRefreshesIncrementally` compares two wall-clock timings
 (`refreshSeconds < scanSeconds`) and failed once in three full runs on a busy Mac (2026-09-21);
 a re-run passed. A failure there alone is load, not a regression.

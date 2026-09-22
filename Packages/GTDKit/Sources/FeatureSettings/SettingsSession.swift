@@ -52,11 +52,13 @@ public final class SettingsSession {
     public var listRows: [Rules.ListRow] { Rules.listRows(model.snapshot) }
 
     /// The effective favourites, in order: the stored choice, or — while nothing has been
-    /// chosen — the derived default (`Rules.favouriteLists`: first four alphabetically). Reading
+    /// chosen — the derived default (first four alphabetically), both via `Rules.favouriteLists`.
+    /// A stored name whose folder is gone (removed or renamed outside the app) is left out, so
+    /// the next `toggleFavourite`/`reorderFavourites` drops it from `GTD/Config.md`. Reading
     /// this never writes `favouriteLists` (R-5's "never written until the user changes
-    /// something"); only `toggleFavourite`/`reorderFavourites` do.
+    /// something").
     public var favouriteListNames: [String] {
-        config.favouriteLists ?? Rules.favouriteLists(model.snapshot).map(\.name)
+        Rules.favouriteLists(model.snapshot).map(\.name)
     }
 
     /// Lists not currently a favourite — what `addFavourite`'s picker offers.

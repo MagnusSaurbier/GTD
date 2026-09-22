@@ -243,7 +243,8 @@ import GTDVault
                 deviceID: deviceID,
                 journal: UndoJournal(directory: stateDirectory),
                 stateDirectory: stateDirectory,
-                env: { Fixtures.reducerEnv(deviceID: deviceID) }),
+                env: { Fixtures.reducerEnv(deviceID: deviceID) },
+            writes: .awaited),
             stateDirectory: stateDirectory)
     }
 

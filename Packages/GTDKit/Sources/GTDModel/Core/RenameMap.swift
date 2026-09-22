@@ -33,6 +33,12 @@ public struct RenameMap: Sendable, Equatable {
         moves.sorted { $0.key < $1.key }.map { (old: $0.key, new: $0.value) }
     }
 
+    /// The way back: every new id → the id it had. What a backend publishes when it has to take
+    /// a rename back, so navigation follows the note home instead of losing it.
+    public var inverted: RenameMap {
+        RenameMap(Dictionary(moves.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first }))
+    }
+
     public mutating func record(_ old: NoteID, as new: NoteID) {
         guard old != new else { return }
         self = merging(RenameMap([old: new]))
