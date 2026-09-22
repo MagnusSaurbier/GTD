@@ -50,6 +50,23 @@ public enum SheetMetrics {
     /// Tallest an inline run of rows may grow inside a content-sized sheet before it scrolls
     /// (`OverflowScroll`).
     public static let inlineRowsMaxHeight: CGFloat = 280
+    /// Tallest the opened action card may stand inside a content-sized Mac sheet before it
+    /// scrolls (`MacCardScroll`): a long note's body must not push the sheet's buttons and
+    /// legend off the window. The cap is also bounded by the presenting window
+    /// (`cardCap(forWindowHeight:)`) — a sheet is allowed to hang below its window, and did.
+    public static let cardMaxHeight: CGFloat = 520
+    /// Shortest the card is ever capped to, so a small window still shows a few lines.
+    public static let cardMinHeight: CGFloat = 240
+    /// What the card's Mac sheet needs besides the card: counter, action bar, legend, toast
+    /// slot, the `Undo`/`Close` row and the spacing between them.
+    public static let cardSheetChrome: CGFloat = 240
+
+    /// The card cap for a sheet on a window of this content height; `nil` (unknown yet) gives
+    /// the plain `cardMaxHeight`.
+    public static func cardCap(forWindowHeight height: CGFloat?) -> CGFloat {
+        guard let height else { return cardMaxHeight }
+        return max(cardMinHeight, min(cardMaxHeight, height - cardSheetChrome))
+    }
 }
 
 /// Corner radii. `Radius.chipShape` (a `Capsule`) lives in the SwiftUI half.
