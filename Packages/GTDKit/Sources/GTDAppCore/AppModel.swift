@@ -166,6 +166,19 @@ public final class AppModel {
         }
     }
 
+    /// R-5 — drops favourites whose list folder is gone (`GTDCommand.pruneFavouriteLists`). Run
+    /// at launch and as the inbox opens its Knowledge / List card; writes only when a favourite
+    /// is actually stale. Reduced on the backend's snapshot, so it is safe before this model has
+    /// received its first one. A refusal reaches the alert, but unlike `perform` a success does
+    /// not clear an error the person has not read yet — nobody asked for this command.
+    public func pruneFavouriteLists() async {
+        do {
+            try await send(.pruneFavouriteLists)
+        } catch {
+            lastError = error
+        }
+    }
+
     /// N6. Never throws — a refused undo (T16: the file changed remotely) lands in `lastError`.
     /// Queued behind any command still in flight, like `send`.
     public func undo() async {

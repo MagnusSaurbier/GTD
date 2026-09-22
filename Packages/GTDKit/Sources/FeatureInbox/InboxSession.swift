@@ -320,6 +320,8 @@ public final class InboxSession {
         case .openAction:
             open(.actionCard)
         case .openKeep:
+            // The navbar is built from the favourites: drop any whose folder is gone first.
+            await model.pruneFavouriteLists()
             open(.keepCard)
         case .trash:
             await fileDecision(.trash, as: .trash)

@@ -161,6 +161,9 @@ public enum GTDCommand: Sendable, Equatable {
     case removeList(name: String)
     /// I4b — the lists shown in the inbox navbar, in the user's order (R-5).
     case setFavouriteLists([String])
+    /// R-5 — drops stored favourites whose list folder is gone (removed or renamed outside the
+    /// app). Changes nothing — so writes nothing — when every favourite still has its folder.
+    case pruneFavouriteLists
     /// Editing one item: a changed title renames its file, `notes` is the body.
     case updateListItem(NoteID, title: String, notes: String)
     /// L3 — checked off: the note moves to `Lists/<name>/Done/` and is kept as a log.

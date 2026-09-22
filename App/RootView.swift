@@ -154,6 +154,8 @@ private struct Lifecycle: ViewModifier {
                 }
                 await composition.bootstrap()
                 if composition.phase == .ready {
+                    // R-5 — a list removed or renamed outside the app leaves a stale favourite.
+                    await composition.model.pruneFavouriteLists()
                     await notifications.requestAuthorizationIfNeeded()
                     await notifications.replanNow(
                         snapshot: composition.model.snapshot,
