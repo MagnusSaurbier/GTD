@@ -132,6 +132,7 @@ struct InboxCardView: View {
             if session.showsBody {
                 TextField("", text: $session.draft.body, axis: .vertical)
                     .textFieldStyle(.plain)
+                    .listEditingShortcuts()
                     .font(Typo.body)
                     .foregroundStyle(Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -176,6 +177,7 @@ struct InboxCardView: View {
             SectionLabel(label, isMissing: isMissing)
             TextField("", text: text, prompt: Self.prompt(placeholder), axis: .vertical)
                 .textFieldStyle(.plain)
+                .listEditingShortcuts()
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -214,6 +216,7 @@ struct InboxCardView: View {
                 prompt: Self.prompt(Copy.whatPlaceholder),
                 axis: .vertical)
                 .textFieldStyle(.plain)
+                .listEditingShortcuts()
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -295,6 +298,7 @@ struct InboxCardView: View {
                 prompt: Self.prompt(InboxCopy.notesPlaceholder),
                 axis: .vertical)
                 .textFieldStyle(.plain)
+                .listEditingShortcuts()
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
                 .fixedSize(horizontal: false, vertical: true)

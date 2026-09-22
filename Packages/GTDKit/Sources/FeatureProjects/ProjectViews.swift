@@ -248,6 +248,7 @@ public struct ProjectDetailView: View {
             Text(Copy.why).font(Typo.sectionHeader)
             TextField(Copy.whyPlaceholder, text: whyBinding(detail), axis: .vertical)
                 .textFieldStyle(.plain)
+                .listEditingShortcuts()
                 .font(Typo.body)
                 .foregroundStyle(Color.textSecondary)
 

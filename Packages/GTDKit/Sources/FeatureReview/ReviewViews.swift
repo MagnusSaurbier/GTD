@@ -269,6 +269,7 @@ struct ReviewTextField: View {
             }
             TextField(placeholder, text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
+                .listEditingShortcuts()
                 .font(Typo.body)
                 .lineLimit(2...6)
                 .accessibilityLabel(label)

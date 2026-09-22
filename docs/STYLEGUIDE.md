@@ -301,6 +301,8 @@ Borderless text fields inside cards/detail; stock `Form` (grouped) in settings. 
 
 **Rebindable keys (N7).** The single-key commands of inbox processing (§3.6: `A K X D`, `← →`, `W P`, `1…9 0`) and of the review deck (§3.10: `K D P T`) are rebindable in **Settings › Keyboard** (Mac only, stored per device): a stock `Form` with one row per command, grouped by screen, each with a key-recorder field, and `Reset to defaults` at the end. A key already used on the same screen is refused inline (`Already used by <command>`) — never an alert. `Esc`, `Tab`, `⌘Z` and `⌘↩` are not rebindable. Every legend row renders the current binding.
 
+**List editing in note bodies (Obsidian keys).** Every note-body field — the inbox card's body, `Why?`, `What?` and notes, the same fields of `Make action`, the Knowledge notes sheet, the action and list-item editors, a project's `Why?`, and the review's text fields — takes the user's Obsidian list shortcuts: `⇧⌘L` toggles a bullet list, `⌥⌘L` cycles plain → `- ` → `- [ ] ` → plain, `⌥L` toggles a checkbox (`- [ ]` ↔ `- [x]`; any other line becomes `- [ ] `). They act on every line the selection touches and keep the indentation. Titles, steps and search fields don't take them. These keys are **fixed** (not in Settings › Keyboard) and Mac only; iOS has no hardware-keyboard path yet.
+
 ## 5. Motion, haptics, sound
 
 - Default animation: `.snappy(duration: 0.3)`; card fly-out `.easeIn(0.25)`; spring-back `.spring(response: 0.35, dampingFraction: 0.8)`. Tokens: `Motion.standard`, `Motion.cardExit`, `Motion.cardReturn`. No other curves.

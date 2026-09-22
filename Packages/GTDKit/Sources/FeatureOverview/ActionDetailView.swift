@@ -325,6 +325,7 @@ private struct ActionDetailEditor: View {
             Text(label).font(Typo.sectionHeader).foregroundStyle(Color.ink)
             TextField(placeholder, text: text, axis: .vertical)
                 .textFieldStyle(.plain)
+                .listEditingShortcuts()
                 .font(Typo.body)
                 .lineLimit(3...)
                 .fixedSize(horizontal: false, vertical: true)

@@ -123,10 +123,17 @@ holds none of them. Adding is normal, renaming is a cross-target change.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter DesignSystemTests` — 47 tests.
+`cd Packages/GTDKit && swift test --filter DesignSystemTests` — 67 tests.
 
 `Interaction/KeyBindingsEnvironment.swift` — `EnvironmentValues.keyBindings` (R-10): the shell sets it from
 `DeviceSettings.keyBindings`; the inbox card, `MakeActionSheet` and the review deck read it.
+
+`Interaction/ListEditing.swift` — `ListEditing.edit(_:text:selection:)`: the Obsidian list
+shortcuts of the note-body fields (STYLEGUIDE §4.5) as a pure text rewrite on UTF-16 offsets, plus
+the fixed key table `ListEditShortcut.table`. Linux-compilable and tested (`ListEditingTests`).
+`Interaction/ListEditingShortcuts.swift` — `View.listEditingShortcuts()`, applied to each body
+`TextField`: on the Mac a local key monitor edits the window's field editor when it belongs to that
+field (one undo step; the binding updates as for typing). A no-op on iOS.
 
 `Interaction/VaultRootEnvironment.swift` — `EnvironmentValues.vaultRootPath`: the vault folder's
 absolute path, set by the app shell (`RootView` and the Mac `Settings` scene), `nil` on fixtures.

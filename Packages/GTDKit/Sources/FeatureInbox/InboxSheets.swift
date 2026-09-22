@@ -103,6 +103,7 @@ struct KnowledgeSheet: View {
                         InboxCopy.notesPlaceholder, text: $notes,
                         prompt: Text(InboxCopy.notesPlaceholder), axis: .vertical)
                         .textFieldStyle(.plain)
+                        .listEditingShortcuts()
                         .labelsHidden()
                 }
             }

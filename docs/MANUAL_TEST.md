@@ -189,6 +189,12 @@ Unplug the mouse for this one.
 - [ ] With no field focused: `1…8` toggle contexts and `⇧1…⇧4` pick a time bucket.
 - [ ] `⌘Z` undoes the last filing from anywhere on the screen.
 - [ ] Filing with a key animates the card out **in that key's direction**.
+- [ ] List keys in a body field (STYLEGUIDE §4.5; not yet seen on screen): in the card's `Why?`,
+      type `call Anna`, then `⌥L` → `- [ ] call Anna`, `⌥L` → `- [x] call Anna`; `⌥⌘L` cycles
+      plain → `- ` → `- [ ] ` → plain; `⇧⌘L` toggles `- `. The caret stays in the text, `⌘Z`
+      undoes one step, and `⌥L` never types `¬`. Select three lines: all three change. In the
+      **title** field the keys do nothing special. Repeat once in the action editor's `What?`, a
+      list item's notes and a review text field.
 
 ## 2. Lists (§5a, L1–L6)
 

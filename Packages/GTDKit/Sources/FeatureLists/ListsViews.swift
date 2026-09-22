@@ -204,6 +204,7 @@ private struct ListItemEditor: View {
                     prompt: Text(ListsCopy.notesPlaceholder).foregroundStyle(Color.textTertiary),
                     axis: .vertical)
                     .textFieldStyle(.plain)
+                    .listEditingShortcuts()
                     .font(Typo.body)
                     .foregroundStyle(Color.ink)
                     .lineLimit(3...)

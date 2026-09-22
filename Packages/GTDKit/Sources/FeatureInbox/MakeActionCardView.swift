@@ -357,6 +357,7 @@ private struct MakeActionCardBody: View {
                 "", text: text,
                 prompt: Text(placeholder).foregroundStyle(Color.textTertiary), axis: .vertical)
                 .textFieldStyle(.plain)
+                .listEditingShortcuts()
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -385,6 +386,7 @@ private struct MakeActionCardBody: View {
                 prompt: Text(Copy.whatPlaceholder).foregroundStyle(Color.textTertiary),
                 axis: .vertical)
                 .textFieldStyle(.plain)
+                .listEditingShortcuts()
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
                 .fixedSize(horizontal: false, vertical: true)
