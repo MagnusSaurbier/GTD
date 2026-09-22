@@ -35,8 +35,8 @@ and then patched the same way.
   field (W1/D39): an action with no who writes **no line**, and clearing the who removes the line
   and nothing else.
 - **An action's body is a lead paragraph plus headings, or it is the `What?` — never both.**
-  `Action.preamble` (R-4) is the text above `# Why?`: the full capture text of a note whose title
-  had to be cut, and whatever a hand-written note keeps before its first heading. A body with no
+  `Action.preamble` (R-4) is the text above `# Why?`: the inbox note's body when it had one (the
+  full capture text of a capture whose name had to be cut), and whatever a hand-written note keeps before its first heading. A body with no
   known heading keeps decoding as one long `What?`, and a note being *moved* into `Actions/` (a
   promoted list item, L4) still gets its headings appended **below** its own text.
 - **Legacy `status:` words are read, never rewritten** (R-1): `backlog` and `maybe` decode as

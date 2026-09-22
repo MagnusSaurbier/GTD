@@ -7,14 +7,18 @@ import DesignSystem
 /// Which field of the card has the keyboard. While one of them is focused, swipes and the
 /// letter/arrow keys are off (STYLEGUIDE §3.6).
 enum CardField: Hashable {
+    /// The title — for an inbox card, the file name (C3).
     case text
+    /// The inbox note's body, shown only when it has something in it.
+    case body
     case why
     case what
     case notes
 }
 
 /// The inbox card (STYLEGUIDE §3.5): same view in both steps, expanding **in place**. Step 1 is
-/// the meta line plus the full, editable capture text and nothing else; step 2a adds `Why?`,
+/// the meta line plus the editable title (the file name, C3) and — when the note has one — its
+/// body, and nothing else; step 2a adds `Why?`,
 /// `What?` and the chips; step 2b adds the `Notes` field. The card never truncates the capture
 /// text — beyond the available height it scrolls **inside the card** (the only place a card
 /// scrolls internally); there is no `Show all` any more (§3.5).
@@ -95,11 +99,14 @@ struct InboxCardView: View {
         }
     }
 
-    // MARK: 2. Raw captured text / title (R-4)
+    // MARK: 2. Title (the file name) and body
 
-    /// R-4 — the note's title *is* the capture text: this field edits the capture itself, and the
-    /// reducer names the file after its first line. It is the **only** text field for the
-    /// captured text — step 2a's "title still editable on tap" is this same field, not a copy.
+    /// C3/R-4 — the note's title **is** its file name: this field shows `Inbox/<title>.md`'s
+    /// name, and a changed title renames the file before the card is filed
+    /// (`InboxSession.persistEdits`). Step 2a's "title still editable on tap" is this same field.
+    /// The body follows it, secondary, only when the note has one worth reading — a long capture
+    /// keeps its full text there, an Obsidian-made note its own lines; the empty Why/What
+    /// template skeleton is not shown (`InboxSession.showsBody`).
     ///
     /// Only the **step-1 small card** scrolls internally past `rawTextMaxHeight` (STYLEGUIDE
     /// §3.5: "the only place a card scrolls internally"); a `ScrollView` always claims up to its
@@ -107,9 +114,9 @@ struct InboxCardView: View {
     /// left a fixed-looking gap between it and `Notes`/`Why?` (T15 defect 5) — 2a and 2b hug their
     /// content and scroll with the page instead (§3.5 "an opened card … scrolls with the page").
     @ViewBuilder private var rawText: some View {
-        let field = TextField(
+        let title = TextField(
             "",
-            text: $session.draft.text,
+            text: $session.draft.title,
             prompt: Self.prompt(InboxCopy.rawTextPlaceholder),
             axis: .vertical)
             .textFieldStyle(.plain)
@@ -119,6 +126,19 @@ struct InboxCardView: View {
             .fixedSize(horizontal: false, vertical: true)
             .focused($focus, equals: .text)
             .accessibilityLabel(InboxCopy.rawTextPlaceholder)
+
+        let field = VStack(alignment: .leading, spacing: Spacing.s) {
+            title
+            if session.showsBody {
+                TextField("", text: $session.draft.body, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(Typo.body)
+                    .foregroundStyle(Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .focused($focus, equals: .body)
+                    .accessibilityLabel(InboxCopy.bodyLabel)
+            }
+        }
 
         if session.step == .step1 {
             ScrollView {

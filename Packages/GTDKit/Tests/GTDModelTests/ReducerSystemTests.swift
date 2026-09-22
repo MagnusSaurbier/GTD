@@ -221,9 +221,10 @@ struct ReducerSystemTests {
     @Test func undoCoversFilingAndStatusChangesOnly() {
         let id = TestVault.actionID("X")
         let undoable: [GTDCommand] = [
-            .editInboxText(TestVault.layout.inboxPath(stamp: "2026-09-19 081204"), "x"),
-            .fileInbox(TestVault.layout.inboxPath(stamp: "2026-09-19 081204"), .trash),
-            .deferInboxToReview(TestVault.layout.inboxPath(stamp: "2026-09-19 081204"), reason: "r"),
+            .renameInboxItem(TestVault.layout.inboxPath(title: "call mum"), title: "x"),
+            .editInboxBody(TestVault.layout.inboxPath(title: "call mum"), "x"),
+            .fileInbox(TestVault.layout.inboxPath(title: "call mum"), .trash),
+            .deferInboxToReview(TestVault.layout.inboxPath(title: "call mum"), reason: "r"),
             .createAction(ActionDraft(title: "X")),
             .updateAction(TestVault.action("X")),
             .setStatus(id, .next, waiting: nil),
@@ -258,7 +259,8 @@ struct ReducerSystemTests {
         let project = Fixtures.daadProject
 
         let commands: [GTDCommand] = [
-            .editInboxText(inbox.id, "edited"),
+            .renameInboxItem(inbox.id, title: "edited"),
+            .editInboxBody(inbox.id, "edited"),
             .fileInbox(inbox.id, .trash),
             .fileInbox(inbox.id, .action(ActionDraft(
                 title: "Frisch", status: .someday, what: "Anrufen"))),

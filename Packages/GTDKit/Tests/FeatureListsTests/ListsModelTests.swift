@@ -89,7 +89,7 @@ struct ListsModelTests {
         let item = lists.openItems(in: "Read")[0]
         let makeAction = lists.makeActionModel(for: item)
         #expect(makeAction.item.id == item.id)
-        #expect(makeAction.draft.text == item.title)
+        #expect(makeAction.draft.title == item.title)
         #expect(makeAction.isFiled == false)
     }
 }

@@ -35,7 +35,9 @@ struct CaptureCodecRoundTripTests {
         let text = try #require(try fs.readText(id.path))
 
         let item = try NoteCodec.decodeInboxItem(id: id, text: text)
-        #expect(item.text == "buy running shoes")
+        #expect(id.path == "Inbox/buy running shoes.md")
+        #expect(item.title == "buy running shoes")
+        #expect(item.body.isEmpty, "the title carries the whole capture")
         #expect(abs(item.created.timeIntervalSince(moment)) < 1)
         #expect(item.reviewReason == nil)
         #expect(NoteCodec.encode(item) == text)
@@ -52,7 +54,7 @@ struct CaptureCodecRoundTripTests {
         """ + "\n"
 
         let item = try NoteCodec.decodeInboxItem(id: NoteID(path: "Inbox/2026-09-19 081204.md"), text: text)
-        #expect(item.text == "buy running shoes")
+        #expect(item.body == "buy running shoes")
         #expect(item.reviewReason == nil)
     }
 
@@ -61,6 +63,6 @@ struct CaptureCodecRoundTripTests {
     @Test func aZuluOffsetFromTheShortcutsIso8601PresetAlsoDecodes() throws {
         let text = "---\ncreated: 2026-09-19T06:12:04Z\n---\nbuy running shoes\n"
         let item = try NoteCodec.decodeInboxItem(id: NoteID(path: "Inbox/2026-09-19 081204.md"), text: text)
-        #expect(item.text == "buy running shoes")
+        #expect(item.body == "buy running shoes")
     }
 }

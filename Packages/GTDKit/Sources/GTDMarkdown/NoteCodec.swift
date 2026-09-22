@@ -34,6 +34,7 @@ public enum NoteCodec {
 
     // MARK: - Inbox
 
+    /// The title is not read from the text: it is the file name (`InboxItem.title`, from `id`).
     public static func decodeInboxItem(
         id: NoteID, text: String, timeZone: TimeZone = .current
     ) throws -> InboxItem {
@@ -47,7 +48,7 @@ public enum NoteCodec {
         }
         return InboxItem(
             id: id,
-            text: RawText.text(doc.bodyLines),
+            body: RawText.text(doc.bodyLines),
             created: created,
             reviewReason: doc.scalar("reviewReason"),
             passthrough: passthrough(text))
@@ -64,8 +65,8 @@ public enum NoteCodec {
             doc.setValue("created", YAMLScalar.timestamp(item.created, timeZone: timeZone), canonicalOrder: order)
         }
         setOptionalText("reviewReason", item.reviewReason, reference?.reviewReason, &doc, order)
-        if reference?.text != item.text {
-            doc.setBody(RawText.block(item.text, terminator: doc.terminator))
+        if reference?.body != item.body {
+            doc.setBody(RawText.block(item.body, terminator: doc.terminator))
         }
         return doc.text
     }

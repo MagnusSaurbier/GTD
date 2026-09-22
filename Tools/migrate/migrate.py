@@ -29,6 +29,7 @@ import os
 import re
 import shutil
 import sys
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -37,7 +38,7 @@ from typing import Optional
 from frontmatter import Frontmatter, read_note, write_note
 
 # --------------------------------------------------------------------------
-# Rule tables (REQUIREMENTS §11, M1-M6)
+# Rule tables (REQUIREMENTS §11, M1-M7)
 # --------------------------------------------------------------------------
 
 CONTEXT_MAP = {
@@ -54,7 +55,7 @@ REMOVE_KEYS = ("priority", "type", "tags", "Ressources")
 BOILERPLATE_MARKERS = {"", "...", "tbd", "todo", "n/a", "-"}
 CLEAN_ACTION_BODY = "# Why?\n\n# What?\n"
 PROJECT_BODY = "# Outcome\n\n# Why?\n\n# Steps\n\n# Log\n"
-AFFECTED_FOR_BACKUP = ["Actions", "Actions_legacy", "Projects", "Inbox.md"]
+AFFECTED_FOR_BACKUP = ["Actions", "Actions_legacy", "Projects", "Inbox.md", "Inbox"]
 EMPTY_FOLDERS = ["Archive", "Knowledge", "Inbox", "GTD/Reviews", "GTD/RoutineLog", "GTD/Trash", "GTD/Routines"]
 DEFAULT_CONFIG_FM = [
     "contexts: [mac, phone, home, campus, errands, calls, deep-work]",
@@ -125,7 +126,8 @@ class Report:
 
 
 class InboxNamer:
-    """Hands out strictly increasing timestamps, 1s apart, for synthesised inbox files."""
+    """Hands out strictly increasing timestamps, 1s apart, for the `created:` of synthesised
+    inbox captures (keeps their order). Not used for filenames any more — see InboxAllocator."""
 
     def __init__(self, base: datetime):
         self._t = base
@@ -134,6 +136,157 @@ class InboxNamer:
         t = self._t
         self._t = self._t + timedelta(seconds=1)
         return t
+
+
+# --------------------------------------------------------------------------
+# Capture titles — mirrors the app's `CaptureText.title` + `VaultLayout.sanitize` (Swift).
+# An inbox note's filename IS its title; the body keeps only what the title can't carry.
+# --------------------------------------------------------------------------
+
+TITLE_LIMIT = 60  # CaptureText.titleLimit
+SANITIZE_LIMIT = 120  # VaultLayout.sanitize's cap (applied first; can't change a 60-char cut)
+ILLEGAL_TITLE_CHARS = set('/\\:*?"<>|[]#^\n\r\t')
+TIMESTAMP_CAPTURE_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{6}(-\d+)?\.md$")
+_ZWJ = "\u200d"
+
+
+def _is_swift_whitespace(ch: str) -> bool:
+    """CharacterSet.whitespaces: tab plus Unicode category Zs (no newlines)."""
+    return ch == "\t" or unicodedata.category(ch) == "Zs"
+
+
+def _graphemes(text: str) -> list[str]:
+    """Approximates Swift `Character`s (extended grapheme clusters) with the stdlib: combining
+    marks, variation selectors and ZWJ sequences stay with their base character, so an NFD
+    "u + ¨" counts as one character, as it does in the app."""
+    clusters: list[str] = []
+    for ch in text:
+        joins = bool(clusters) and (
+            unicodedata.category(ch) in ("Mn", "Me", "Mc")
+            or 0xFE00 <= ord(ch) <= 0xFE0F
+            or ch == _ZWJ
+            or clusters[-1].endswith(_ZWJ)
+        )
+        if joins:
+            clusters[-1] += ch
+        else:
+            clusters.append(ch)
+    return clusters
+
+
+def sanitize_title(raw: str) -> str:
+    """VaultLayout.sanitize, except that an empty result is returned as "" (the app's
+    "Untitled" fallback is never wanted for captures: no title means skip / needs a decision)."""
+    cleaned = "".join(" " if ch in ILLEGAL_TITLE_CHARS else ch for ch in raw)
+    collapsed = " ".join(part for part in cleaned.split(" ") if part)
+    trimmed = collapsed.strip()
+    return "".join(_graphemes(trimmed)[:SANITIZE_LIMIT])
+
+
+def _trim_swift_whitespace(text: str) -> str:
+    start, end = 0, len(text)
+    while start < end and _is_swift_whitespace(text[start]):
+        start += 1
+    while end > start and _is_swift_whitespace(text[end - 1]):
+        end -= 1
+    return text[start:end]
+
+
+def _cut_title(text: str, limit: int = TITLE_LIMIT) -> str:
+    """CaptureText.cut: ≤ `limit` characters, at the last word boundary that fits; a single
+    word longer than the limit is cut hard."""
+    chars = _graphemes(text)
+    if len(chars) <= limit:
+        return text
+    head = "".join(chars[:limit])
+    last_space = head.rfind(" ")
+    if last_space != -1:
+        word = head[last_space + 1 :]
+        kept = _trim_swift_whitespace(head[:last_space])
+        if kept and word:
+            return kept
+    return _trim_swift_whitespace(head)
+
+
+def capture_title(text: str) -> Optional[str]:
+    """CaptureText.title(of:) — the note title for a capture's text, or None if it has none
+    (empty, whitespace-only, or nothing left after sanitizing, e.g. `[[]]`)."""
+    for line in text.split("\n"):
+        candidate = _trim_swift_whitespace(line)
+        if candidate:
+            sanitized = sanitize_title(candidate)
+            return _cut_title(sanitized) if sanitized else None
+    return None
+
+
+def capture_body(text: str, title: str) -> str:
+    """CaptureText.body(capture:title:notes: ""): the full trimmed text when the title could not
+    carry it (cut, more lines, or changed by sanitizing), else empty."""
+    full = text.strip()
+    return full if full != title else ""
+
+
+def is_placeholder_line(stripped: str) -> bool:
+    """An empty bullet or checkbox: `-`, `*`, `- [ ]`, `- []`, `- [x]` with nothing after it."""
+    return re.fullmatch(r"[-*+](\s*\[[ xX]?\])?", stripped) is not None
+
+
+def is_skeleton_body(body: str) -> bool:
+    """True when a body is only the action template's skeleton: `# Why?` / `# What?` headings,
+    empty `-` / `- [ ]` bullets and blank lines (or nothing at all). Used only for capture bodies
+    (M2 04_Maybe, M7) — never to decide that an Actions/ note is empty (see is_empty_action_body)."""
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if stripped == "" or is_placeholder_line(stripped):
+            continue
+        if re.fullmatch(r"#{1,6}\s+(why|what)\?", stripped, flags=re.IGNORECASE):
+            continue
+        return False
+    return True
+
+
+def is_empty_action_body(body: str) -> bool:
+    """M6: `# Why?` and `# What?` are both literally empty (the original rule — a placeholder
+    `-` / `- [ ]` bullet counts as content), AND the body holds nothing else at all: no other
+    section, no text, no links. Only blank lines and the two headings are allowed, so moving the
+    note to Inbox/ with an empty body can never drop anything the user wrote."""
+    if get_section(body, "Why?") != "" or get_section(body, "What?") != "":
+        return False
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if stripped == "" or re.fullmatch(r"#{1,6}\s+(why|what)\?", stripped, flags=re.IGNORECASE):
+            continue
+        return False
+    return True
+
+
+def note_body_text(text: str) -> str:
+    parsed = read_note(text)
+    return parsed[1] if parsed is not None else text
+
+
+def render_capture(created: str, body: str) -> str:
+    fm = Frontmatter.parse([f"created: {created}"])
+    return write_note(fm, f"{body}\n" if body else "")
+
+
+class InboxAllocator:
+    """Hands out `Inbox/<title>.md` paths, suffixing ` 2`, ` 3`, … on a collision with a file
+    already in Inbox/ or one planned earlier in this run. Compared case-insensitively because
+    the vault lives on a case-insensitive file system (APFS/iCloud)."""
+
+    def __init__(self, vault: Path):
+        inbox = vault / "Inbox"
+        self._taken: set[str] = {p.name.casefold() for p in inbox.iterdir()} if inbox.is_dir() else set()
+
+    def allocate(self, title: str) -> str:
+        name = f"{title}.md"
+        n = 2
+        while name.casefold() in self._taken:
+            name = f"{title} {n}.md"
+            n += 1
+        self._taken.add(name.casefold())
+        return f"Inbox/{name}"
 
 
 # --------------------------------------------------------------------------
@@ -429,39 +582,57 @@ def plan_list_items(report: Report, ops: list[Op], docs: list[ListItemDoc]) -> N
         )
 
 
-def plan_maybe_captures(vault: Path, report: Report, ops: list[Op], namer: InboxNamer) -> None:
+def plan_maybe_captures(
+    vault: Path, report: Report, ops: list[Op], namer: InboxNamer, inbox: InboxAllocator
+) -> None:
     """04_Maybe items become plain inbox captures (REQUIREMENTS §11 M2): the script no longer
-    guesses `status: maybe` for them — each runs through the new inbox flow by hand instead."""
+    guesses `status: maybe` for them — each runs through the new inbox flow by hand instead.
+    The capture is named after the old file (its title); the body is the old body only, or
+    empty when that was just the template skeleton."""
     src_dir = vault / "Actions_legacy" / "04_Maybe"
     if not src_dir.is_dir():
         return
     for path in sorted(src_dir.glob("*.md")):
         relp = relpath(vault, path)
-        text = path.read_text(encoding="utf-8")
-        parsed = read_note(text)
-        title = path.stem
-        body = parsed[1] if parsed is not None else text
-        capture_body = f"{title}\n\n{body.strip()}\n" if body.strip() else f"{title}\n"
-        dt = namer.next()
-        target_rel = f"Inbox/{dt:%Y-%m-%d %H%M%S}.md"
-        capture_fm = Frontmatter.parse([f"created: {dt.isoformat()}"])
-        ops.append(Op("write", target_rel, write_note(capture_fm, capture_body)))
+        title = capture_title(path.stem)
+        if title is None:
+            report.add_unresolved("M2", relp, "04_Maybe item has no usable title in its filename — import manually")
+            continue
+        body = note_body_text(path.read_text(encoding="utf-8"))
+        body = "" if is_skeleton_body(body) else body.strip()
+        target_rel = inbox.allocate(title)
+        ops.append(Op("write", target_rel, render_capture(namer.next().isoformat(), body)))
         ops.append(Op("delete", relp))
         report.add_change("M2", relp, f"04_Maybe item — imported to {target_rel} as an inbox capture")
 
 
-def plan_actions(vault: Path, report: Report, ops: list[Op], docs: list[ActionDoc], namer: InboxNamer) -> None:
+def plan_actions(
+    vault: Path, report: Report, ops: list[Op], docs: list[ActionDoc], namer: InboxNamer, inbox: InboxAllocator
+) -> None:
     for doc in docs:
-        is_empty = get_section(doc.body, "Why?") == "" and get_section(doc.body, "What?") == ""
-        if is_empty:
-            title = Path(doc.target_relpath).stem
-            dt = namer.next()
-            target_rel = f"Inbox/{dt:%Y-%m-%d %H%M%S}.md"
-            capture_fm = Frontmatter.parse([f"created: {dt.isoformat()}"])
-            ops.append(Op("write", target_rel, write_note(capture_fm, title)))
-            ops.append(Op("delete", doc.source_relpath))
-            report.add_change("M6", doc.source_relpath, f"empty Why?/What? — moved to {target_rel} as a capture")
-            continue
+        # A finished action stays finished: sending it back to the inbox would resurrect it.
+        if is_empty_action_body(doc.body) and doc.fm.get_scalar("status") != "done":
+            title = capture_title(Path(doc.target_relpath).stem)
+            if title is None:
+                report.add_unresolved(
+                    "M6", doc.source_relpath, "empty Why?/What? but no usable title in the filename — left in place"
+                )
+            else:
+                target_rel = inbox.allocate(title)
+                # the source file's own frontmatter, before M1/M2 edited it in memory
+                parsed = read_note((vault / doc.source_relpath).read_text(encoding="utf-8"))
+                original = parsed[0] if parsed is not None else doc.fm
+                kept_key = next((k for k in ("created", "dateCreated") if original.get_scalar(k)), None)
+                created = original.get_scalar(kept_key) if kept_key else namer.next().isoformat()
+                dropped = [e.key for e in original.entries if e.kind == "key" and e.key != kept_key]
+                ops.append(Op("write", target_rel, render_capture(str(created), "")))
+                ops.append(Op("delete", doc.source_relpath))
+                note = " (created taken from dateCreated)" if kept_key == "dateCreated" else ""
+                note += f"; dropped frontmatter: {', '.join(dropped)}" if dropped else ""
+                report.add_change(
+                    "M6", doc.source_relpath, f"empty Why?/What? — moved to {target_rel} as a capture{note}"
+                )
+                continue
 
         new_text = write_note(doc.fm, doc.body)
         if doc.source == "existing":
@@ -513,7 +684,9 @@ def plan_duplicates(vault: Path, report: Report, ops: list[Op]) -> None:
 # --------------------------------------------------------------------------
 
 
-def plan_inbox_split(vault: Path, report: Report, ops: list[Op], namer: InboxNamer) -> None:
+def plan_inbox_split(vault: Path, report: Report, ops: list[Op], namer: InboxNamer, inbox: InboxAllocator) -> None:
+    """Each non-blank line of Inbox.md becomes `Inbox/<title>.md`; the body keeps the full line
+    only when the title could not carry it (e.g. `[[remote]]` -> `remote.md`, body `[[remote]]`)."""
     inbox_md = vault / "Inbox.md"
     if not inbox_md.is_file():
         return
@@ -529,13 +702,63 @@ def plan_inbox_split(vault: Path, report: Report, ops: list[Op], namer: InboxNam
             target = m.group(1)
             if not wikilink_target_exists(vault, target):
                 report.add_unresolved("M4", "Inbox.md", f"dangling link [[{target}]] in line: {content_line!r}")
-        dt = namer.next()
-        target_rel = f"Inbox/{dt:%Y-%m-%d %H%M%S}.md"
-        fm = Frontmatter.parse([f"created: {dt.isoformat()}"])
-        ops.append(Op("write", target_rel, write_note(fm, content_line)))
+        title = capture_title(content_line)
+        if title is None:
+            report.add_change("M4", "Inbox.md", f"line {content_line!r} has no usable title — dropped (kept in backup)")
+            continue
+        target_rel = inbox.allocate(title)
+        body = capture_body(content_line, title)
+        ops.append(Op("write", target_rel, render_capture(namer.next().isoformat(), body)))
         report.add_change("M4", "Inbox.md", f"line -> {target_rel}")
     if any_line:
         ops.append(Op("delete", "Inbox.md"))
+
+
+# --------------------------------------------------------------------------
+# M7: timestamp-named captures already in Inbox/ -> Inbox/<title>.md
+# --------------------------------------------------------------------------
+
+
+def plan_timestamp_captures(vault: Path, report: Report, ops: list[Op], inbox: InboxAllocator) -> None:
+    """Renames captures the old app named `yyyy-MM-dd HHmmss[-n].md` after their text, the way
+    the app names captures now. The frontmatter (`created`, `reviewReason`, unknown keys) is kept
+    byte-for-byte; the body keeps the full text only when the title could not carry it. A capture
+    without a title (empty or skeleton-only body) is left in place and reported. Files that are
+    not timestamp-named are never touched, so a second run finds nothing to do."""
+    inbox_dir = vault / "Inbox"
+    if not inbox_dir.is_dir():
+        return
+    for path in sorted(inbox_dir.glob("*.md")):
+        if not TIMESTAMP_CAPTURE_RE.match(path.name):
+            continue
+        relp = relpath(vault, path)
+        text = path.read_text(encoding="utf-8")
+        head, body = split_frontmatter_block(text)
+        title = None if is_skeleton_body(body) else capture_title(body)
+        if title is None:
+            report.add_unresolved(
+                "M7", relp, "timestamp-named capture with no text to title it — rename or delete it by hand"
+            )
+            continue
+        if f"{title}.md".casefold() == path.name.casefold():
+            continue  # its text is literally its timestamp name; nothing to rename
+        new_body = capture_body(body, title)
+        target_rel = inbox.allocate(title)
+        ops.append(Op("write", target_rel, head + (f"{new_body}\n" if new_body else "")))
+        ops.append(Op("delete", relp))
+        suffix = " (full text kept in the body)" if new_body else ""
+        report.add_change("M7", relp, f"timestamp-named capture — renamed to {target_rel}{suffix}")
+
+
+def split_frontmatter_block(text: str) -> tuple[str, str]:
+    """(verbatim frontmatter block incl. both `---` lines and the trailing newline, body).
+    ("", text) when the note has no frontmatter."""
+    parts = text.split("\n")
+    if parts and parts[0].strip() == "---":
+        for j in range(1, len(parts)):
+            if parts[j].strip() == "---":
+                return "\n".join(parts[: j + 1]) + "\n", "\n".join(parts[j + 1 :])
+    return "", text
 
 
 # --------------------------------------------------------------------------
@@ -657,13 +880,16 @@ def plan(vault: Path, now: datetime, decisions_path: Optional[Path] = None) -> t
     report = Report()
     ops: list[Op] = []
     namer = InboxNamer(now)
+    inbox = InboxAllocator(vault)  # one allocator for the whole run: collisions span rules
     decisions_path = decisions_path or (vault / "projects.decisions.yaml")
 
-    plan_inbox_split(vault, report, ops, namer)
-    plan_maybe_captures(vault, report, ops, namer)
+    # M7 first: captures already in Inbox/ are the oldest, so they get the unsuffixed names.
+    plan_timestamp_captures(vault, report, ops, inbox)
+    plan_inbox_split(vault, report, ops, namer, inbox)
+    plan_maybe_captures(vault, report, ops, namer, inbox)
 
     action_docs, list_docs = collect_action_documents(vault, report)
-    plan_actions(vault, report, ops, action_docs, namer)
+    plan_actions(vault, report, ops, action_docs, namer, inbox)
     plan_list_items(report, ops, list_docs)
 
     plan_duplicates(vault, report, ops)

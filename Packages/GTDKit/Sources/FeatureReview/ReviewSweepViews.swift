@@ -102,7 +102,7 @@ struct SweepDeferredStep: View {
 
                 Divider()
 
-                TextField(Copy.whatPlaceholder, text: $draft.text, axis: .vertical)
+                TextField(Copy.whatPlaceholder, text: $draft.title, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(Typo.cardText)
                     .accessibilityLabel(Copy.inbox)
@@ -212,7 +212,8 @@ struct SweepDeferredStep: View {
 
     private func file(_ decision: InboxDecision, item: InboxItem) {
         let fix = systemFix
-        Task { await session.fileDeferred(item, decision: decision, systemFix: fix) }
+        let title = draft.title
+        Task { await session.fileDeferred(item, decision: decision, systemFix: fix, title: title) }
     }
 
     @ViewBuilder private func pickerSheet(_ picker: Picker) -> some View {

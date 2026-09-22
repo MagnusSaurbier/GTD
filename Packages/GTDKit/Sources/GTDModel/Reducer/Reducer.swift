@@ -25,7 +25,8 @@ import Foundation
 /// | I4c trash is a move, never a status | `trashAction`, `fileInbox` |
 /// | W1/D39 waiting needs a follow-up date (who is optional); leaving clears both | `normalize` |
 /// | I4/D12/R-3 a new transition into a tier brings that tier's required fields | `normalize` |
-/// | I2/R-4 the capture text is the note's title; what it cannot hold stays in the body | `fileInbox`, `CaptureText` |
+/// | C3/R-4 an inbox note's title is its file name; renaming it is a move; filing keeps it | `renameInboxItem`, `fileInbox` |
+/// | R-4 a body that is only the Why/What template skeleton is carried over as empty | `fileInbox`, `CaptureText.isEmptyBody` |
 /// | I4a/R-8 the project chip, including the project it creates | `makeAction`, `resolveProject` |
 /// | R-2 a Next item may be deferred; it just does not occupy a slot while hidden | `Rules` |
 /// | P3 only active projects put actions into Next; leaving `active` demotes | `normalize`, `updateProject` |
@@ -39,8 +40,11 @@ public enum Reducer {
         env: ReducerEnv
     ) throws(GTDError) -> Reduction {
         switch c {
-        case let .editInboxText(id, text):
-            return try editInboxText(s, id: id, text: text)
+        case let .renameInboxItem(id, title):
+            return try renameInboxItem(s, id: id, title: title)
+
+        case let .editInboxBody(id, body):
+            return try editInboxBody(s, id: id, body: body)
 
         case let .fileInbox(id, decision):
             return try fileInbox(s, id: id, decision: decision, env: env)
@@ -133,12 +137,37 @@ public enum Reducer {
 
     // MARK: - Inbox
 
-    private static func editInboxText(
-        _ s: VaultSnapshot, id: NoteID, text: String
+    /// C3/R-4 — the card's title field. The title **is** the file name, so a new title moves
+    /// the file within `Inbox/`, like renaming an action. The new name is cut and sanitised like
+    /// a capture's (`CaptureText.renamedTitle`); an empty one is refused and a name that is taken is a
+    /// `.titleCollision` — a rename never overwrites and never picks a ` 2` behind the user's back.
+    private static func renameInboxItem(
+        _ s: VaultSnapshot, id: NoteID, title: String
+    ) throws(GTDError) -> Reduction {
+        guard let index = s.inbox.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
+        guard let clean = CaptureText.renamedTitle(title) else { throw .invalid(Message.titleRequired) }
+        let target = s.config.layout.inboxPath(title: clean)
+        guard target != id else { return Reduction(snapshot: s) }
+        guard !pathExists(target, in: s) else { throw .titleCollision(clean) }
+        let item = s.inbox[index]
+        var next = s
+        next.inbox[index] = InboxItem(
+            id: target, body: item.body, created: item.created,
+            reviewReason: item.reviewReason, passthrough: item.passthrough)
+        var renames = RenameMap.empty
+        renames.record(id, as: target)
+        return Reduction(
+            snapshot: next, extraOps: [.move(from: id.path, to: target.path)], renames: renames)
+    }
+
+    /// The body of an inbox note — everything below its frontmatter. Separate from the title,
+    /// which lives in the file name (`renameInboxItem`).
+    private static func editInboxBody(
+        _ s: VaultSnapshot, id: NoteID, body: String
     ) throws(GTDError) -> Reduction {
         guard let index = s.inbox.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
         var next = s
-        next.inbox[index].text = text
+        next.inbox[index].body = body
         return Reduction(snapshot: next)
     }
 
@@ -160,10 +189,10 @@ public enum Reducer {
     /// `created` stamp and anything the user put in its frontmatter survive the filing), and
     /// Trash moves it to `GTD/Trash/` (I4c).
     ///
-    /// R-4 — the note's title is the capture text: first line, sanitised, cut at a word boundary
-    /// to ≤ 60 characters (`CaptureText`). Whatever the title could not hold becomes the first
-    /// paragraph of the body, above `# Why?` or above the notes, so a long dictation is never
-    /// reduced to its first sixty characters.
+    /// R-4 — the filed note keeps the inbox note's **title, which is its file name** (C3). The
+    /// body comes along — above `# Why?` for an action, above the notes panel for Knowledge and
+    /// list items — unless it says nothing: a body that is only the empty Why/What template
+    /// skeleton counts as empty (`CaptureText.isEmptyBody`), so it never ends up in the note twice.
     private static func fileInbox(
         _ s: VaultSnapshot, id: NoteID, decision: InboxDecision, env: ReducerEnv
     ) throws(GTDError) -> Reduction {
@@ -174,15 +203,17 @@ public enum Reducer {
         var filedNotes: [FiledNote] = []
         var renames = RenameMap.empty
 
-        // The capture text *is* the title (I2, D27) — the card's title field edits the capture
-        // itself (`editInboxText`), so there is only one text and it is this one.
-        let title = try captureTitle(item.text)
+        // The file name *is* the title (C3) — the card's title field renames the file
+        // (`renameInboxItem`) before it is filed, so there is only one title and it is this one.
+        // Sanitising is a no-op for any name a file can have; it only guards what a wikilink
+        // could not carry. The name is *not* cut to 60 characters — the user chose it.
+        let title = VaultLayout.sanitize(item.title)
 
         switch decision {
         case let .action(draft):
             var filed = draft
             filed.title = title
-            filed.preamble = CaptureText.body(capture: item.text, title: title, notes: "")
+            filed.preamble = CaptureText.filedBody(body: item.body, notes: "")
             // I4a/R-8 — the `+ project` chip may name a project that does not exist yet;
             // `makeAction` creates it, so filing the card stays one command and one commit.
             let action = try makeAction(from: filed, in: &next, env: env, created: item.created)
@@ -199,7 +230,7 @@ public enum Reducer {
             extraOps.append(.move(from: item.id.path, to: noteID.path))
             filedNotes.append(FiledNote(
                 id: noteID,
-                body: CaptureText.body(capture: item.text, title: title, notes: notes),
+                body: CaptureText.filedBody(body: item.body, notes: notes),
                 created: item.created,
                 source: item.passthrough))
             renames.record(item.id, as: noteID)
@@ -217,7 +248,7 @@ public enum Reducer {
                 title: title,
                 isFinished: false,
                 created: item.created,
-                notes: CaptureText.body(capture: item.text, title: title, notes: notes),
+                notes: CaptureText.filedBody(body: item.body, notes: notes),
                 passthrough: item.passthrough))
             extraOps.append(.move(from: item.id.path, to: target.path))
             renames.record(item.id, as: target)
@@ -230,13 +261,6 @@ public enum Reducer {
         try checkCap(old: s, new: next, today: env.today)
         return Reduction(
             snapshot: next, extraOps: extraOps, filedNotes: filedNotes, renames: renames)
-    }
-
-    /// R-4 — the title a capture is filed under, or a refusal when there is nothing to name it
-    /// with. Only whitespace is never filed as "Untitled" (§1 "no lying defaults").
-    private static func captureTitle(_ text: String) throws(GTDError) -> String {
-        guard let title = CaptureText.title(of: text) else { throw .invalid(Message.titleRequired) }
-        return title
     }
 
     /// I4b/D36 — where a Knowledge filing lands: a folder under `Knowledge/`, or the folder of

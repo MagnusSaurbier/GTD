@@ -26,9 +26,10 @@ public enum DeferredSweep {
         _ draft: InboxSession.Draft, status: ActionStatus, waiting: WaitingInfo? = nil
     ) -> ActionDraft {
         ActionDraft(
-            // R-4 — the reducer names the note after the capture text; the project chip
-            // (I4a) rides along in the draft, exactly as on the inbox card.
-            title: draft.text,
+            // The reducer files under the note's file name (renamed first when the title was
+            // edited, `ReviewSession.fileDeferred`); the project chip (I4a) rides along in the
+            // draft, exactly as on the inbox card.
+            title: draft.title,
             status: status,
             contexts: draft.contexts,
             timeEstimate: draft.timeBucket?.minutes,

@@ -54,7 +54,7 @@ struct EncodeFromScratchTests {
         let created = try #require(YAMLScalar.parseTimestamp("2026-09-19T08:12:04+02:00", defaultTimeZone: zone))
         let item = InboxItem(
             id: NoteID(path: "Inbox/2026-09-19 081204.md"),
-            text: "buy new running shoes",
+            body: "buy new running shoes",
             created: created)
         #expect(NoteCodec.encode(item, timeZone: zone)
             == "---\ncreated: 2026-09-19T08:12:04+02:00\n---\nbuy new running shoes\n")

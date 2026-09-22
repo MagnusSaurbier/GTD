@@ -63,7 +63,7 @@ struct WeeklyStatsTests {
         var snapshot = VaultSnapshot.empty
         // Still queued, captured this week.
         snapshot.inbox = [
-            InboxItem(id: NoteID(path: "Inbox/a.md"), text: "a", created: Self.date(2026, 9, 15)),
+            InboxItem(id: NoteID(path: "Inbox/a.md"), body: "a", created: Self.date(2026, 9, 15)),
         ]
         // Filed this week (its `created` survived from the inbox capture) — counts as both
         // captured and processed.
@@ -197,7 +197,7 @@ struct WeeklyStatsTests {
         // KW 53 2020: 2020-12-28 … 2021-01-03.
         let week = ISOWeek(year: 2020, week: 53)
         var snapshot = VaultSnapshot.empty
-        snapshot.inbox = [InboxItem(id: NoteID(path: "Inbox/x.md"), text: "x", created: Self.date(2021, 1, 1))]
+        snapshot.inbox = [InboxItem(id: NoteID(path: "Inbox/x.md"), body: "x", created: Self.date(2021, 1, 1))]
         snapshot.actions = [Self.action("Spans the boundary", created: Self.date(2020, 12, 30))]
         let stats = WeeklyStats.compute(snapshot: snapshot, week: week, calendar: Self.calendar)
         #expect(stats.year == 2020)

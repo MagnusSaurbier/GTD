@@ -4,8 +4,10 @@ import GTDModel
 /// Standalone capture writer: one file in `Inbox/`, no index, no scan, no codec (C1, C3).
 ///
 /// Capture must work in under three seconds from a Shortcut, with neither Obsidian nor the app
-/// running (T30), so this type deliberately does the least possible: resolve the bookmark, build
-/// `Inbox/<yyyy-MM-dd HHmmss>[-n].md`, write it atomically.
+/// running (T30), so this type deliberately does the least possible: resolve the bookmark, name
+/// the note after its text (`Inbox/<title>[ n].md`, `CaptureText.note(for:)`), write it
+/// atomically. An empty capture is refused with `InboxWriter.CaptureRefusal.empty` — it is never
+/// saved under a made-up name.
 ///
 /// It renders its own two-key frontmatter rather than calling `NoteCodec.encode`. A fresh
 /// capture has no unknown keys and no body sections to preserve, so there is nothing for the
@@ -18,6 +20,12 @@ public struct InboxWriter: Sendable {
     /// Injected by tests and by the store; `nil` means "resolve the bookmark on every capture".
     private let fileSystem: (any VaultFileSystem)?
     private let calendar: Calendar
+
+    /// Why a capture was not written although the vault was reachable.
+    public enum CaptureRefusal: Error, Equatable, Sendable {
+        /// The text was empty or only whitespace, so there is nothing to name the note after.
+        case empty
+    }
 
     public init(layout: VaultLayout = .default, bookmark: VaultBookmark = VaultBookmark()) {
         self.layout = layout
@@ -40,27 +48,38 @@ public struct InboxWriter: Sendable {
         self.calendar = calendar
     }
 
+    /// Writes `Inbox/<title>.md` and returns its id. The title is the first line of `text`
+    /// (`CaptureText.title`); the body holds the full text only when the title could not carry it.
+    /// A name that is taken gets ` 2`, ` 3`, … — never an overwrite: a capture is the one thing
+    /// with no other copy.
     @discardableResult
     public func capture(text: String, at date: Date = Date()) throws -> NoteID {
+        // Refused before the vault is touched: an empty capture needs no bookmark to fail.
+        guard let note = CaptureText.note(for: text) else { throw CaptureRefusal.empty }
         let target = try resolveFileSystem()
         defer { if fileSystem == nil { bookmark.stopAccess() } }
 
-        let stamp = InboxWriter.stamp(date, calendar: calendar)
-        var id = layout.inboxPath(stamp: stamp)
-        var collision = 0
-        // Two captures in the same second (or a second device's file already synced in) get
-        // `-1`, `-2`, … . Never overwrite: a capture is the one thing with no other copy.
-        while target.exists(id.path) {
+        var id = layout.inboxPath(title: note.title)
+        var collision = 1
+        while InboxWriter.isTaken(id.path, in: target) {
             collision += 1
             guard collision < 1000 else {
-                throw VaultError.ioFailed(path: id.path, reason: "too many captures this second")
+                throw VaultError.ioFailed(path: id.path, reason: "too many captures with this name")
             }
-            id = layout.inboxPath(stamp: stamp, collision: collision)
+            id = layout.inboxPath(title: note.title, collision: collision)
         }
 
-        try target.writeText(InboxWriter.note(text: text, created: date, calendar: calendar),
+        try target.writeText(InboxWriter.note(body: note.body, created: date, calendar: calendar),
                              to: id.path)
         return id
+    }
+
+    /// A name is taken by a file, and also by an evicted iCloud file that only exists as its
+    /// `.<name>.icloud` placeholder (`info` reports those) — writing over that would make iCloud
+    /// produce a conflict copy of a note the user never touched.
+    private static func isTaken(_ path: String, in fileSystem: any VaultFileSystem) -> Bool {
+        if fileSystem.exists(path) { return true }
+        return ((try? fileSystem.info(path)) ?? nil) != nil
     }
 
     /// Resolve **first**, then bracket access.
@@ -83,13 +102,6 @@ public struct InboxWriter: Sendable {
 
     // MARK: Format (ARCHITECTURE §3)
 
-    /// `yyyy-MM-dd HHmmss` in the device's time zone — the capture file name (C3).
-    static func stamp(_ date: Date, calendar: Calendar = .current) -> String {
-        let c = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
-        return "\(pad(c.year, 4))-\(pad(c.month))-\(pad(c.day)) "
-            + "\(pad(c.hour))\(pad(c.minute))\(pad(c.second))"
-    }
-
     /// ISO-8601 with the device's UTC offset. Written by hand so the output does not depend on
     /// locale or platform (the same reason `GTDModel.Day` avoids `DateFormatter`).
     static func iso(_ date: Date, calendar: Calendar = .current) -> String {
@@ -102,10 +114,13 @@ public struct InboxWriter: Sendable {
             + "\(sign)\(pad(minutes / 60)):\(pad(minutes % 60))"
     }
 
-    static func note(text: String, created: Date, calendar: Calendar = .current) -> String {
-        var body = text
+    /// The file: `created` and the body — nothing below the frontmatter when the body is empty,
+    /// exactly what `NoteCodec.encode` renders for the same item.
+    static func note(body: String, created: Date, calendar: Calendar = .current) -> String {
+        var body = body
         while body.hasSuffix("\n") { body.removeLast() }
-        return "---\ncreated: \(iso(created, calendar: calendar))\n---\n\(body)\n"
+        let frontmatter = "---\ncreated: \(iso(created, calendar: calendar))\n---\n"
+        return body.isEmpty ? frontmatter : frontmatter + body + "\n"
     }
 
     private static func pad(_ value: Int?, _ width: Int = 2) -> String {

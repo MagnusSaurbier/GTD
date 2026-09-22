@@ -298,7 +298,7 @@ struct InboxFlowJourneyTests {
         #expect(try vault.text(captured.path) == nil)
         #expect(model.undoLabel == "Moved to Trash")
         // Nothing is hard-deleted: the note is in the trash, under its own name, unchanged.
-        let inTrash = try #require(try vault.text("GTD/Trash/2026-09-19 074000.md"))
+        let inTrash = try #require(try vault.text("GTD/Trash/that newsletter thing, probably nothing.md"))
         #expect(inTrash == capturedText, "the trashed note is not rewritten on its way out")
         #expect(!model.snapshot.inbox.contains { $0.id == captured })
 

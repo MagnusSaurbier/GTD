@@ -109,7 +109,7 @@ public enum SampleVault {
     static func renderInbox(_ item: InboxItem) -> String {
         var frontmatter = ["created: \(iso(item.created))"]
         if let reason = item.reviewReason { frontmatter.append("reviewReason: \(quote(reason))") }
-        return document(frontmatter: frontmatter, body: item.text + "\n")
+        return document(frontmatter: frontmatter, body: item.body.isEmpty ? "" : item.body + "\n")
     }
 
     static func renderAction(_ action: Action) -> String {

@@ -320,7 +320,7 @@ private struct MakeActionCardBody: View {
             // like `InboxCardView`'s 2a/2b, rather than reserving `rawTextMaxHeight` the way a
             // `ScrollView` would even for one line of text (T15 defect 5).
             TextField(
-                "", text: $model.draft.text,
+                "", text: $model.draft.title,
                 prompt: Text(InboxCopy.rawTextPlaceholder).foregroundStyle(Color.textTertiary),
                 axis: .vertical)
                 .textFieldStyle(.plain)

@@ -9,7 +9,7 @@ import Testing
 /// `InboxWriter` backed by `InMemoryFileSystem` — the "fake writer" the T30 brief asks for; it is
 /// the only fake-able part of the pipeline (`InboxWriter` renders its own frontmatter, see its
 /// doc comment).
-@Suite("CaptureRequest — normalisation, stamping, routing to the inbox writer (C1, C3)")
+@Suite("CaptureRequest — normalisation, naming, routing to the inbox writer (C1, C3)")
 struct CaptureRequestTests {
 
     private var berlin: Calendar { Fixtures.calendar }
@@ -37,27 +37,26 @@ struct CaptureRequestTests {
 
     // MARK: perform() — file name format, collisions, empty rejection
 
-    @Test func performWritesOneFileNamedByTheCaptureMoment() throws {
+    @Test func performWritesOneFileNamedAfterTheCapture() throws {
         let fs = InMemoryFileSystem()
         let moment = Fixtures.date(Fixtures.today, 8, 12, 4)
-        let id = try CaptureRequest(text: "buy running shoes").perform(writer: fakeWriter(fs), now: moment)
+        let id = try CaptureRequest(text: "  buy running shoes ").perform(writer: fakeWriter(fs), now: moment)
 
-        #expect(id.path == "Inbox/2026-09-19 081204.md")
-        #expect(try fs.readText(id.path)?.contains("buy running shoes") == true)
+        #expect(id.path == "Inbox/buy running shoes.md")
+        #expect(try fs.readText(id.path)?.contains("created: 2026-09-19T08:12:04+02:00") == true)
     }
 
-    @Test func twoCapturesInTheSameSecondGetCollisionSuffixesAndNeverOverwrite() throws {
+    @Test func twoCapturesWithTheSameNameGetCollisionSuffixesAndNeverOverwrite() throws {
         let fs = InMemoryFileSystem()
         let moment = Fixtures.date(Fixtures.today, 8, 12, 4)
         let writer = fakeWriter(fs)
 
-        let first = try CaptureRequest(text: "one").perform(writer: writer, now: moment)
-        let second = try CaptureRequest(text: "two").perform(writer: writer, now: moment)
+        let first = try CaptureRequest(text: "call mum").perform(writer: writer, now: moment)
+        let second = try CaptureRequest(text: "call mum\nabout Sunday").perform(writer: writer, now: moment)
 
-        #expect(first.path == "Inbox/2026-09-19 081204.md")
-        #expect(second.path == "Inbox/2026-09-19 081204-1.md")
-        #expect(try fs.readText(first.path)?.contains("one") == true)
-        #expect(try fs.readText(second.path)?.contains("two") == true)
+        #expect(first.path == "Inbox/call mum.md")
+        #expect(second.path == "Inbox/call mum 2.md")
+        #expect(try fs.readText(second.path)?.contains("about Sunday") == true)
     }
 
     @Test func multiLineCapturesKeepTheirBody() throws {
@@ -142,12 +141,6 @@ struct CaptureRequestTests {
         #expect(CaptureError.writeFailed("disk full").errorDescription?.contains("disk full") == true)
     }
 
-    // MARK: CaptureStamp
-
-    @Test func stampFormat() {
-        #expect(CaptureStamp.string(for: Fixtures.date(Fixtures.today, 8, 12, 4), calendar: berlin)
-                == "2026-09-19 081204")
-    }
 }
 
 /// A bookmark store whose folder resolves but whose scoped access is refused — the sandbox

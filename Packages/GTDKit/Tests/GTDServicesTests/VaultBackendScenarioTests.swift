@@ -21,12 +21,12 @@ struct VaultBackendScenarioTests {
         let layout = VaultLayout.default
 
         func capture(_ prefix: String) throws -> InboxItem {
-            try #require(start.inbox.first { $0.text.hasPrefix(prefix) })
+            try #require(start.inbox.first { $0.title.hasPrefix(prefix) })
         }
         let toAction = try capture("call the Hausverwaltung")
         let toKnowledge = try capture("ask Marie")
         let toList = try capture("buy new running shoes")
-        let toTrash = try capture("idea: a script")
+        let toTrash = try capture("idea a script")
 
         // 1 — an action. R-4: the note is named after the capture text, and the capture's
         // `created` follows it into the note (A1, I4).
@@ -88,7 +88,7 @@ struct VaultBackendScenarioTests {
         try await vault.backend.start()
         let before = try vault.filesOutsideTheTrash()
         let start = await vault.backend.currentSnapshot()
-        let item = try #require(start.inbox.first { $0.text.hasPrefix("Steuererklärung") })
+        let item = try #require(start.inbox.first { $0.title.hasPrefix("Steuererklärung") })
         let captureText = try #require(try vault.text(item.id.path))
 
         _ = try await vault.backend.perform(.fileInbox(item.id, .action(ActionDraft(
@@ -386,7 +386,7 @@ struct VaultBackendScenarioTests {
         let before = try vault.files()
 
         let item = try #require(await vault.backend.currentSnapshot().inbox.first {
-            $0.text.hasPrefix("ask Marie")
+            $0.title.hasPrefix("ask Marie")
         })
         await #expect(throws: GTDError.titleCollision(
             "ask Marie whether she still needs the monitor")) {

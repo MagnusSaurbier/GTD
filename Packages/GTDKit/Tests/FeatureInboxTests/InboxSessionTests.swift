@@ -66,7 +66,7 @@ struct InboxSessionTests {
     @Test func midSessionCaptureGoesOnTop() async {
         let (session, model, backend) = InboxTestSupport.makeSession()
         let before = session.queue.count
-        let fresh = InboxTestSupport.capture("water the plants", at: "2026-09-19 120000")
+        let fresh = InboxTestSupport.capture("water the plants")
 
         backend.capture(fresh)
         await InboxTestSupport.wait { model.snapshot.inboxItem(fresh.id) != nil }
@@ -82,7 +82,7 @@ struct InboxSessionTests {
         let editing = try! #require(session.current)
         session.draft.what = "Call about the window handle"
 
-        let fresh = InboxTestSupport.capture("water the plants", at: "2026-09-19 120000")
+        let fresh = InboxTestSupport.capture("water the plants")
         backend.capture(fresh)
         await InboxTestSupport.wait { model.snapshot.inboxItem(fresh.id) != nil }
         session.refresh()
@@ -99,7 +99,7 @@ struct InboxSessionTests {
         let opened = try! #require(session.current)
         #expect(session.draft.isPristine(for: opened))
 
-        let fresh = InboxTestSupport.capture("water the plants", at: "2026-09-19 120000")
+        let fresh = InboxTestSupport.capture("water the plants")
         backend.capture(fresh)
         await InboxTestSupport.wait { model.snapshot.inboxItem(fresh.id) != nil }
         session.refresh()
@@ -274,7 +274,8 @@ struct InboxSessionTests {
     @Test func nothingIsPrefilled() {
         let (session, _, _) = InboxTestSupport.makeSession()
         let item = try! #require(session.current)
-        #expect(session.draft.text == item.text)
+        #expect(session.draft.title == item.title)
+        #expect(session.draft.body == item.body)
         #expect(session.draft.why.isEmpty)
         #expect(session.draft.what.isEmpty)
         #expect(session.draft.notes.isEmpty)
@@ -286,19 +287,47 @@ struct InboxSessionTests {
         #expect(session.draft.isPristine(for: item))
     }
 
-    /// R-4 — the capture text *is* the title, and editing the title edits the capture. The
-    /// note's file name follows from it (cut at a word boundary to ≤ 60 characters).
-    @Test func theCaptureTextIsTheTitleAndStaysEditable() {
+    /// C3 — the card's title is the note's file name and stays editable; the name a new title
+    /// would give the file is sanitised and cut like a capture's.
+    @Test func theFileNameIsTheTitleAndStaysEditable() {
         let (session, _, _) = InboxTestSupport.makeSession()
         let item = try! #require(session.current)
-        #expect(session.draft.noteTitle == item.text)
+        #expect(session.draft.title == item.id.title)
+        #expect(session.draft.noteTitle == item.title)
 
         session.draft.what = "- [ ] Ring the Hausverwaltung\n- [ ] Note the case number"
-        #expect(session.draft.noteTitle == item.text, "What? never renames the note any more")
+        #expect(session.draft.noteTitle == item.title, "What? never renames the note")
         #expect(session.draft.suggestsProject)   // A2: two checkboxes
 
-        session.draft.text = "Window handle: ask Frau Meier"
+        session.draft.title = "Window handle: ask Frau Meier"
         #expect(session.draft.noteTitle == "Window handle ask Frau Meier")
+    }
+
+    /// The trigger of the 2026-09-22 decision: a note made in Obsidian from the template shows
+    /// its file name as the title, and its empty Why/What skeleton is not shown as a body.
+    @Test func aSkeletonOnlyNoteShowsItsFileNameAndNoBody() {
+        let note = InboxItem(
+            id: NoteID(path: "Inbox/test task.md"), body: "# Why?\n- \n\n# What?\n- [ ] ",
+            created: Fixtures.date(Fixtures.today, 23, 0))
+        var snapshot = Fixtures.sampleSnapshot
+        snapshot.inbox = [note]
+        let (session, _, _) = InboxTestSupport.makeSession(snapshot: snapshot)
+        #expect(session.current?.title == "test task")
+        #expect(session.draft.title == "test task")
+        #expect(!session.showsBody)
+    }
+
+    @Test func onlyABodyWithContentIsShown() {
+        let (session, _, _) = InboxTestSupport.makeSession()
+        #expect(session.current?.body.isEmpty == true)
+        #expect(!session.showsBody, "a capture whose title carried everything has no body")
+
+        var snapshot = Fixtures.sampleSnapshot
+        snapshot.inbox = [InboxTestSupport.capture("call mum\nabout Sunday lunch")]
+        let (withBody, _, _) = InboxTestSupport.makeSession(snapshot: snapshot)
+        #expect(withBody.current?.title == "call mum")
+        #expect(withBody.showsBody)
+        #expect(withBody.draft.body == "call mum\nabout Sunday lunch")
     }
 
     @Test func filingWritesExactlyWhatTheDraftHolds() async {
@@ -321,19 +350,109 @@ struct InboxSessionTests {
         #expect(action.project == nil)
     }
 
-    /// The raw text is editable in place; for Knowledge and Trash the capture file itself moves,
-    /// so the edit has to reach the file first.
-    @Test func editingTheRawTextIsPersistedBeforeFiling() async {
+    /// C3 — a changed title renames the inbox file before the card is filed, so the filed note
+    /// carries the new name. Undo puts the card back under that name, with its draft.
+    @Test func aChangedTitleRenamesTheFileBeforeFiling() async {
+        let (session, model, _) = await InboxTestSupport.openedActionCard()
+        let item = try! #require(session.current)
+        session.draft.title = "Mail the Hausverwaltung — Frau Meier"
+        session.draft.what = "Describe the handle"
+
+        await session.take(.someday)
+
+        #expect(model.snapshot.inboxItem(item.id) == nil)
+        let action = try! #require(model.snapshot.actions.first {
+            $0.title == "Mail the Hausverwaltung — Frau Meier"
+        })
+        #expect(action.id.path == "Actions/Mail the Hausverwaltung — Frau Meier.md")
+        #expect(session.processed == 1)
+
+        await session.undo()   // the filing is undone; the rename stays on the file
+        let renamed = NoteID(path: "Inbox/Mail the Hausverwaltung — Frau Meier.md")
+        #expect(model.snapshot.inboxItem(renamed) != nil)
+        #expect(session.current?.id == renamed)
+        #expect(session.draft.what == "Describe the handle")
+        #expect(session.step == .actionCard)
+    }
+
+    /// For Trash and Knowledge the file itself moves as it is, so the rename reaches it first.
+    @Test func aChangedTitleReachesTheFileBeforeItIsTrashed() async {
         let (session, model, _) = InboxTestSupport.makeSession()
         let item = try! #require(session.current)
-        session.draft.text = "call the Hausverwaltung about the window handle — Frau Meier"
+        session.draft.title = "call the Hausverwaltung — Frau Meier"
 
         await session.take(.trash)
 
         #expect(model.snapshot.inboxItem(item.id) == nil)
-        await session.undo()   // the filing is undone; the text edit stays on the file
-        #expect(model.snapshot.inboxItem(item.id)?.text
-                == "call the Hausverwaltung about the window handle — Frau Meier")
+        await session.undo()
+        #expect(model.snapshot.inboxItem(NoteID(path: "Inbox/call the Hausverwaltung — Frau Meier.md"))
+                != nil)
+    }
+
+    /// A title that another inbox note already has is a collision: nothing is renamed or filed,
+    /// and the card stays exactly where it was.
+    @Test func aTitleThatIsTakenIsRefusedAndTheCardStays() async {
+        let (session, model, _) = await InboxTestSupport.openedActionCard()
+        let item = try! #require(session.current)
+        let other = try! #require(session.queue.dropFirst().first)
+        session.draft.title = other.title
+        session.draft.what = "Something"
+
+        await session.take(.someday)
+
+        #expect(session.refusal?.reason == .failed(.titleCollision(other.title)))
+        #expect(model.snapshot.inboxItem(item.id) != nil)
+        #expect(session.current?.id == item.id)
+        #expect(session.draft.what == "Something")
+        #expect(session.processed == 0)
+    }
+
+    @Test func anEmptyTitleIsRefused() async {
+        let (session, model, _) = InboxTestSupport.makeSession()
+        let item = try! #require(session.current)
+        session.draft.title = "   "
+
+        await session.take(.trash)
+
+        #expect(session.refusal?.reason == .failed(.invalid("A title is required")))
+        #expect(model.snapshot.inboxItem(item.id) != nil)
+    }
+
+    /// The Next cap refuses the card *after* the rename landed. The card follows the renamed
+    /// note — same step, same draft — and the retry after a demotion files it under the new name.
+    @Test func aRenamedCardSurvivesTheCapAndIsFiledUnderItsNewName() async {
+        let (session, model, _) = await InboxTestSupport.openedActionCard()
+        fillForNext(session, what: "Ring the Hausverwaltung")
+        await session.take(.next)   // now at the cap
+        await session.take(.openAction)
+        fillForNext(session, what: "Write the rename script")
+        session.draft.title = "Rename the scans by date"
+        await session.take(.next)
+        #expect(session.sheet == .cap)
+
+        let renamed = NoteID(path: "Inbox/Rename the scans by date.md")
+        #expect(model.snapshot.inboxItem(renamed) != nil, "the rename reached the file")
+        session.refresh()
+        #expect(session.current?.id == renamed)
+        #expect(session.step == .actionCard)
+        #expect(session.draft.what == "Write the rename script")
+
+        let demote = try! #require(session.capCandidates.first)
+        await session.demoteAndRetry(demote.id)
+        #expect(model.snapshot.inboxItem(renamed) == nil)
+        #expect(model.snapshot.actions.contains {
+            $0.title == "Rename the scans by date" && $0.status == .next
+        })
+    }
+
+    @Test func anEditedBodyIsPersistedBeforeFiling() async {
+        let (session, model, _) = InboxTestSupport.makeSession()
+        let item = try! #require(session.current)
+        session.draft.body = "The handle on the left window."
+
+        await session.take(.trash)
+        await session.undo()
+        #expect(model.snapshot.inboxItem(item.id)?.body == "The handle on the left window.")
     }
 
     // MARK: - Validation flags (R-3, STYLEGUIDE §3.6)
@@ -503,7 +622,7 @@ struct InboxSessionTests {
         let next = try! #require(session.current)
         #expect(next.id != first.id)
         #expect(session.step == .step1)
-        #expect(session.draft.text == next.text)
+        #expect(session.draft.title == next.title)
         #expect(session.draft.why.isEmpty)
         #expect(session.draft.isPristine(for: next))
     }
@@ -525,7 +644,7 @@ struct InboxSessionTests {
         #expect(session.sheet == nil)
         #expect(model.snapshot.action(victim.id)?.status == .someday)
         let filed = try! #require(model.snapshot.actions.first {
-            $0.title == CaptureText.title(of: second.text)
+            $0.title == second.title
         })
         #expect(filed.status == .next)
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap)
@@ -553,7 +672,7 @@ struct InboxSessionTests {
 
         #expect(session.sheet == nil)
         let filed = try! #require(model.snapshot.actions.first {
-            $0.title == CaptureText.title(of: refused.text)
+            $0.title == refused.title
         })
         #expect(filed.status == .someday)
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == cap,
@@ -597,7 +716,7 @@ struct InboxSessionTests {
         session.cancelSheet()
         await session.take(.someday)
         let filed = try! #require(model.snapshot.actions.first {
-            $0.title == CaptureText.title(of: refused.text)
+            $0.title == refused.title
         })
         #expect(filed.status == .someday)
         #expect(filed.project == project.id)
@@ -1166,7 +1285,7 @@ struct InboxSessionTests {
         let next = try! #require(session.current)
         #expect(session.step == .step1, "every card starts on the small card again")
         #expect(session.draft.isPristine(for: next))
-        #expect(session.draft.text == next.text)
+        #expect(session.draft.title == next.title)
         #expect(session.missingFields.isEmpty)
     }
 
@@ -1248,7 +1367,7 @@ struct MakeActionModelTests {
     @Test func itStartsFromTheListItemOnTheOpenedActionCard() {
         let (model, _, item) = makeModel()
         #expect(model.step == .actionCard)
-        #expect(model.draft.text == item.title)
+        #expect(model.draft.title == item.title)
         #expect(model.draft.notes == item.notes)
         #expect(model.draft.why.isEmpty && model.draft.what.isEmpty)
         #expect(model.exits == [.next, .someday, .waiting, .done])

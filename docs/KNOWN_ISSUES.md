@@ -12,7 +12,7 @@ and `AppUITests/` was written blind. On 2026-09-19 (Xcode 27) the package, the m
 iOS-simulator app built, all package tests and the app's own test bundles passed, and the app
 launched on fixtures on both platforms.
 
-The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 297 package
+The 2026-09-21 inbox rework was built on that Mac, so its UI code is compiled — 1 321 package
 tests pass and both scratch app builds are warning-free — and parts of it have been driven on
 screen: the two-step card's step 1, the opened action card with its asterisk refusal, a swipe to
 Next, Trash with its toast, the project picker, the keep card's navbar, the Mac per-step key
@@ -155,6 +155,17 @@ of the same fact.
   path (which writes without the app) stays the app-free capture route either way.
 - **The three App Intents may not appear in the Shortcuts app**: `GTDIntents` lives in the package
   and App Intents metadata is extracted per target. `App/README.md` has the fix to try.
+- **Inbox notes are named after their text (2026-09-22), which brings three rough edges.**
+  (1) A second capture with the same first line is `<name> 2.md`, and `VaultClassifier.conflictCopies`
+  reports it next to `<name>.md` as a possible iCloud conflict copy — the same deliberate false
+  positive an action's ` 2` already has. (2) A **case-only** rename on the card (`buy milk` →
+  `Buy milk`) passes the reducer (it compares paths exactly) but a case-insensitive file system
+  already "has" the destination, so the store refuses the move with `destinationExists` and the
+  card shows the error; renaming an action by case alone has always behaved the same way.
+  (3) Shortcut recipe A cannot cut a name to 60 characters or tell whether the name carried the
+  whole text, so it always writes the full text as the body (the card then shows it under the
+  title) and fails instead of adding ` 2` when the name is taken. None of it has been seen on a
+  device yet.
 - **The staleness thresholds (14 d / 30 d / inbox 7 d / due 3 d / follow-up 2 d) are first
   guesses.** STYLEGUIDE §10 says to tune them after two real weekly reviews, with real data.
 

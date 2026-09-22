@@ -487,22 +487,24 @@ public enum Fixtures {
             notes: notes)
     }
 
-    /// `stamp` is the capture file name, `yyyy-MM-dd HHmmss` — `created` is derived from it so
-    /// the file name and the frontmatter can never drift apart (C3).
+    /// A capture written the way `InboxWriter` writes one (C3): named after its text, with the
+    /// full text as the body only when the name could not carry it. `capturedAt` is
+    /// `yyyy-MM-dd HHmmss`, the moment of the capture.
     private static func inboxItem(
-        _ stamp: String,
+        _ capturedAt: String,
         _ text: String,
         reviewReason: String? = nil
     ) -> InboxItem {
-        let parts = stamp.split(separator: " ")
+        let parts = capturedAt.split(separator: " ")
         let captureDay = Day(iso: String(parts[0])) ?? today
         let digits = Array(parts[1])
         let hour = Int(String(digits[0...1])) ?? 0
         let minute = Int(String(digits[2...3])) ?? 0
         let second = Int(String(digits[4...5])) ?? 0
+        let note = CaptureText.note(for: text) ?? (title: text, body: "")
         return InboxItem(
-            id: layout.inboxPath(stamp: stamp),
-            text: text,
+            id: layout.inboxPath(title: note.title),
+            body: note.body,
             created: date(captureDay, hour, minute, second),
             reviewReason: reviewReason)
     }

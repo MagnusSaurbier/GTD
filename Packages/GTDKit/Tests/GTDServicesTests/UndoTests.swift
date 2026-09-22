@@ -15,7 +15,7 @@ struct UndoTests {
         try await vault.backend.start()
         let before = try vault.filesOutsideTheTrash()
         let start = await vault.backend.currentSnapshot()
-        let item = try #require(start.inbox.first { $0.text.hasPrefix("call the Hausverwaltung") })
+        let item = try #require(start.inbox.first { $0.title.hasPrefix("call the Hausverwaltung") })
 
         _ = try await vault.backend.perform(.fileInbox(item.id, .action(ActionDraft(
             title: "ignored — R-4 names the note after the capture",

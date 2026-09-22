@@ -13,9 +13,11 @@ public enum InboxCopy {
 
     // MARK: Card
 
-    /// R-4 — the capture text **is** the title, so the card has one text field, not two: this is
-    /// its prompt. (There is no separate `Title` label any more.)
+    /// C3/R-4 — the prompt of the card's title field, which is the note's file name. (There is
+    /// no separate `Title` label.)
     public static let rawTextPlaceholder = "What was captured"
+    /// VoiceOver name of the note's body under the title, shown only when there is one.
+    public static let bodyLabel = "Note"
     public static let checklist = "Checklist"
     public static let contextGroupLabel = "Context"
     public static let timeGroupLabel = "Time"

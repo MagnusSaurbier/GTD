@@ -173,10 +173,12 @@ enum InboxTestSupport {
         }
     }
 
-    static func capture(_ text: String, at stamp: String) -> InboxItem {
-        InboxItem(
-            id: NoteID(path: "Inbox/\(stamp).md"),
-            text: text,
+    /// A capture of `text`, named and bodied as `InboxWriter` writes one (C3).
+    static func capture(_ text: String) -> InboxItem {
+        let note = CaptureText.note(for: text) ?? (title: text, body: "")
+        return InboxItem(
+            id: VaultLayout.default.inboxPath(title: note.title),
+            body: note.body,
             created: Fixtures.date(Fixtures.today, 12, 0))
     }
 }

@@ -40,13 +40,13 @@ struct SnapshotEmissionTests {
         // The watcher fires: another device added a note while we were working.
         var scanned = await backend.currentSnapshot()
         scanned.inbox.append(InboxItem(
-            id: NoteID(path: "Inbox/2026-09-19 120000.md"),
-            text: "from the phone",
+            id: NoteID(path: "Inbox/from the phone.md"),
+            body: "",
             created: Fixtures.date(Fixtures.today, 12, 0)))
         store.publish(scanned)
 
         try await eventually("the remote capture arrives") {
-            await backend.currentSnapshot().inbox.contains { $0.text == "from the phone" }
+            await backend.currentSnapshot().inbox.contains { $0.title == "from the phone" }
         }
         #expect(await backend.currentSnapshot().actions.contains { $0.title == "Buy a desk lamp" })
     }

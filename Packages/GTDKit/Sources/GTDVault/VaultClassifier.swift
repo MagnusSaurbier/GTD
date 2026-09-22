@@ -159,8 +159,9 @@ public struct VaultClassifier: Sendable {
     /// Paths that look like an iCloud conflict copy: `Foo 2.md` next to an existing `Foo.md`
     /// (N3 §7.5). Never auto-resolved — the app only reports them.
     ///
-    /// A deliberate false positive: `VaultLayout.actionPath(title:collision:)` uses the same
-    /// " 2" suffix for a genuine title collision. Reporting one file too many is the safe
+    /// A deliberate false positive: `VaultLayout.actionPath(title:collision:)` and
+    /// `inboxPath(title:collision:)` (two captures with the same name) use the same " 2" suffix
+    /// for a genuine title collision. Reporting one file too many is the safe
     /// direction; the user decides.
     public static func conflictCopies(among paths: [String]) -> [String] {
         let all = Set(paths.map(VaultPath.normalize))

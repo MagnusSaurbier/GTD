@@ -13,9 +13,13 @@ import DesignSystem
 /// What the user has decided about the card in front of them. Nothing here is written to the
 /// vault until the card is filed, and nothing is pre-filled (§1 "no lying defaults").
 public struct InboxDraft: Sendable, Equatable {
-    /// The captured text, editable in place — and, since R-4, the **title** as well: the note is
-    /// named after its first line and keeps the whole text in its body.
-    public var text: String
+    /// The note's title, editable in place. For an inbox card it is the **file name** (C3): a
+    /// changed title renames `Inbox/<title>.md` before the card is filed. For L4's "Make action"
+    /// it is the list item's title.
+    public var title: String
+    /// The inbox note's body — what is below its frontmatter. Often empty: a capture keeps its
+    /// text in the title and only writes a body when the title could not carry all of it.
+    public var body: String
     public var why: String
     public var what: String
     /// I4b — the optional notes panel of the opened Knowledge / List card (step 2b). It survives
@@ -31,7 +35,8 @@ public struct InboxDraft: Sendable, Equatable {
     public var newProjectTitle: String?
 
     public init(
-        text: String = "",
+        title: String = "",
+        body: String = "",
         why: String = "",
         what: String = "",
         notes: String = "",
@@ -42,7 +47,8 @@ public struct InboxDraft: Sendable, Equatable {
         project: NoteID? = nil,
         newProjectTitle: String? = nil
     ) {
-        self.text = text
+        self.title = title
+        self.body = body
         self.why = why
         self.what = what
         self.notes = notes
@@ -55,18 +61,23 @@ public struct InboxDraft: Sendable, Equatable {
     }
 
     public init(item: InboxItem) {
-        self.init(text: item.text)
+        self.init(title: item.title, body: item.body)
     }
 
-    /// L4 — "Make action" starts from the list item: its title is the capture text, its notes
-    /// are kept (the reducer puts them above the action's headings).
+    /// L4 — "Make action" starts from the list item: its title is kept, and so are its notes
+    /// (the reducer puts them above the action's headings).
     public init(item: ListItem) {
-        self.init(text: item.title, notes: item.notes)
+        self.init(title: item.title, notes: item.notes)
     }
 
-    /// R-4 — the file name this card would get, for the card to show. `nil` while the capture is
-    /// only whitespace, which is the one thing that cannot be filed.
-    public var noteTitle: String? { CaptureText.title(of: text) }
+    /// The file name the title field would give the note — sanitised and cut like a capture
+    /// (`CaptureText.renamedTitle`). `nil` while the field is only whitespace, which is the one
+    /// title that is refused.
+    public var noteTitle: String? { CaptureText.renamedTitle(title) }
+
+    /// True when the card has a body worth showing: not empty, and not just the Why/What
+    /// template skeleton an Obsidian-made note carries (`CaptureText.isEmptyBody`).
+    public var hasBodyContent: Bool { !CaptureText.isEmptyBody(body) }
 
     /// A2 — a second checkbox in *What?* offers "Turn into project".
     public var suggestsProject: Bool { Checkbox.scan(what).count >= 2 }
@@ -79,9 +90,9 @@ public struct InboxDraft: Sendable, Equatable {
     /// Builds the command payload. Suggestions are never in here — only confirmed values.
     public func actionDraft(status: ActionStatus, waiting: WaitingInfo? = nil) -> ActionDraft {
         ActionDraft(
-            // R-4 — the reducer names the note after the capture text; what travels here is the
-            // text the card shows, so the two can never disagree.
-            title: text,
+            // The inbox reducer files under the note's (already renamed) file name and ignores
+            // this; L4's "Make action" uses it. Either way it is the title the card shows.
+            title: title,
             status: status,
             contexts: contexts,
             timeEstimate: timeBucket?.minutes,

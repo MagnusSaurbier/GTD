@@ -110,10 +110,9 @@ public enum KnowledgeTarget: Sendable, Equatable, Codable, Hashable {
 
 /// Where an inbox card goes when it leaves (I4).
 ///
-/// **No decision carries a title** (R-4): the title of every filed note is the capture text
-/// itself — first line, sanitised, cut at a word boundary to ≤ 60 characters — and whatever the
-/// title could not hold stays in the note's body. Editing the title *is* editing the capture
-/// (`editInboxText`), so there is only ever one text to keep in sync.
+/// **No decision carries a title** (R-4): every filed note keeps the inbox note's title, which is
+/// its file name (C3). Editing the title on the card renames the inbox file first
+/// (`renameInboxItem`), so there is only ever one title to keep in sync.
 public enum InboxDecision: Sendable, Equatable, Codable {
     /// next / someday / waiting / done — the status lives in the draft, and so does the optional
     /// project chip (I4a). There is no Project *target* any more (R-8): a capture that is really
@@ -132,7 +131,12 @@ public enum InboxDecision: Sendable, Equatable, Codable {
 /// Every mutation in the app is exactly one of these. The reducer is the only place that
 /// interprets them (ARCHITECTURE §4).
 public enum GTDCommand: Sendable, Equatable {
-    case editInboxText(NoteID, String)
+    /// C3/R-4 — renames an inbox note: its title **is** its file name, so this moves
+    /// `Inbox/<old>.md` to `Inbox/<title>.md`. An empty title is refused, a taken one is a
+    /// `.titleCollision`.
+    case renameInboxItem(NoteID, title: String)
+    /// Replaces an inbox note's body (everything below the frontmatter). The title is not in it.
+    case editInboxBody(NoteID, String)
     case fileInbox(NoteID, InboxDecision)
     case deferInboxToReview(NoteID, reason: String)
     case createAction(ActionDraft)

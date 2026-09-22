@@ -23,63 +23,84 @@ struct InboxWriterTests {
         try #require(StubNoteParser.date(iso))
     }
 
-    @Test func fileNameIsTheLocalTimestamp() throws {
-        let moment = try date("2026-09-19T08:12:04+00:00")
-        #expect(InboxWriter.stamp(moment, calendar: utc) == "2026-09-19 081204")
-        #expect(InboxWriter.stamp(moment, calendar: berlin) == "2026-09-19 101204")
-    }
-
     @Test func createdIsIsoWithTheLocalOffset() throws {
         let moment = try date("2026-09-19T08:12:04+00:00")
         #expect(InboxWriter.iso(moment, calendar: utc) == "2026-09-19T08:12:04+00:00")
         #expect(InboxWriter.iso(moment, calendar: berlin) == "2026-09-19T10:12:04+02:00")
     }
 
-    @Test func writesOneFileWithTheCreatedFrontmatter() throws {
+    /// C3 (2026-09-22) — a capture is named after its text; a title that carries the whole
+    /// text leaves the body empty, so nothing is written below the frontmatter.
+    @Test func theFileIsNamedAfterTheCaptureAndTheBodyStaysEmpty() throws {
         let fs = InMemoryFileSystem()
         let writer = InboxWriter(fileSystem: fs, calendar: utc)
         let id = try writer.capture(text: "buy running shoes", at: try date("2026-09-19T08:12:04+00:00"))
 
-        #expect(id.path == "Inbox/2026-09-19 081204.md")
+        #expect(id.path == "Inbox/buy running shoes.md")
+        #expect(id.title == "buy running shoes")
         #expect(try fs.readText(id.path) == """
         ---
         created: 2026-09-19T08:12:04+00:00
         ---
-        buy running shoes
 
         """)
     }
 
-    @Test func twoCapturesInTheSameSecondGetSuffixesAndNeverOverwrite() throws {
+    /// The title is the first line, sanitised and cut; the body keeps the full text because the
+    /// title could not carry it (R-4).
+    @Test func aLongOrMultiLineCaptureKeepsItsFullTextInTheBody() throws {
+        let fs = InMemoryFileSystem()
+        let writer = InboxWriter(fileSystem: fs, calendar: utc)
+        let id = try writer.capture(text: "idea: rename the scans\nby their date\n\n\n",
+                                    at: try date("2026-09-19T08:12:04+00:00"))
+        #expect(id.path == "Inbox/idea rename the scans.md")
+        let text = try #require(try fs.readText(id.path))
+        #expect(text.hasSuffix("---\nidea: rename the scans\nby their date\n"))
+    }
+
+    @Test func aTakenNameGetsANumberAndNothingIsOverwritten() throws {
         let fs = InMemoryFileSystem()
         let writer = InboxWriter(fileSystem: fs, calendar: utc)
         let moment = try date("2026-09-19T08:12:04+00:00")
 
-        let first = try writer.capture(text: "one", at: moment)
-        let second = try writer.capture(text: "two", at: moment)
-        let third = try writer.capture(text: "three", at: moment)
+        let first = try writer.capture(text: "call mum", at: moment)
+        let second = try writer.capture(text: "call mum", at: moment)
+        let third = try writer.capture(text: "call mum\nabout Sunday", at: moment)
 
-        #expect(first.path == "Inbox/2026-09-19 081204.md")
-        #expect(second.path == "Inbox/2026-09-19 081204-1.md")
-        #expect(third.path == "Inbox/2026-09-19 081204-2.md")
-        #expect(try fs.readText(first.path)?.contains("one") == true)
-        #expect(try fs.readText(second.path)?.contains("two") == true)
+        #expect(first.path == "Inbox/call mum.md")
+        #expect(second.path == "Inbox/call mum 2.md")
+        #expect(third.path == "Inbox/call mum 3.md")
+        #expect(try fs.readText(third.path)?.contains("about Sunday") == true)
+        #expect(try fs.listFiles().count == 3)
     }
 
-    @Test func multiLineCapturesKeepTheirBodyAndEndWithExactlyOneNewline() throws {
+    /// An evicted iCloud file exists only as its `.<name>.icloud` placeholder. Its name is still
+    /// taken: writing over it would make iCloud produce a conflict copy.
+    @Test func anEvictedNoteStillTakesItsName() throws {
+        let vault = try TempVault()
+        try vault.write("", to: "Inbox/.call mum.md.icloud")
+        let writer = InboxWriter(fileSystem: PlainFileSystem(root: vault.url), calendar: utc)
+        let id = try writer.capture(text: "call mum", at: try date("2026-09-19T08:12:04+00:00"))
+        #expect(id.path == "Inbox/call mum 2.md")
+    }
+
+    /// No timestamp fallback: an empty capture has nothing to name the note after, so it is
+    /// refused — before the vault is even resolved.
+    @Test(arguments: ["", "   ", "\n\n \t\n"])
+    func anEmptyCaptureIsRefused(_ text: String) throws {
         let fs = InMemoryFileSystem()
         let writer = InboxWriter(fileSystem: fs, calendar: utc)
-        let id = try writer.capture(text: "line one\nline two\n\n\n",
-                                    at: try date("2026-09-19T08:12:04+00:00"))
-        let text = try #require(try fs.readText(id.path))
-        #expect(text.hasSuffix("line one\nline two\n"))
+        #expect(throws: InboxWriter.CaptureRefusal.empty) {
+            try writer.capture(text: text, at: try date("2026-09-19T08:12:04+00:00"))
+        }
+        #expect(try fs.listFiles().isEmpty)
     }
 
     @Test func honoursACustomInboxFolder() throws {
         let fs = InMemoryFileSystem()
         let writer = InboxWriter(fileSystem: fs, layout: VaultLayout(inbox: "00 Inbox"), calendar: utc)
         let id = try writer.capture(text: "x", at: try date("2026-09-19T08:12:04+00:00"))
-        #expect(id.path == "00 Inbox/2026-09-19 081204.md")
+        #expect(id.path == "00 Inbox/x.md")
     }
 
     @Test func capturingWithoutAVaultFails() throws {
@@ -95,24 +116,30 @@ struct InboxWriterTests {
         let vault = try TempVault()
         let writer = InboxWriter(fileSystem: PlainFileSystem(root: vault.url), calendar: utc)
         let id = try writer.capture(text: "on disk", at: try date("2026-09-19T08:12:04+00:00"))
-        #expect(vault.read(id.path)?.contains("on disk") == true)
+        #expect(id.path == "Inbox/on disk.md")
+        #expect(vault.read(id.path)?.hasPrefix("---\ncreated: ") == true)
     }
 
     /// The writer renders its own frontmatter so capture needs neither the codec nor an index.
-    /// This pins that format to the codec's the moment T10 lands.
-    @Test(.enabled(if: NoteCodecParser.codecIsImplemented))
-    func captureRoundTripsThroughTheCodec() throws {
+    /// This pins that format to the codec's — with and without a body.
+    @Test(.enabled(if: NoteCodecParser.codecIsImplemented),
+          arguments: ["buy running shoes", "buy running shoes\nthe blue ones"])
+    func captureRoundTripsThroughTheCodec(_ capture: String) throws {
         let fs = InMemoryFileSystem()
         let writer = InboxWriter(fileSystem: fs, calendar: utc)
         let moment = try date("2026-09-19T08:12:04+00:00")
-        let id = try writer.capture(text: "buy running shoes", at: moment)
+        let id = try writer.capture(text: capture, at: moment)
         let text = try #require(try fs.readText(id.path))
 
         let item = try NoteCodec.decodeInboxItem(id: id, text: text)
-        #expect(item.text == "buy running shoes")
+        #expect(item.title == "buy running shoes")
+        #expect(item.body == (capture.contains("\n") ? capture : ""))
         #expect(abs(item.created.timeIntervalSince(moment)) < 1)
         #expect(item.reviewReason == nil)
         #expect(NoteCodec.encode(item) == text)
+        // A fresh item with the same fields renders the very same bytes (N2 from scratch).
+        let fresh = InboxItem(id: id, body: item.body, created: item.created)
+        #expect(NoteCodec.encode(fresh, timeZone: utc.timeZone) == text)
     }
 }
 

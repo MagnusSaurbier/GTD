@@ -3,23 +3,33 @@ import Foundation
 // MARK: - Inbox
 
 /// One capture, one file in `Inbox/` (C3).
+///
+/// The note's **title is its file name** (2026-09-22): `Inbox/<title>.md`, exactly like every
+/// other note in the vault. A capture is named after its text when it is written
+/// (`CaptureText.title(of:)`), and a note the user made in Obsidian keeps the name they gave it —
+/// the first body line is never shown in its place. Renaming the card renames the file
+/// (`GTDCommand.renameInboxItem`).
 public struct InboxItem: Identifiable, Sendable, Equatable {
     public let id: NoteID
-    public var text: String
+    /// Everything below the frontmatter. May be empty — the title lives in the file name.
+    public var body: String
     public var created: Date
     /// Non-nil ⇒ deferred to the weekly review (I5); such items leave the processing queue.
     public var reviewReason: String?
     public var passthrough: NotePassthrough
 
+    /// The file name without `.md` — what every list, card and label shows for this item.
+    public var title: String { id.title }
+
     public init(
         id: NoteID,
-        text: String,
+        body: String,
         created: Date,
         reviewReason: String? = nil,
         passthrough: NotePassthrough = .empty
     ) {
         self.id = id
-        self.text = text
+        self.body = body
         self.created = created
         self.reviewReason = reviewReason
         self.passthrough = passthrough

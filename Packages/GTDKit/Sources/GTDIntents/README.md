@@ -7,10 +7,10 @@ Requirements: C1, C2, C3 (C4 out of scope), R3.
 
 Linux-testable (Foundation-only):
 - `CaptureRequest` — normalises text (rejects empty/whitespace-only, trims, keeps line breaks)
-  and routes to `GTDVault.InboxWriter`; `perform(writer:now:) throws(CaptureError)`.
+  and routes to `GTDVault.InboxWriter`, which names the file after the text
+  (`Inbox/<title>.md`, C3); `perform(writer:now:) throws(CaptureError)`.
 - `CaptureError` — `.emptyText`, `.noVaultSelected`, `.bookmarkStale`, `.writeFailed(String)`;
   conforms to `LocalizedError` so a thrown one is a usable spoken/visible message on its own.
-- `CaptureStamp` — the `yyyy-MM-dd HHmmss` file-name format, hand-written (locale/platform-free).
 - `RoutineDeepLink` / `InboxDeepLink` — build the `gtd://routine/<id>` / `gtd://inbox` strings
   `StartRoutineIntent` / `ProcessInboxIntent` hand to `PendingRoute`.
 - `PendingRoute` (+ `PendingRouteStore`, `InMemoryPendingRouteStore`, `UserDefaultsPendingRouteStore`)
@@ -27,7 +27,7 @@ Linux-testable (Foundation-only):
 
 All AppIntents machinery lives in `CaptureIntents.swift`, guarded entirely by
 `#if canImport(AppIntents)`. Everything worth unit-testing (`CaptureRequest`, `CaptureError`,
-`CaptureStamp`, `RoutineDeepLink`, `InboxDeepLink`, `PendingRoute`) is Foundation-only and lives
+`RoutineDeepLink`, `InboxDeepLink`, `PendingRoute`) is Foundation-only and lives
 outside that guard, so `swift test` covers it without Xcode.
 
 ## Gotchas

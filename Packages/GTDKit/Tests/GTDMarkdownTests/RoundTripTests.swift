@@ -194,7 +194,8 @@ struct RoundTripTests {
         let text = "---\ncreated: 2026-09-08T07:12:33+02:00\n---\nbuy new running shoes"
         let id = NoteID(path: "Inbox/2026-09-08 071233.md")
         let item = try NoteCodec.decodeInboxItem(id: id, text: text, timeZone: vaultTimeZone)
-        #expect(item.text == "buy new running shoes")
+        #expect(item.body == "buy new running shoes")
+        #expect(item.title == "2026-09-08 071233", "the title is the file name, never the body")
         #expect(NoteCodec.encode(item, timeZone: vaultTimeZone) == text)
     }
 
@@ -202,7 +203,18 @@ struct RoundTripTests {
         let text = "---\ncreated: 2026-09-08T07:12:33+02:00\n---\nline one\n\nline three — with an em dash\n"
         let id = NoteID(path: "Inbox/x.md")
         let item = try NoteCodec.decodeInboxItem(id: id, text: text, timeZone: vaultTimeZone)
-        #expect(item.text == "line one\n\nline three — with an em dash")
+        #expect(item.body == "line one\n\nline three — with an em dash")
+        #expect(NoteCodec.encode(item, timeZone: vaultTimeZone) == text)
+    }
+
+    /// The trigger of the 2026-09-22 decision, byte for byte: a note made in Obsidian from the
+    /// user's template. Its title is the file name; the skeleton stays in the body untouched.
+    @Test func obsidianTemplateInboxNoteRoundTripsAndIsTitledByItsFileName() throws {
+        let text = "---\ncreated: 2026-09-20T18:03:00+02:00\n---\n# Why?\n- \n\n# What?\n- [ ] "
+        let id = NoteID(path: "Inbox/test task.md")
+        let item = try NoteCodec.decodeInboxItem(id: id, text: text, timeZone: vaultTimeZone)
+        #expect(item.title == "test task")
+        #expect(item.body == "# Why?\n- \n\n# What?\n- [ ] ")
         #expect(NoteCodec.encode(item, timeZone: vaultTimeZone) == text)
     }
 

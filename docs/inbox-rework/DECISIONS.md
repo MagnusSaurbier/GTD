@@ -39,7 +39,7 @@ Status: **merged into [[GTD App Requirements]] on 2026-09-21** (started 2026-09-
 - D27. *(was O14 remainder)* **The original inbox entry stays the title**; it becomes editable when clicked. What? is a separate field and does not replace the title. Still open: when the file is renamed — see O14.
 - D28. *(was O19)* **Multi-item captures: manual re-capture.** No split function; process the card as one item and quick-capture the rest by hand.
 - D29. *(was O20)* **Undo returns to the opened card with entered fields intact** (after a tier swipe / list filing); undo after step-1 Trash or Defer brings back the small card.
-- D30. *(was O14 last bit)* **File rename happens on filing**: the timestamp name stays while the item is in the inbox; on filing the filename becomes the title, sanitised and truncated to ~60 chars. Full text stays in the note.
+- D30. *(was O14 last bit)* **File rename happens on filing**: the timestamp name stays while the item is in the inbox; on filing the filename becomes the title, sanitised and truncated to ~60 chars. Full text stays in the note. *(Superseded 2026-09-22: captures are named after their text when written, the file name is always the title, and renaming the card renames the file — ARCHITECTURE §6.)*
 - D31. *(was O12)* **`04_Maybe` migration: run all 45 items through the new inbox flow** (import as inbox captures; each becomes Someday, a list item, Knowledge or Trash). Not imported as `maybe`.
 
 ### Projects and Waiting

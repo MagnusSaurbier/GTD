@@ -66,8 +66,15 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 - Nothing is pre-filled and no suggestion is ever persisted: the last-used knowledge folder and
   the +7 d follow-up are **suggested** until the user taps them (§1, STYLEGUIDE §3.1). The
   suggestion travels as its own field of `KnowledgePickerModel`, never as a chosen folder.
-- **The capture text is the title** (R-4): the title field edits the capture itself, and the
-  reducer names the file after its first line. `InboxDraft.noteTitle` shows what that will be.
+- **The file name is the title** (C3, 2026-09-22): the card's title field shows `InboxItem.title`
+  (the file name, never the body's first line) and a changed title **renames the file** before the
+  card is filed or deferred — `InboxSession.persistEdits` sends `editInboxBody` (if the body
+  changed) and then `renameInboxItem`, and the queue, the draft and the card's step follow the
+  renamed note, so a cap refusal or a failed filing after the rename keeps the card intact. A taken
+  name is `.titleCollision`, an empty one `.invalid`, both shown as `InboxRefusal.failed`.
+  `InboxDraft.noteTitle` shows the name a title would give the file (`CaptureText.renamedTitle`).
+  The body is shown under the title only when it has content (`InboxSession.showsBody`): the empty
+  Why/What template skeleton of an Obsidian-made note is not.
 - **Required fields are R-3's** (`RequiredField.missing`, shared with the reducer): Next asks for
   `Why?` + `What?` + a context + a time estimate, Someday for `What?`, Waiting for `What?` plus
   the sheet's date, and Done/Knowledge/lists/Trash for nothing. The session pre-validates *and*
@@ -136,8 +143,8 @@ and a crowded `Knowledge` preview, because the fixtures have too few projects to
 `MakeActionCardView.swift` are wrapped entirely in `#if canImport(SwiftUI)`. T08 adapted the views
 **mechanically** to the state machine (per-step bar, per-step keys, per-step legend, the collapse
 gesture, the `More…` sheet) so the package kept building; **T09 designed them** per STYLEGUIDE
-§3.5/§3.6: `InboxCardView.body` is step-aware (step 1 is the meta line + the full, scrolling,
-editable capture text and nothing else; step 2a adds `Why?`/`What?`/chips; step 2b adds `Notes`),
+§3.5/§3.6: `InboxCardView.body` is step-aware (step 1 is the meta line + the editable title — the
+file name — and, when it has content, the note's body, scrolling inside the card, and nothing else; step 2a adds `Why?`/`What?`/chips; step 2b adds `Notes`),
 the three real bars (`DesignSystem.StepOneBar`/`ActionCardBar`/`KnowledgeListNavbar`) are wired in
 place of the ad hoc `GlassActionBar` reconstructions T08 left, the bar cross-fades between steps
 and the card expands with `Motion.standard`, every `Why?`/`What?`/`Context`/`Time` label carries
@@ -184,7 +191,7 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 118 tests, all Linux-compilable.
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 125 tests, all Linux-compilable.
 
 `InboxSessionTests` pins one transition or one refusal at a time: the LIFO queue, every step
 change, every exit of STYLEGUIDE §3.6's three tables, the validation flags and the asterisk

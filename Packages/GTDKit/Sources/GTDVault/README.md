@@ -14,6 +14,10 @@ The only module that touches the file system.
   Also `scan()`, `currentSnapshot`, `startWatching()`, `stopWatching()`, `close()`.
 - `VaultBookmark` + `BookmarkStore` / `PathBookmarkStore` — durable folder access.
 - `InboxWriter` — standalone capture (C1/C3); needs only the bookmark, no index, no codec.
+  Writes `Inbox/<title>.md` named after the text (`CaptureText.note(for:)`); a taken name —
+  including an evicted file's `.<name>.icloud` placeholder — gets ` 2`, ` 3`, …; an empty capture
+  throws `InboxWriter.CaptureRefusal.empty`. Note that `VaultClassifier.conflictCopies` reports
+  such a ` 2` next to its original as a possible iCloud conflict copy (a deliberate false positive).
 - `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (`moveFolder(_:to:)`,
   `createFolder(_:)` and
   `folderExists(_:)` alongside the file operations; `listEntries()` returns a
