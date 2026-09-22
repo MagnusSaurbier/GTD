@@ -189,7 +189,14 @@ Unplug the mouse for this one.
 - [ ] With no field focused: `1…8` toggle contexts and `⇧1…⇧4` pick a time bucket.
 - [ ] `⌘Z` undoes the last filing from anywhere on the screen.
 - [ ] Filing with a key animates the card out **in that key's direction**.
-- [ ] List keys in a body field (STYLEGUIDE §4.5; not yet seen on screen): in the card's `Why?`,
+- [ ] Live preview in a body field (STYLEGUIDE §4.4; checked off-screen on macOS, never on iOS):
+      type `**bold** and [[Note|link]]` and `- [ ] task` lines into the card's `Why?`, then click
+      elsewhere — the markup disappears, the box is drawn. Click the box: it ticks, the line is
+      struck through, the caret does not jump into the field; `⌘Z` unticks. Put the caret back on
+      the first line: `**` and `[[Note|` reappear, grey. Return after `- [ ] task` starts
+      `- [ ] `; Return again on that empty item removes it. On iPhone: tap a box; with a hardware
+      keyboard the list keys below work too.
+- [ ] List keys in a body field (STYLEGUIDE §4.5; checked off-screen on macOS): in the card's `Why?`,
       type `call Anna`, then `⌥L` → `- [ ] call Anna`, `⌥L` → `- [x] call Anna`; `⌥⌘L` cycles
       plain → `- ` → `- [ ] ` → plain; `⇧⌘L` toggles `- `. The caret stays in the text, `⌘Z`
       undoes one step, and `⌥L` never types `¬`. Select three lines: all three change. In the

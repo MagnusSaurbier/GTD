@@ -267,11 +267,8 @@ struct ReviewTextField: View {
             if let footnote {
                 Text(footnote).font(Typo.counter).foregroundStyle(Color.textSecondary)
             }
-            TextField(placeholder, text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .listEditingShortcuts()
-                .font(Typo.body)
-                .lineLimit(2...6)
+            NoteEditor(text: $text, prompt: placeholder, minLines: 2)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel(label)
         }
     }

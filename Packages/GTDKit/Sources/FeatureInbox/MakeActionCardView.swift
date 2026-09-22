@@ -353,13 +353,7 @@ private struct MakeActionCardBody: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(label, isMissing: isMissing)
-            TextField(
-                "", text: text,
-                prompt: Text(placeholder).foregroundStyle(Color.textTertiary), axis: .vertical)
-                .textFieldStyle(.plain)
-                .listEditingShortcuts()
-                .font(Typo.body)
-                .foregroundStyle(Color.ink)
+            NoteEditor(text: text, prompt: placeholder)
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: field)
                 .accessibilityLabel(label)
@@ -381,14 +375,7 @@ private struct MakeActionCardBody: View {
                 .font(Typo.meta)
                 .foregroundStyle(Color.textSecondary)
             }
-            TextField(
-                "", text: $model.draft.what,
-                prompt: Text(Copy.whatPlaceholder).foregroundStyle(Color.textTertiary),
-                axis: .vertical)
-                .textFieldStyle(.plain)
-                .listEditingShortcuts()
-                .font(Typo.body)
-                .foregroundStyle(Color.ink)
+            NoteEditor(text: $model.draft.what, prompt: Copy.whatPlaceholder)
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: .what)
                 .accessibilityLabel(Copy.what)

@@ -130,11 +130,7 @@ struct InboxCardView: View {
         let field = VStack(alignment: .leading, spacing: Spacing.s) {
             title
             if session.showsBody {
-                TextField("", text: $session.draft.body, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .listEditingShortcuts()
-                    .font(Typo.body)
-                    .foregroundStyle(Color.textSecondary)
+                NoteEditor(text: $session.draft.body, tone: .secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .focused($focus, equals: .body)
                     .accessibilityLabel(InboxCopy.bodyLabel)
@@ -175,11 +171,7 @@ struct InboxCardView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(label, isMissing: isMissing)
-            TextField("", text: text, prompt: Self.prompt(placeholder), axis: .vertical)
-                .textFieldStyle(.plain)
-                .listEditingShortcuts()
-                .font(Typo.body)
-                .foregroundStyle(Color.ink)
+            NoteEditor(text: text, prompt: placeholder)
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: field)
@@ -210,15 +202,7 @@ struct InboxCardView: View {
                 .font(Typo.meta)
                 .foregroundStyle(Color.textSecondary)
             }
-            TextField(
-                "",
-                text: $session.draft.what,
-                prompt: Self.prompt(Copy.whatPlaceholder),
-                axis: .vertical)
-                .textFieldStyle(.plain)
-                .listEditingShortcuts()
-                .font(Typo.body)
-                .foregroundStyle(Color.ink)
+            NoteEditor(text: $session.draft.what, prompt: Copy.whatPlaceholder)
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: .what)
@@ -292,15 +276,7 @@ struct InboxCardView: View {
     private var notesSection: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(InboxCopy.notesLabel)
-            TextField(
-                "",
-                text: $session.draft.notes,
-                prompt: Self.prompt(InboxCopy.notesPlaceholder),
-                axis: .vertical)
-                .textFieldStyle(.plain)
-                .listEditingShortcuts()
-                .font(Typo.body)
-                .foregroundStyle(Color.ink)
+            NoteEditor(text: $session.draft.notes, prompt: InboxCopy.notesPlaceholder)
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: .notes)
                 .accessibilityLabel(InboxCopy.notesLabel)

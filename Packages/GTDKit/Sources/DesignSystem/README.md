@@ -123,17 +123,27 @@ holds none of them. Adding is normal, renaming is a cross-target change.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter DesignSystemTests` — 67 tests.
+`cd Packages/GTDKit && swift test --filter DesignSystemTests` — 84 tests.
 
 `Interaction/KeyBindingsEnvironment.swift` — `EnvironmentValues.keyBindings` (R-10): the shell sets it from
 `DeviceSettings.keyBindings`; the inbox card, `MakeActionSheet` and the review deck read it.
 
 `Interaction/ListEditing.swift` — `ListEditing.edit(_:text:selection:)`: the Obsidian list
-shortcuts of the note-body fields (STYLEGUIDE §4.5) as a pure text rewrite on UTF-16 offsets, plus
-the fixed key table `ListEditShortcut.table`. Linux-compilable and tested (`ListEditingTests`).
-`Interaction/ListEditingShortcuts.swift` — `View.listEditingShortcuts()`, applied to each body
-`TextField`: on the Mac a local key monitor edits the window's field editor when it belongs to that
-field (one undo step; the binding updates as for typing). A no-op on iOS.
+shortcuts of the note-body fields (STYLEGUIDE §4.5) as a pure text rewrite on UTF-16 offsets, the
+fixed key table `ListEditShortcut.table`, and `ListEditing.newline(text:selection:)` (Return
+continues a list). Linux-compilable and tested (`ListEditingTests`).
+
+`Editor/MarkdownRendering.swift` — the live preview of note bodies (STYLEGUIDE §4.4) as pure data:
+`runs(_:selection:)` says which UTF-16 range gets which `MarkdownAttributes` (bold, heading, link,
+hidden markup, bullet, checkbox …), revealing markup on the lines the selection touches;
+`display(_:)` is the read-only form. Linux-compilable and tested (`MarkdownRenderingTests`).
+`Editor/NoteEditor.swift` — `NoteEditor(text:prompt:font:tone:minLines:)`, the note-body field
+everywhere a vertical `TextField` used to be: a TextKit 1 `NSTextView`/`UITextView` whose layout
+manager hides markup glyphs and draws bullets and boxes; a click on a box ticks it; the list keys
+and Return continuation go through the text system (one undo step each). `.focused(_:equals:)`
+works on it as on a `TextField` (checked on macOS 26). The text storage must be kept by the view —
+a layout manager holds it weakly. `MarkdownText.attributed(_:)` renders read-only note text
+(`CollapsibleText`).
 
 `Interaction/VaultRootEnvironment.swift` — `EnvironmentValues.vaultRootPath`: the vault folder's
 absolute path, set by the app shell (`RootView` and the Mac `Settings` scene), `nil` on fixtures.

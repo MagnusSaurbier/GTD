@@ -99,12 +99,8 @@ struct KnowledgeSheet: View {
                 }
 
                 Section(InboxCopy.notesLabel) {
-                    TextField(
-                        InboxCopy.notesPlaceholder, text: $notes,
-                        prompt: Text(InboxCopy.notesPlaceholder), axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .listEditingShortcuts()
-                        .labelsHidden()
+                    NoteEditor(text: $notes, prompt: InboxCopy.notesPlaceholder)
+                        .accessibilityLabel(InboxCopy.notesLabel)
                 }
             }
             .sheetFormStyle()

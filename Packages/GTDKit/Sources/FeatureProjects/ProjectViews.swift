@@ -246,11 +246,8 @@ public struct ProjectDetailView: View {
                 .font(Typo.screenTitle)
 
             Text(Copy.why).font(Typo.sectionHeader)
-            TextField(Copy.whyPlaceholder, text: whyBinding(detail), axis: .vertical)
-                .textFieldStyle(.plain)
-                .listEditingShortcuts()
-                .font(Typo.body)
-                .foregroundStyle(Color.textSecondary)
+            NoteEditor(text: whyBinding(detail), prompt: Copy.whyPlaceholder, tone: .secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text(Copy.area).font(Typo.meta).foregroundStyle(Color.textSecondary)
             AreaPicker(detail: detail)

@@ -1,6 +1,6 @@
 /// The Obsidian list shortcuts of every note-body field (STYLEGUIDE §4.5): the pure text
-/// rewrite. `View.listEditingShortcuts()` (Mac) feeds it the field's text and selection and
-/// applies the result; everything that decides *what* changes lives here, so it is tested.
+/// rewrite. `NoteEditor` feeds it the field's text and selection and applies the result;
+/// everything that decides *what* changes lives here, so it is tested.
 ///
 /// A command works on **whole lines** — every line the selection touches (a selection ending at
 /// the very start of a line leaves that line out, as in Obsidian). The indentation is kept; only
@@ -98,6 +98,37 @@ public enum ListEditing {
         let lower = map(selection.lowerBound, keepsLineStart: !selection.isEmpty)
         let upper = selection.isEmpty ? lower : max(lower, map(selection.upperBound, keepsLineStart: false))
         return ListEdit(range: range, replacement: replacement, selection: lower..<upper)
+    }
+
+    /// Return inside a list item, as in Obsidian: the new line gets the same marker (`- `,
+    /// `- [ ] ` unticked, the next number); Return on an item with no text removes its marker
+    /// instead. `nil` outside a list — the editor then inserts a plain newline.
+    public static func newline(text: String, selection: Range<Int>) -> ListEdit? {
+        let lines = split(text)
+        let index = lineIndex(containing: selection.lowerBound, in: lines)
+        let span = lines[index]
+        guard selection.upperBound <= span.end else { return nil }
+        let line = Line(parsing: span.text)
+        guard line.kind != .plain else { return nil }
+        let markerEnd = span.start + line.indent.utf16.count + line.marker.utf16.count
+        guard selection.lowerBound >= markerEnd else { return nil }
+
+        if line.content.allSatisfy({ $0 == " " || $0 == "\t" }) {
+            return ListEdit(range: span.start..<span.end, replacement: "", selection: span.start..<span.start)
+        }
+        let next: String
+        switch line.kind {
+        case .plain: return nil
+        case .bullet: next = line.marker
+        case .task: next = String(line.marker.prefix(1)) + " [ ] "
+        case .numbered:
+            let digits = line.marker.prefix { $0.isNumber }
+            let number = (Int(digits) ?? 0) + 1
+            next = "\(number)" + line.marker.dropFirst(digits.count)
+        }
+        let insert = "\n" + line.indent + next
+        let caret = selection.lowerBound + insert.utf16.count
+        return ListEdit(range: selection, replacement: insert, selection: caret..<caret)
     }
 
     // MARK: - Rewriting

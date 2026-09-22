@@ -17,7 +17,7 @@ public struct CollapsibleText: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(text)
+            Text(MarkdownText.attributed(text))
                 .font(Typo.cardText)
                 .foregroundStyle(Color.ink)
                 .lineLimit(lineLimit)
@@ -34,7 +34,7 @@ public struct CollapsibleText: View {
         }
         .sheet(isPresented: $isShowingFull) {
             ScrollView {
-                Text(text)
+                Text(MarkdownText.attributed(text))
                     .font(Typo.cardText)
                     .foregroundStyle(Color.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)

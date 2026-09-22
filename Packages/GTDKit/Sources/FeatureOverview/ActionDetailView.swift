@@ -323,11 +323,7 @@ private struct ActionDetailEditor: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             Text(label).font(Typo.sectionHeader).foregroundStyle(Color.ink)
-            TextField(placeholder, text: text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .listEditingShortcuts()
-                .font(Typo.body)
-                .lineLimit(3...)
+            NoteEditor(text: text, prompt: placeholder, minLines: 3)
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: entry)
         }

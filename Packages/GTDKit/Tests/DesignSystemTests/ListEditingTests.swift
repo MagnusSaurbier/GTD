@@ -127,6 +127,33 @@ struct ListEditingTests {
         #expect(run(.toggleBulletList, "--|-") == "- --|-")
     }
 
+    // MARK: - Return in a list
+
+    private func newline(_ marked: String) -> String? {
+        let (text, selection) = unmark(marked)
+        guard let edit = ListEditing.newline(text: text, selection: selection) else { return nil }
+        var units = Array(text.utf16)
+        units.replaceSubrange(edit.range, with: Array(edit.replacement.utf16))
+        return mark(String(decoding: units, as: UTF16.self), edit.selection)
+    }
+
+    @Test func returnContinuesTheList() {
+        #expect(newline("- milk|") == "- milk\n- |")
+        #expect(newline("  * [x] done|") == "  * [x] done\n  * [ ] |")
+        #expect(newline("9) nine|") == "9) nine\n10) |")
+        #expect(newline("- spl|it") == "- spl\n- |it")
+    }
+
+    @Test func returnOnAnEmptyItemEndsTheList() {
+        #expect(newline("- a\n- |") == "- a\n|")
+        #expect(newline("- [ ] |") == "|")
+    }
+
+    @Test func returnOutsideAListIsPlain() {
+        #expect(newline("text|") == nil)
+        #expect(newline("-| a") == nil)
+    }
+
     // MARK: - Key table
 
     @Test func theKeyTableMatchesObsidian() {
