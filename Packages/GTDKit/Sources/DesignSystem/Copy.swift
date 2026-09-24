@@ -201,6 +201,9 @@ public enum Copy {
     // MARK: Date picker (`DayPicker`)
 
     /// What the calendar popover/sheet is, for VoiceOver.
+    /// The version stamp's spoken label (`VersionStamp`) — "Version 0.3".
+    public static func version(_ short: String) -> String { "Version \(short)" }
+
     public static let pickADate = "Pick a date"
     public static let previousMonth = "Previous month"
     public static let nextMonth = "Next month"

@@ -64,8 +64,10 @@ expect 11 harmless `no rule to process file … xcstrings/assetcatalog` warnings
 8. Out of scope unless the user says otherwise: everything in REQUIREMENTS §12.
 9. Gate before reporting done: `scripts/check.sh`. Report failures verbatim; never disable a test.
 10. **No work without a ticket** (`docs/TICKETS.md`): open a GitHub issue before anything else, label it
-    `in progress` and set its **Branch:** the moment work starts, rewrite its **State**/**Remaining** before
-    every push and before your context could end, close it via `Closes #N` in the PR. `scripts/check-tickets.sh` enforces this.
+    `in progress`, set its **Branch:** and claim the next free **Version:** (`scripts/check-tickets.sh --status`
+    prints it; `project.yml`'s `MARKETING_VERSION` gets the same number) the moment work starts, rewrite its
+    **State**/**Remaining** before every push and before your context could end, close it via `Closes #N` in
+    the PR. `scripts/check-tickets.sh` enforces this, including version collisions.
 11. Actions minutes only for code: a docs-only commit ends its subject with `[skip ci]`; deploys run on
     tags or dispatch only (`.github/workflows/README.md`).
 

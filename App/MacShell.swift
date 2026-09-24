@@ -32,6 +32,8 @@ struct MacShell: View {
         // hyphenate and badges collapse.
         .frame(
             minWidth: OverviewLayout.windowMinWidth, minHeight: OverviewLayout.windowMinHeight)
+        // The build's version, bottom right (`docs/TICKETS.md`: every issue claims one).
+        .overlay(alignment: .bottomTrailing) { VersionStamp() }
         // A deep link or an App Intent asked for inbox processing; on the Mac the window owns
         // that sheet (`OverviewView`), so the request is handed over rather than presented twice.
         .onChange(of: router.isProcessingInbox) { _, requested in

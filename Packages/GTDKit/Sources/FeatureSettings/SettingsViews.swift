@@ -755,12 +755,8 @@ public struct SettingsView: View {
         }
     }
 
-    private static var appVersion: String {
-        let bundle = Bundle.main
-        let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-        return "\(version) (\(build))"
-    }
+    /// `AppVersion` reads the bundle; an unversioned bundle shows an empty row, not "1.0".
+    private static var appVersion: String { AppVersion.current.settingsLabel }
 }
 
 /// One routine's schedule (R1, R3): an on/off toggle plus a time picker while on. Turning it on

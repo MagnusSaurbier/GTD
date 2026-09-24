@@ -25,6 +25,19 @@ is strict and `scripts/check-tickets.sh` (part of `scripts/check.sh`) enforces t
    add the label `in progress`, add `agent:local` or `agent:cloud`, and set **Branch:** in the
    body to the branch you work on (`gh issue edit N --add-label "in progress" --body-file …`).
    An issue may not stay unlabelled while code for it is being written.
+   **Claim a version at the same time.** Every `in progress` issue owns one app version, and the
+   build from its branch carries it (the shells stamp it bottom right, Settings prints it). Run
+   `scripts/check-tickets.sh --status`: its `versions` line says what main is and which `0.N` is
+   the next free one — one minor above the highest of main's `MARKETING_VERSION` and every open
+   issue's claim. Put that number in **Version:** and in `project.yml`'s `MARKETING_VERSION`
+   (one line, in the same commit as your first code). Two agents that start at the same time
+   read the same board; the one whose issue edit lands second sees the collision on its next
+   `check-tickets.sh` and takes the next free number. Never reuse a version another open issue
+   claims, and never claim one at or below main's. On merge the branch's `project.yml` conflicts
+   with main only if another version merged first; keep your own number. The checker fails the
+   gate only for the current branch's own issue (no claim, a collision, `project.yml` disagreeing);
+   another branch's missing claim is printed as a NOTE so that nobody's push waits on someone
+   else's omission.
 3. **Keep the body current.** Rewrite **State** and **Remaining** (and **PR:** once there is
    one) at least:
    - before every `git push`,
@@ -44,7 +57,7 @@ is strict and `scripts/check-tickets.sh` (part of `scripts/check.sh`) enforces t
    `docs/KNOWN_ISSUES.md`, not a file under `docs/`, not a chat transcript. Those may *point to*
    an issue by number.
 
-`scripts/check-tickets.sh --status` prints the board and any problems; it runs at the start of
+`scripts/check-tickets.sh --status` prints the board, the next free version and any problems; it runs at the start of
 every agent session (`.claude/settings.json`) and inside `scripts/check.sh`. Without `gh` or
 without network it prints `SKIPPED` and the rule still applies.
 
@@ -53,7 +66,7 @@ without network it prints `SKIPPED` and the rule still applies.
 Copy this verbatim — the checker looks for the bold field names and the headings.
 
 ```markdown
-**Branch:** — · **PR:** — · **Agent:** —
+**Branch:** — · **PR:** — · **Agent:** — · **Version:** —
 
 ## Goal
 
@@ -82,7 +95,8 @@ tracked now, whether it is a significant functionality change (→ tag → deplo
 ```
 
 **Branch** is the branch name in backticks once there is one; **PR** the PR URL; **Agent** is
-`local` or `cloud`. Labels: `in progress` (state), `abandoned` (closed reason), `follow-up`
+`local` or `cloud`; **Version** the `<major>.<minor>` this issue claims (rule 2) — the same
+string as `MARKETING_VERSION` in `project.yml` on the branch. Labels: `in progress` (state), `abandoned` (closed reason), `follow-up`
 (has a spec in `docs/follow-ups/`), `agent:local` / `agent:cloud`.
 
 ## Ticket size
@@ -95,6 +109,7 @@ open its own; the parent agent updates the shared issue when the subagent report
 
 ```bash
 gh issue list --label "in progress"                      # what is being worked on, and by whom
+scripts/check-tickets.sh --status                        # the board, and the next free version
 gh issue view N                                          # the ticket
 gh issue edit N --body-file body.md                      # update State / Remaining (the whole body)
 gh issue edit N --add-label "in progress" --add-label "agent:local"
