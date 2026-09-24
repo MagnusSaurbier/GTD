@@ -1,6 +1,6 @@
 # Every change is tracked by a ticket; docs commits cost no Actions minutes
 
-**Status:** in progress · **Branch:** `docs/ticket-workflow` · **PR:** https://github.com/MagnusSaurbier/GTD/pull/2 · **Opened:** 2026-09-24 · **Last updated:** 2026-09-24 · **Agent:** local
+**Status:** done · **Branch:** `docs/ticket-workflow` · **PR:** https://github.com/MagnusSaurbier/GTD/pull/2 · **Opened:** 2026-09-24 · **Last updated:** 2026-09-24 · **Agent:** local
 
 ## Goal
 
@@ -23,8 +23,7 @@ cloud deployments or GitHub Actions; docs commits trigger nothing.
 
 ## Remaining
 
-1. Review and merge PR #2.
-2. After merge: move this file to `docs/history/`, fill in **Outcome**, commit on `main` with `[skip ci]`.
+Nothing.
 
 ## Handover
 
@@ -33,4 +32,7 @@ uncommitted edits — this work lives in the worktree `.claude/worktrees/ticket-
 
 ## Outcome
 
-—
+Merged into `main` on 2026-09-24 as 36ca92b (PR #2). Verified after merge: `scripts/check-docs.sh`,
+`scripts/check-tickets.sh` and `scripts/check-workflows.sh` green on `main`; the checker reported this
+very ticket as merged-but-in-progress, which is what triggered this move. Nothing cut. Not a
+functionality change: no tag, no deployment.
