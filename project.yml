@@ -39,7 +39,10 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: GTD
+        # Dock, Finder, the application menu and the iOS home screen name the build by its
+        # version ("GTD - 0.2"), so "which build is this?" needs no window (docs/TICKETS.md).
+        CFBundleDisplayName: GTD - $(MARKETING_VERSION)
+        CFBundleName: GTD - $(MARKETING_VERSION)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
