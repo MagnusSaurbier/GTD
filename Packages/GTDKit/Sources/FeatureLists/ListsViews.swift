@@ -10,6 +10,7 @@ import FeatureInbox
 /// ListsRoute.self)` live in `App/PhoneShell`, exactly as the Next tab's push does.
 public struct ListsHomeView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.listIcons) private var listIcons
 
     public init() {}
 
@@ -25,7 +26,7 @@ public struct ListsHomeView: View {
                     ForEach(lists.rows, id: \.list.id) { row in
                         NavigationLink(value: ListsRoute.list(row.list.name)) {
                             HStack {
-                                Label(row.list.name, systemImage: Symbols.list(named: row.list.name))
+                                Label(row.list.name, systemImage: Symbols.list(named: row.list.name, icons: listIcons))
                                     .font(Typo.body)
                                     .foregroundStyle(Color.ink)
                                 Spacer(minLength: Spacing.s)
@@ -51,6 +52,7 @@ public struct ListsHomeView: View {
 /// `Done`, context menu `Make action` / `Trash`, a quiet `Show done` button revealing
 /// `Lists/<name>/Done/` when it has entries. Tapping a row pushes the item editor.
 public struct ListItemsView: View {
+    @Environment(\.listIcons) private var listIcons
     private let list: String
 
     @Environment(AppModel.self) private var model
@@ -67,7 +69,7 @@ public struct ListItemsView: View {
         let finished = lists.finishedItems(in: list)
         Group {
             if open.isEmpty && finished.isEmpty {
-                ContentUnavailableView(Copy.emptyListTitle(list), systemImage: Symbols.list(named: list))
+                ContentUnavailableView(Copy.emptyListTitle(list), systemImage: Symbols.list(named: list, icons: listIcons))
             } else {
                 List {
                     ForEach(open) { item in

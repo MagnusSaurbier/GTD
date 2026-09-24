@@ -105,7 +105,10 @@ public enum InboxExit: Sendable, Equatable, Hashable {
     }
 
     /// Icon map (STYLEGUIDE §7). A custom list falls back to `list.bullet` via `Symbols.list`.
-    public var symbol: String {
+    public var symbol: String { symbol(icons: [:]) }
+
+    /// `symbol`, with a list drawn in the icon the user picked (`EnvironmentValues.listIcons`).
+    public func symbol(icons: [String: String]) -> String {
         switch self {
         case .openAction: Symbols.actionKind
         case .openKeep: Symbols.knowledgeOrListKind
@@ -116,7 +119,7 @@ public enum InboxExit: Sendable, Equatable, Hashable {
         case .waiting: Symbols.waiting
         case .done: Symbols.done
         case .knowledge: Symbols.knowledge
-        case let .list(name): Symbols.list(named: name)
+        case let .list(name): Symbols.list(named: name, icons: icons)
         case .more: Symbols.more
         case .collapse: Symbols.collapse
         }

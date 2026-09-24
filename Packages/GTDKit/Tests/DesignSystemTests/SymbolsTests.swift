@@ -29,4 +29,22 @@ struct SymbolsTests {
         // STYLEGUIDE §7 lists "Promote step / Make action" as one table entry.
         #expect(Symbols.makeAction == Symbols.promoteStep)
     }
+
+    /// L2 — a picked icon wins, matched case-insensitively; without one the built-in glyph stays.
+    @Test func aPickedIconReplacesTheBuiltInGlyph() {
+        let icons = ["Read": "books.vertical", "Groceries": "cart"]
+        #expect(Symbols.list(named: "Read", icons: icons) == "books.vertical")
+        #expect(Symbols.list(named: "groceries", icons: icons) == "cart")
+        #expect(Symbols.list(named: "Watch", icons: icons) == Symbols.listWatch)
+        #expect(Symbols.list(named: "Other", icons: [:]) == Symbols.listBullet)
+    }
+
+    /// The picker offers each symbol once, and the three built-in list glyphs are among them.
+    @Test func thePickerCatalogueHasNoDuplicatesAndOffersTheBuiltIns() {
+        let all = Symbols.listIconChoices.flatMap(\.symbols)
+        #expect(Set(all).count == all.count)
+        for builtIn in [Symbols.listRead, Symbols.listWatch, Symbols.listWish, Symbols.listBullet] {
+            #expect(all.contains(builtIn))
+        }
+    }
 }

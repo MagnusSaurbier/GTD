@@ -1,6 +1,6 @@
 # FeatureSettings
 
-Onboarding, synced settings (contexts, on-the-go subset, Lists — add/rename/remove/favourites,
+Onboarding, synced settings (contexts, on-the-go subset, Lists — add/rename/remove/favourites/icon,
 Next cap, routine times), device-local settings (notification toggles, morning time, vault display
 name, Mac key rebinds) and the vault-issues list.
 

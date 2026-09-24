@@ -170,6 +170,8 @@ public struct SettingsView: View {
     @State private var renameListText = ""
     @State private var renameListRefusal: String?
     @State private var pendingListRemoval: String?
+    /// The list whose icon picker is open (L2).
+    @State private var iconPickerList: IconPickerTarget?
 
     #if os(macOS)
     // MARK: Keyboard (R-10, N7, STYLEGUIDE §4.5) — Mac only
@@ -231,6 +233,18 @@ public struct SettingsView: View {
         // L2/R-5: removing a list is undoable, but it takes every item with it — that bulk
         // consequence is why this one still asks first (ARCHITECTURE §6), unlike most undoable
         // actions in this app.
+        .sheet(item: $iconPickerList) { target in
+            ListIconPicker(
+                listName: target.name,
+                current: Symbols.list(named: target.name, icons: session.config.listIcons),
+                builtIn: Symbols.list(named: target.name)
+            ) { symbol in
+                Task { try? await session.setListIcon(target.name, symbol: symbol) }
+            }
+            #if os(iOS)
+            .presentationDetents([.medium, .large])
+            #endif
+        }
         .confirmationDialog(
             SettingsCopy.removeListTitle,
             isPresented: Binding(
@@ -426,8 +440,7 @@ public struct SettingsView: View {
 
     private func listRow(_ session: SettingsSession, row: Rules.ListRow) -> some View {
         HStack(spacing: Spacing.s) {
-            Image(systemName: Symbols.list(named: row.list.name))
-                .foregroundStyle(Color.textSecondary)
+            listIconButton(session, name: row.list.name)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.list.name).font(Typo.body).foregroundStyle(Color.ink)
                 Text(Copy.counter(remaining: row.openCount, total: row.openCount + row.finishedCount))
@@ -472,8 +485,12 @@ public struct SettingsView: View {
     /// alert (STYLEGUIDE §4.3/T13).
     private func renamingListRow(_ session: SettingsSession, name: String) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            TextField(Copy.list, text: $renameListText)
-                .onSubmit { commitRename(session, from: name) }
+            HStack(spacing: Spacing.s) {
+                listIconButton(session, name: name)
+                    .buttonStyle(.plain)
+                TextField(Copy.list, text: $renameListText)
+                    .onSubmit { commitRename(session, from: name) }
+            }
             if let renameListRefusal {
                 Text(renameListRefusal).font(Typo.meta).foregroundStyle(Color.signalAttention)
             }
@@ -488,6 +505,20 @@ public struct SettingsView: View {
                     .tint(Color.gtdAccent)
             }
         }
+    }
+
+    /// The list's icon, tappable: it opens `ListIconPicker` (L2). Same button in the plain row
+    /// and in the rename editor, so the icon can be changed either way.
+    private func listIconButton(_ session: SettingsSession, name: String) -> some View {
+        Button {
+            iconPickerList = IconPickerTarget(name: name)
+        } label: {
+            Image(systemName: Symbols.list(named: name, icons: session.config.listIcons))
+                .foregroundStyle(Color.gtdAccent)
+                .frame(minWidth: 28, minHeight: 28)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(SettingsCopy.chooseListIcon(name))
     }
 
     private func addList(_ session: SettingsSession) {
@@ -581,7 +612,8 @@ public struct SettingsView: View {
 
     private func favouriteRow(name: String, index: Int) -> some View {
         HStack(spacing: Spacing.s) {
-            Image(systemName: Symbols.list(named: name)).foregroundStyle(Color.textSecondary)
+            Image(systemName: Symbols.list(named: name, icons: model.snapshot.config.listIcons))
+                .foregroundStyle(Color.textSecondary)
             Text(name).font(Typo.body).foregroundStyle(Color.ink)
             if !ListsEditing.isShownOnPhone(index: index) {
                 Text(SettingsCopy.macOnlyFavourite)
@@ -930,4 +962,11 @@ public struct VaultIssuesView: View {
         snapshot: .empty,
         today: { Fixtures.today }))
 }
+
+/// `sheet(item:)` needs an `Identifiable`; a list is identified by its name.
+private struct IconPickerTarget: Identifiable {
+    let name: String
+    var id: String { name }
+}
+
 #endif

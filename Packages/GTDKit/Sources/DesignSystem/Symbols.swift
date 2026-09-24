@@ -1,4 +1,5 @@
 import Foundation
+import GTDModel
 
 /// The canonical, exhaustive SF Symbols map (STYLEGUIDE §7). A concept missing here is added
 /// to the style guide **first**, then to this file. Views never write a symbol name.
@@ -86,6 +87,56 @@ public enum Symbols {
         default: listBullet
         }
     }
+
+    /// The symbol a list shows: the one the user picked in Settings (`GTDConfig.listIcons`,
+    /// matched case-insensitively), else the built-in glyph above.
+    public static func list(named name: String, icons: [String: String]) -> String {
+        if let picked = icons[name] ?? icons.first(where: { GTDList.sameName($0.key, name) })?.value {
+            return picked
+        }
+        return list(named: name)
+    }
+
+    /// One group of the list icon picker.
+    public struct ListIconGroup: Sendable, Identifiable {
+        public let title: String
+        public let symbols: [String]
+        public var id: String { title }
+    }
+
+    /// Everything the list icon picker offers (Settings → Lists). Every name here exists on
+    /// iOS/macOS 26; `DesignSystemTests` checks there are no duplicates.
+    public static let listIconChoices: [ListIconGroup] = [
+        ListIconGroup(title: "Read & learn", symbols: [
+            "book", "books.vertical", "book.closed", "text.book.closed", "newspaper", "magazine",
+            "bookmark", "graduationcap",
+        ]),
+        ListIconGroup(title: "Watch & listen", symbols: [
+            "play.rectangle", "tv", "film", "popcorn", "music.note", "headphones", "mic",
+            "gamecontroller", "theatermasks", "camera", "paintpalette",
+        ]),
+        ListIconGroup(title: "Shop & give", symbols: [
+            "gift", "giftcard", "cart", "bag", "basket", "tag", "creditcard", "shippingbox",
+            "tshirt", "shoe", "eyeglasses",
+        ]),
+        ListIconGroup(title: "Food & home", symbols: [
+            "fork.knife", "cup.and.saucer", "wineglass", "carrot", "birthday.cake",
+            "takeoutbag.and.cup.and.straw", "house", "sofa", "bed.double", "lamp.desk", "leaf",
+            "hammer", "wrench.and.screwdriver", "paintbrush",
+        ]),
+        ListIconGroup(title: "Go & do", symbols: [
+            "airplane", "car", "bicycle", "map", "mappin.and.ellipse", "globe.europe.africa", "tent",
+            "mountain.2", "beach.umbrella", "building.columns", "ticket", "figure.run", "dumbbell",
+            "trophy",
+        ]),
+        ListIconGroup(title: "People & ideas", symbols: [
+            "person.2", "heart", "star", "lightbulb", "sparkles", "pawprint", "stethoscope", "pills",
+        ]),
+        ListIconGroup(title: "General", symbols: [
+            listBullet, "checklist", "flag", "pin", "folder", "doc.text", "link", "laptopcomputer",
+            "iphone", "puzzlepiece", "calendar", "clock",
+        ]),
+    ]
 
     // MARK: Inbox step 1 kinds, navbar, required field (T06)
 

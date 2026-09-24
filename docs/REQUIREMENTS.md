@@ -89,7 +89,7 @@ Dropped: `priority`, `type`, `tags`, `scheduled`, `Ressources`.
 ## 5a. Lists
 
 - L1. **Lists** hold items that are only relevant in a specific situation. Initial lists: **Read**, **Watch**, **Wish**. List items are **not commitments**: no Why?/What?, no time estimate, no cap, no `status`.
-- L2. **Folders are the lists**: each subfolder of `Lists/` is a list (e.g. `Lists/Read/`), one note per item. The folder is the only marker. Settings can add / rename / remove lists (creates / renames the folder) and choose the favourites shown in the inbox navbar (I4b).
+- L2. **Folders are the lists**: each subfolder of `Lists/` is a list (e.g. `Lists/Read/`), one note per item. The folder is the only marker. Settings can add / rename / remove lists (creates / renames the folder), choose the favourites shown in the inbox navbar (I4b), and pick each list's icon from a grid (tap the icon in the list row or in its rename editor; synced as `listIcons` in `GTD/Config.md`, follows a rename, "Default" goes back to the built-in glyph).
 - L3. **Finishing** an item (read / watched / bought) = check off → the note moves to **`Lists/<name>/Done/`** and is kept as a log.
 - L4. **Promoting** an item: **"Make action"** moves the note to `Actions/` and opens it as the normal opened action card (I3/I4: required fields, tier swipe, cap dialog).
 - L5. Lists are **fully available on iPhone** (browse, finish, promote, edit) — typical on-the-go lookups.

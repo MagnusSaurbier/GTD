@@ -119,6 +119,7 @@ public struct ActionCardBar: View {
 /// favourite lists in Settings order, then `More…`. Positions never reorder by use; a list slot
 /// files the card at once (undoable), `Knowledge` and `More…` open a sheet.
 public struct KnowledgeListNavbar: View {
+    @Environment(\.listIcons) private var listIcons
     private let slots: [NavbarSlot]
     private let onKnowledge: () -> Void
     private let onList: (String) -> Void
@@ -165,7 +166,7 @@ public struct KnowledgeListNavbar: View {
     private func symbol(for slot: NavbarSlot) -> String {
         switch slot.kind {
         case .knowledge: Symbols.knowledge
-        case let .list(name): Symbols.list(named: name)
+        case let .list(name): Symbols.list(named: name, icons: listIcons)
         case .more: Symbols.more
         }
     }

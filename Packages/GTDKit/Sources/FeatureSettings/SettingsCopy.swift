@@ -17,6 +17,8 @@ enum SettingsCopy {
     /// The `confirmationDialog` body — names the list and how many items travel with it (R-5:
     /// "takes items with it"). Removing a list is undoable, but the bulk of what moves is why
     /// this one destructive action still asks first (ARCHITECTURE §6).
+    static func chooseListIcon(_ name: String) -> String { "Choose icon for \(name)" }
+
     static func removeListMessage(name: String, itemCount: Int) -> String {
         itemCount == 0
             ? "\"\(name)\" is empty. It moves to \(Copy.trash) and can be undone."
