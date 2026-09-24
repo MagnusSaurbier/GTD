@@ -58,6 +58,10 @@ public enum Copy {
     public static let actionFailed = "Couldn't complete that"
     public static let undo = "Undo"
     public static let clearFilters = "Clear filters"
+    /// Filter-bar section headers on Next and Someday (E1): say what a picked chip means —
+    /// contexts are *all* the ones at hand, time is the *most* that is free right now.
+    public static let contextFilterHeader = "Context - pick all available right now"
+    public static let timeFilterHeader = "Time - maximum available right now"
     /// The `Lists` sidebar row / iPhone tab and the fixed-vocabulary singular "one list" term
     /// (§6.2: "List").
     public static let list = "List"

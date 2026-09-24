@@ -258,6 +258,13 @@ private enum NoteText {
         return rect.insetBy(dx: -2, dy: -2).contains(point) ? range : nil
     }
 
+    /// The width to measure at: the proposal when it is a real width, else the width the view
+    /// already has, else a guess (only before the first layout).
+    static func measuringWidth(_ proposed: CGFloat?, current: CGFloat) -> CGFloat {
+        if let proposed, proposed.isFinite, proposed > 0 { return proposed }
+        return current > 0 ? current : 320
+    }
+
     static func height(layout: NSLayoutManager, container: NSTextContainer, font: PlatformFont,
                        minLines: Int) -> CGFloat {
         layout.ensureLayout(for: container)
@@ -332,13 +339,20 @@ public struct NoteEditor: NSViewRepresentable {
         view.restyle()
     }
 
+    /// SwiftUI probes with 0, the real width and infinity. The text wraps at the width the view
+    /// is finally given (`NoteTextView.setFrameSize`), so a probe must not leave the container
+    /// at its width — that is what wrapped a wide detail column at sixty points (2026-09-24).
     public func sizeThatFits(_ proposal: ProposedViewSize, nsView view: NoteTextView,
                              context: Context) -> CGSize? {
-        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? 320
         guard let layout = view.layoutManager, let container = view.textContainer else { return nil }
+        let width = NoteText.measuringWidth(proposal.width, current: view.bounds.width)
+        let previous = container.containerSize
         container.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
-        return CGSize(width: width, height: NoteText.height(layout: layout, container: container,
-                                                             font: view.styler.baseFont, minLines: minLines))
+        let height = NoteText.height(layout: layout, container: container,
+                                     font: view.styler.baseFont, minLines: minLines)
+        container.containerSize = view.bounds.width > 0
+            ? CGSize(width: view.bounds.width, height: .greatestFiniteMagnitude) : previous
+        return CGSize(width: width, height: height)
     }
 
     private func configure(_ view: NoteTextView) {
@@ -403,6 +417,15 @@ public final class NoteTextView: NSTextView {
             DispatchQueue.main.async { [weak self] in self?.restyle() }
         }
         return resigned
+    }
+
+    /// The frame SwiftUI settles on is the wrap width — not the last width a probe measured.
+    public override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        guard newSize.width > 0, let container = textContainer,
+              container.containerSize.width != newSize.width else { return }
+        container.containerSize = CGSize(width: newSize.width, height: .greatestFiniteMagnitude)
+        invalidateIntrinsicContentSize()
     }
 
     public override var intrinsicContentSize: NSSize {
@@ -555,10 +578,15 @@ public struct NoteEditor: UIViewRepresentable {
 
     public func sizeThatFits(_ proposal: ProposedViewSize, uiView view: NoteTextView,
                              context: Context) -> CGSize? {
-        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? 320
+        let width = NoteText.measuringWidth(proposal.width, current: view.bounds.width)
+        let previous = view.textContainer.size
         view.textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
-        return CGSize(width: width, height: NoteText.height(layout: view.layoutManager, container: view.textContainer,
-                                                             font: view.styler.baseFont, minLines: minLines))
+        let height = NoteText.height(layout: view.layoutManager, container: view.textContainer,
+                                     font: view.styler.baseFont, minLines: minLines)
+        // `widthTracksTextView` follows the frame once there is one; until then keep the probe.
+        view.textContainer.size = view.bounds.width > 0
+            ? CGSize(width: view.bounds.width, height: .greatestFiniteMagnitude) : previous
+        return CGSize(width: width, height: height)
     }
 
     private func configure(_ view: NoteTextView) {
