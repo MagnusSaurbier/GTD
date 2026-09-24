@@ -38,6 +38,9 @@ is strict and `scripts/check-tickets.sh` (part of `scripts/check.sh`) enforces t
    gate only for the current branch's own issue (no claim, a collision, `project.yml` disagreeing);
    another branch's missing claim is printed as a NOTE so that nobody's push waits on someone
    else's omission.
+   Whenever you ask the user to test something on screen, say the version in chat ("build 0.2"):
+   the stamp bottom right and the Dock name `GTD - 0.2` are how they confirm they run your build
+   and not another session's.
 3. **Keep the body current.** Rewrite **State** and **Remaining** (and **PR:** once there is
    one) at least:
    - before every `git push`,

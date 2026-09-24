@@ -68,6 +68,8 @@ expect 11 harmless `no rule to process file … xcstrings/assetcatalog` warnings
     prints it; `project.yml`'s `MARKETING_VERSION` gets the same number) the moment work starts, rewrite its
     **State**/**Remaining** before every push and before your context could end, close it via `Closes #N` in
     the PR. `scripts/check-tickets.sh` enforces this, including version collisions.
+    **When you hand the user something to test, name the version in chat** ("this is 0.2"), so they can
+    check the stamp bottom right (or the Dock name `GTD - 0.2`) and know they run the right build.
 11. Actions minutes only for code: a docs-only commit ends its subject with `[skip ci]`; deploys run on
     tags or dispatch only (`.github/workflows/README.md`).
 
