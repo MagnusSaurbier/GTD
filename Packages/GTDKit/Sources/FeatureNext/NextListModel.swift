@@ -236,7 +236,7 @@ public final class NextListModel {
         guard let followUp = action.followUpDate else { return }
         try await model.send(.setStatus(
             action.id, .waiting,
-            waiting: WaitingInfo(who: action.waitingFor ?? "", followUp: followUp.adding(days: days))))
+            waiting: WaitingInfo(who: action.waitingFor, followUp: followUp.adding(days: days))))
     }
 
     /// Chase quick action: whatever you were waiting for arrived — the action is done.
