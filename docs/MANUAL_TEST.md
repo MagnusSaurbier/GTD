@@ -83,6 +83,12 @@ swipes, Mac with keys. Open it with the `Process inbox` button, `⌘I`, or `gtd:
       suggested* +7 d chip you must tap to confirm; `Who or what` says **(optional)**.
       `Set waiting` stays disabled until a date is confirmed. File with the who left empty — the
       note must get `followUpDate:` and **no** `waitingFor:` line.
+- [ ] **The date calendar (`DayPicker`):** tap a confirmed `+ defer` / `+ due` / follow-up chip —
+      the calendar opens (popover on Mac, medium sheet on iPhone) on the chosen month with that
+      day filled and today in accent. **One** click on any day sets the chip to that date and
+      closes the calendar at once; `‹` / `›` page months and the middle dot returns to the month
+      you started on, none of them changing the date. (Before 2026-09-24 this was a stock
+      graphical `DatePicker` whose clicks never reached the chip: no date could be set at all.)
 - [ ] A one-time hint overlay (`← Someday` / `→ Next` / `↓ Back`) appears the first time an
       **action card** is opened — not on the session's first card.
 

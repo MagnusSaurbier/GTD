@@ -198,6 +198,28 @@ public enum Copy {
         return first.lowercased() + text.dropFirst()
     }
 
+    // MARK: Date picker (`DayPicker`)
+
+    /// What the calendar popover/sheet is, for VoiceOver.
+    public static let pickADate = "Pick a date"
+    public static let previousMonth = "Previous month"
+    public static let nextMonth = "Next month"
+    /// Back to the month the picker opened on — it moves the grid, it does not pick a date.
+    public static let thisMonth = "Back to the selected month"
+
+    /// One day cell, spoken: `Friday 25 September 2026`, and `today` / `tomorrow` for the two
+    /// days that have their own word (STYLEGUIDE §8; same wording as `DateText.spelled`).
+    public static func dayPickerCell(_ day: Day, today: Day) -> String {
+        let date = "\(day.day) \(MonthGrid.spelledMonths[day.month - 1]) \(day.year)"
+        let delta = day.days(since: today)
+        switch delta {
+        case 0: return "\(date), today"
+        case 1: return "\(date), tomorrow"
+        case -1: return "\(date), yesterday"
+        default: return date
+        }
+    }
+
     public static let onTheRemarkable = "On the reMarkable"
 
     /// Chase quick action (W2, T21): `Bump +7d`.
