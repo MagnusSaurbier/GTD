@@ -181,20 +181,16 @@ public struct OverviewView: View {
     }
 }
 
-/// A sidebar section as a drop target for a dragged row (E3): the `moveNote` handler decides
-/// whether the drop would do anything (that is the highlight) and what it opens. Sections
-/// without a `moveDestination` are plain rows.
+/// A sidebar section as a drop target for a dragged row (E3): `NoteDropRow` asks the
+/// `moveNote` handler whether the drop would do anything (that is the light-blue highlight)
+/// and hands it the drop. Sections without a `moveDestination` are plain rows.
 private struct SidebarDropRow<Content: View>: View {
     let item: SidebarItem
     @ViewBuilder let content: () -> Content
-    @Environment(\.moveNote) private var moveNote
 
     var body: some View {
-        if let destination = item.moveDestination, let moveNote {
-            NoteDropRow(
-                accepts: { moveNote.accepts($0, destination) },
-                perform: { moveNote.move($0, destination) },
-                content: content)
+        if let destination = item.moveDestination {
+            NoteDropRow(destination: destination, content: content)
         } else {
             content()
         }

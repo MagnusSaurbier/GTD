@@ -31,7 +31,9 @@ private struct MoveNoteHostModifier: ViewModifier {
                     accepts: { id, destination in coordinator.accepts(id, destination) },
                     move: { id, destination in
                         Task { await coordinator.move(id, to: destination) }
-                    })
+                    },
+                    beginDrag: { id in coordinator.dragging = id },
+                    currentDrag: { coordinator.dragging })
             })
             .onAppear {
                 if injected == nil, owned == nil {

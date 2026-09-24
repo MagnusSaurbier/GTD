@@ -44,6 +44,11 @@ public final class MoveCoordinator {
 
     public var dialogue: Dialogue?
 
+    /// The note last picked up by a drag in this window (`MoveNoteHandler.beginDrag`), so a
+    /// drop target can say while it hovers whether it would accept it. Not cleared at the
+    /// drag's end — the drag API has no end hook — and only ever read during a hover.
+    public var dragging: NoteID?
+
     /// The Mac key table the card legend shows; the host keeps it current.
     public var keyBindings: KeyBindings
 

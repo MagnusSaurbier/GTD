@@ -69,7 +69,7 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
 - Drag-to-category (E3, `Interaction/NoteDragging.swift`): `NoteDragItem` (the `Transferable`
   a dragged row carries — the `NoteID` under an app-private UTType, so nothing leaves the app),
   `View.draggableNote(_:)` for a row, `View.noteDropTarget(isTargeted:accepts:perform:)` and
-  `NoteDropRow { }` (drop target + the `accentWash` row tint while targeted) for a section or
+  `NoteDropRow(destination:) { }` (drop target + the light-blue `dropTargetWash` row tint while a note it would accept hovers) for a section or
   project row, the `\.moveNote` environment (`MoveNoteHandler`: `accepts`/`move` over
   `GTDAppCore.MoveDestination`, set by the shell that hosts the dialogues, `nil` where there is
   nowhere to move to) and `MoveToMenu(id:)`, the drag's context-menu twin (renders nothing

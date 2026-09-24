@@ -14,22 +14,14 @@ import GTDFixtures
 /// a click or the arrow keys select a row, selecting opens the project in the detail column
 /// (`onOpenProject`), and `selection` — the project that column shows — is what the list
 /// highlights. The list keeps no selection of its own. iOS keeps tap-to-open.
-/// One project row as a drop target for a dragged action (E3). Without a `moveNote` handler
-/// (a screen with nowhere to move to) it is the plain row.
+/// One project row as a drop target for a dragged action (E3): attaches the action to this
+/// project, replacing the one it named before.
 private struct ProjectDropRow<Content: View>: View {
     let project: NoteID
     @ViewBuilder let content: () -> Content
-    @Environment(\.moveNote) private var moveNote
 
     var body: some View {
-        if let moveNote {
-            NoteDropRow(
-                accepts: { moveNote.accepts($0, .project(project)) },
-                perform: { moveNote.move($0, .project(project)) },
-                content: content)
-        } else {
-            content()
-        }
+        NoteDropRow(destination: .project(project), content: content)
     }
 }
 

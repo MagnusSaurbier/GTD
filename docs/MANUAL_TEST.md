@@ -306,7 +306,7 @@ Mac, on fixtures. Every row in Next, Someday, Waiting and Deferred can be dragge
 sections Next · Someday · Waiting · Projects · Deferred and the rows of the Projects list take
 the drop. Inbox, Lists, Review and Routines never highlight and never take a drop.
 
-- [ ] Drag a Next row onto **Someday**: the section tints (`accentWash`) while the row hovers,
+- [ ] Drag a Next row onto **Someday**: the section lights up light blue (`dropTargetWash`) while the row hovers,
       the item moves at once, the `Moved to Someday` toast appears, `⌘Z` brings it back.
 - [ ] Drag a Someday row that has a time estimate onto **Next**: moves at once (or the shell's
       cap alert at 15/15 — no automatic demotion).
