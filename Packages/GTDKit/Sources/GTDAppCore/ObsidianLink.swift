@@ -35,6 +35,21 @@ public enum ObsidianLink {
         url(forVaultPath: id.path, vaultRoot: vaultRoot, form: form)
     }
 
+    /// The note's absolute file-system path, for "Copy path" next to "Open in Obsidian": what a
+    /// terminal or a `/do <path>` prompt takes. Unescaped — it is not a URL. `nil` exactly when
+    /// `url(for:vaultRoot:)` is.
+    public static func filePath(for id: NoteID, vaultRoot: String?) -> String? {
+        filePath(forVaultPath: id.path, vaultRoot: vaultRoot)
+    }
+
+    public static func filePath(forVaultPath relativePath: String, vaultRoot: String?) -> String? {
+        let relative = relativePath.trimmingSlashes
+        guard let vaultRoot, !relative.isEmpty else { return nil }
+        let root = vaultRoot.trimmingTrailingSlashes
+        guard !root.isEmpty else { return nil }
+        return "\(root)/\(relative)"
+    }
+
     /// `relativePath` is vault-relative (`NoteID.path`, `Project.referenceFiles`,
     /// `VaultIssue.path`). `nil` when the vault root is unknown or either part is empty.
     public static func url(forVaultPath relativePath: String, vaultRoot: String?, form: Form = .platformDefault) -> URL? {

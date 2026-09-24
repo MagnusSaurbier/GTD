@@ -375,6 +375,9 @@ Run **without** `-useFixtures`.
       `Settings → Vault issues`, Obsidian opens that very file — no "Vault not found". Try a file
       whose name has a space, an `&` and an umlaut. Do it on the Mac (`path=`) **and** on the
       iPhone (`vault=&file=`). On fixtures the button is absent.
+- [ ] **Copy path** (beside Open in Obsidian in an action's detail): the clipboard holds the
+      note's absolute path, unescaped (`open "$(pbpaste)"` in Terminal opens the file). Absent on
+      fixtures, like its neighbour.
 - [ ] `Settings → Change vault…` then pick the copy again: everything still works.
 
 ## 5. Two devices (Mac + iPhone, same iCloud vault copy)
