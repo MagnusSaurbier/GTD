@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The gate every task must pass before reporting done (CLAUDE.md rule 8).
 #
-#   scripts/check.sh          package build + tests, docs check, migration tests, simulator build
+#   scripts/check.sh          package build + tests, docs/tickets/workflows checks, migration tests, simulator build
 #   scripts/check.sh --app    additionally regenerate the Xcode project and build the app
 #
 # Steps that need a tool this machine does not have (Xcode, pytest) are skipped with a clear
@@ -33,6 +33,12 @@ step "swift test (Packages/GTDKit)"
 
 step "docs check"
 "$REPO_ROOT/scripts/check-docs.sh"
+
+step "tickets check (docs/TICKETS.md)"
+"$REPO_ROOT/scripts/check-tickets.sh"
+
+step "workflows check (.github/workflows/README.md)"
+"$REPO_ROOT/scripts/check-workflows.sh"
 
 step "pytest — Tools/migrate"
 # The migration script is Python and has its own suite. pytest is often installed for the user
