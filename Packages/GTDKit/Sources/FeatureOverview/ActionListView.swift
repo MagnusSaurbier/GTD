@@ -119,10 +119,12 @@ public struct ActionListView: View {
                 .contentShape(Rectangle())
                 .tag(action.id)
                 .draggableNote(action.id)
-                #if !os(macOS)
+                // On every platform, the Mac included: the drag source takes the mouse-down
+                // before the `List(selection:)` sees it, so a click no longer selects the row
+                // by itself — the tap opens the note, and the selection follows the detail.
                 .onTapGesture { onOpen(action.id) }
-                #endif
                 .accessibilityAddTraits(.isButton)
+                .accessibilityAction { onOpen(action.id) }
                 .contextMenu {
                     Button(Copy.done) { send(.complete(action.id)) }
                     Divider()

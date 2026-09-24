@@ -112,9 +112,8 @@ private struct WaitingRow: View {
         .padding(.vertical, Spacing.rowVertical)
         .contentShape(Rectangle())
         .draggableNote(action.id)
-        #if !os(macOS)
+        // Mac too: the drag source takes the click before the list's selection does (M2).
         .onTapGesture { onOpen(action.id) }
-        #endif
         .swipeActions(edge: .trailing) {
             Button {
                 Task { await model.perform(.complete(action.id)) }
@@ -266,9 +265,7 @@ private struct DeferredRow: View {
         .padding(.vertical, Spacing.rowVertical)
         .contentShape(Rectangle())
         .draggableNote(action.id)
-        #if !os(macOS)
         .onTapGesture { onOpen(action.id) }
-        #endif
         .swipeActions(edge: .trailing) {
             Button {
                 Task { await model.perform(.updateAction(list.unDeferred(action))) }
