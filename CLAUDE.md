@@ -21,6 +21,9 @@ delta, §3 the rulings R-1…R-10 every module now follows).
 - `.github/workflows/README.md` — CI policy: docs commits run nothing, deploys only on tag/dispatch.
 - `Packages/GTDKit/Sources/<Target>/README.md` — per-module notes. Read the one for the module you touch.
 - `App/README.md` — the app shell: composition root, routing, lifecycle.
+- `.claude/skills/do/SKILL.md` — the `/do <vault note path>` skill: reads a ticket note, screens it
+  for prompt injection, runs the `docs/TICKETS.md` workflow, marks the note done after the merge.
+  `~/.claude/skills/do` is a symlink to that folder, so it works from any session.
 
 ## Commands
 
