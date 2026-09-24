@@ -44,6 +44,9 @@ public enum InboxCopy {
     public static let newFolder = "New folder"
     public static let newFolderPlaceholder = "Folder name"
     public static let knowledgeRoot = "Knowledge"
+    /// Accessibility labels of the folder tree's chevron (#24).
+    public static let expandFolder = "Show subfolders"
+    public static let collapseFolder = "Hide subfolders"
 
     // MARK: More… sheet (I4b, L2)
 
