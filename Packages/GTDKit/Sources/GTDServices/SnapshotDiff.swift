@@ -180,7 +180,12 @@ public enum SnapshotDiff {
     // MARK: - The stale-write guard (N3)
 
     /// What every file `ops` would overwrite or move away from must still hold for the commit
-    /// to be safe, as `ContentHash`es keyed by path (ARCHITECTURE §6, 2026-09-24).
+    /// to be safe, keyed by path: the texts the file may hold, an empty list for "no file"
+    /// (ARCHITECTURE §6, 2026-09-24). Two texts are acceptable for a note that came from a scan:
+    /// its entity's encoding *and* the file text it was decoded from — they differ only when
+    /// reading normalised something (an inbox capture without `created`), and that is not a
+    /// change made elsewhere. Kept as text rather than a hash because a refusal shows the first
+    /// one to the person as the base of the merge (2026-09-25).
     ///
     /// The expectation is the base snapshot's entity **encoded**: the codec patches the text it
     /// stashed at decode time, so an untouched entity encodes to its file byte for byte, and a
@@ -195,7 +200,7 @@ public enum SnapshotDiff {
     /// absent even when the same command writes it right after the move.
     static func expectedContents(
         before ops: [VaultFileOp], in old: VaultSnapshot, timeZone: TimeZone = .current
-    ) -> [String: String] {
+    ) -> [String: [String]] {
         let routineLog = old.config.layout.routineLog + "/"
         var paths = Set<String>()
         for op in ops {
@@ -205,42 +210,60 @@ public enum SnapshotDiff {
             case .moveFolder, .createFolder: continue
             }
         }
-        var expected: [String: String] = [:]
+        var expected: [String: [String]] = [:]
         for path in paths where !path.hasPrefix(routineLog) {
-            expected[path] = ContentHash.of(text(at: path, in: old, timeZone: timeZone))
+            expected[path] = acceptableTexts(at: path, in: old, timeZone: timeZone)
         }
         return expected
+    }
+
+    /// Every path the snapshot's note collections occupy — what a rename elsewhere can be found
+    /// under (`VaultBackend.conflict(for:at:in:)`).
+    static func entityPaths(in snapshot: VaultSnapshot) -> [String] {
+        snapshot.inbox.map(\.id.path) + snapshot.actions.map(\.id.path)
+            + snapshot.listItems.map(\.id.path) + snapshot.areas.map(\.id.path)
+            + snapshot.projects.map(\.id.path) + snapshot.routines.map(\.id.path)
     }
 
     /// The file at `path` as `snapshot` knows it — its entity's encoding — or `nil` when the
     /// snapshot holds no note there.
     static func text(at path: String, in snapshot: VaultSnapshot, timeZone: TimeZone) -> String? {
+        acceptableTexts(at: path, in: snapshot, timeZone: timeZone).first
+    }
+
+    /// The texts the file at `path` may hold according to `snapshot`: the entity's encoding
+    /// first, then the text it was decoded from when that differs; empty when the snapshot
+    /// holds no note there.
+    static func acceptableTexts(
+        at path: String, in snapshot: VaultSnapshot, timeZone: TimeZone
+    ) -> [String] {
+        let encoded: (text: String, passthrough: NotePassthrough)?
         if let item = snapshot.inbox.first(where: { $0.id.path == path }) {
-            return NoteCodec.encode(item, timeZone: timeZone)
+            encoded = (NoteCodec.encode(item, timeZone: timeZone), item.passthrough)
+        } else if let action = snapshot.actions.first(where: { $0.id.path == path }) {
+            encoded = (NoteCodec.encode(action, timeZone: timeZone), action.passthrough)
+        } else if let item = snapshot.listItems.first(where: { $0.id.path == path }) {
+            encoded = (NoteCodec.encode(item, timeZone: timeZone), item.passthrough)
+        } else if let area = snapshot.areas.first(where: { $0.id.path == path }) {
+            encoded = (NoteCodec.encode(area), area.passthrough)
+        } else if let project = snapshot.projects.first(where: { $0.id.path == path }) {
+            encoded = (NoteCodec.encode(project), project.passthrough)
+        } else if let routine = snapshot.routines.first(where: { $0.id.path == path }) {
+            encoded = (NoteCodec.encode(routine), routine.passthrough)
+        } else if path == snapshot.config.layout.configFile {
+            encoded = (NoteCodec.encode(snapshot.config), snapshot.config.passthrough)
+        } else if let review = snapshot.lastReview,
+                  review.noteID(layout: snapshot.config.layout).path == path {
+            encoded = (NoteCodec.encode(review, timeZone: timeZone), review.passthrough)
+        } else {
+            encoded = nil
         }
-        if let action = snapshot.actions.first(where: { $0.id.path == path }) {
-            return NoteCodec.encode(action, timeZone: timeZone)
+        guard let encoded else { return [] }
+        var texts = [encoded.text]
+        if let source = NoteCodec.sourceText(of: encoded.passthrough), source != encoded.text {
+            texts.append(source)
         }
-        if let item = snapshot.listItems.first(where: { $0.id.path == path }) {
-            return NoteCodec.encode(item, timeZone: timeZone)
-        }
-        if let area = snapshot.areas.first(where: { $0.id.path == path }) {
-            return NoteCodec.encode(area)
-        }
-        if let project = snapshot.projects.first(where: { $0.id.path == path }) {
-            return NoteCodec.encode(project)
-        }
-        if let routine = snapshot.routines.first(where: { $0.id.path == path }) {
-            return NoteCodec.encode(routine)
-        }
-        if path == snapshot.config.layout.configFile {
-            return NoteCodec.encode(snapshot.config)
-        }
-        if let review = snapshot.lastReview,
-           review.noteID(layout: snapshot.config.layout).path == path {
-            return NoteCodec.encode(review, timeZone: timeZone)
-        }
-        return nil
+        return texts
     }
 
     // MARK: - extraOps bookkeeping

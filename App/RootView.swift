@@ -94,6 +94,15 @@ private struct GlobalFlows: ViewModifier {
                     }
                 }
             }
+            // N3 — a write the vault had moved past: both versions, the person merges.
+            .sheet(item: conflict) { conflict in
+                ConflictSheet(
+                    conflict: conflict,
+                    onDone: { path, text in
+                        Task { await model.resolveConflict(path: path, text: text) }
+                    },
+                    onKeepVault: { model.discardConflict() })
+            }
             // R3 — a routine opened from a notification or an App Intent.
             .flowCover(item: $router.routineRun) { target in
                 RoutineRunnerView(routine: target.note, onFinished: { router.routineRun = nil })
@@ -110,6 +119,13 @@ private struct GlobalFlows: ViewModifier {
     }
 
     // MARK: Bindings
+
+    /// The sheet closes only through the model: Done clears the conflict once the merged note
+    /// is written, "Keep the vault's version" clears it at once. Interactive dismissal is off,
+    /// so a `nil` set here is the model's own.
+    private var conflict: Binding<WriteConflict?> {
+        Binding(get: { model.conflict }, set: { if $0 == nil { model.discardConflict() } })
+    }
 
     private var whatsNext: Binding<NoteTarget?> {
         Binding(

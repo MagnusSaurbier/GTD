@@ -24,6 +24,14 @@ public enum NoteCodec {
     /// `NotePassthrough` slot holding the note's original text.
     static let sourceSlot = "source"
 
+    /// The file text the entity was decoded from, byte for byte, or `nil` for an entity the app
+    /// created. `GTDServices`' stale-write guard accepts it beside the entity's encoding, so a
+    /// read-time normalisation — an inbox note without `created` takes the file's date, and
+    /// encoding it would add the line — never counts as "changed elsewhere" (2026-09-25).
+    public static func sourceText(of passthrough: NotePassthrough) -> String? {
+        passthrough[sourceSlot]
+    }
+
     // MARK: - Kind
 
     /// The `kind:` of a note (`project`, `area`, `review`, …), for callers that must dispatch

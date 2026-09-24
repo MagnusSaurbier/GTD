@@ -350,6 +350,26 @@ import GTDVault
         #expect(today.count == 2, "both steps are in today's log: \(today)")
     }
 
+    /// The first real-vault refusal (2026-09-25): a capture typed outside the app has no
+    /// `created`, so reading it takes the file's date and encoding it would add the line. That
+    /// is not a change made elsewhere — renaming and filing it must go through.
+    @Test func aCaptureWithoutCreatedIsNotAConflict() async throws {
+        let vault = try TestVault.onDisk(deviceID: "mac-1")
+        defer { vault.cleanUp() }
+        try vault.fileSystem.writeText("Just a thought typed in Obsidian.\n", to: "Inbox/typed elsewhere.md")
+        try await vault.backend.start()
+
+        let id = NoteID(path: "Inbox/typed elsewhere.md")
+        #expect(await vault.backend.currentSnapshot().inbox.contains { $0.id == id })
+        _ = try await vault.backend.perform(.renameInboxItem(id, title: "typed elsewhere, renamed"))
+
+        let renamed = NoteID(path: "Inbox/typed elsewhere, renamed.md")
+        #expect(try vault.text(id.path) == nil)
+        #expect(try vault.text(renamed.path) == "Just a thought typed in Obsidian.\n", "a pure rename rewrites nothing")
+        _ = try await vault.backend.perform(.editInboxBody(renamed, "Now with a body."))
+        #expect(try #require(try vault.text(renamed.path)).contains("Now with a body."))
+    }
+
     // MARK: - Helpers
 
     /// A second backend over the **same** folder, with its own device id and its own

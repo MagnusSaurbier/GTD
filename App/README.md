@@ -40,6 +40,9 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
 - **Notifications:** every snapshot change re-plans (debounced), as does foregrounding and the
   background refresh — a device only knows what has synced into its own snapshot.
 - **Errors:** `AppModel.writeFailure`, `AppModel.lastError` and shell failures share one alert.
+  A refusal that carries a `WriteConflict` opens `ConflictSheet` instead (N3): Done writes the
+  merged note through `AppModel.resolveConflict`, "Keep the vault's version" discards. Both
+  shells re-scan the vault (`refreshFromDisk`) the moment inbox processing begins.
   Nothing is swallowed.
 - **Queued writes:** the vault is written behind the UI, and only when the person acts on an
   item — the shell triggers no write of its own (no archive on launch or foreground; the backend

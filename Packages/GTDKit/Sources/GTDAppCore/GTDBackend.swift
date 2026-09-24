@@ -31,11 +31,15 @@ public struct WriteFailure: Error, Sendable, CustomStringConvertible {
     public var label: String
     public var reason: any Error
     public var discarded: Int
+    /// Set when the refusal is the stale-write guard's (N3): both versions of the note and a
+    /// proposed merge, for the conflict sheet. `AppModel` shows the sheet instead of the alert.
+    public var conflict: WriteConflict?
 
-    public init(label: String, reason: any Error, discarded: Int = 0) {
+    public init(label: String, reason: any Error, discarded: Int = 0, conflict: WriteConflict? = nil) {
         self.label = label
         self.reason = reason
         self.discarded = discarded
+        self.conflict = conflict
     }
 
     public var description: String {
@@ -70,11 +74,21 @@ public protocol GTDBackend: Sendable {
 
     /// Human-readable label of what `undo()` would revert, or `nil` when there is nothing.
     func undoLabel() async -> String?
+
+    /// Writes the note the person merged in the conflict sheet — `text` as-is at `path`,
+    /// moving the vault's copy there first when the title changed — and makes it undoable.
+    /// The one write besides `undo()` that bypasses the reducer (ARCHITECTURE §6, 2026-09-25).
+    func resolve(_ conflict: WriteConflict, path: String, text: String) async throws
 }
 
 public extension GTDBackend {
     func writeFailures() -> AsyncStream<WriteFailure> {
         AsyncStream { $0.finish() }
+    }
+
+    /// A backend without files has nothing to merge into.
+    func resolve(_ conflict: WriteConflict, path: String, text: String) async throws {
+        throw ConflictError.unsupported
     }
 
     /// The snapshot as of right now, for callers that do not care about identity changes.

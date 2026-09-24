@@ -41,8 +41,10 @@ import GTDVault
 /// Obsidian, another device. Before `commit`, every file the command would overwrite or move
 /// away from is read and compared with what the base snapshot says it holds
 /// (`SnapshotDiff.expectedContents`); a mismatch is `ServiceError.staleWrite`, and the queue is
-/// abandoned like any other refusal — re-read, published, reported. It is a refusal, never a
-/// merge (ARCHITECTURE §6, 2026-09-24). Staleness is about the *files*, not the snapshot's age:
+/// abandoned like any other refusal — re-read, published, reported. The report carries a
+/// `WriteConflict` (both texts, both paths, a proposed merge) for the conflict sheet, and
+/// `resolve` writes what the person settled on; the app itself never merges (ARCHITECTURE §6,
+/// 2026-09-24 and 2026-09-25). Staleness is about the *files*, not the snapshot's age:
 /// a week offline commits fine as long as the touched notes did not change. Re-scan first,
 /// refuse second: `perform` pulls the store's newest snapshot before reducing, so a change the
 /// store has indexed but the backend has not received yet never turns into a refusal.
@@ -183,8 +185,8 @@ public actor VaultBackend: GTDBackend {
     private struct PendingWrite {
         var ops: [VaultFileOp]
         /// What each file the ops touch must still hold when their turn comes (N3), path →
-        /// `ContentHash`.
-        var expected: [String: String]
+        /// the acceptable texts, empty for "no file".
+        var expected: [String: [String]]
         var layout: VaultLayout
         var label: String
         var isUndoable: Bool
@@ -287,8 +289,13 @@ public actor VaultBackend: GTDBackend {
         if let waiter = first.waiter {
             waiter.resume(throwing: error)
         } else {
+            var conflict: WriteConflict?
+            if case let ServiceError.staleWrite(path)? = error as? ServiceError {
+                conflict = await self.conflict(for: first, at: path, in: truth)
+            }
             failures.publish(WriteFailure(
-                label: first.label, reason: error, discarded: dropped.count - 1))
+                label: first.label, reason: error, discarded: dropped.count - 1,
+                conflict: conflict))
         }
         for later in dropped.dropFirst() {
             later.waiter?.resume(throwing: ServiceError.writeDiscarded)
@@ -569,10 +576,83 @@ public actor VaultBackend: GTDBackend {
     /// snapshot it was reduced on says. Reads go straight to the files, not the index, so the
     /// answer is as fresh as the disk. A file that cannot be read (evicted, N3 §7.4) refuses
     /// with the store's own error rather than a misleading "changed elsewhere".
-    private func refuseIfStale(_ expected: [String: String]) async throws {
+    private func refuseIfStale(_ expected: [String: [String]]) async throws {
         for path in expected.keys.sorted() {
-            let now = ContentHash.of(try await store.read(path: path))
-            guard now == expected[path] else { throw ServiceError.staleWrite(path: path) }
+            let acceptable = expected[path] ?? []
+            let unchanged: Bool
+            if let now = try await store.read(path: path) {
+                unchanged = acceptable.contains(now)
+            } else {
+                unchanged = acceptable.isEmpty
+            }
+            guard unchanged else { throw ServiceError.staleWrite(path: path) }
+        }
+    }
+
+    /// Both sides of a refused write, for the conflict sheet (ARCHITECTURE §6, 2026-09-25).
+    ///
+    /// *Mine* is what the dropped write would have left at the note's path — the put's text, the
+    /// base text for a pure move, nothing for a trash. *Theirs* is the file as it is now, or,
+    /// when the path is empty, the note the re-scanned vault holds under another name with
+    /// exactly the base's content: that is what a rename elsewhere looks like.
+    private func conflict(
+        for write: PendingWrite, at basePath: String, in truth: VaultSnapshot?
+    ) async -> WriteConflict {
+        let base = write.expected[basePath]?.first
+        var minePath = basePath
+        var mine: String? = base
+        for op in write.ops {
+            switch op {
+            case let .move(from, to) where from == basePath: minePath = to
+            case let .delete(path) where path == basePath: mine = nil
+            default: continue
+            }
+        }
+        for case let .put(path, text) in write.ops where path == minePath { mine = text }
+
+        var theirsPath: String?
+        var theirs: String?
+        if let now = try? await store.read(path: basePath) {
+            theirsPath = basePath
+            theirs = now
+        } else if let base, let truth {
+            let timeZone = makeEnv().calendar.timeZone
+            for path in SnapshotDiff.entityPaths(in: truth)
+            where SnapshotDiff.text(at: path, in: truth, timeZone: timeZone) == base {
+                theirsPath = path
+                theirs = base
+                break
+            }
+        }
+        return WriteConflict(
+            label: write.label, basePath: basePath, base: base, path: minePath, mine: mine,
+            theirsPath: theirsPath, theirs: theirs)
+    }
+
+    /// The conflict sheet's Done: the merged text, as-is, at the path the person chose. The
+    /// vault's copy moves there first when the title changed; a taken title is a collision the
+    /// person resolves. Journaled like a command, published like an undo.
+    public func resolve(_ conflict: WriteConflict, path: String, text: String) async throws {
+        try await startIfNeeded()
+        await flush()
+        var ops: [VaultFileOp] = []
+        if let theirsPath = conflict.theirsPath, theirsPath != path {
+            if try await exists(path) { throw GTDError.titleCollision(NoteID(path: path).title) }
+            ops.append(.move(from: theirsPath, to: path))
+        } else if conflict.theirsPath == nil, try await exists(path) {
+            throw GTDError.titleCollision(NoteID(path: path).title)
+        }
+        ops.append(.put(path: path, text: text))
+        let inverse = try await store.commit(ops)
+        await journal.push(UndoJournal.Entry(
+            label: UndoLabel.merged(title: NoteID(path: path).title),
+            inverseOps: inverse,
+            hashes: try await hashes(touchedBy: inverse)))
+        let renames = conflict.theirsPath.map { $0 == path ? RenameMap.empty
+            : RenameMap(from: NoteID(path: $0), to: NoteID(path: path)) } ?? .empty
+        if let scanned = await storeSnapshot(), !scanned.isEmptyVault {
+            lastFromStore = scanned
+            publish(scanned, renames: renames)
         }
     }
 
