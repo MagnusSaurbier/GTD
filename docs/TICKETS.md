@@ -29,13 +29,13 @@ is strict and `scripts/check-tickets.sh` (part of `scripts/check.sh`) enforces t
    build from its branch carries it (the shells stamp it bottom right, Settings prints it). Run
    `scripts/check-tickets.sh --status`: its `versions` line says what main is and which `0.N` is
    the next free one — one minor above the highest of main's `MARKETING_VERSION` and every open
-   issue's claim. Put that number in **Version:** and in `project.yml`'s `MARKETING_VERSION`
+   issue's claim. Put that number in **Version:** and in `App/Version.xcconfig`'s `MARKETING_VERSION`
    (one line, in the same commit as your first code). Two agents that start at the same time
    read the same board; the one whose issue edit lands second sees the collision on its next
    `check-tickets.sh` and takes the next free number. Never reuse a version another open issue
-   claims, and never claim one at or below main's. On merge the branch's `project.yml` conflicts
+   claims, and never claim one at or below main's. On merge the branch's `App/Version.xcconfig` conflicts
    with main only if another version merged first; keep your own number. The checker fails the
-   gate only for the current branch's own issue (no claim, a collision, `project.yml` disagreeing);
+   gate only for the current branch's own issue (no claim, a collision, `App/Version.xcconfig` disagreeing);
    another branch's missing claim is printed as a NOTE so that nobody's push waits on someone
    else's omission.
    Whenever you ask the user to test something on screen, say the version in chat ("build 0.2"):
@@ -99,7 +99,7 @@ tracked now, whether it is a significant functionality change (→ tag → deplo
 
 **Branch** is the branch name in backticks once there is one; **PR** the PR URL; **Agent** is
 `local` or `cloud`; **Version** the `<major>.<minor>` this issue claims (rule 2) — the same
-string as `MARKETING_VERSION` in `project.yml` on the branch. Labels: `in progress` (state), `abandoned` (closed reason), `follow-up`
+string as `MARKETING_VERSION` in `App/Version.xcconfig` on the branch. Labels: `in progress` (state), `abandoned` (closed reason), `follow-up`
 (has a spec in `docs/follow-ups/`), `agent:local` / `agent:cloud`.
 
 ## Ticket size
