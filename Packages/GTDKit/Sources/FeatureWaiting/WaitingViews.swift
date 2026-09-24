@@ -181,7 +181,8 @@ private struct WaitingRow: View {
             get: { offeringBump ? nil : action.followUpDate },
             set: { newValue in
                 offeringBump = false
-                guard let newValue, let info = list.bumped(action, to: newValue) else { return }
+                guard let newValue else { return }
+                let info = list.bumped(action, to: newValue)
                 Task { await model.perform(.setStatus(action.id, .waiting, waiting: info)) }
             })
     }

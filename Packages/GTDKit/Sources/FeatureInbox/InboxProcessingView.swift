@@ -231,7 +231,9 @@ struct InboxSessionView: View {
             Text(session.counter)
                 .font(Typo.counter)
                 .foregroundStyle(Color.textSecondary)
-            card
+            // Capped and scrolling past `SheetMetrics.cardMaxHeight`: a content-sized sheet
+            // would otherwise grow with a long note until its buttons leave the window.
+            MacCardScroll(focused: focus) { card }
             // Mac also gets a row of stock buttons under the card (STYLEGUIDE §3.6) — the
             // keyboard is the primary path, but every action stays reachable with the mouse.
             actionBar

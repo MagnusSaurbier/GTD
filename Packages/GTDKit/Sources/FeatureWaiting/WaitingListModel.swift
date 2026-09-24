@@ -82,12 +82,17 @@ public final class WaitingListModel {
     /// (dashed) chip. Never written until the user confirms it (§1 "no lying defaults").
     public var suggestedBump: Day { WaitingInfo.suggestedFollowUp(from: today) }
 
-    /// The `WaitingInfo` a "chase done → bump" confirms: same `who`, a new follow-up date.
-    /// `nil` if the action has no `who` yet (shouldn't happen for a `.waiting` action, but a
-    /// hand-edited file could still be missing it).
-    public func bumped(_ action: Action, to date: Day) -> WaitingInfo? {
-        guard let who = action.waitingFor else { return nil }
-        return WaitingInfo(who: who, followUp: date)
+    /// The `WaitingInfo` a "chase done → bump" (or any date picked in the row's calendar)
+    /// confirms: the same `who`, a new follow-up date.
+    ///
+    /// W1/D39 — the who is **optional**, so a waiting item without one bumps like any other.
+    /// This used to return `nil` for a missing who and the row's chip then silently dropped the
+    /// date the user had just picked: on a real vault, where M2 imported every waiting item with
+    /// no who at all, no follow-up date could be set from the list (user report, 2026-09-24).
+    /// A blank who is normalised away, so no empty `waitingFor:` line is written.
+    public func bumped(_ action: Action, to date: Day) -> WaitingInfo {
+        let who = action.waitingFor?.trimmingCharacters(in: .whitespaces)
+        return WaitingInfo(who: (who?.isEmpty ?? true) ? nil : who, followUp: date)
     }
 
     /// The action with its `deferDate` cleared — "un-defer now" (D1).

@@ -48,6 +48,12 @@ public enum Symbols {
     /// Routine runner: one step back.
     public static let back = "chevron.backward"
 
+    /// `DayPicker`'s month stepper. Like `moveUp`/`moveDown` these are the stock chevrons (plus
+    /// the stock "back to where you were" dot), not invented concept icons.
+    public static let previousMonth = "chevron.left"
+    public static let nextMonth = "chevron.right"
+    public static let thisMonth = "circle"
+
     public static let routineGeneric = "repeat"
     public static let routineMorning = "sunrise"
     public static let routineBedtime = "moon.stars"

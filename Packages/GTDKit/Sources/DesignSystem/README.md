@@ -17,7 +17,9 @@ Platform-free (compiles on Linux, unit-tested):
   `GTDModel.Signal` into text and a symbol.
 - `CardDragGeometry` — the pure drag-to-file maths behind `ItemCard` (§3.6): axis lock, per-
   direction thresholds, rotation, exit offset. `FlowLayoutEngine` — the row-wrapping algorithm
-  behind `FlowLayout` (§3.1). `NavbarPlatform`/`NavbarSlot`/`NavbarLayout.slots(favourites:platform:)`
+  behind `FlowLayout` (§3.1). `MonthGrid(year:month:)`/`MonthGrid(containing:)` — one month as six
+  full Monday-first ISO weeks, with `contains(_:)`, `previous`/`next` and the header titles, behind
+  the SwiftUI `DayPicker` (§3.1's date chips). `NavbarPlatform`/`NavbarSlot`/`NavbarLayout.slots(favourites:platform:)`
   — the Knowledge/List navbar's fixed-slot layout (§3.6): which slots exist for N favourites and a
   platform limit (4 on iPhone, 8 on Mac), in which order, with which Mac key index. All are
   unit-tested directly; the SwiftUI types below are thin wrappers over them.
@@ -29,7 +31,12 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
 - `Typo`, `Motion`, `Radius.chipShape`/`cardShape`/`tileShape`, `View.cardElevation()`,
   `View.shake(trigger:)` (§3.6/§5's validation shake — 6 pt, 0.3 s, a no-op under Reduce Motion).
 - `Chip`, `FlowLayout`, `ContextChipGroup`, `TimeBucketChipGroup`, `DateValueChip`,
-  `Badge`, `ActionRow`, `ListItemRow` (§3.3 "List items": completion circle + title only, no
+  `DayPicker(selection:today:onPick:)` — the app's own month calendar the date chips open
+  (popover on Mac, medium sheet on iOS): one click on a day calls `onPick` and the chip writes
+  the date and closes the picker. It replaced the stock graphical `DatePicker`, whose clicks
+  never reached the chip's binding on macOS, so no date could be picked at all (2026-09-24).
+  Its calendar arithmetic is `MonthGrid` (Foundation-only, tested on Linux).
+- `Badge`, `ActionRow`, `ListItemRow` (§3.3 "List items": completion circle + title only, no
   second line, no badges, no age), `ProjectRow`, `ItemCard`, `CollapsibleText`,
   `View.itemCardPeek(hasNext:)`, `UndoToast`,
   `SectionLabel(_:isMissing:font:foreground:)` — a field/chip-group label with the required-field

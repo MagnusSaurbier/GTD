@@ -127,7 +127,8 @@ public struct MakeActionCardView: View {
         #else
         VStack(spacing: Spacing.l) {
             Spacer(minLength: 0)
-            card
+            // Same cap as the inbox's Mac sheet (`InboxSessionView.macContent`).
+            MacCardScroll(focused: focus) { card }
             ActionCardBar(
                 isFieldFocused: focus != nil,
                 onWaiting: { Task { await model.take(.waiting) } },

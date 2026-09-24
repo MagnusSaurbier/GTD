@@ -31,6 +31,11 @@ FILES=(
     "docs/CONTRIBUTING-AGENTS.md"
     "docs/KNOWN_ISSUES.md"
     "docs/follow-ups/README.md"
+    "docs/TICKETS.md"
+    "docs/open_tickets/README.md"
+    "docs/in_progress/README.md"
+    "docs/history/README.md"
+    ".github/workflows/README.md"
 )
 while IFS= read -r module_readme; do
     FILES+=("$module_readme")

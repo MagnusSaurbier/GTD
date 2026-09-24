@@ -210,7 +210,8 @@ public struct TimeBucketChipGroup: View {
 }
 
 /// A date chip: `plus` symbol + `Defer` when unset, the formatted date when confirmed, dashed when suggested.
-/// Tapping opens a **stock graphical `DatePicker`** — popover on Mac, medium sheet on iOS.
+/// Tapping opens the app's own `DayPicker` — popover on Mac, medium sheet on iOS. One click
+/// on a day sets the date and closes the picker.
 public struct DateValueChip: View {
     private let label: String
     @Binding private var value: Day?
@@ -272,13 +273,15 @@ public struct DateValueChip: View {
         return .unset
     }
 
+    /// The app's own `DayPicker`: one click on a day writes the value and closes the picker.
+    /// The stock graphical `DatePicker` that used to sit here looked right but could not be
+    /// used — on macOS its clicks never reached this chip's binding, so a follow-up/defer/due
+    /// date simply could not be set from the calendar (user report, 2026-09-24).
     private var picker: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             #if os(iOS)
-            // The graphical `DatePicker` has no confirm control of its own and picking a day
-            // does not dismiss it — without this the only way out was swiping down (T15
-            // defect 4b). Swipe-down still works; this just gives it a second, discoverable
-            // way out, same as every other sheet in the app.
+            // The sheet's own way out for someone who opened it and changed their mind; picking
+            // a day closes it too. Swipe-down still works (T15 defect 4b).
             HStack {
                 Spacer(minLength: 0)
                 Button(Copy.done) { isPresented = false }
@@ -286,15 +289,11 @@ public struct DateValueChip: View {
             .padding(.horizontal, Spacing.l)
             .padding(.top, Spacing.m)
             #endif
-            DatePicker(
-                label,
-                selection: Binding(
-                    get: { (value ?? suggestion ?? today).startOfDay() ?? Date() },
-                    set: { value = Day($0) }),
-                displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                .padding(Spacing.l)
+            DayPicker(selection: value, today: today) { day in
+                value = day
+                isPresented = false
+            }
+            .padding(Spacing.l)
         }
         #if os(iOS)
         .presentationDetents([.medium])

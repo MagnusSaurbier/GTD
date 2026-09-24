@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && echo 'Ticket board (docs/TICKETS.md: create a ticket before any work, keep it current):' && scripts/check-tickets.sh --status"
+          }
+        ]
+      }
+    ]
+  }
+}

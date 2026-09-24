@@ -157,8 +157,17 @@ struct FeatureWaitingTests {
         let bumped = list.bumped(action, to: today.adding(days: 7))
         #expect(bumped == WaitingInfo(who: "Alice", followUp: today.adding(days: 7)))
 
+        // W1/D39 — the who is optional, so an item without one still bumps. This returned `nil`
+        // until 2026-09-24 and the row's calendar then dropped the date the user had picked: on a
+        // real vault, where M2 imported every waiting item without a who, no follow-up date could
+        // be set from the list at all.
         let noWho = makeAction("B", status: .waiting, who: nil, followUp: today)
-        #expect(list.bumped(noWho, to: today.adding(days: 7)) == nil)
+        #expect(list.bumped(noWho, to: today.adding(days: 7))
+            == WaitingInfo(who: nil, followUp: today.adding(days: 7)))
+
+        // A blank who is normalised away — never an empty `waitingFor:` line (§1).
+        let blankWho = makeAction("C", status: .waiting, who: "  ", followUp: today)
+        #expect(list.bumped(blankWho, to: today.adding(days: 7)).who == nil)
     }
 
     @Test func suggestedBumpIsSevenDaysFromToday() {
