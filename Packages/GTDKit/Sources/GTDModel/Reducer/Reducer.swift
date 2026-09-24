@@ -104,6 +104,9 @@ public enum Reducer {
         case .pruneFavouriteLists:
             return pruneFavouriteLists(s)
 
+        case let .setListIcon(list, symbol):
+            return try setListIcon(s, list: list, symbol: symbol)
+
         case let .updateListItem(id, title, notes):
             return try updateListItem(s, id: id, title: title, notes: notes)
 
@@ -731,6 +734,11 @@ public enum Reducer {
                 GTDList.sameName($0, list.name) ? clean : $0
             }
         }
+        // So does its icon.
+        if let icon = next.config.listIcon(for: list.name) {
+            next.config.listIcons = next.config.listIcons.filter { !GTDList.sameName($0.key, list.name) }
+            next.config.listIcons[clean] = icon
+        }
         return Reduction(
             snapshot: next,
             extraOps: [.moveFolder(from: oldFolder, to: newFolder)],
@@ -749,6 +757,7 @@ public enum Reducer {
             favourites.removeAll { GTDList.sameName($0, list.name) }
             next.config.favouriteLists = favourites
         }
+        next.config.listIcons = next.config.listIcons.filter { !GTDList.sameName($0.key, list.name) }
         return Reduction(
             snapshot: next,
             extraOps: [.moveFolder(
@@ -784,6 +793,19 @@ public enum Reducer {
         guard kept.count < stored.count else { return Reduction(snapshot: s) }
         var next = s
         next.config.favouriteLists = kept
+        return Reduction(snapshot: next)
+    }
+
+    /// L2 — the icon a list shows everywhere. Stored under the list's own spelling, so the
+    /// config names the folder exactly; `nil` or an empty symbol removes the entry.
+    private static func setListIcon(
+        _ s: VaultSnapshot, list name: String, symbol: String?
+    ) throws(GTDError) -> Reduction {
+        guard let list = s.list(named: name) else { throw .invalid(Message.unknownList(name)) }
+        let clean = symbol?.trimmingCharacters(in: .whitespaces) ?? ""
+        var next = s
+        next.config.listIcons = s.config.listIcons.filter { !GTDList.sameName($0.key, list.name) }
+        if !clean.isEmpty { next.config.listIcons[list.name] = clean }
         return Reduction(snapshot: next)
     }
 

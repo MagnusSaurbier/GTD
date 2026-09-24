@@ -168,6 +168,8 @@ public enum GTDCommand: Sendable, Equatable {
     /// R-5 — drops stored favourites whose list folder is gone (removed or renamed outside the
     /// app). Changes nothing — so writes nothing — when every favourite still has its folder.
     case pruneFavouriteLists
+    /// L2 — the SF Symbol shown for a list; `nil` goes back to the built-in glyph.
+    case setListIcon(list: String, symbol: String?)
     /// Editing one item: a changed title renames its file, `notes` is the body.
     case updateListItem(NoteID, title: String, notes: String)
     /// L3 — checked off: the note moves to `Lists/<name>/Done/` and is kept as a log.

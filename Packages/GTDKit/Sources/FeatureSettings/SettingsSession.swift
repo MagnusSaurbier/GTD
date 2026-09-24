@@ -99,7 +99,12 @@ public final class SettingsSession {
         try await model.send(.setFavouriteLists(next))
     }
 
-    // MARK: Next cap (A3)
+    /// L2 — the icon `name` shows everywhere; `nil` goes back to its built-in glyph.
+    public func setListIcon(_ name: String, symbol: String?) async throws {
+        try await model.send(.setListIcon(list: name, symbol: symbol))
+    }
+
+        // MARK: Next cap (A3)
 
     /// Rethrows `GTDError.invalid` for cap <= 0 (`Reducer.updateConfig`) — the UI never
     /// pre-clamps, so the same validation lives in one place.

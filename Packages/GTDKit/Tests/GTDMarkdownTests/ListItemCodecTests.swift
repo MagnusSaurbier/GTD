@@ -237,3 +237,41 @@ struct ConfigFavouriteListsTests {
         #expect(NoteCodec.encode(config) == text)
     }
 }
+
+/// L2 — `listIcons:` in `GTD/Config.md`: written only once an icon is picked.
+struct ConfigListIconsTests {
+
+    private let id = NoteID(path: "GTD/Config.md")
+
+    @Test func anAbsentKeyDecodesAsNoIcons() throws {
+        let config = try NoteCodec.decodeConfig(id: id, text: "---\nnextCap: 15\n---\n")
+        #expect(config.listIcons.isEmpty)
+    }
+
+    @Test func pickingAnIconAddsTheMappingAndClearingItTakesItAway() throws {
+        let text = "---\nnextCap: 15\n---\n# Config\n"
+        var config = try NoteCodec.decodeConfig(id: id, text: text)
+        config.listIcons = ["Watch": "tv", "Read": "books.vertical"]
+        let written = NoteCodec.encode(config)
+        #expect(written == "---\nnextCap: 15\nlistIcons:\n  Read: books.vertical\n  Watch: tv\n---\n# Config\n")
+        #expect(try NoteCodec.decodeConfig(id: id, text: written).listIcons == config.listIcons)
+
+        var cleared = try NoteCodec.decodeConfig(id: id, text: written)
+        cleared.listIcons = [:]
+        #expect(NoteCodec.encode(cleared) == text)
+    }
+
+    @Test func aListNameThatNeedsQuotingSurvives() throws {
+        var config = try NoteCodec.decodeConfig(id: id, text: "---\nnextCap: 15\n---\n")
+        config.listIcons = ["Books: to buy": "cart"]
+        let back = try NoteCodec.decodeConfig(id: id, text: NoteCodec.encode(config))
+        #expect(back.listIcons == ["Books: to buy": "cart"])
+    }
+
+    @Test func aHandWrittenMappingRoundTripsUntouched() throws {
+        let text = "---\nlistIcons: {Read: book, Wish: cart}\nnextCap: 15\n---\n"
+        let config = try NoteCodec.decodeConfig(id: id, text: text)
+        #expect(config.listIcons == ["Read": "book", "Wish": "cart"])
+        #expect(NoteCodec.encode(config) == text)
+    }
+}
