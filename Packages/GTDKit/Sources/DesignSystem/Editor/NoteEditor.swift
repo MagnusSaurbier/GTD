@@ -243,7 +243,7 @@ private enum NoteDrawing {
 
 /// The shared parts of both platforms' text views: storage, layout, the list commands.
 @MainActor
-private enum NoteText {
+enum NoteText {
     /// A TextKit 1 stack. The storage is returned too: a layout manager holds its storage only
     /// weakly, so the text view must keep it (`NoteTextView.storage`) or it is freed at once.
     static func makeStack() -> (storage: NSTextStorage, container: NSTextContainer) {
@@ -268,6 +268,25 @@ private enum NoteText {
         let rect = manager.rectFor(NSRange(location: range.lowerBound, length: range.count),
                                    in: container, origin: .zero)
         return rect.insetBy(dx: -2, dy: -2).contains(point) ? range : nil
+    }
+
+    /// Where the caret belongs after the text was replaced from outside the view (the inbox card
+    /// turning `- ` into `- [ ] `, a snapshot arriving mid-edit). The change is taken to be one
+    /// replaced stretch between the texts' common prefix and suffix, in UTF-16 units:
+    /// a caret before it stays, a caret at or after it moves with the change — so an insertion
+    /// exactly at the caret lands the caret after the inserted text, as typing would — and a
+    /// caret inside the replaced stretch goes to its end. Never inside hidden markup, then.
+    static func caret(_ caret: Int, from old: String, to new: String) -> Int {
+        let before = Array(old.utf16), after = Array(new.utf16)
+        var prefix = 0
+        while prefix < before.count, prefix < after.count, before[prefix] == after[prefix] { prefix += 1 }
+        var suffix = 0
+        while suffix < before.count - prefix, suffix < after.count - prefix,
+              before[before.count - 1 - suffix] == after[after.count - 1 - suffix] { suffix += 1 }
+        let clamped = max(0, min(caret, before.count))
+        if clamped >= before.count - suffix { return clamped + (after.count - before.count) }
+        if clamped <= prefix { return clamped }
+        return after.count - suffix
     }
 
     /// The width to measure at: the proposal when it is a real width, else the width the view
@@ -343,10 +362,9 @@ public struct NoteEditor: NSViewRepresentable {
         context.coordinator.text = $text
         configure(view)
         if view.string != text, !view.hasMarkedText() {
-            let selection = view.selectedRange()
+            let caret = NoteText.caret(view.selectedRange().location, from: view.string, to: text)
             view.string = text
-            let length = (text as NSString).length
-            view.setSelectedRange(NSRange(location: min(selection.location, length), length: 0))
+            view.setSelectedRange(NSRange(location: caret, length: 0))
         }
         view.restyle()
     }
@@ -583,7 +601,9 @@ public struct NoteEditor: UIViewRepresentable {
         context.coordinator.text = $text
         configure(view)
         if view.text != text, view.markedTextRange == nil {
+            let caret = NoteText.caret(view.selectedRange.location, from: view.text, to: text)
             view.text = text
+            view.selectedRange = NSRange(location: caret, length: 0)
         }
         view.restyle()
     }
