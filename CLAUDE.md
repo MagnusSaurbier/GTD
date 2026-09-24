@@ -16,8 +16,8 @@ delta, §3 the rulings R-1…R-10 every module now follows).
 - `docs/TRACEABILITY.md` — every requirement → its module, tests, status. Fix the row your change moves.
 - `docs/KNOWN_ISSUES.md` — what is missing, deliberate or merely assumed. Read it before filing a bug.
 - `docs/MANUAL_TEST.md` — the checks only a real Mac/iPhone can do (§1–§3 = the reworked flow); §9 is the first-real-use checklist.
-- `docs/TICKETS.md` — **the ticket rule**: `docs/open_tickets/` → `docs/in_progress/` → `docs/history/`. Read it first.
-- `docs/follow-ups/` — briefs for work nobody has started · `docs/history/` — finished tickets and how the app was built; not instructions.
+- `docs/TICKETS.md` — **the ticket rule**: every change is a GitHub issue, opened first, labelled `in progress`, body kept current, closed by the PR.
+- `docs/follow-ups/` — specs for the open `follow-up` issues · `docs/history/` — how the app was built; not instructions.
 - `.github/workflows/README.md` — CI policy: docs commits run nothing, deploys only on tag/dispatch.
 - `Packages/GTDKit/Sources/<Target>/README.md` — per-module notes. Read the one for the module you touch.
 - `App/README.md` — the app shell: composition root, routing, lifecycle.
@@ -63,9 +63,9 @@ expect 11 harmless `no rule to process file … xcstrings/assetcatalog` warnings
 7. An error is never swallowed: `AppModel.send` throws, `perform`/`report` reach the shell's alert.
 8. Out of scope unless the user says otherwise: everything in REQUIREMENTS §12.
 9. Gate before reporting done: `scripts/check.sh`. Report failures verbatim; never disable a test.
-10. **No work without a ticket** (`docs/TICKETS.md`): write it in `docs/open_tickets/` before anything else,
-    `git mv` it to `docs/in_progress/` the moment work starts, update it before every push and before your
-    context could end, move it to `docs/history/` once the PR is merged. `scripts/check-tickets.sh` enforces this.
+10. **No work without a ticket** (`docs/TICKETS.md`): open a GitHub issue before anything else, label it
+    `in progress` and set its **Branch:** the moment work starts, rewrite its **State**/**Remaining** before
+    every push and before your context could end, close it via `Closes #N` in the PR. `scripts/check-tickets.sh` enforces this.
 11. Actions minutes only for code: a docs-only commit ends its subject with `[skip ci]`; deploys run on
     tags or dispatch only (`.github/workflows/README.md`).
 
@@ -88,7 +88,7 @@ README untrue, fix that statement in the same commit.**
 | You did this | Update this |
 | --- | --- |
 | Added/renamed/removed a target, script, folder or command | "Where things are" / "Commands" here, ARCHITECTURE §2 |
-| Pushed, finished a subagent, changed the plan, or are about to run out of context | the ticket in `docs/in_progress/` |
+| Pushed, finished a subagent, changed the plan, or are about to run out of context | the issue body (`gh issue edit N --body-file …`) |
 | Changed a public contract or the vault layout/format | ARCHITECTURE §3/§4 and the module README |
 | Made or reversed a product/technical decision | ARCHITECTURE §6 (one row, with date) |
 | Closed or widened a gap | the row in `docs/TRACEABILITY.md`, and `docs/KNOWN_ISSUES.md` |

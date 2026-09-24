@@ -23,4 +23,4 @@ There are no workflows yet. When one is added, it follows these rules, and
 6. Nothing runs on a schedule.
 
 What "significant functionality" means: the user can do something they could not do before, or
-a documented behaviour changed. The ticket's **Outcome** says which it was.
+a documented behaviour changed. The issue's **Outcome** says which it was.

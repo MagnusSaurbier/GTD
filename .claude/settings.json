@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && echo 'Ticket board (docs/TICKETS.md: create a ticket before any work, keep it current):' && scripts/check-tickets.sh --status"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && echo 'Ticket board (docs/TICKETS.md: open a GitHub issue before any work, keep its body current):' && scripts/check-tickets.sh --status"
           }
         ]
       }
