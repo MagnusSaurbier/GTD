@@ -37,6 +37,11 @@ struct UndoLabelTests {
             .fileInbox(id, .action(ActionDraft(title: "x", status: .done))), in: snapshot) == "Done")
     }
 
+    /// E3 — an action dropped on a list reads like an inbox card filed there (§6.3).
+    @Test func movingAnActionToAListNamesTheList() {
+        #expect(UndoLabel.of(.moveActionToList(id, list: "Read"), in: snapshot) == "Added to Read")
+    }
+
     /// I4c — trashing an action is its own command, and it says so.
     @Test func trashingAnActionSaysMovedToTrash() {
         #expect(UndoLabel.of(.trashAction(id), in: snapshot) == "Moved to Trash")

@@ -361,6 +361,7 @@ private struct NextListContent: View {
             }
         }
         .nextRowChrome()
+        .draggableNote(action.id)
         #if os(iOS)
         .swipeActions(edge: .trailing) {
             Button(Copy.done) { run { try await list.complete(action) } }
@@ -385,6 +386,8 @@ private struct NextListContent: View {
             }
             Button(Copy.waiting) { waitingSheetAction = action }
             Button(Copy.deferLabel) { deferSheetAction = action }
+            // The drag-to-section twin (E3) — where the screen has sections to move to.
+            MoveToMenu(id: action.id)
         }
     }
 
@@ -393,6 +396,7 @@ private struct NextListContent: View {
             action, title: list.chaseTitle(for: action), spokenLabel: list.chaseSpokenLabel(for: action)
         ) { run { try await list.resolveChase(action) } }
             .nextRowChrome()
+            .draggableNote(action.id)
             #if os(iOS)
             .swipeActions(edge: .trailing) {
                 Button(Copy.resolved) { run { try await list.resolveChase(action) } }
@@ -406,6 +410,7 @@ private struct NextListContent: View {
             .contextMenu {
                 Button(Copy.bumpFollowUp(days: 7)) { run { try await list.bumpFollowUp(action) } }
                 Button(Copy.resolved) { run { try await list.resolveChase(action) } }
+                MoveToMenu(id: action.id)
             }
     }
 

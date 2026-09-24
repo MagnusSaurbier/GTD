@@ -43,6 +43,7 @@ public enum UndoLabel {
         case .completeListItem: "Done"
         case .trashListItem: "Moved to Trash"
         case let .promoteListItem(_, draft): "Filed to \(tier(draft.status))"
+        case let .moveActionToList(_, list): "Added to \(list)"
         case .renameList: "Renamed list"
         case .removeList: "Removed list"
         case .updateListItem: "Edited"

@@ -37,6 +37,12 @@ public struct OverviewView: View {
     private var nav: OverviewNavigation { injectedNavigation ?? ownedNavigation }
 
     public var body: some View {
+        // Every list row below can be dragged onto a sidebar section or a project row (E3);
+        // the dialogue a drop needs is presented over the whole window.
+        content.moveNoteHost()
+    }
+
+    private var content: some View {
         Group {
             if nav.selection.spansDetailColumn {
                 NavigationSplitView {
@@ -97,12 +103,14 @@ public struct OverviewView: View {
         return List(selection: selectionBinding) {
             Section {
                 ForEach(SidebarItem.counted, id: \.self) { item in
-                    SidebarRow(
-                        item: item,
-                        count: item.count(counts),
-                        capSignal: item == .next ? Rules.capSignal(model.snapshot, today: model.today()) : nil,
-                        today: model.today())
-                        .tag(item)
+                    SidebarDropRow(item: item) {
+                        SidebarRow(
+                            item: item,
+                            count: item.count(counts),
+                            capSignal: item == .next ? Rules.capSignal(model.snapshot, today: model.today()) : nil,
+                            today: model.today())
+                    }
+                    .tag(item)
                 }
             }
             Section {
@@ -170,6 +178,22 @@ public struct OverviewView: View {
 
     private var issuesBinding: Binding<Bool> {
         Binding(get: { nav.isIssuesPresented }, set: { nav.isIssuesPresented = $0 })
+    }
+}
+
+/// A sidebar section as a drop target for a dragged row (E3): `NoteDropRow` asks the
+/// `moveNote` handler whether the drop would do anything (that is the light-blue highlight)
+/// and hands it the drop. Sections without a `moveDestination` are plain rows.
+private struct SidebarDropRow<Content: View>: View {
+    let item: SidebarItem
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if let destination = item.moveDestination {
+            NoteDropRow(destination: destination, content: content)
+        } else {
+            content()
+        }
     }
 }
 

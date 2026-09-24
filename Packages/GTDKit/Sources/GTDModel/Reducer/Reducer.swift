@@ -116,6 +116,9 @@ public enum Reducer {
         case let .promoteListItem(id, draft):
             return try promoteListItem(s, id: id, draft: draft, env: env)
 
+        case let .moveActionToList(id, list):
+            return try moveActionToList(s, id: id, list: list)
+
         case let .saveWeeklyReview(review):
             return try saveWeeklyReview(s, review: review, env: env)
 
@@ -866,6 +869,50 @@ public enum Reducer {
             snapshot: next,
             extraOps: [.move(from: item.id.path, to: action.id.path)],
             renames: renames)
+    }
+
+    /// E3 — an action becomes a list item (the inverse of `promoteListItem`): the file moves
+    /// into `Lists/<name>/`, keeps its `created` and its frontmatter passthrough, and its body
+    /// (preamble, `Why?`, `What?`) becomes the item's notes so nothing the person wrote is
+    /// lost. Undo moves it back. A list item is never an action, so the cap only ever drops.
+    private static func moveActionToList(
+        _ s: VaultSnapshot, id: NoteID, list name: String
+    ) throws(GTDError) -> Reduction {
+        guard let action = s.action(id) else { throw .notFound(id) }
+        guard let list = s.list(named: name) else { throw .invalid(Message.unknownList(name)) }
+        let target = s.config.layout.listItemPath(list: list.name, title: action.title)
+        guard !pathExists(target, in: s) else { throw .titleCollision(action.title) }
+
+        var next = s
+        next.actions.removeAll { $0.id == id }
+        retarget(from: id, to: nil, in: &next)
+        next.listItems.append(ListItem(
+            id: target,
+            list: list.name,
+            title: action.title,
+            isFinished: false,
+            created: action.created,
+            notes: listNotes(of: action),
+            passthrough: action.passthrough))
+        var renames = RenameMap.empty
+        renames.record(id, as: target)
+        return Reduction(
+            snapshot: next,
+            extraOps: [.move(from: id.path, to: target.path)],
+            renames: renames)
+    }
+
+    /// The item's notes: the action's preamble, then `Why?` / `What?` under their headings when
+    /// they say anything — the same text, readable in Obsidian, nothing dropped.
+    static func listNotes(of action: Action) -> String {
+        var parts: [String] = []
+        let preamble = action.preamble.trimmingCharacters(in: .whitespacesAndNewlines)
+        let why = action.why.trimmingCharacters(in: .whitespacesAndNewlines)
+        let what = action.what.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !preamble.isEmpty { parts.append(preamble) }
+        if !why.isEmpty { parts.append("# Why?\n" + why) }
+        if !what.isEmpty { parts.append("# What?\n" + what) }
+        return parts.joined(separator: "\n\n")
     }
 
     /// L2 — a list name is a folder name: non-empty after sanitising, and never the reserved

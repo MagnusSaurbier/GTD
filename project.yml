@@ -46,6 +46,13 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
+        # The app-private pasteboard type a dragged row carries (`DesignSystem.NoteDragItem`,
+        # E3). Declared so macOS treats it as a real type on the drag pasteboard rather than
+        # a dynamic one; nothing outside the app conforms to it.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.magnussaurbier.gtd.note
+            UTTypeDescription: GTD note reference
+            UTTypeConformsTo: [public.data]
         ITSAppUsesNonExemptEncryption: false
         NSHumanReadableCopyright: ""
         CFBundleURLTypes:

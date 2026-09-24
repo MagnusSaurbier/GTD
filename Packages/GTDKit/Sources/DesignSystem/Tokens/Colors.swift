@@ -48,6 +48,12 @@ public extension Color {
     /// Selected-row background where system selection is not used; drag-target tint for Next.
     static var accentWash: Color { gtdAccent.opacity(0.18) }
 
+    /// The light-blue wash a sidebar section or project row wears while a dragged note it
+    /// would accept hovers over it (E3, the user's call 2026-09-24: "light up light blue").
+    /// System blue rather than the accent, so it reads as "drop here" against the selected
+    /// row's own highlight.
+    static var dropTargetWash: Color { Color.blue.opacity(0.28) }
+
     /// Step 1 — aging / approaching.
     static var signalAging: Color { .yellow }
     /// Step 2 — needs attention.

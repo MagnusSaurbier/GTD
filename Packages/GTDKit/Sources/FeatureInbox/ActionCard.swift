@@ -70,6 +70,22 @@ public struct InboxDraft: Sendable, Equatable {
         self.init(title: item.title, notes: item.notes)
     }
 
+    /// A drop onto a section that needs more than the note has (`MovePlan.card`): the card
+    /// starts from everything the action already carries, so the person only fills the gap.
+    /// The preamble (R-4) is the body the card shows above `Why?`.
+    public init(action: Action) {
+        self.init(
+            title: action.title,
+            body: action.preamble,
+            why: action.why,
+            what: action.what,
+            contexts: action.contexts,
+            timeBucket: action.timeBucket,
+            deferDate: action.deferDate,
+            due: action.due,
+            project: action.project)
+    }
+
     /// The file name the title field would give the note — sanitised and cut like a capture
     /// (`CaptureText.renamedTitle`). `nil` while the field is only whitespace, which is the one
     /// title that is refused.
@@ -186,6 +202,13 @@ public struct ActionCardState: Sendable, Equatable {
     /// An error that is neither the cap nor a validation issue.
     public var lastError: GTDError?
 
+    /// The tier the note is in now, when the card is over an **existing** action (a drop onto
+    /// a sidebar section). `nil` for a capture or a list item, which are new to every tier.
+    /// `RequiredField.missing` asks less of a note that already is an action (R-3: "a note
+    /// already in its tier is never judged again"), and the card must ask exactly what the
+    /// reducer would, or its asterisks lie.
+    public var previousStatus: ActionStatus?
+
     /// A filing waiting for a free Next slot (the cap's forced choice).
     public struct PendingFiling: Sendable, Equatable {
         public var status: ActionStatus
@@ -197,7 +220,7 @@ public struct ActionCardState: Sendable, Equatable {
         }
     }
 
-    public init(draft: InboxDraft = InboxDraft()) {
+    public init(draft: InboxDraft = InboxDraft(), previousStatus: ActionStatus? = nil) {
         self.draft = draft
         self.flagged = []
         self.shakeTrigger = 0
@@ -206,6 +229,7 @@ public struct ActionCardState: Sendable, Equatable {
         self.capCandidates = []
         self.pending = nil
         self.lastError = nil
+        self.previousStatus = previousStatus
     }
 
     // MARK: Validation flags
@@ -242,7 +266,7 @@ public struct ActionCardState: Sendable, Equatable {
     public func preValidate(status: ActionStatus, waiting: WaitingInfo? = nil) -> [RequiredField] {
         RequiredField.missing(
             status: status,
-            previous: nil,
+            previous: previousStatus,
             why: draft.why,
             what: draft.what,
             contexts: draft.contexts,
