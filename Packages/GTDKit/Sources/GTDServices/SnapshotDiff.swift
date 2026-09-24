@@ -177,6 +177,72 @@ public enum SnapshotDiff {
         entries.sorted { ($0.at, $0.routine, $0.step) < ($1.at, $1.routine, $1.step) }
     }
 
+    // MARK: - The stale-write guard (N3)
+
+    /// What every file `ops` would overwrite or move away from must still hold for the commit
+    /// to be safe, as `ContentHash`es keyed by path (ARCHITECTURE §6, 2026-09-24).
+    ///
+    /// The expectation is the base snapshot's entity **encoded**: the codec patches the text it
+    /// stashed at decode time, so an untouched entity encodes to its file byte for byte, and a
+    /// queued command's base is the previous command's reduced entity, whose encoding is what
+    /// that command wrote. A path the snapshot holds no note for must be **absent** — a file that
+    /// appeared unseen is exactly the edit the guard exists to protect.
+    ///
+    /// Exempt: the routine log (one file per day per device — this device is its only writer,
+    /// and log entries carry no passthrough to compare), `.moveFolder` (its files travel unread;
+    /// nothing inside is overwritten) and move destinations (the store refuses to overwrite on a
+    /// move). Paths are checked *before* the ops apply, so a rename's destination is expected
+    /// absent even when the same command writes it right after the move.
+    static func expectedContents(
+        before ops: [VaultFileOp], in old: VaultSnapshot, timeZone: TimeZone = .current
+    ) -> [String: String] {
+        let routineLog = old.config.layout.routineLog + "/"
+        var paths = Set<String>()
+        for op in ops {
+            switch op {
+            case let .put(path, _), let .delete(path): paths.insert(path)
+            case let .move(from, _): paths.insert(from)
+            case .moveFolder, .createFolder: continue
+            }
+        }
+        var expected: [String: String] = [:]
+        for path in paths where !path.hasPrefix(routineLog) {
+            expected[path] = ContentHash.of(text(at: path, in: old, timeZone: timeZone))
+        }
+        return expected
+    }
+
+    /// The file at `path` as `snapshot` knows it — its entity's encoding — or `nil` when the
+    /// snapshot holds no note there.
+    static func text(at path: String, in snapshot: VaultSnapshot, timeZone: TimeZone) -> String? {
+        if let item = snapshot.inbox.first(where: { $0.id.path == path }) {
+            return NoteCodec.encode(item, timeZone: timeZone)
+        }
+        if let action = snapshot.actions.first(where: { $0.id.path == path }) {
+            return NoteCodec.encode(action, timeZone: timeZone)
+        }
+        if let item = snapshot.listItems.first(where: { $0.id.path == path }) {
+            return NoteCodec.encode(item, timeZone: timeZone)
+        }
+        if let area = snapshot.areas.first(where: { $0.id.path == path }) {
+            return NoteCodec.encode(area)
+        }
+        if let project = snapshot.projects.first(where: { $0.id.path == path }) {
+            return NoteCodec.encode(project)
+        }
+        if let routine = snapshot.routines.first(where: { $0.id.path == path }) {
+            return NoteCodec.encode(routine)
+        }
+        if path == snapshot.config.layout.configFile {
+            return NoteCodec.encode(snapshot.config)
+        }
+        if let review = snapshot.lastReview,
+           review.noteID(layout: snapshot.config.layout).path == path {
+            return NoteCodec.encode(review, timeZone: timeZone)
+        }
+        return nil
+    }
+
     // MARK: - extraOps bookkeeping
 
     /// What `extraOps` speaks for: the paths it names, and the folders it moves.

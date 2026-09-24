@@ -56,4 +56,13 @@ elsewhere.
 
 ## Result
 
-_(fill in when done)_
+Done 2026-09-24 (issue #7). Rule: ARCHITECTURE §6, 2026-09-24. `VaultBackend.refuseIfStale` reads
+every path a command would put, delete or move away from and compares it with the base
+snapshot's entity encoded (`SnapshotDiff.expectedContents`) — absent for a note the snapshot does
+not have; a mismatch is `ServiceError.staleWrite(path:)`, which `abandonQueue` handles like any
+refused write (re-scan, publish, report with "reopen the note and make the change again").
+`perform` pulls the store's newest snapshot before reducing (re-scan first). Exempt: the routine
+log, `.moveFolder`, move destinations. Tests: `SyncScenarioTests` (rename race → one note and one
+refusal; field edited elsewhere; long-stale snapshot with unchanged files commits twice; create
+collision; routine log never refused), `QueuedWriteTests` (refusal on `writeFailures()`, snapshot
+reverts to the other writer's text), `SnapshotDiffTests` (the expectation list).

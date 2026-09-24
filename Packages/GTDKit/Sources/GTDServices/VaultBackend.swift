@@ -36,6 +36,17 @@ import GTDVault
 /// the two agree; the scan is only more precise about the fields that come from the file system
 /// (`Action.modified`, `NotePassthrough`, `VaultIssue`s).
 ///
+/// ### The stale-write guard (N3)
+/// A command is reduced on a snapshot, and the snapshot can be behind the vault: a sync landing,
+/// Obsidian, another device. Before `commit`, every file the command would overwrite or move
+/// away from is read and compared with what the base snapshot says it holds
+/// (`SnapshotDiff.expectedContents`); a mismatch is `ServiceError.staleWrite`, and the queue is
+/// abandoned like any other refusal — re-read, published, reported. It is a refusal, never a
+/// merge (ARCHITECTURE §6, 2026-09-24). Staleness is about the *files*, not the snapshot's age:
+/// a week offline commits fine as long as the touched notes did not change. Re-scan first,
+/// refuse second: `perform` pulls the store's newest snapshot before reducing, so a change the
+/// store has indexed but the backend has not received yet never turns into a refusal.
+///
 /// ### Housekeeping
 /// `start()` (also run lazily before the first command) creates the folder skeleton
 /// `VaultLayout` requires if it is missing, scans and starts watching. `archiveCompleted` runs
@@ -122,6 +133,10 @@ public actor VaultBackend: GTDBackend {
         _ command: GTDCommand, awaitingWrite: Bool, housekeepingDay: Day? = nil
     ) async throws -> [AppPrompt] {
         try await startIfNeeded()
+        // Re-scan first, refuse second: reduce on the newest snapshot the store has. A no-op in
+        // the steady state (`drain` and the forwarding task already pulled it) and while writes
+        // are queued (the store cannot know them yet, README §5).
+        await pullFromStore(onlyIfMoved: true)
         let env = makeEnv()
         let old = latest
         let reduction = try Reducer.reduce(old, command, env: env)
@@ -145,6 +160,8 @@ public actor VaultBackend: GTDBackend {
 
         let write = PendingWrite(
             ops: ops,
+            expected: SnapshotDiff.expectedContents(
+                before: ops, in: old, timeZone: env.calendar.timeZone),
             layout: old.config.layout,
             label: UndoLabel.of(command, in: old),
             isUndoable: Rules.isUndoable(command),
@@ -165,6 +182,9 @@ public actor VaultBackend: GTDBackend {
     /// One command's file operations, waiting for their turn.
     private struct PendingWrite {
         var ops: [VaultFileOp]
+        /// What each file the ops touch must still hold when their turn comes (N3), path →
+        /// `ContentHash`.
+        var expected: [String: String]
         var layout: VaultLayout
         var label: String
         var isUndoable: Bool
@@ -219,9 +239,13 @@ public actor VaultBackend: GTDBackend {
         for waiter in waiters { waiter.resume() }
     }
 
-    /// The file-system half of a command: collisions, the one transaction, the undo journal.
+    /// The file-system half of a command: collisions, the stale-write guard, the one
+    /// transaction, the undo journal. Collisions go first: a taken destination in a folder the
+    /// index does not read (`Knowledge/`) is a `titleCollision` the person resolves, not a stale
+    /// snapshot.
     private func commit(_ write: PendingWrite) async throws {
         let ops = try await resolveCollisions(write.ops, layout: write.layout)
+        try await refuseIfStale(write.expected)
         let inverse = try await store.commit(ops)
         if write.isUndoable {
             await journal.push(UndoJournal.Entry(
@@ -536,6 +560,19 @@ public actor VaultBackend: GTDBackend {
         } catch {
             // An evicted iCloud item exists but cannot be read — treat it as taken (N3 §7.4).
             return true
+        }
+    }
+
+    // MARK: - Stale-write guard
+
+    /// N3 — refuses the write when a file it would overwrite or move no longer holds what the
+    /// snapshot it was reduced on says. Reads go straight to the files, not the index, so the
+    /// answer is as fresh as the disk. A file that cannot be read (evicted, N3 §7.4) refuses
+    /// with the store's own error rather than a misleading "changed elsewhere".
+    private func refuseIfStale(_ expected: [String: String]) async throws {
+        for path in expected.keys.sorted() {
+            let now = ContentHash.of(try await store.read(path: path))
+            guard now == expected[path] else { throw ServiceError.staleWrite(path: path) }
         }
     }
 
