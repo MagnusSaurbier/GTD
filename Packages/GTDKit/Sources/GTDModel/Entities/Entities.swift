@@ -395,6 +395,10 @@ public struct GTDConfig: Sendable, Equatable {
     /// key appears in the file only once the user has picked favourites (`setFavouriteLists`),
     /// so a vault that has not been to the settings screen keeps its config untouched.
     public var favouriteLists: [String]?
+    /// The SF Symbol the user picked per list, keyed by list name (L2). A list without an entry
+    /// shows its built-in glyph (`Symbols.list`); like `favouriteLists`, the key reaches
+    /// `GTD/Config.md` only once the user has picked an icon.
+    public var listIcons: [String: String]
     public var layout: VaultLayout
     public var passthrough: NotePassthrough
 
@@ -403,6 +407,7 @@ public struct GTDConfig: Sendable, Equatable {
         onTheGoContexts: [String],
         nextCap: Int,
         favouriteLists: [String]? = nil,
+        listIcons: [String: String] = [:],
         layout: VaultLayout = .default,
         passthrough: NotePassthrough = .empty
     ) {
@@ -410,8 +415,15 @@ public struct GTDConfig: Sendable, Equatable {
         self.onTheGoContexts = onTheGoContexts
         self.nextCap = nextCap
         self.favouriteLists = favouriteLists
+        self.listIcons = listIcons
         self.layout = layout
         self.passthrough = passthrough
+    }
+
+    /// The icon picked for `list`, matched case-insensitively like every list name (L2).
+    public func listIcon(for list: String) -> String? {
+        if let exact = listIcons[list] { return exact }
+        return listIcons.first { GTDList.sameName($0.key, list) }?.value
     }
 
     /// A4 — there is **no `reading` context**: all reading goes to the Read list (§5a).

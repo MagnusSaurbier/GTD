@@ -28,6 +28,7 @@ struct RootView: View {
             .environment(composition.model)
             .environment(\.vaultRootPath, composition.vaultRootPath)
             .environment(\.keyBindings, composition.deviceSettings.keyBindings)
+            .environment(\.listIcons, composition.model.snapshot.config.listIcons)
     }
 
     @ViewBuilder private var phaseContent: some View {

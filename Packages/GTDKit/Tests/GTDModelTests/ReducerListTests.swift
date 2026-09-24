@@ -471,4 +471,38 @@ struct ReducerListTests {
         #expect(!Rules.isUndoable(.createList(name: "Wish")))
         #expect(!Rules.isUndoable(.setFavouriteLists(["Read"])))
     }
+
+    // MARK: - setListIcon (L2)
+
+    @Test func pickingAnIconStoresItUnderTheListsOwnSpelling() throws {
+        let result = try Reducer.reduce(vault(), .setListIcon(list: "read", symbol: "books.vertical"), env: env)
+        #expect(result.snapshot.config.listIcons == ["Read": "books.vertical"])
+        #expect(result.extraOps.isEmpty)
+    }
+
+    @Test func pickingNoIconGoesBackToTheBuiltInGlyph() throws {
+        var config = GTDConfig.default
+        config.listIcons = ["Read": "books.vertical", "Watch": "tv"]
+        let result = try Reducer.reduce(vault(config: config), .setListIcon(list: "Read", symbol: nil), env: env)
+        #expect(result.snapshot.config.listIcons == ["Watch": "tv"])
+    }
+
+    @Test func anIconForAListThatIsNotThereIsRefused() {
+        #expect(throws: GTDError.self) {
+            try Reducer.reduce(vault(), .setListIcon(list: "Gone", symbol: "tv"), env: env)
+        }
+    }
+
+    @Test func theIconFollowsARenameAndGoesWithARemoval() throws {
+        var config = GTDConfig.default
+        config.listIcons = ["Read": "books.vertical"]
+        let renamed = try Reducer.reduce(vault(config: config), .renameList(from: "Read", to: "Books"), env: env)
+        #expect(renamed.snapshot.config.listIcons == ["Books": "books.vertical"])
+        let removed = try Reducer.reduce(renamed.snapshot, .removeList(name: "books"), env: env)
+        #expect(removed.snapshot.config.listIcons.isEmpty)
+    }
+
+    @Test func pickingAnIconIsNotUndoable() {
+        #expect(!Rules.isUndoable(.setListIcon(list: "Read", symbol: "tv")))
+    }
 }

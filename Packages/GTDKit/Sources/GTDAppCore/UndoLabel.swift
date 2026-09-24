@@ -47,7 +47,7 @@ public enum UndoLabel {
         case .renameList: "Renamed list"
         case .removeList: "Removed list"
         case .updateListItem: "Edited"
-        case .createList, .setFavouriteLists, .pruneFavouriteLists:
+        case .createList, .setFavouriteLists, .pruneFavouriteLists, .setListIcon:
             // Not undoable (`Rules.isUndoable`); never reaches the toast.
             "Last change"
         case .toggleCheckbox: "Toggled checkbox"

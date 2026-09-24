@@ -443,6 +443,7 @@ struct MoreListsSheet: View {
 /// closes the sheet by clearing its own presentation once the list exists (a refused name keeps
 /// it open — the refusal arrives through `newListRefusal`).
 struct ListChoiceSheet: View {
+    @Environment(\.listIcons) private var listIcons
     let lists: [GTDList]
     let hasNoLists: Bool
     let listsFolderName: String
@@ -476,7 +477,7 @@ struct ListChoiceSheet: View {
                                 dismiss()
                                 onChoose(list.name)
                             } label: {
-                                Label(list.name, systemImage: Symbols.list(named: list.name))
+                                Label(list.name, systemImage: Symbols.list(named: list.name, icons: listIcons))
                                     .font(Typo.body)
                                     .foregroundStyle(Color.ink)
                             }

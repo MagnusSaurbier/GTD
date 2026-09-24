@@ -374,6 +374,8 @@ Rendering: `.symbolRenderingMode(.hierarchical)`, monochrome `ink`/`textSecondar
 | List: Wish | `gift` | | More… | `ellipsis` |
 | Collapse / Back | `chevron.down` | | Required field missing | `asterisk` |
 
+A list shows the icon the user picked in Settings → Lists (a tap on the list's icon opens a grid of `Symbols.listIconChoices`; stored as `listIcons` in `GTD/Config.md`). Without a pick, Read / Watch / Wish keep `book` / `play.rectangle` / `gift` and every other list `list.bullet`.
+
 Contexts have **no icons** — they are lowercase text chips (`mac`, `phone`, `home`, `campus`, `errands`, `calls`, `deep-work`). A concept missing from this table → add it here first, then use it.
 
 ## 8. Accessibility (non-negotiable)

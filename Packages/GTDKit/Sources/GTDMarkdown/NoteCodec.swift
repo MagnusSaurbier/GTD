@@ -485,8 +485,22 @@ public enum NoteCodec {
             // R-5 — absent means "the user has never chosen"; `Rules.favouriteLists` derives the
             // default. `nil` and `[]` are different answers and both survive a round trip.
             favouriteLists: doc.hasKey("favouriteLists") ? (doc.list("favouriteLists") ?? []) : nil,
+            listIcons: listIcons(doc.mappingNode("listIcons")),
             layout: layout,
             passthrough: passthrough(text))
+    }
+
+    /// `listIcons:` is a plain `list name: symbol` mapping; an entry without a string on both
+    /// sides is skipped rather than refused — a stray line costs one list its icon, nothing else.
+    private static func listIcons(_ node: Node?) -> [String: String] {
+        guard let mapping = node?.mapping else { return [:] }
+        var icons: [String: String] = [:]
+        for (key, value) in mapping {
+            guard let name = key.scalar?.string, let symbol = value.scalar?.string,
+                  !name.isEmpty, !symbol.isEmpty else { continue }
+            icons[name] = symbol
+        }
+        return icons
     }
 
     public static func encode(_ config: GTDConfig) -> String {
@@ -514,6 +528,17 @@ public enum NoteCodec {
                 doc.setValue("favouriteLists", YAMLScalar.flowList(favourites), canonicalOrder: order)
             } else {
                 doc.removeValue("favouriteLists")
+            }
+        }
+        // Like favourites, only a picked icon puts `listIcons:` into the file.
+        if reference?.listIcons ?? [:] != config.listIcons {
+            if config.listIcons.isEmpty {
+                doc.removeValue("listIcons")
+            } else {
+                let lines = ["listIcons:"] + config.listIcons.keys.sorted().map {
+                    "  \(YAMLScalar.string($0)): \(YAMLScalar.string(config.listIcons[$0] ?? ""))"
+                }
+                doc.setLines("listIcons", lines, canonicalOrder: order)
             }
         }
         if reference?.layout != config.layout {
@@ -702,7 +727,7 @@ public enum NoteCodec {
         public static let project = ["kind", "status", "area"]
         public static let routine = ["time"]
         public static let config = [
-            "contexts", "onTheGoContexts", "nextCap", "favouriteLists", "layout",
+            "contexts", "onTheGoContexts", "nextCap", "favouriteLists", "listIcons", "layout",
         ]
         public static let review = ["kind", "year", "week", "savedAt"]
     }

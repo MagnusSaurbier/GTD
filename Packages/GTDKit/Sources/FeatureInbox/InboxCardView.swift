@@ -31,6 +31,7 @@ struct InboxCardView: View {
     let shake: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.listIcons) private var listIcons
     /// Caps how tall the raw-text field may grow before it scrolls internally (§3.5). Scales with
     /// Dynamic Type rather than a fixed pixel count (STYLEGUIDE §2.3).
     @ScaledMetric(relativeTo: .title3) private var rawTextMaxHeight: CGFloat = 260
@@ -312,7 +313,7 @@ struct InboxCardView: View {
 
     @ViewBuilder private var destinationLabel: some View {
         if let dragTarget {
-            Label(dragTarget.title, systemImage: dragTarget.symbol)
+            Label(dragTarget.title, systemImage: dragTarget.symbol(icons: listIcons))
                 .font(Typo.sectionHeader)
                 .foregroundStyle(Color.ink)
                 .padding(Spacing.l)
