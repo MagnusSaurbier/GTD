@@ -21,16 +21,19 @@ all touch SwiftUI files that no machine has compiled yet, and each brief says so
 The build-out's rules are over — there are no waves, no per-task "Owns" paths, no frozen files,
 and no contract-change procedure. What is left is the ordinary one:
 
-1. Read `CLAUDE.md`, then `docs/CONTRIBUTING-AGENTS.md` for the shape of the change you are
+1. Prepend the ticket header from `docs/TICKETS.md` to the brief and `git mv` it to
+   `docs/in_progress/` — the brief *is* the ticket from here on, and it is kept current like one.
+2. Read `CLAUDE.md`, then `docs/CONTRIBUTING-AGENTS.md` for the shape of the change you are
    making, then the brief, then the README of every module it names.
-2. Do the work. Keep GTD semantics in `GTDModel`, keep platform code behind the guards of
+3. Do the work. Keep GTD semantics in `GTDModel`, keep platform code behind the guards of
    `docs/ARCHITECTURE.md` §5, add the tests the brief asks for.
-3. `scripts/check.sh` must exit 0. UI work also runs the `docs/STYLEGUIDE.md` §9 checklist.
-4. Update what your change made untrue: `docs/TRACEABILITY.md`'s row (that is the point of the
+4. `scripts/check.sh` must exit 0. UI work also runs the `docs/STYLEGUIDE.md` §9 checklist.
+5. Update what your change made untrue: `docs/TRACEABILITY.md`'s row (that is the point of the
    brief), `docs/KNOWN_ISSUES.md`, the module README, and `docs/ARCHITECTURE.md` §6 if you
    decided something.
-5. When the brief is done, move it to `docs/history/` — it becomes a record, like the build-out
-   briefs. A brief you only partly did stays here, with a note at the bottom saying what is left.
+6. When the PR is merged, move it to `docs/history/` with **Outcome** filled in — it becomes a
+   record, like the build-out briefs. A brief you only partly did stays in `docs/in_progress/`
+   with **Remaining** saying what is left.
 
 A brief is a starting point, not a contract. If the code has moved past it, follow the code and
 say so in the commit; if it turns out to be the wrong idea, delete it and write down why in

@@ -4,8 +4,13 @@ For agents and for future-you. `CLAUDE.md` holds the invariants; this file holds
 through the code for the four changes that come up most. Read the README of every module you
 touch first — they are short and they carry the traps.
 
-Three things are true of every change:
+Four things are true of every change:
 
+- **It has a ticket before it has a branch.** `docs/TICKETS.md`: write the ticket in
+  `docs/open_tickets/`, move it to `docs/in_progress/` when you start, keep **State** and
+  **Remaining** current before every push, move it to `docs/history/` when the PR merges. The
+  ticket is how the next agent continues if this session dies; `scripts/check-tickets.sh` fails
+  when it is missing or older than the branch's code.
 - **Check `docs/REQUIREMENTS.md` §12 first.** If what you are being asked for is on that list —
   an energy field, LLM suggestions, Calendar sync, recurring actions, timers — it is out of scope
   by decision, not by omission. Say so before you build it, and build it only if the user says to.
@@ -97,6 +102,8 @@ The longest route in the codebase, and the one where a mistake reaches the user'
 ## Before you say you are done
 
 - `scripts/check.sh` exits 0, and you pasted the tail of it into your report.
+- The ticket in `docs/in_progress/` says what is committed, pushed, verified and left, with
+  today's date in **Last updated** and the PR URL in **PR**. A docs-only commit ends with `[skip ci]`.
 - The tests you added fail when you break the thing they test. Check it once; a test that cannot
   fail is worse than no test.
 - Docs that your change made untrue are fixed in the same commit.
