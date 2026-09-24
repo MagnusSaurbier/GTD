@@ -174,6 +174,13 @@ of the same fact.
 - **The staleness thresholds (14 d / 30 d / inbox 7 d / due 3 d / follow-up 2 d) are first
   guesses.** STYLEGUIDE §10 says to tune them after two real weekly reviews, with real data.
 
+- **Note live preview (STYLEGUIDE §4.4).** `NoteEditor` was checked off-screen on macOS only
+  (rendering, focus both ways, the list keys, Return, Tab, growth, dark mode, a box click sent to
+  the view); the iOS `UITextView` side compiles but nobody has run it, and whether `.focused`
+  reaches a `UIViewRepresentable` there is unchecked. Links are styled but not clickable (Obsidian
+  opens them with ⌘-click). Tables, footnotes, embeds (`![[…]]`) and callouts show as plain text.
+  A ticked box `[x]` is a little wider than `[ ]`, so its text sits ~2 pt further right.
+
 ## 5. Migration (`Tools/migrate/`)
 
 The script has never been run against a real vault, by design — only the user runs it, against a

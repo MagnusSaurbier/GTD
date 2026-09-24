@@ -185,7 +185,10 @@ private struct NextListContent: View {
         #if os(macOS)
         VStack(alignment: .leading, spacing: Spacing.s) {
             filterHeader(Copy.contextFilterHeader)
-            contextChips
+            HStack(alignment: .top, spacing: Spacing.s) {
+                onlyMobileChip
+                contextChips
+            }
             filterHeader(Copy.timeFilterHeader)
             HStack(alignment: .firstTextBaseline, spacing: Spacing.l) {
                 TimeBucketChipGroup(selection: timeBucketBinding)
@@ -199,7 +202,11 @@ private struct NextListContent: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             filterHeader(Copy.contextFilterHeader)
             ScrollView(.horizontal, showsIndicators: false) {
-                contextChips.padding(.horizontal, Spacing.screenMargin)
+                HStack(spacing: Spacing.s) {
+                    onlyMobileChip
+                    contextChips
+                }
+                .padding(.horizontal, Spacing.screenMargin)
             }
             filterHeader(Copy.timeFilterHeader)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -228,6 +235,17 @@ private struct NextListContent: View {
         ContextChipGroup(
             contexts: list.availableContexts,
             selection: Binding(get: { list.contexts }, set: { list.setContexts($0) }))
+    }
+
+    /// E2 — on the iPhone the list shows only on-the-go contexts while this chip is on (the
+    /// default); switched off, every context's chip appears and the list is the whole Next list.
+    /// Not a filter, so `Clear filters` leaves it alone. Absent in `.full`, which never restricts.
+    @ViewBuilder private var onlyMobileChip: some View {
+        if list.mode == .onTheGo {
+            Chip(Copy.onlyMobile, state: list.isOnTheGoOnly ? .confirmed : .unset) {
+                list.setShowsAllContexts(!list.showsAllContexts)
+            }
+        }
     }
 
     @ViewBuilder private var clearFiltersButton: some View {

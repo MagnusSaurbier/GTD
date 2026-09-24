@@ -8,7 +8,7 @@ in Obsidian.
 ## Status
 
 **Feature-complete, partly verified on screen, never pointed at a real vault.** Every module of
-`Packages/GTDKit` is implemented and tested — 1 350 tests — and the app shell wires them together:
+`Packages/GTDKit` is implemented and tested — 1 385 tests — and the app shell wires them together:
 the vault backend behind onboarding, the iPhone tabs and the Mac window, deep links, notifications
 and background refresh. Everything up to 2026-09-19 was written on Linux with no Xcode and first
 compiled and launched on fixtures that day; the 2026-09-21 inbox rework was built on a Mac with

@@ -38,7 +38,8 @@ public struct InboxItem: Identifiable, Sendable, Equatable {
 
 // MARK: - Action
 
-/// One markdown note in `Actions/` (A1). Body is `# Why?` + `# What?`.
+/// One markdown note in `Actions/` (A1). The body carries `# Why?` + `# What?` and whatever
+/// else the user wrote; see `body`.
 public struct Action: Identifiable, Sendable, Equatable {
     public let id: NoteID
     /// Filename stem. Renaming an action is a file move, performed by `GTDServices`.
@@ -58,13 +59,46 @@ public struct Action: Identifiable, Sendable, Equatable {
     /// File modification date. Read-only for everything except `GTDVault`, which fills it in
     /// from the file system; drives the staleness signals (STYLEGUIDE §2.2).
     public var modified: Date?
+    /// The whole note body below the frontmatter, `"\n"`-joined, without a trailing newline —
+    /// headings, lead paragraph, the user's own sections, all of it. The detail editor shows
+    /// and edits exactly this text (2026-09-24). `preamble`, `why` and `what` read and write
+    /// their part of it through `NoteBody`.
+    public var body: String
+    public var passthrough: NotePassthrough
+
     /// R-4 — the body text **above** `# Why?`: the full capture text of a note whose title could
     /// not hold it, and anything a hand-written note carries before the first heading. Empty for
-    /// a note whose body starts with a heading.
-    public var preamble: String
-    public var why: String
-    public var what: String
-    public var passthrough: NotePassthrough
+    /// a note whose body starts with a heading, and for a body with no heading at all (which is
+    /// the `What?`, below).
+    public var preamble: String {
+        get { hasActionHeadings ? NoteBody.prefix(of: body) : "" }
+        set { body = NoteBody.setPrefix(newValue, in: body) }
+    }
+
+    /// The `# Why?` section.
+    public var why: String {
+        get { NoteBody.text(of: "Why?", in: body) ?? "" }
+        set { body = NoteBody.setText("Why?", newValue, in: body, canonicalOrder: NoteBody.actionSections) }
+    }
+
+    /// The `# What?` section. A note without either action heading is all "What?" — hand-written
+    /// notes and notes made outside the app show their text instead of looking empty — and
+    /// setting it on such a note replaces the body.
+    public var what: String {
+        get {
+            if let text = NoteBody.text(of: "What?", in: body) { return text }
+            return NoteBody.hasSection("Why?", in: body) ? "" : NoteBody.wholeText(body)
+        }
+        set {
+            if hasActionHeadings {
+                body = NoteBody.setText("What?", newValue, in: body, canonicalOrder: NoteBody.actionSections)
+            } else {
+                body = NoteBody.wholeText(newValue)
+            }
+        }
+    }
+
+    private var hasActionHeadings: Bool { NoteBody.hasAnySection(of: NoteBody.actionSections, in: body) }
 
     public init(
         id: NoteID,
@@ -84,6 +118,7 @@ public struct Action: Identifiable, Sendable, Equatable {
         preamble: String = "",
         why: String = "",
         what: String = "",
+        body: String? = nil,
         passthrough: NotePassthrough = .empty
     ) {
         self.id = id
@@ -100,9 +135,10 @@ public struct Action: Identifiable, Sendable, Equatable {
         self.completedDate = completedDate
         self.reviewReason = reviewReason
         self.modified = modified
-        self.preamble = preamble
-        self.why = why
-        self.what = what
+        // `body` wins when given (the codec, the editor); otherwise the pieces make the
+        // template shape — an empty action body is exactly `# Why?\n\n# What?`.
+        self.body = body ?? NoteBody.compose(
+            prefix: preamble, sections: [("Why?", why), ("What?", what)])
         self.passthrough = passthrough
     }
 

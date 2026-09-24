@@ -130,10 +130,7 @@ struct InboxCardView: View {
         let field = VStack(alignment: .leading, spacing: Spacing.s) {
             title
             if session.showsBody {
-                TextField("", text: $session.draft.body, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(Typo.body)
-                    .foregroundStyle(Color.textSecondary)
+                NoteEditor(text: $session.draft.body, tone: .secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .focused($focus, equals: .body)
                     .accessibilityLabel(InboxCopy.bodyLabel)
@@ -174,16 +171,20 @@ struct InboxCardView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(label, isMissing: isMissing)
-            TextField("", text: text, prompt: Self.prompt(placeholder), axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(Typo.body)
-                .foregroundStyle(Color.ink)
+            NoteEditor(text: text, prompt: placeholder)
+                .onAdvance { focus = Self.next(after: field) }
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: field)
                 .accessibilityLabel(label)
         }
         .id(field)
+    }
+
+    /// `⌘↩` past a field's last input line (STYLEGUIDE §4.4): `Why?` → `What?`; after `What?`
+    /// (and every other body field) the keyboard goes back to the card, so the keys act on it.
+    static func next(after field: CardField) -> CardField? {
+        field == .why ? .what : nil
     }
 
     /// A placeholder must never read as an entered value (no lying defaults): it is tertiary,
@@ -208,14 +209,8 @@ struct InboxCardView: View {
                 .font(Typo.meta)
                 .foregroundStyle(Color.textSecondary)
             }
-            TextField(
-                "",
-                text: $session.draft.what,
-                prompt: Self.prompt(Copy.whatPlaceholder),
-                axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(Typo.body)
-                .foregroundStyle(Color.ink)
+            NoteEditor(text: $session.draft.what, prompt: Copy.whatPlaceholder)
+                .onAdvance { focus = Self.next(after: .what) }
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: .what)
@@ -289,14 +284,7 @@ struct InboxCardView: View {
     private var notesSection: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(InboxCopy.notesLabel)
-            TextField(
-                "",
-                text: $session.draft.notes,
-                prompt: Self.prompt(InboxCopy.notesPlaceholder),
-                axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(Typo.body)
-                .foregroundStyle(Color.ink)
+            NoteEditor(text: $session.draft.notes, prompt: InboxCopy.notesPlaceholder)
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: .notes)
                 .accessibilityLabel(InboxCopy.notesLabel)

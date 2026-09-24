@@ -163,7 +163,7 @@ struct PatchTests {
         // No `status` ⇒ unreadable; start from a fresh action instead.
         var action = Action(id: id, title: "A", status: .next)
         action.passthrough = NoteCodec.passthrough(text)
-        action.what = "Just prose."          // matches what decode would have read
+        action.body = "Just prose."          // matches what decode would have read
         let encoded = NoteCodec.encode(action, timeZone: vaultTimeZone)
         #expect(encoded == "---\nstatus: next\n---\nJust prose.\n")
     }

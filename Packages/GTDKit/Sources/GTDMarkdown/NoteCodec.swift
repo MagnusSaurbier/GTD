@@ -105,16 +105,6 @@ public enum NoteCodec {
                 reason: "Unknown `status` \"\(statusRaw)\" — expected one of "
                     + ActionStatus.acceptedRawValues.joined(separator: ", "))
         }
-        let sections = BodySections(lines: doc.bodyLines, terminator: doc.terminator)
-        let why = sections.text(of: "Why?")
-        let what = sections.text(of: "What?")
-        // R-4 — the paragraph above `# Why?`: the full capture text of a note whose title could
-        // not hold it. Only a note that really has the action headings has one; a headingless
-        // body is the `What?` (below), and reading it as both would duplicate it.
-        let preamble = (why == nil && what == nil)
-            ? ""
-            : RawText.text(RawText.trimTrailingBlanks(sections.prefix).kept)
-
         return Action(
             id: id,
             title: id.title,
@@ -131,11 +121,9 @@ public enum NoteCodec {
             completedDate: doc.timestamp("completedDate", defaultTimeZone: timeZone),
             reviewReason: doc.scalar("reviewReason"),
             modified: nil,
-            preamble: preamble,
-            why: why ?? "",
-            // A note without either heading is all "What?" — hand-written notes and notes made
-            // outside the app still show their text instead of looking empty.
-            what: what ?? (why == nil ? RawText.text(doc.bodyLines) : ""),
+            // The whole body, as written. `Action.why`/`.what`/`.preamble` are views over it
+            // (`GTDModel.NoteBody`): a note without either heading reads as one long `What?`.
+            body: RawText.text(doc.bodyLines),
             passthrough: passthrough(text))
     }
 
@@ -176,36 +164,14 @@ public enum NoteCodec {
         setOptionalDate("completedDate", action.completedDate, reference?.completedDate, &doc, order, timeZone)
         setOptionalText("reviewReason", action.reviewReason, reference?.reviewReason, &doc, order)
 
-        var sections = BodySections(lines: doc.bodyLines, terminator: doc.terminator)
-        let hasHeadings = sections.index(of: "Why?") != nil || sections.index(of: "What?") != nil
-        // "The whole body is the What?" holds when this file really decodes as an action —
-        // `decodeAction` reads a headingless body as `what` — or when the body already says
-        // exactly what the action says. When neither holds, the note is being *moved* into
-        // `Actions/` (a promoted list item, L4) and its body is somebody else's content: the
-        // headings are appended **below** it instead of written over it, so nothing is lost.
-        let bodyIsWhat = !hasHeadings
-            && (reference != nil || RawText.text(sections.prefix) == action.what)
-        if (reference?.why ?? "") != action.why {
-            sections.setText("Why?", action.why, canonicalOrder: Headings.action)
+        // The body is one field (2026-09-24): the model holds it whole and the editor edits it
+        // whole, so it is written whole — but only when its text changed, with the file's own
+        // line terminator. A note nobody edited keeps every byte, blank lines included. For a
+        // note that does not decode as an action (a list item being *moved* into `Actions/`,
+        // L4) the reducer has already put the item's notes at the top of `action.body`.
+        if RawText.text(doc.bodyLines) != action.body {
+            doc.setBody(RawText.block(action.body, terminator: doc.terminator))
         }
-        if (reference?.what ?? "") != action.what {
-            if bodyIsWhat {
-                // The whole body was read as "What?" — write it back the same way.
-                sections.prefix = RawText.block(action.what, terminator: doc.terminator)
-            } else {
-                sections.setText("What?", action.what, canonicalOrder: Headings.action)
-            }
-        }
-        // R-4 — the paragraph above the headings, written last so it sits above whatever the
-        // two lines before it just inserted. Never touched while the body *is* the `What?`.
-        if !bodyIsWhat, (reference?.preamble ?? "") != action.preamble {
-            var lead = RawText.block(action.preamble, terminator: doc.terminator)
-            if !lead.isEmpty, !sections.sections.isEmpty {
-                lead.append(RawLine(content: "", terminator: doc.terminator))
-            }
-            sections.prefix = lead
-        }
-        doc.setBody(sections.lines)
         return doc.text
     }
 

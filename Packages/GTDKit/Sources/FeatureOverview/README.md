@@ -22,6 +22,10 @@ action editor no other feature target owns.
 - `ActionDetailView(action:onRename:)` — the autosaving note editor (also the iPhone detail).
   Autosave means: chips and pickers save at once; typed text is held until blur, close or
   `AppModel.flushHeldEdits()` — there is no typing-pause timer in the app (tests inject one).
+  Below the chips sits **one** `DesignSystem.NoteEditor` over `ActionEditModel.body`: the note's
+  whole body as an Obsidian-style live preview (STYLEGUIDE §4.4), `# Why?`/`# What?` being
+  headings in the text. A note that lacks them shows them (`ActionEditModel.displayBody`); they
+  reach the file with the first edit, never by merely opening the note.
 - `SidebarItem.lists` (T10) — the single `Lists` sidebar row (count = open items across every
   list, `Rules.SidebarCounts.lists`); the content column is `FeatureLists.ListsSectionsView`
   (one section per list) and the detail column is `FeatureLists.ListItemEditorView` for
@@ -44,7 +48,9 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 - **The title is held while typing.** `ActionEditModel.setTitleHeld` keeps a title edit local until blur, Return or close: a title is the file name (A1), so saving on every typing pause renamed the file mid-word and popped the iPhone detail. `complete()` and `trash()` flush pending edits first, then send the existing commands; `isClosed` tells the view the action is gone.
 - **Autosave never clobbers.** `ActionEditModel` keeps the remote action plus the *dirty* fields
   overlaid, and writes only dirty fields onto the *current* snapshot action. A snapshot arriving
-  mid-edit updates untouched fields and leaves the edit alone. The payload is built through
+  mid-edit updates untouched fields and leaves the edit alone. The body is **one** field
+  (`ActionField.body`, 2026-09-24): while the person types in it, a remote change to any part of
+  it waits until the edit is written; the chips and the title still merge field by field. The payload is built through
   `AppModel.send(deriving:)`, i.e. only when the command's turn comes — building it earlier
   raced any command still in flight and reverted that command's fields, which is what made
   `ActionEditModelTests` fail about one run in three.
