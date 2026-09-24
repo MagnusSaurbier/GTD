@@ -49,9 +49,10 @@ Compiles and tests on Linux.
 - **Required fields are a reducer rule (R-3).** `RequiredField.missing` answers what a tier is
   still missing, and `normalize` throws `.missingFields` on every *new* transition into one:
   Next asks for `Why?` + `What?` + a context + a time estimate, a newly created Someday or
-  Waiting note for `What?`, Waiting always for its follow-up date, and Done/lists/Knowledge/Trash
-  for nothing. A note already in its tier is left alone and **demoting is never refused** — the
-  vault has to stay repairable.
+  Waiting note for `What?`, a note entering Waiting for its follow-up date, and
+  Done/lists/Knowledge/Trash for nothing. A note already in its tier is left alone — a waiting
+  note without a follow-up date (every M2 import) stays editable and keeps the who and date it
+  has — and **demoting is never refused**: the vault has to stay repairable.
 - **An inbox note's title is its file name (C3/R-4, 2026-09-22).** `InboxItem.title` is
   `id.title`; `body` is everything below the frontmatter and may be empty. A capture is named
   `CaptureText.title(of:)` when it is written (first line, sanitised, cut at a word boundary to

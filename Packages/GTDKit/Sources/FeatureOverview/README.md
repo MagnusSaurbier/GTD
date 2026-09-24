@@ -26,6 +26,8 @@ action editor no other feature target owns.
   whole body as an Obsidian-style live preview (STYLEGUIDE §4.4), `# Why?`/`# What?` being
   headings in the text. A note that lacks them shows them (`ActionEditModel.displayBody`); they
   reach the file with the first edit, never by merely opening the note.
+  "Close" includes opening another row: the Mac detail column swaps editors in place with no
+  `onDisappear`, so `.task(id:)` flushes the editor it replaces.
 - `SidebarItem.lists` (T10) — the single `Lists` sidebar row (count = open items across every
   list, `Rules.SidebarCounts.lists`); the content column is `FeatureLists.ListsSectionsView`
   (one section per list) and the detail column is `FeatureLists.ListItemEditorView` for

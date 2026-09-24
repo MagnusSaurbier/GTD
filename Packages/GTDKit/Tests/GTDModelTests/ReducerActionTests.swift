@@ -87,6 +87,32 @@ struct ReducerActionTests {
         #expect(action.waiting == WaitingInfo(who: nil, followUp: TestVault.day(7)))
     }
 
+    /// M2 imports every legacy waiting item without a follow-up date. Such a note is already in
+    /// its tier, so an edit to it (context, time, text) is not judged (R-3) and keeps the
+    /// halves it has; only *entering* waiting asks for the date.
+    @Test func editingAWaitingNoteWithoutAFollowUpDateIsAllowedAndKeepsItsWho() throws {
+        var imported = TestVault.action(
+            "Coaching contract", .waiting,
+            waiting: WaitingInfo(who: "Coach", followUp: TestVault.day(3)),
+            what: "Ask about the locked cards")
+        imported.followUpDate = nil
+        let vault = TestVault.snapshot(actions: [imported])
+
+        var edited = imported
+        edited.contexts = ["mac"]
+        edited.timeEstimate = 10
+        let result = try Reducer.reduce(vault, .updateAction(edited), env: env)
+        let action = try #require(result.snapshot.action(imported.id))
+        #expect(action.contexts == ["mac"])
+        #expect(action.timeEstimate == 10)
+        #expect(action.waitingFor == "Coach")
+        #expect(action.followUpDate == nil)
+
+        // Staying in waiting through `setStatus` is not an entry either.
+        let same = try Reducer.reduce(vault, .setStatus(imported.id, .waiting, waiting: nil), env: env)
+        #expect(same.snapshot.action(imported.id)?.waitingFor == "Coach")
+    }
+
     @Test(arguments: [ActionStatus.next, .someday, .done])
     func leavingWaitingClearsBothHalves(status: ActionStatus) throws {
         // R-3 — the move into Next needs what Next requires, so the note carries it.

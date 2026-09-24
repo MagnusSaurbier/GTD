@@ -308,6 +308,26 @@ struct ActionEditModelTests {
         #expect(editor.lastError == nil)
     }
 
+    /// The user's 2026-09-24 report: context and time chips on an imported waiting item (no
+    /// follow-up date) showed "Still missing: Follow-up" and the edit was gone on leaving.
+    @Test func chipsOnAWaitingNoteWithoutAFollowUpDateAreSaved() async throws {
+        var action = fixture(title: "Coaching", status: .waiting)
+        action.waitingFor = "Coach"
+        let (model, editor) = make(action)
+
+        editor.setContexts(["mac", "phone"])
+        editor.setTimeEstimate(10)
+        await editor.waitForPendingSave()
+
+        let saved = try #require(model.snapshot.action(editor.id))
+        #expect(editor.lastError == nil)
+        #expect(editor.hasUnsavedEdits == false)
+        #expect(saved.contexts == ["mac", "phone"])
+        #expect(saved.timeEstimate == 10)
+        #expect(saved.waitingFor == "Coach")
+        #expect(saved.followUpDate == nil)
+    }
+
     @Test func leavingWaitingClearsWhoAndFollowUp() async throws {
         let (model, editor) = make(fixture())
         editor.setWaiting(WaitingInfo(who: "Lena", followUp: Fixtures.day(7)))

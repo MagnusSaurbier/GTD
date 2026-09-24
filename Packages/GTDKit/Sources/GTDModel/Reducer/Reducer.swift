@@ -1221,11 +1221,15 @@ public enum Reducer {
 
         if action.status == .waiting {
             // W1/D39 — the date is the commitment; who is optional, and an empty who writes no
-            // `waitingFor:` line at all rather than an empty one.
-            let info = waiting ?? action.waiting
-            let who = (info?.who ?? "").trimmingCharacters(in: .whitespaces)
+            // `waitingFor:` line at all rather than an empty one. Without new info the note
+            // keeps its own halves: `Action.waiting` is `nil` for a date-less waiting note, and
+            // reading it here used to clear such a note's who on any edit.
+            if let waiting {
+                action.waitingFor = waiting.who
+                action.followUpDate = waiting.followUp
+            }
+            let who = (action.waitingFor ?? "").trimmingCharacters(in: .whitespaces)
             action.waitingFor = who.isEmpty ? nil : who
-            action.followUpDate = info?.followUp
         } else {
             action.waitingFor = nil
             action.followUpDate = nil

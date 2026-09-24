@@ -81,9 +81,13 @@ private struct ActionDetailEditor: View {
             // Our own rename hands us back the note we are already editing — keep the state
             // (and any keystrokes typed since the save) instead of rebuilding the editor.
             if let editor, editor.id == id { return }
+            // Opening another row swaps the editor in place — no `onDisappear` — so the one
+            // being replaced writes its held text now, before it is let go.
+            let leaving = editor
             let fresh = ActionEditModel(model: model, id: id)
             fresh.onRename = { onRename($0) }
             editor = fresh
+            await leaving?.flush()
         }
         .onChange(of: model.snapshot) { _, _ in
             editor?.refresh()
