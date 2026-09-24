@@ -1,6 +1,6 @@
 # Every change is tracked by a ticket; docs commits cost no Actions minutes
 
-**Status:** in progress · **Branch:** `docs/ticket-workflow` · **PR:** — · **Opened:** 2026-09-24 · **Last updated:** 2026-09-24 · **Agent:** local
+**Status:** in progress · **Branch:** `docs/ticket-workflow` · **PR:** https://github.com/MagnusSaurbier/GTD/pull/2 · **Opened:** 2026-09-24 · **Last updated:** 2026-09-24 · **Agent:** local
 
 ## Goal
 
@@ -12,6 +12,8 @@ cloud deployments or GitHub Actions; docs commits trigger nothing.
 
 ## State
 
+- Committed and pushed on `docs/ticket-workflow`; PR #2 open. All three doc checks green; both
+  checkers exercised in a scratch repo (missing/stale/merged ticket, good and bad workflows).
 - Written `docs/TICKETS.md` (the rule + template), READMEs in the three ticket folders,
   `.github/workflows/README.md` (CI policy; the repo has no workflows yet),
   `scripts/check-tickets.sh` and `scripts/check-workflows.sh`, both wired into `scripts/check.sh`.
@@ -21,9 +23,8 @@ cloud deployments or GitHub Actions; docs commits trigger nothing.
 
 ## Remaining
 
-1. Run `scripts/check-docs.sh`, `scripts/check-tickets.sh`, `scripts/check-workflows.sh` green.
-2. Commit with `[skip ci]`, push, open the PR, put its URL in **PR:** above.
-3. After merge: move this file to `docs/history/`, fill in **Outcome**, commit on `main` with `[skip ci]`.
+1. Review and merge PR #2.
+2. After merge: move this file to `docs/history/`, fill in **Outcome**, commit on `main` with `[skip ci]`.
 
 ## Handover
 
