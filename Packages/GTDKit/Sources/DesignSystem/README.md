@@ -41,6 +41,9 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   Its calendar arithmetic is `MonthGrid` (Foundation-only, tested on Linux).
 - `VersionStamp(version:)` — the version in the bottom-right corner of both shells
   (`Typo.counter`, `textTertiary`, no hit testing); draws nothing without a version.
+- `View.pinnedScreenTitle(_:)` — a screen's headline, pinned on top (#33). iPhone: its own top
+  `safeAreaBar` in `Typo.screenTitle`, the bar's inline title removed; the large nav title scrolled
+  and rubber-banded with the list. Mac: plain `.navigationTitle`.
 - `Badge`, `ActionRow`, `ListItemRow` (§3.3 "List items": completion circle + title only, no
   second line, no badges, no age), `ProjectRow`, `ItemCard`, `CollapsibleText`,
   `View.itemCardPeek(hasNext:)`, `UndoToast`,

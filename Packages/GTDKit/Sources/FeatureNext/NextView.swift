@@ -91,7 +91,7 @@ private struct NextListContent: View {
 
     var body: some View {
         // The list is the screen's top-level scroll view and the chips ride in its top safe-area
-        // inset — a `VStack { chips; List }` keeps the large title from ever collapsing (P20).
+        // bar, under the pinned headline (#33) — neither moves when the list scrolls.
         Group {
             if list.isEmpty {
                 emptyStateView
@@ -105,10 +105,7 @@ private struct NextListContent: View {
         #else
         .safeAreaInset(edge: .top, spacing: 0) { filterBar }
         #endif
-        .navigationTitle(Copy.next)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.large)
-        #endif
+        .pinnedScreenTitle(Copy.next)
         .toolbar { quickCaptureToolbar }
         .onChange(of: hostSelection) { _, newValue in selectedID = newValue }
         .safeAreaInset(edge: .bottom) { toastView }
