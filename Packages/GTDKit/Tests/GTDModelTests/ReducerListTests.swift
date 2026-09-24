@@ -303,6 +303,44 @@ struct ReducerListTests {
         #expect(TestVault.error(vault(), .trashListItem(ghost)) == .notFound(ghost))
     }
 
+    // MARK: - moveActionToList (E3)
+
+    /// The action's note moves into the list folder; its body becomes the item's notes.
+    @Test func anActionDroppedOnAListBecomesAnItemOfIt() throws {
+        let action = TestVault.action("Read Dune", .someday, why: "Everyone says so.", what: "Borrow it.")
+        let result = try Reducer.reduce(
+            vault(actions: [action]), .moveActionToList(action.id, list: "Read"), env: env)
+        let item = try #require(result.snapshot.listItems.first { $0.list == "Read" })
+        #expect(item.title == "Read Dune")
+        #expect(item.id == TestVault.layout.listItemPath(list: "Read", title: "Read Dune"))
+        #expect(!item.isFinished)
+        #expect(item.created == action.created)
+        #expect(item.notes == "# Why?\nEveryone says so.\n\n# What?\nBorrow it.")
+        #expect(result.snapshot.action(action.id) == nil)
+        #expect(result.extraOps == [.move(from: action.id.path, to: item.id.path)])
+        #expect(result.renames.pairs.contains { $0.old == action.id && $0.new == item.id })
+        #expect(Rules.isUndoable(.moveActionToList(action.id, list: "Read")))
+    }
+
+    @Test func droppingOnAnUnknownListIsRefused() {
+        let action = TestVault.action("Read Dune", .someday)
+        #expect(TestVault.error(vault(actions: [action]), .moveActionToList(action.id, list: "Nope"))
+            == .invalid("Unknown list: Nope"))
+    }
+
+    @Test func droppingOnAListThatAlreadyHasThatTitleIsRefused() {
+        let action = TestVault.action("Read Dune", .someday)
+        let taken = TestVault.listItem("Read", "Read Dune")
+        #expect(TestVault.error(
+            vault(items: [taken], actions: [action]), .moveActionToList(action.id, list: "Read"))
+            == .titleCollision("Read Dune"))
+    }
+
+    @Test func droppingAMissingActionIsNotFound() {
+        let id = TestVault.actionID("Ghost")
+        #expect(TestVault.error(vault(), .moveActionToList(id, list: "Read")) == .notFound(id))
+    }
+
     // MARK: - promoteListItem (L4)
 
     @Test func makingAnActionMovesTheNoteIntoActions() throws {

@@ -73,6 +73,21 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         }
     }
 
+    /// E3 — what a row dropped on this section asks for (`MovePlan`). `nil` for the sections
+    /// nothing can be dropped on: the inbox is processed in forced order (I1), and the flows
+    /// are not categories. Lists asks which list, like the inbox's `More…` sheet.
+    public var moveDestination: MoveDestination? {
+        switch self {
+        case .next: .next
+        case .someday: .someday
+        case .waiting: .waiting
+        case .deferred: .deferred
+        case .projects: .projects
+        case .lists: .lists
+        case .inbox, .review, .routines: nil
+        }
+    }
+
     /// D3 — the calendar strip is docked only under the lists whose items are *dated*: Next
     /// (due), Waiting (follow-up) and Deferred (defer). Everywhere else it was dead space.
     public var showsCalendarStrip: Bool {

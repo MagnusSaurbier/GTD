@@ -118,10 +118,13 @@ public struct ActionListView: View {
                 onComplete: { send(.complete(action.id)) })
                 .contentShape(Rectangle())
                 .tag(action.id)
-                #if !os(macOS)
+                .draggableNote(action.id)
+                // On every platform, the Mac included: the drag source takes the mouse-down
+                // before the `List(selection:)` sees it, so a click no longer selects the row
+                // by itself — the tap opens the note, and the selection follows the detail.
                 .onTapGesture { onOpen(action.id) }
-                #endif
                 .accessibilityAddTraits(.isButton)
+                .accessibilityAction { onOpen(action.id) }
                 .contextMenu {
                     Button(Copy.done) { send(.complete(action.id)) }
                     Divider()
@@ -130,6 +133,9 @@ public struct ActionListView: View {
                             send(.setStatus(action.id, target, waiting: nil))
                         }
                     }
+                    // The drag-to-section twin (E3): Waiting, Deferred and a project go
+                    // through the dialogue each needs, like a drop would.
+                    MoveToMenu(id: action.id)
                 }
         }
     }

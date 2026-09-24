@@ -26,6 +26,9 @@ struct KnowledgeSheet: View {
     @State private var notes: String = ""
     @State private var newFolder: String = ""
     @State private var isAddingFolder = false
+    /// Paths of the folders whose children are shown (#24). Starts empty: the tree opens
+    /// collapsed, as the stock outline did.
+    @State private var expandedFolders: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -45,15 +48,11 @@ struct KnowledgeSheet: View {
                     }
                     .buttonStyle(.plain)
 
-                    OutlineGroup(KnowledgeTree.build(folders), children: \.childNodes) { node in
-                        Button {
-                            selection = node.path
-                            projectTarget = nil
-                        } label: {
-                            folderRow(name: node.name, path: node.path)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    // Own tree rows instead of `OutlineGroup`: inside a `Form` on macOS the
+                    // stock outline draws a child's label *left* of its parent (where the
+                    // parent's chevron sits) and animates open/close. Here every level is
+                    // shifted right by one step and toggling is instant (#24).
+                    folderTreeRows(KnowledgeTree.build(folders), depth: 0)
 
                     if isAddingFolder {
                         HStack {
@@ -121,8 +120,57 @@ struct KnowledgeSheet: View {
         .onAppear { folders = session.knowledgeFolders }
     }
 
-    private func folderRow(name: String, path: String) -> some View {
-        HStack {
+    /// One row per visible folder, depth-first. Collapsed folders hide their subtree; the set
+    /// of open folders is device state for the sheet's lifetime only.
+    @ViewBuilder
+    private func folderTreeRows(_ nodes: [FolderNode], depth: Int) -> some View {
+        ForEach(nodes) { node in
+            Button {
+                selection = node.path
+                projectTarget = nil
+            } label: {
+                folderRow(name: node.name, path: node.path, node: node, depth: depth)
+            }
+            .buttonStyle(.plain)
+
+            if expandedFolders.contains(node.path) {
+                AnyView(folderTreeRows(node.children, depth: depth + 1))
+            }
+        }
+    }
+
+    private func folderRow(
+        name: String, path: String, node: FolderNode? = nil, depth: Int = 0
+    ) -> some View {
+        HStack(spacing: Spacing.xs) {
+            // Every row reserves the chevron's width so that siblings without children line
+            // up with siblings that have some; the indent per level is one chevron slot.
+            Group {
+                if let node, node.childNodes != nil {
+                    Button {
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            if !expandedFolders.insert(node.path).inserted {
+                                expandedFolders.remove(node.path)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: expandedFolders.contains(node.path)
+                              ? Symbols.collapse : Symbols.nextMonth)
+                            .font(Typo.controlGlyph)
+                            .foregroundStyle(Color.textSecondary)
+                            .frame(width: Spacing.l, height: Spacing.l)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(expandedFolders.contains(node.path)
+                                        ? InboxCopy.collapseFolder : InboxCopy.expandFolder)
+                } else {
+                    Color.clear.frame(width: Spacing.l, height: Spacing.l)
+                }
+            }
+            .padding(.leading, CGFloat(depth) * Spacing.l)
             Label(name, systemImage: Symbols.area)
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
@@ -375,8 +423,36 @@ struct CapSheet: View {
 /// what a list is instead of showing an empty table. Decisions are `InboxSession`'s.
 struct MoreListsSheet: View {
     @Bindable var session: InboxSession
-    @Environment(\.dismiss) private var dismiss
 
+    var body: some View {
+        ListChoiceSheet(
+            lists: session.allLists,
+            hasNoLists: session.hasNoLists,
+            listsFolderName: session.listsFolderName,
+            newListRefusal: session.newListRefusal,
+            onChoose: { name in Task { await session.take(.list(name)) } },
+            onCreate: { name in Task { await session.createListAndFile(name: name) } },
+            onNameChanged: { session.clearNewListRefusal() },
+            onCancel: { session.cancelSheet() })
+    }
+}
+
+/// The list picker as a sheet: every list, `New list…` with its inline refusal, and the
+/// no-lists explanation. Shared by the inbox's `More…` slot and a drop onto the Lists section
+/// (E3), so the picker exists once; the owner decides what a choice does. `onCreate`'s owner
+/// closes the sheet by clearing its own presentation once the list exists (a refused name keeps
+/// it open — the refusal arrives through `newListRefusal`).
+struct ListChoiceSheet: View {
+    let lists: [GTDList]
+    let hasNoLists: Bool
+    let listsFolderName: String
+    let newListRefusal: String?
+    let onChoose: (String) -> Void
+    let onCreate: (String) -> Void
+    let onNameChanged: () -> Void
+    let onCancel: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
     @State private var newListName = ""
     @State private var isAddingList = false
     @FocusState private var isNameFocused: Bool
@@ -384,21 +460,21 @@ struct MoreListsSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if session.hasNoLists && !isAddingList {
+                if hasNoLists && !isAddingList {
                     ContentUnavailableView {
                         Label(InboxCopy.noListsTitle, systemImage: Symbols.listBullet)
                     } description: {
-                        Text(InboxCopy.noListsBody(folder: session.listsFolderName))
+                        Text(InboxCopy.noListsBody(folder: listsFolderName))
                     } actions: {
                         Button(InboxCopy.newList) { startAdding() }
                             .tint(Color.gtdAccent)
                     }
                 } else {
                     List {
-                        ForEach(session.allLists) { list in
+                        ForEach(lists) { list in
                             Button {
                                 dismiss()
-                                Task { await session.take(.list(list.name)) }
+                                onChoose(list.name)
                             } label: {
                                 Label(list.name, systemImage: Symbols.list(named: list.name))
                                     .font(Typo.body)
@@ -416,7 +492,7 @@ struct MoreListsSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(InboxCopy.cancel) {
                         dismiss()
-                        session.cancelSheet()
+                        onCancel()
                     }
                 }
             }
@@ -432,11 +508,11 @@ struct MoreListsSheet: View {
                         .focused($isNameFocused)
                         .submitLabel(.done)
                         .onSubmit { create() }
-                        .onChange(of: newListName) { session.clearNewListRefusal() }
+                        .onChange(of: newListName) { onNameChanged() }
                     Button(InboxCopy.createList) { create() }
                         .disabled(newListName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                if let refusal = session.newListRefusal {
+                if let refusal = newListRefusal {
                     Text(refusal).font(Typo.meta).foregroundStyle(Color.signalAttention)
                 }
             }
@@ -456,10 +532,9 @@ struct MoreListsSheet: View {
         isNameFocused = true
     }
 
-    /// The session closes the sheet once the card is filed; a refused name keeps it open.
+    /// The owner closes the sheet once the note has moved; a refused name keeps it open.
     private func create() {
-        let name = newListName
-        Task { await session.createListAndFile(name: name) }
+        onCreate(newListName)
     }
 }
 #endif

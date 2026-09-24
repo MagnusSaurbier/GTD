@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import GTDModel
+import GTDAppCore
 import GTDFixtures
 @testable import FeatureOverview
 
@@ -245,5 +246,19 @@ struct SidebarRoutingTests {
         nav.apply(snapshot: snapshot, renames: RenameMap(from: old, to: new))
 
         #expect(nav.detail == .action(new))
+    }
+
+    /// E3 — which sections take a dropped row, and what they ask `MovePlan` for. The inbox
+    /// (forced order, I1) and the two flows take nothing.
+    @Test func everySectionKnowsWhetherARowCanBeDroppedOnIt() {
+        #expect(SidebarItem.next.moveDestination == .next)
+        #expect(SidebarItem.someday.moveDestination == .someday)
+        #expect(SidebarItem.waiting.moveDestination == .waiting)
+        #expect(SidebarItem.deferred.moveDestination == .deferred)
+        #expect(SidebarItem.projects.moveDestination == .projects)
+        #expect(SidebarItem.lists.moveDestination == .lists)
+        for item in [SidebarItem.inbox, .review, .routines] {
+            #expect(item.moveDestination == nil, "\(item)")
+        }
     }
 }

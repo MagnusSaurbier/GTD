@@ -137,6 +137,12 @@ of the same fact.
   (`OverflowScroll`). Compiled for macOS and the iOS Simulator, never opened: MANUAL_TEST §1.3
   and §3.4 are the checks. `OverflowScroll` (`ViewThatFits` + a capped frame) is the part most
   likely to need a tweak once seen.
+- **Drag-to-category (2026-09-24) has not been dragged by anyone.** The rows' `.draggable`,
+  the sidebar's and the project rows' `.dropDestination`, the light-blue `dropTargetWash` hover tint and the
+  sheets a drop opens are compiled and the flow behind them is unit-tested
+  (`MovePlanTests`, `MoveCoordinatorTests`), but no drag has been performed on screen. The
+  iPhone has no sidebar, so it has no drop target at all; its rows' `Move to…` menu is the same
+  flow. Script: `docs/MANUAL_TEST.md` §3.7.
 - **"Open in Obsidian" has not been clicked against a real vault since its URL was fixed.**
   `GTDAppCore.ObsidianLink` builds `path=<absolute path>` on the Mac and
   `vault=<folder name>&file=<relative path>` on iOS, unit-tested against Obsidian's documented

@@ -4,22 +4,51 @@ import GTDModel
 import GTDAppCore
 import DesignSystem
 
-/// **Make action** (L4): the opened action card, alone, for one list item.
+/// **Make action** (L4): the opened action card, alone, over one existing note.
 ///
 /// `FeatureLists` presents STYLEGUIDE §3.5's step 2a on top of this — the same card, the same
 /// draft, the same required fields and the same cap flow as the inbox, because all of that is
 /// `ActionCardState` / `ActionCardEngine` and neither this type nor `InboxSession` owns a copy of
-/// it. The only differences are what it starts from (a `ListItem`, not a capture), the command it
-/// sends (`promoteListItem`, which *moves* the note out of `Lists/<n>/`) and that there is no
-/// step 1 to collapse to: the way out is `cancel()`, which leaves the item in its list.
+/// it. The only differences are what it starts from (a `Source`, not a capture), the command it
+/// sends (`promoteListItem`, which *moves* the note out of `Lists/<n>/`, or `updateAction` for
+/// an action that was dropped onto a section it is not ready for — `MovePlan.card`) and that
+/// there is no step 1 to collapse to: the way out is `cancel()`, which leaves the note as it was.
 ///
 /// The exits are the four of the action card: `→` Next, `←` Someday, `Waiting`, `Done`.
 @MainActor
 @Observable
 public final class MakeActionModel {
 
-    /// The item being promoted; it stays in its list until `isFiled`.
-    public let item: ListItem
+    /// What the card is over. Nothing is written until `isFiled`.
+    public enum Source: Sendable, Equatable {
+        /// L4 — a list item being promoted; it stays in its list until filed.
+        case listItem(ListItem)
+        /// A drop (or `Move to…`) that needs fields the action does not have yet.
+        case action(Action)
+
+        public var id: NoteID {
+            switch self {
+            case let .listItem(item): item.id
+            case let .action(action): action.id
+            }
+        }
+    }
+
+    public let source: Source
+
+    /// The list item being promoted (L4), `nil` when the card is over an action.
+    public var item: ListItem? {
+        if case let .listItem(item) = source { return item }
+        return nil
+    }
+
+    /// The capture stamp the card shows (`InboxCopy.captureStamp`), when the note has one.
+    public var created: Date? {
+        switch source {
+        case let .listItem(item): item.created
+        case let .action(action): action.created
+        }
+    }
 
     /// Draft, validation flags and cap state — the inbox card's, unchanged.
     public var card: ActionCardState
@@ -58,9 +87,31 @@ public final class MakeActionModel {
         bindings: KeyBindings = .defaults
     ) {
         self.model = model
-        self.item = item
+        self.source = .listItem(item)
         self.keyBindings = bindings
         self.card = ActionCardState(draft: InboxDraft(item: item))
+    }
+
+    /// The card over an existing action that was dropped onto `target` and is not ready for it
+    /// (`MovePlan.card`). It opens with the action's own values, the fields `target` still
+    /// needs already marked (STYLEGUIDE §3.6's asterisks — no second refusal needed to see
+    /// them), and, for Waiting, the follow-up sheet already up: the date is the only thing
+    /// that tier can be missing on an existing action (W1/D39), so the card behind it is
+    /// only there for the way back.
+    public init(
+        model: AppModel,
+        action: Action,
+        target: ActionStatus,
+        missing: [RequiredField],
+        bindings: KeyBindings = .defaults
+    ) {
+        self.model = model
+        self.source = .action(action)
+        self.keyBindings = bindings
+        var card = ActionCardState(draft: InboxDraft(action: action), previousStatus: action.status)
+        if !missing.isEmpty { card.flag(missing) }
+        self.card = card
+        if target == .waiting { sheet = .waiting }
     }
 
     // MARK: - Derived
@@ -234,7 +285,39 @@ public final class MakeActionModel {
     }
 
     private func send(_ payload: ActionDraft) async throws {
-        try await model.send(.promoteListItem(item.id, payload))
+        switch source {
+        case let .listItem(item):
+            try await model.send(.promoteListItem(item.id, payload))
+        case let .action(action):
+            var payload = payload
+            if let title = payload.newProjectTitle {
+                try await model.send(.createProject(ProjectDraft(title: title)))
+                payload.project = model.snapshot.config.layout.projectPath(title: title, inArea: nil)
+                payload.newProjectTitle = nil
+            }
+            try await model.send(.updateAction(updated(action, with: payload)))
+        }
+    }
+
+    /// The action as the card would write it: the draft's values over the note's own, the
+    /// waiting pair from the sheet. `updateAction` runs the same `normalize` as a filing
+    /// (required fields, the cap, an inactive project), so every refusal comes back the same
+    /// way. A project created from the picker (R-8) is born first, by its own command, because
+    /// `updateAction` names projects and never creates them.
+    private func updated(_ action: Action, with payload: ActionDraft) -> Action {
+        var updated = action
+        updated.title = payload.title
+        updated.status = payload.status
+        updated.contexts = payload.contexts
+        updated.timeEstimate = payload.timeEstimate
+        updated.project = payload.project
+        updated.deferDate = payload.deferDate
+        updated.due = payload.due
+        updated.waitingFor = payload.waiting?.who
+        updated.followUpDate = payload.waiting?.followUp
+        updated.why = payload.why
+        updated.what = payload.what
+        return updated
     }
 
     private func apply(_ outcome: ActionCardEngine.Outcome) {

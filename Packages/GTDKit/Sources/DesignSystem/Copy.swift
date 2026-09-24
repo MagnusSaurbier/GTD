@@ -24,6 +24,14 @@ public enum Copy {
     public static let knowledge = "Knowledge"
     public static let trash = "Trash"
     public static let deferLabel = "Defer"
+    /// The Deferred section — items hidden by a future `defer` (D1).
+    public static let deferred = "Deferred"
+    /// A row's context-menu submenu that twins the drag onto a sidebar section (E3, §8).
+    public static let moveTo = "Move to"
+    /// The `Move to` entry that asks which project: `Project…`.
+    public static let projectEllipsis = "Project…"
+    /// The `Move to` entry that asks which list: `List…`.
+    public static let listEllipsis = "List…"
     public static let due = "Due"
     public static let followUp = "Follow-up"
     public static let chase = "Chase"
