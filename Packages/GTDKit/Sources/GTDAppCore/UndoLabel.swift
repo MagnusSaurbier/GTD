@@ -14,6 +14,9 @@ import GTDModel
 /// (ARCHITECTURE §5). Only `complete` names its note, because both backends already did.
 public enum UndoLabel {
 
+    /// The conflict sheet's write (N3): `Merged “Call the bank”`.
+    public static func merged(title: String) -> String { "Merged \u{201C}\(title)\u{201D}" }
+
     public static func of(_ command: GTDCommand, in snapshot: VaultSnapshot) -> String {
         switch command {
         case let .fileInbox(_, decision):

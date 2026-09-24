@@ -44,6 +44,12 @@ struct MacShell: View {
             router.isProcessingInbox = false
             router.overview.isProcessingInbox = true
         }
+        // N3 — processing begins on what the files say *now*: a re-scan before the first card,
+        // so a note edited elsewhere a moment ago is the one presented, not the one remembered.
+        .onChange(of: router.overview.isProcessingInbox) { _, began in
+            guard began else { return }
+            Task { await composition.refreshFromDisk() }
+        }
     }
 }
 

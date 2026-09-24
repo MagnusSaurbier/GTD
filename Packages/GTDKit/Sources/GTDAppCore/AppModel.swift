@@ -25,6 +25,10 @@ public final class AppModel {
     /// next command is usually through before the person has read this. Only `clearError()`
     /// clears it.
     public private(set) var writeFailure: WriteFailure?
+    /// A refused write that the person can settle: both versions of the note and a proposed
+    /// merge (N3). The shell opens the conflict sheet on it; `resolveConflict` / `discardConflict`
+    /// close it. A refusal that carries one never lands in `writeFailure`.
+    public private(set) var conflict: WriteConflict?
     /// Injectable clock so previews and tests are deterministic.
     public let today: () -> Day
 
@@ -66,7 +70,11 @@ public final class AppModel {
                 guard let self else { return }
                 // The first one stays: it is the one the person has to read, and a second
                 // refusal while the alert is up is almost always the same cause.
-                if self.writeFailure == nil { self.writeFailure = failure }
+                if let conflict = failure.conflict {
+                    if self.conflict == nil { self.conflict = conflict }
+                } else if self.writeFailure == nil {
+                    self.writeFailure = failure
+                }
                 self.undoLabel = await backend.undoLabel()
             }
         }
@@ -228,5 +236,25 @@ public final class AppModel {
     public func clearError() {
         lastError = nil
         writeFailure = nil
+    }
+
+    /// Done in the conflict sheet: writes the merged note. A failure stays in `lastError` and
+    /// the sheet stays open, so nothing the person typed is lost.
+    @discardableResult
+    public func resolveConflict(path: String, text: String) async -> Bool {
+        guard let conflict else { return false }
+        let done = await report { try await self.backend.resolve(conflict, path: path, text: text) }
+        if done {
+            self.conflict = nil
+            apply(await backend.currentUpdate())
+            undoLabel = await backend.undoLabel()
+        }
+        return done
+    }
+
+    /// The sheet's other exit: the vault's version stands (the refused write was already
+    /// reverted when the conflict was reported).
+    public func discardConflict() {
+        conflict = nil
     }
 }

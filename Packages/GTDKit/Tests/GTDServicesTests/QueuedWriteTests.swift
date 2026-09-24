@@ -130,6 +130,97 @@ struct QueuedWriteTests {
         #expect(await rig.store.commits == 0)
     }
 
+    /// The refusal carries both versions for the conflict sheet, and `resolve` writes what the
+    /// person settled on — undoable, and shown at once (ARCHITECTURE §6, 2026-09-25).
+    @Test func aStaleWriteCarriesAConflictAndResolveWritesTheMergedNote() async throws {
+        let rig = try await Rig()
+        defer { rig.cleanUp() }
+        let action = try await rig.nextAction()
+        var failures = rig.backend.writeFailures().makeAsyncIterator()
+        let base = try #require(try rig.fileSystem.readText(action.id.path))
+
+        _ = try await rig.backend.perform(.setStatus(action.id, .someday, waiting: nil))
+        let elsewhere = base + "\nA line typed elsewhere.\n"
+        try rig.fileSystem.writeText(elsewhere, to: action.id.path)
+
+        await rig.store.open()
+        let failure = try #require(await failures.next())
+        await rig.backend.flush()
+
+        let conflict = try #require(failure.conflict)
+        #expect(conflict.basePath == action.id.path)
+        #expect(conflict.base == base)
+        #expect(conflict.path == action.id.path)
+        #expect(conflict.mine?.contains("status: someday") == true, "what this device wanted to write")
+        #expect(conflict.theirsPath == action.id.path)
+        #expect(conflict.theirs == elsewhere)
+        // Two different places changed: the merge keeps both and reports no clash.
+        let suggestion = conflict.suggestion
+        #expect(suggestion.conflicts == 0)
+        #expect(suggestion.text.contains("status: someday") && suggestion.text.contains("typed elsewhere"))
+
+        try await rig.backend.resolve(conflict, path: suggestion.path, text: suggestion.text)
+        #expect(try rig.fileSystem.readText(action.id.path) == suggestion.text)
+        let shown = try #require(await rig.backend.currentSnapshot().action(action.id))
+        #expect(shown.status == .someday, "the merged note is on screen without waiting for a watcher")
+        #expect(await rig.backend.undoLabel() == "Merged \u{201C}\(action.id.title)\u{201D}")
+
+        try await rig.backend.undo()
+        #expect(try rig.fileSystem.readText(action.id.path) == elsewhere, "undo restores the vault's version")
+    }
+
+    /// Renamed in the vault, edited here: the conflict finds the note under its new name, the
+    /// suggestion is that name with this device's text, and resolving under a third title moves
+    /// the vault's file there — nothing is written back to the old path.
+    @Test func aRenameElsewhereIsFoundByContentAndResolvedUnderTheChosenTitle() async throws {
+        let rig = try await Rig()
+        defer { rig.cleanUp() }
+        let action = try await rig.nextAction()
+        var failures = rig.backend.writeFailures().makeAsyncIterator()
+        let base = try #require(try rig.fileSystem.readText(action.id.path))
+
+        var edited = action
+        edited.why = "edited here"
+        _ = try await rig.backend.perform(.updateAction(edited))
+        let renamedPath = "Actions/\(action.id.title) — renamed elsewhere.md"
+        try rig.fileSystem.move(action.id.path, to: renamedPath)
+
+        await rig.store.open()
+        let failure = try #require(await failures.next())
+        await rig.backend.flush()
+
+        let conflict = try #require(failure.conflict)
+        #expect(conflict.theirsPath == renamedPath)
+        #expect(conflict.theirs == base)
+        #expect(conflict.suggestion.path == renamedPath)
+        #expect(conflict.suggestion.text.contains("edited here"))
+
+        let chosen = "Actions/\(action.id.title) — settled.md"
+        try await rig.backend.resolve(conflict, path: chosen, text: conflict.suggestion.text)
+        #expect(try rig.fileSystem.readText(chosen) == conflict.suggestion.text)
+        #expect(try rig.fileSystem.readText(renamedPath) == nil)
+        #expect(try rig.fileSystem.readText(action.id.path) == nil, "the old path stays empty")
+        #expect(await rig.backend.currentSnapshot().action(NoteID(path: chosen))?.why == "edited here")
+        #expect(await rig.backend.currentUpdate().renames.pairs.contains {
+            $0.old.path == renamedPath && $0.new.path == chosen
+        }, "the shell can follow the note to its settled title")
+    }
+
+    /// A title the vault already uses is the person's to change, not ours to overwrite.
+    @Test func resolvingOntoATakenTitleIsACollision() async throws {
+        let rig = try await Rig()
+        defer { rig.cleanUp() }
+        let action = try await rig.nextAction()
+        let other = try #require(await rig.backend.currentSnapshot().actions.first { $0.id != action.id })
+        let conflict = WriteConflict(
+            label: "Edit", basePath: action.id.path, base: "x", path: action.id.path, mine: "x",
+            theirsPath: action.id.path, theirs: "y")
+        await rig.store.open()
+        await #expect(throws: GTDError.titleCollision(other.id.title)) {
+            try await rig.backend.resolve(conflict, path: other.id.path, text: "merged")
+        }
+    }
+
     @Test func undoWaitsForTheQueueAndThenRestoresTheFile() async throws {
         let rig = try await Rig()
         defer { rig.cleanUp() }
