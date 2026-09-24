@@ -44,7 +44,7 @@ public struct ListsHomeView: View {
                 }
             }
         }
-        .navigationTitle(Copy.lists)
+        .pinnedScreenTitle(Copy.lists)
     }
 }
 
@@ -90,7 +90,7 @@ public struct ListItemsView: View {
                 }
             }
         }
-        .navigationTitle(list)
+        .pinnedScreenTitle(list)
         .sheet(item: $makeActionTarget) { item in
             MakeActionSheet(model: model, item: item)
         }

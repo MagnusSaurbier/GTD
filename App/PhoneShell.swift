@@ -85,9 +85,6 @@ struct PhoneShell: View {
                 mode: .onTheGo,
                 onOpen: { router.nextPath.append($0) },
                 onQuickCapture: { router.isCapturePresented = true })
-                .navigationTitle(Copy.next)
-                // P20 — a large title collapses on scroll; `.inline` or a pinned header cannot.
-                .navigationBarTitleDisplayMode(.large)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
@@ -138,7 +135,7 @@ struct PhoneShell: View {
     private var inboxTab: some View {
         NavigationStack {
             InboxTabContent(onProcess: { router.isProcessingInbox = true })
-                .navigationTitle(Copy.inbox)
+                .pinnedScreenTitle(Copy.inbox)
                 // P17 — captures land here, so this is where the capture button belongs too.
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
@@ -157,7 +154,6 @@ struct PhoneShell: View {
     private var routinesTab: some View {
         NavigationStack {
             RoutinesHomeView()
-                .navigationTitle(AppCopy.routines)
         }
     }
 }

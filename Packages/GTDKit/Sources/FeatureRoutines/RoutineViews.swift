@@ -23,7 +23,7 @@ public struct RoutinesHomeView: View {
             }
             .buttonStyle(.plain)
         }
-        .navigationTitle(Copy.routines)
+        .pinnedScreenTitle(Copy.routines)
         #if os(iOS)
         .fullScreenCover(item: $presented) { item in
             // `RoutineRunnerView` wraps its own `NavigationStack` for the toolbar's `Close`.
