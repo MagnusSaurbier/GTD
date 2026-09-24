@@ -154,7 +154,10 @@ everywhere a vertical `TextField` used to be: a TextKit 1 `NSTextView`/`UITextVi
 manager hides markup glyphs and draws bullets and boxes; a click on a box ticks it; the list keys
 and Return continuation go through the text system (one undo step each). `.focused(_:equals:)`
 works on it as on a `TextField` (checked on macOS 26). The text storage must be kept by the view —
-a layout manager holds it weakly. `MarkdownText.attributed(_:)` renders read-only note text
+a layout manager holds it weakly. Where a box or dot goes is computed from glyph locations
+(`NoteLayoutManager.rectFor`): after an incremental relayout TextKit 1's `boundingRect` answers a
+zero-wide rect for glyphs that follow hidden (null) glyphs at a line start (`NoteLayoutTests`).
+`MarkdownText.attributed(_:)` renders read-only note text
 (`CollapsibleText`).
 
 `Interaction/VaultRootEnvironment.swift` — `EnvironmentValues.vaultRootPath`: the vault folder's

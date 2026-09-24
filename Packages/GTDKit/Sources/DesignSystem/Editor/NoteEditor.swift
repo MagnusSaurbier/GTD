@@ -192,13 +192,25 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         }
     }
 
-    /// The drawn rect of a character range, in the text view's coordinates.
+    /// The drawn rect of a character range on one line, in the text view's coordinates.
+    ///
+    /// Built from glyph locations, not `boundingRect(forGlyphRange:in:)`: when a line starts
+    /// with hidden (null) glyphs — a task's `- ` — and the layout was updated incrementally
+    /// (Return at the end of that task), TextKit 1 answers both `boundingRect` and
+    /// `enumerateEnclosingRects` with a zero-width rect at the end of the line above, so the
+    /// box vanished and could not be clicked (2026-09-24). `location(forGlyphAt:)` stays right.
     func rectFor(_ range: NSRange, in container: NSTextContainer, origin: CGPoint) -> CGRect {
         let glyphs = glyphRange(forCharacterRange: range, actualCharacterRange: nil)
-        var rect = boundingRect(forGlyphRange: glyphs, in: container)
-        rect.origin.x += origin.x
-        rect.origin.y += origin.y
-        return rect
+        guard glyphs.length > 0 else { return .zero }
+        var fragmentGlyphs = NSRange()
+        let fragment = lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: &fragmentGlyphs)
+        let start = location(forGlyphAt: glyphs.location).x
+        let after = NSMaxRange(glyphs)
+        let end = after < NSMaxRange(fragmentGlyphs)
+            ? location(forGlyphAt: after).x
+            : lineFragmentUsedRect(forGlyphAt: glyphs.location, effectiveRange: nil).maxX - fragment.minX
+        return CGRect(x: fragment.minX + start + origin.x, y: fragment.minY + origin.y,
+                      width: max(0, end - start), height: fragment.height)
     }
 }
 

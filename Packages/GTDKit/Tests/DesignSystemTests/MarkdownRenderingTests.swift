@@ -97,6 +97,20 @@ struct MarkdownRenderingTests {
         #expect(runs.contains { $0.range == 0..<2 && $0.attributes.hidden })
     }
 
+    /// Return at the end of a task leaves the caret at the start of the new item; the item it
+    /// left keeps its box (the box was lost on screen, 2026-09-24).
+    @Test func theItemAboveANewTaskKeepsItsBox() {
+        let text = "- [ ] a\n- [ ] b\n- [ ] "
+        let end = text.utf16.count
+        for selection in [end..<end, 15..<15, 14..<14] {
+            let runs = MarkdownRendering.runs(text, selection: selection)
+            for box in [2..<5, 10..<13, 18..<21] {
+                #expect(runs.contains { $0.range == box && $0.attributes.checkbox == false
+                    && !$0.attributes.hidden })
+            }
+        }
+    }
+
     @Test func aClickFindsTheBox() {
         let text = "intro\n- [ ] call"
         #expect(MarkdownRendering.checkbox(at: 9, in: text) == 8..<11)
