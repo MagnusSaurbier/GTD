@@ -267,6 +267,20 @@ Unplug the mouse for this one.
 - [ ] A waiting row whose who is empty reads `<what>` alone — never a dangling "— ".
 - [ ] Its chase row in Next reads `Chase: <what>`; with a who it reads `Chase: <who> — <what>`.
 
+### 3.7 The action detail's body editor (A1, STYLEGUIDE §4.4) — 2026-09-24, not yet seen
+
+- [ ] Open any action in the detail column (Mac) or push its detail (iPhone). Below the
+      Project chip there are **no `Why?` / `What?` labels**: one text area shows the note's body
+      with `# Why?` and `# What?` rendered as headings and the markup hidden (Obsidian live
+      preview). The line the caret is on shows its markup in the secondary colour.
+- [ ] Type under `# What?`, click elsewhere: the file's `# What?` section has the text and
+      nothing else in the file changed (open it in Obsidian). A `- [ ]` line shows a box; two of
+      them make `Turn into project` appear.
+- [ ] In Obsidian, add `# Notes` with a line under it to an action, and delete its `# Why?`
+      heading. Back in the app the detail shows the Notes section **and** an empty `# Why?`
+      heading above `# What?`. Nothing was written yet (Obsidian shows the file unchanged);
+      type one character and the heading is in the file, with the Notes section intact.
+
 ### 3.4 Projects and areas (P1/R-6/R-7)
 
 - [ ] The projects list shows area-less projects **first, without a section header** (no

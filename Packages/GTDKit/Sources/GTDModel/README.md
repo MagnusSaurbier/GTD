@@ -11,7 +11,8 @@ Compiles and tests on Linux.
   (R-4: the title a capture is filed under, and the body that keeps what the title could not).
 - `Entities/` — `InboxItem`, `Action`, `GTDList`, `ListItem`, `Area`, `Project`, `ProjectStep`, `LogEntry`, `Routine`,
   `RoutineStep`, `RoutineLogEntry`, `GTDConfig`, `VaultIssue`, `WeeklyReview`, `VaultSnapshot`,
-  `NotePassthrough`, `Checkbox`, `ActionStatus`, `ProjectStatus`, `TimeBucket`, `RoutineStepResult`.
+  `NotePassthrough`, `Checkbox`, `NoteBody` (the `# Heading` sections of `Action.body`),
+  `ActionStatus`, `ProjectStatus`, `TimeBucket`, `RoutineStepResult`.
 - `Commands/` — `ActionDraft` (incl. `newProjectTitle`, R-8, and `preamble`, R-4),
   `ProjectDraft`, `WaitingInfo` (`who` optional, W1/D39), `KnowledgeTarget`, `InboxDecision`,
   `GTDCommand`, `RequiredField` (+ `RequiredField.missing`, R-3), `GTDError`, `AppPrompt`,
@@ -28,6 +29,13 @@ Compiles and tests on Linux.
 ## Invariants
 
 - **No lying defaults:** undecided is `nil`/empty; `timeEstimate` is never `0`.
+- **An action's body is one field** (2026-09-24). `Action.body` is the whole text below the
+  frontmatter; `preamble`, `why` and `what` are computed over it through `NoteBody` — the one
+  place in this target that knows heading syntax (a `# Title` line starts a section, fences
+  don't, titles compare case- and punctuation-insensitively, `Why?` then `What?` is the
+  canonical order). A body without either action heading reads as one long `What?`, and setting
+  `what` on it replaces the body. `Action(why:what:preamble:)` composes the template shape, so
+  the empty body is exactly `# Why?\n\n# What?`; pass `body:` to hand over a text as is.
 - `NotePassthrough` is opaque — only `GTDMarkdown` reads its slots.
 - The reducer is the only place with GTD semantics; its doc comment maps each rule to the code
   that enforces it. `extraOps` owns any path it names (ARCHITECTURE §4).

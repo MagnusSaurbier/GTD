@@ -123,11 +123,16 @@ the whole capture text, when the title could not hold it
 - [ ] …
 ```
 
-The paragraph **above** `# Why?` is `Action.preamble` (R-4): the full capture text of a note
-whose title had to be cut, and anything a hand-written note carries before its first heading. A
-note whose body has no heading at all is still read as one long `What?`, as before — a body is
-either a lead paragraph plus headings, or it is the `What?`, never both. `waitingFor:` is
-**optional** (W1/D39): an empty who writes no line at all.
+**The whole body is one field, `Action.body`** (2026-09-24): everything below the frontmatter,
+headings and the user's own sections included, `"\n"`-joined. The detail editor shows and edits
+it as one markdown document; the codec reads it whole and writes it whole — only when it changed.
+`Action.preamble`, `.why` and `.what` are views over it (`GTDModel.NoteBody`): the paragraph
+**above** `# Why?` is the preamble (R-4: the full capture text of a note whose title had to be
+cut, and anything a hand-written note carries before its first heading); a note whose body has
+no heading at all is still read as one long `What?` — a body is either a lead paragraph plus
+headings, or it is the `What?`, never both. An action note without the two headings gets them
+when its detail is opened (written with the first edit). `waitingFor:` is **optional** (W1/D39):
+an empty who writes no line at all.
 
 List item (L1, §5a) — the leanest note in the vault. The **file name is the title**, the folder
 is the list, `Done/` says it is finished, and the body is free notes (I4b). Nothing else:
@@ -502,6 +507,7 @@ silently. What is deliberately *not* built is REQUIREMENTS §12, summarised in
 | 2026-09-22 | **The vault is written only when the person acts on an item, and never on the thread that draws.** Launch and foregrounding write nothing: the daily archive (A5) rides the write queue behind the first change of the day instead of running inside `start()` (which launch awaited) or on foreground. The editors no longer autosave on a 600 ms typing pause — typed text is held until the field blurs, the editor closes, or the shell calls `AppModel.flushHeldEdits()` (iOS backgrounding, ⌘Q); chips, pickers and status changes still save at once. The price: a crash or force-quit mid-typing loses the text of the field being typed in. The device-local review-progress file is written on a background queue too. |
 | 2026-09-21 | **"Open in Obsidian" has one builder, `GTDAppCore.ObsidianLink`.** Obsidian's `path=` takes an absolute path only, so the three hand-rolled `path=<vault-relative>` links failed with "Vault not found". The Mac sends `path=<absolute>` (unambiguous, and right even when the picked folder sits inside a larger vault); iOS sends `vault=<picked folder's name>&file=<relative>`, because the path its bookmark resolves to is not known to match Obsidian's sandbox. The root reaches views through `\.vaultRootPath` in `DesignSystem`; no root, no link. |
 | 2026-09-22 | **File changes are picked up at once, like Obsidian.** The presenter only hears coordinated writes, so a plain external write waited for the 5 s poll plus a 300 ms debounce. macOS now runs `FSEventsVaultWatcher` beside the presenter and the poll; watchers pass a `VaultChange.paths` hint, the store re-indexes just those files (`VaultIndex.refresh(paths:)`, falling back to a walk for folders, unseen folders and bursts > 64), the debounce is 50 ms quiet / 500 ms ceiling, and a refresh that changed nothing publishes nothing. Measured ~100 ms from a plain write to the store's snapshot. The store's own commits use the same targeted path. A file in `Inbox/` with no `created` is a capture dated by the file, so anything that drops a note there shows up. iOS has no FSEvents: the presenter (iCloud and other apps coordinate) plus the poll. |
+| 2026-09-24 | **An action's body is one field, edited as one markdown document.** Trigger: the user wants the detail column to show the note's markdown body the way Obsidian does — headings *in* the text, the user's own sections visible — instead of two `Why?`/`What?` fields that hid everything else in the passthrough. `Action.body` is the stored text; `preamble`/`why`/`what` are computed over it through `GTDModel.NoteBody` (the same heading grammar as `BodySections`, on plain text), so R-3, A2 and every reducer rule read as before. `NoteCodec.decodeAction` reads the body whole and `encode` writes it whole, only when it changed, with the file's terminator — the per-section patching and the L4 "append the headings below a moved note" rule are gone from the codec; `promoteListItem` now puts the item's notes into the draft's preamble itself. `ActionEditModel` has one `.body` field (a remote change to any part of the body waits while the person types in it), shows an action's missing `# Why?`/`# What?` headings (a headingless body's text goes under `What?`, where the codec always read it) and writes them with the first edit — opening a note writes nothing. The inbox card and `Make action` keep their `Why?`/`What?` fields: they fill a draft, not a note. |
 | 2026-09-22 | **Stale favourites are pruned at launch and when the inbox opens its Knowledge / List card (R-5).** The user's call, and the one exception to "launch writes nothing": `GTDCommand.pruneFavouriteLists` drops a `favouriteLists` name whose folder is gone (renamed or removed in Finder/Obsidian), and writes `GTD/Config.md` only when there is one. A vault showing no list at all is left alone — an unsynced `Lists/` must not wipe the choice. In-app renames rename the favourite in place (`renameList`); in-app removals already dropped it. |
 
 ## 7. Sync safety rules (N3) — apply to every change that writes

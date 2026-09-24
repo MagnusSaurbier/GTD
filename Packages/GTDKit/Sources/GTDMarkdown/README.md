@@ -34,11 +34,13 @@ and then patched the same way.
   existing `0` in a file is left alone rather than rewritten. `waitingFor:` is the same kind of
   field (W1/D39): an action with no who writes **no line**, and clearing the who removes the line
   and nothing else.
-- **An action's body is a lead paragraph plus headings, or it is the `What?` — never both.**
-  `Action.preamble` (R-4) is the text above `# Why?`: the inbox note's body when it had one (the
-  full capture text of a capture whose name had to be cut), and whatever a hand-written note keeps before its first heading. A body with no
-  known heading keeps decoding as one long `What?`, and a note being *moved* into `Actions/` (a
-  promoted list item, L4) still gets its headings appended **below** its own text.
+- **An action's body is read and written whole** (2026-09-24). `decodeAction` hands the text
+  below the frontmatter to `Action.body`; `encode` writes it back — `RawText.block` with the
+  file's terminator — only when it differs from the stored file's body, so an untouched body
+  keeps every byte. Which part of it is the `What?` or the lead paragraph is `GTDModel.NoteBody`'s
+  business, not the codec's (the two share one heading grammar). A note being *moved* into
+  `Actions/` (a promoted list item, L4) arrives with the item's notes already at the top of its
+  body, put there by the reducer.
 - **Legacy `status:` words are read, never rewritten** (R-1): `backlog` and `maybe` decode as
   `.someday`, `trash` as `ActionStatus.legacyTrashed`. Because the encoder patches only lines
   whose *decoded* value changed, such a file keeps its own word on disk until the status really
@@ -66,11 +68,9 @@ and then patched the same way.
 - `encodeRoutineLog` regenerates the file (entries sorted by `at`) — it is the one encoder that
   does not patch, because `[RoutineLogEntry]` has no passthrough. It writes `at` in the given
   time zone, so pass the same one when comparing output.
-- `encode(_ action:)` replaces the whole body with the `What?` **only** when the file decodes as
-  an action (a headingless action note *is* its `What?`) or when the body already says what the
-  action says. Otherwise — a note being moved into `Actions/`, e.g. a promoted list item (L4) —
-  the `# Why?`/`# What?` headings are appended *below* the existing body, so the notes somebody
-  wrote about the item are never written over.
+- `encode(_ action:)` rewrites the body as one block when its text changed, so a body with
+  *mixed* line endings comes out uniform (the file's dominant terminator) after an edit, and its
+  trailing blank lines are dropped. Frontmatter lines are still patched one by one.
 - A key hidden inside a multi-line quoted scalar confuses the line scanner. Reading is still
   correct, and nothing breaks because only the schema's own keys are ever patched.
 
