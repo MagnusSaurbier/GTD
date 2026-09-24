@@ -113,6 +113,64 @@ struct NextListModelTests {
         #expect(list.items.isEmpty)
     }
 
+    // MARK: - All contexts on the iPhone (E2)
+
+    @Test func onTheGoIsTheDefaultOnThePhone() {
+        let list = NextListModel(model: makeModel(), mode: .onTheGo, store: InMemoryNextFilterStore())
+        #expect(!list.showsAllContexts)
+        #expect(list.isOnTheGoOnly)
+    }
+
+    @Test func showingAllContextsLiftsTheOnTheGoRestriction() {
+        let list = NextListModel(model: makeModel(), mode: .onTheGo, store: InMemoryNextFilterStore())
+        let restricted = list.items.count
+
+        list.setShowsAllContexts(true)
+        #expect(!list.isOnTheGoOnly)
+        #expect(list.availableContexts == Fixtures.sampleSnapshot.config.contexts)
+        #expect(list.items.map(\.id) == Rules.nextList(Fixtures.sampleSnapshot, today: Fixtures.today).map(\.id))
+        #expect(list.items.count > restricted)
+        #expect(list.visibleCountText == nil, "every Next action is on screen")
+
+        list.setContexts(["mac"])
+        #expect(!list.items.isEmpty)
+        #expect(list.items.allSatisfy { $0.contexts.contains("mac") })
+        #expect(list.visibleCountText?.hasSuffix("shown") == true)
+    }
+
+    @Test func restoringOnTheGoDropsContextsThatAreNotOnTheGo() {
+        let list = NextListModel(model: makeModel(), mode: .onTheGo, store: InMemoryNextFilterStore())
+        list.setShowsAllContexts(true)
+        list.setContexts(["mac", "errands"])
+
+        list.setShowsAllContexts(false)
+        #expect(list.isOnTheGoOnly)
+        #expect(list.contexts == ["errands"], "a hidden chip must not keep filtering")
+        #expect(list.items.allSatisfy { $0.contexts.contains("errands") })
+    }
+
+    @Test func showsAllContextsIsRememberedPerModeAndSurvivesClearFilters() {
+        let store = InMemoryNextFilterStore()
+        let first = NextListModel(model: makeModel(), mode: .onTheGo, store: store)
+        first.setShowsAllContexts(true)
+        first.clearFilters()
+        #expect(first.showsAllContexts, "the scope is not a filter; Clear filters leaves it")
+
+        #expect(NextListModel(model: makeModel(), mode: .onTheGo, store: store).showsAllContexts)
+        #expect(!NextListModel(model: makeModel(), mode: .full, store: store).showsAllContexts)
+    }
+
+    @Test func userDefaultsStoreRemembersShowsAllContexts() throws {
+        let suite = "NextListModelTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsNextFilterStore(defaults: defaults)
+        #expect(!store.showsAllContexts(for: .onTheGo))
+        store.save(showsAllContexts: true, for: .onTheGo)
+        #expect(store.showsAllContexts(for: .onTheGo))
+        #expect(!store.showsAllContexts(for: .full))
+    }
+
     // MARK: - Cap (STYLEGUIDE §2.2)
 
     @Test func capBelowIsPlainCountAboveIsBadge() async throws {

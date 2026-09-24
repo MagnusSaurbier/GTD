@@ -62,6 +62,8 @@ public enum Copy {
     /// contexts are *all* the ones at hand, time is the *most* that is free right now.
     public static let contextFilterHeader = "Context - pick all available right now"
     public static let timeFilterHeader = "Time - maximum available right now"
+    /// iPhone Next filter bar (E2): the switch that lifts the on-the-go restriction.
+    public static let allContexts = "All contexts"
     /// The `Lists` sidebar row / iPhone tab and the fixed-vocabulary singular "one list" term
     /// (§6.2: "List").
     public static let list = "List"

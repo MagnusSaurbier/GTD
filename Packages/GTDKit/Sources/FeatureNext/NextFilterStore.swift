@@ -12,6 +12,9 @@ public protocol NextFilterStore: Sendable {
     func contexts(for mode: NextViewMode) -> [String]
     func timeAvailable(for mode: NextViewMode) -> Int?
     func save(contexts: [String], timeAvailable: Int?, for mode: NextViewMode)
+    /// E2 — whether the iPhone list shows every context instead of only the on-the-go ones.
+    func showsAllContexts(for mode: NextViewMode) -> Bool
+    func save(showsAllContexts: Bool, for mode: NextViewMode)
 }
 
 /// The default, device-local store. Minutes and contexts are namespaced per `NextViewMode`
@@ -44,7 +47,16 @@ public struct UserDefaultsNextFilterStore: NextFilterStore, @unchecked Sendable 
         }
     }
 
+    public func showsAllContexts(for mode: NextViewMode) -> Bool {
+        defaults.bool(forKey: showsAllKey(mode))
+    }
+
+    public func save(showsAllContexts: Bool, for mode: NextViewMode) {
+        defaults.set(showsAllContexts, forKey: showsAllKey(mode))
+    }
+
     private func contextsKey(_ mode: NextViewMode) -> String { "FeatureNext.contexts.\(mode)" }
+    private func showsAllKey(_ mode: NextViewMode) -> String { "FeatureNext.showsAllContexts.\(mode)" }
     private func timeKey(_ mode: NextViewMode) -> String { "FeatureNext.timeAvailable.\(mode)" }
 }
 
@@ -55,6 +67,7 @@ public struct InMemoryNextFilterStore: NextFilterStore {
     private final class Box: @unchecked Sendable {
         var contexts: [NextViewMode: [String]] = [:]
         var time: [NextViewMode: Int?] = [:]
+        var showsAll: [NextViewMode: Bool] = [:]
     }
     private let box = Box()
 
@@ -67,4 +80,7 @@ public struct InMemoryNextFilterStore: NextFilterStore {
         box.contexts[mode] = contexts
         box.time[mode] = timeAvailable
     }
+
+    public func showsAllContexts(for mode: NextViewMode) -> Bool { box.showsAll[mode] ?? false }
+    public func save(showsAllContexts: Bool, for mode: NextViewMode) { box.showsAll[mode] = showsAllContexts }
 }

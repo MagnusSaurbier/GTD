@@ -19,7 +19,7 @@ Source: [[GTD my own setup]], scan of `Actions/` + `Actions_legacy/`, research o
 - N3. Sync-safe by design: one writer per file where possible, atomic new-file writes, no shared append-only files across devices.
 - N4. The app replaces TaskNotes (its views and modals); the note-per-action data is kept.
 - N5. Device split:
-  - **iPhone**: capture, inbox processing, reduced Next view (on-the-go contexts only), **lists (full)**, routines.
+  - **iPhone**: capture, inbox processing, reduced Next view (on-the-go contexts by default, E2), **lists (full)**, routines.
   - **Mac**: everything, incl. full overview, projects, weekly review.
 - N6. Undo for the last filing/status change.
 - N7. **Mac keybinds are rebindable in settings** (defaults in I9).
@@ -128,7 +128,7 @@ Dropped: `priority`, `type`, `tags`, `scheduled`, `Ressources`.
 ## 8. Engage views
 
 - E1. **Next view** (default screen): filter chips for **context** and **time available**, below a plain list of actions (project shown as label). Max 15 items + chase items.
-- E2. **iPhone**: Next view hard-filtered to on-the-go contexts; tick off actions; no full task overview. Exception: the **Lists tab is fully available** (L5).
+- E2. **iPhone**: Next view filtered to on-the-go contexts by default; an `All contexts` chip lifts that filter for an overview of every open Next action (remembered per device; the context chips alone cannot lift it). Tick off actions. Exception: the **Lists tab is fully available** (L5).
 - E3. **Mac overview**: sidebar with live counts (Inbox · Next · Someday · Waiting · Lists · Projects · Deferred), list in the middle, note preview/editor on the right. Primary grouping **by area/project**; context and time are filters, not groupings.
 - E4. Projects list: each row = project, its active action(s), remaining step count, stalled badge.
 
