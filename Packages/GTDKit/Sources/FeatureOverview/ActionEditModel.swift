@@ -7,8 +7,8 @@ import GTDAppCore
 /// successful save is what an autosave writes — nothing else (see `ActionEditModel`).
 public enum ActionField: String, Hashable, Sendable, CaseIterable {
     case title
-    case why
-    case what
+    /// The whole note body — one field, edited as one markdown document (2026-09-24).
+    case body
     case status
     case contexts
     case timeEstimate
@@ -94,8 +94,10 @@ public final class ActionEditModel: AppModel.HeldEdits {
     // MARK: - Reading
 
     public var title: String { draft?.title ?? "" }
-    public var why: String { draft?.why ?? "" }
-    public var what: String { draft?.what ?? "" }
+    /// What the body editor shows: the note's whole body, with the `# Why?` / `# What?`
+    /// headings added where an action note lacks them (A1). Nothing is written by looking —
+    /// the added headings reach the vault with the person's first edit of the body.
+    public var body: String { ActionEditModel.displayBody(draft?.body ?? "") }
     public var status: ActionStatus { draft?.status ?? .someday }
     public var contexts: [String] { draft?.contexts ?? [] }
     public var timeBucket: TimeBucket? { draft?.timeBucket }
@@ -139,8 +141,17 @@ public final class ActionEditModel: AppModel.HeldEdits {
             .filter { !$0.isEmpty }
         return (lines.joined(separator: " "), true)
     }
-    public func setWhy(_ value: String) { edit(.why) { $0.why = value } }
-    public func setWhat(_ value: String) { edit(.what) { $0.what = value } }
+    /// The body as typed. Unchanged text (the editor echoing `body` back) is not an edit.
+    public func setBody(_ value: String) {
+        guard value != body else { return }
+        edit(.body) { $0.body = value }
+    }
+
+    /// An action note always shows its two sections (A1); `NoteBody` puts a headingless body's
+    /// text under `# What?`, where the codec has always read it.
+    static func displayBody(_ body: String) -> String {
+        NoteBody.ensuringSections(NoteBody.actionSections, in: body)
+    }
 
     public func setContexts(_ value: [String]) { edit(.contexts, immediate: true) { $0.contexts = value } }
 
@@ -365,8 +376,7 @@ public final class ActionEditModel: AppModel.HeldEdits {
         for field in fields {
             switch field {
             case .title: out.title = local.title
-            case .why: out.why = local.why
-            case .what: out.what = local.what
+            case .body: out.body = local.body
             case .status: out.status = local.status
             case .contexts: out.contexts = local.contexts
             case .timeEstimate: out.timeEstimate = local.timeEstimate

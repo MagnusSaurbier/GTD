@@ -127,9 +127,7 @@ public enum SampleVault {
         if let completed = action.completedDate { frontmatter.append("completedDate: \(iso(completed))") }
         if let reason = action.reviewReason { frontmatter.append("reviewReason: \(quote(reason))") }
 
-        var body = "# Why?\n\(action.why)\n"
-        body += "\n# What?\n\(action.what)\n"
-        return document(frontmatter: frontmatter, body: body)
+        return document(frontmatter: frontmatter, body: action.body.isEmpty ? "" : action.body + "\n")
     }
 
     /// §5a — the leanest note in the vault: an optional `created`, and the notes as the body.

@@ -47,7 +47,7 @@ private struct ActionDetailEditor: View {
     #endif
 
     private enum TextEntry: Hashable {
-        case title, why, what
+        case title, body
     }
 
     var body: some View {
@@ -160,11 +160,16 @@ private struct ActionDetailEditor: View {
                         get: { editor.project }, set: { editor.setProject($0) }))
                 }
 
-                section(Copy.why, entry: .why, placeholder: Copy.whyPlaceholder, text: Binding(
-                    get: { editor.why }, set: { editor.setWhy($0) }))
-
-                section(Copy.what, entry: .what, placeholder: Copy.whatPlaceholder, text: Binding(
-                    get: { editor.what }, set: { editor.setWhat($0) }))
+                // The note's whole body as one live-preview markdown document (STYLEGUIDE §4.4):
+                // `# Why?` and `# What?` are headings *in* the text, not fields around it, and
+                // whatever else the note carries is right there too.
+                NoteEditor(
+                    text: Binding(get: { editor.body }, set: { editor.setBody($0) }),
+                    minLines: 6)
+                    .onAdvance { focus = nil }        // ⌘↩ past the last input line: keyboard away
+                    .fixedSize(horizontal: false, vertical: true)
+                    .focused($focus, equals: .body)
+                    .id(TextEntry.body)
 
                 if editor.suggestsProject {
                     Button {
@@ -325,21 +330,6 @@ private struct ActionDetailEditor: View {
             Text(label).font(Typo.meta).foregroundStyle(Color.textSecondary)
             content()
         }
-    }
-
-    @ViewBuilder private func section(
-        _ label: String, entry: TextEntry, placeholder: String, text: Binding<String>
-    ) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
-            Text(label).font(Typo.sectionHeader).foregroundStyle(Color.ink)
-            TextField(placeholder, text: text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(Typo.body)
-                .lineLimit(3...)
-                .fixedSize(horizontal: false, vertical: true)
-                .focused($focus, equals: entry)
-        }
-        .id(entry)
     }
 
     /// A refused command (STYLEGUIDE §4.3: no alerts for validation — inline, in place).

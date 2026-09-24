@@ -858,8 +858,12 @@ public enum Reducer {
     ) throws(GTDError) -> Reduction {
         guard let item = s.listItem(id) else { throw .notFound(id) }
         var next = s
+        // L4 — the item's own notes are somebody else's content: they stay at the top of the
+        // body and the action headings follow below them (R-4's shape), so nothing is lost.
+        var filed = draft
+        filed.preamble = CaptureText.filedBody(body: item.notes, notes: draft.preamble)
         let action = try makeAction(
-            from: draft, in: &next, env: env, created: item.created, passthrough: item.passthrough)
+            from: filed, in: &next, env: env, created: item.created, passthrough: item.passthrough)
         next.listItems.removeAll { $0.id == id }
         next.actions.append(action)
         try checkCap(old: s, new: next, today: env.today)
@@ -1197,9 +1201,7 @@ public enum Reducer {
             completedDate: action.completedDate,
             reviewReason: action.reviewReason,
             modified: action.modified,
-            preamble: action.preamble,
-            why: action.why,
-            what: action.what,
+            body: action.body,
             passthrough: action.passthrough)
     }
 

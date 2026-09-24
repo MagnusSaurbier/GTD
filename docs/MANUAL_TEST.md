@@ -194,11 +194,26 @@ Unplug the mouse for this one.
       Knowledge / List card `1 Knowledge · 2 Read · 3 Watch · 4 Wish · 0 More… · Esc Back`.
 - [ ] Each of those keys does what the legend says: `A`/`K`/`X`/`D` on step 1, `←`/`→`/`W`/`P`
       and `⌘↩` on the action card, `1`…`9`/`0` on the navbar.
-- [ ] `Tab` moves title → `Why?` → `What?` → chips. `Esc` blurs a focused field so the single
-      keys act on the card again.
+- [ ] In `Why?`, `Tab` indents the line (`⇧Tab` outdents) and focus stays put; `⌘↩` puts the
+      caret on `What?`'s input line, `⌘↩` again (no input line left) moves focus on to the chips.
+      `Esc` blurs a focused field so the single keys act on the card again. (2026-09-25, not
+      yet seen on screen.)
 - [ ] With no field focused: `1…8` toggle contexts and `⇧1…⇧4` pick a time bucket.
 - [ ] `⌘Z` undoes the last filing from anywhere on the screen.
 - [ ] Filing with a key animates the card out **in that key's direction**.
+- [ ] Live preview in a body field (STYLEGUIDE §4.4; checked off-screen on macOS, never on iOS):
+      type `**bold** and [[Note|link]]` and `- [ ] task` lines into the card's `Why?`, then click
+      elsewhere — the markup disappears, the box is drawn. Click the box: it ticks, the line is
+      struck through, the caret does not jump into the field; `⌘Z` unticks. Put the caret back on
+      the first line: `**` and `[[Note|` reappear, grey. Return after `- [ ] task` starts
+      `- [ ] `; Return again on that empty item removes it. On iPhone: tap a box; with a hardware
+      keyboard the list keys below work too.
+- [ ] List keys in a body field (STYLEGUIDE §4.5; checked off-screen on macOS): in the card's `Why?`,
+      type `call Anna`, then `⌥L` → `- [ ] call Anna`, `⌥L` → `- [x] call Anna`; `⌥⌘L` cycles
+      plain → `- ` → `- [ ] ` → plain; `⇧⌘L` toggles `- `. The caret stays in the text, `⌘Z`
+      undoes one step, and `⌥L` never types `¬`. Select three lines: all three change. In the
+      **title** field the keys do nothing special. Repeat once in the action editor's `What?`, a
+      list item's notes and a review text field.
 
 ## 2. Lists (§5a, L1–L6)
 
@@ -253,6 +268,20 @@ Unplug the mouse for this one.
 
 - [ ] A waiting row whose who is empty reads `<what>` alone — never a dangling "— ".
 - [ ] Its chase row in Next reads `Chase: <what>`; with a who it reads `Chase: <who> — <what>`.
+
+### 3.7 The action detail's body editor (A1, STYLEGUIDE §4.4) — 2026-09-24, not yet seen
+
+- [ ] Open any action in the detail column (Mac) or push its detail (iPhone). Below the
+      Project chip there are **no `Why?` / `What?` labels**: one text area shows the note's body
+      with `# Why?` and `# What?` rendered as headings and the markup hidden (Obsidian live
+      preview). The line the caret is on shows its markup in the secondary colour.
+- [ ] Type under `# What?`, click elsewhere: the file's `# What?` section has the text and
+      nothing else in the file changed (open it in Obsidian). A `- [ ]` line shows a box; two of
+      them make `Turn into project` appear.
+- [ ] In Obsidian, add `# Notes` with a line under it to an action, and delete its `# Why?`
+      heading. Back in the app the detail shows the Notes section **and** an empty `# Why?`
+      heading above `# What?`. Nothing was written yet (Obsidian shows the file unchanged);
+      type one character and the heading is in the file, with the Notes section intact.
 
 ### 3.4 Projects and areas (P1/R-6/R-7)
 

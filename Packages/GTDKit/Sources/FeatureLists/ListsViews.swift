@@ -198,15 +198,9 @@ private struct ListItemEditor: View {
                     errorBanner(editor)
                 }
 
-                TextField(
-                    "",
+                NoteEditor(
                     text: Binding(get: { editor.notes }, set: { editor.setNotes($0) }),
-                    prompt: Text(ListsCopy.notesPlaceholder).foregroundStyle(Color.textTertiary),
-                    axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(Typo.body)
-                    .foregroundStyle(Color.ink)
-                    .lineLimit(3...)
+                    prompt: ListsCopy.notesPlaceholder, minLines: 3)
                     .fixedSize(horizontal: false, vertical: true)
                     .focused($focus, equals: .notes)
                     .accessibilityLabel(ListsCopy.notesPlaceholder)
