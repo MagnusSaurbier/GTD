@@ -8,7 +8,7 @@ import DesignSystem
 public enum NextViewMode: String, Sendable, Equatable, Hashable, CaseIterable, CustomStringConvertible {
     case full
     /// iPhone: filtered to `config.onTheGoContexts` by default (E2). The context chips cannot
-    /// lift that restriction; only the explicit `All contexts` switch (`showsAllContexts`) can.
+    /// lift that restriction; only switching the explicit `Only mobile` chip off (`showsAllContexts`) can.
     case onTheGo
 
     public var description: String { rawValue }
@@ -48,7 +48,7 @@ public final class NextListModel {
     // MARK: - Filters (E1)
 
     /// True while the list is restricted to the on-the-go contexts: the iPhone, unless the user
-    /// switched on `All contexts` (E2).
+    /// switched `Only mobile` off (E2).
     public var isOnTheGoOnly: Bool { mode == .onTheGo && !showsAllContexts }
 
     /// Contexts the chips may offer — the on-the-go restriction narrows the set, and the chips
@@ -170,7 +170,7 @@ public final class NextListModel {
 
     /// Why the list shows fewer rows than the cap count says: `8 of 14 on the go` on the iPhone
     /// (whose context restriction hides the rest, E2), `3 of 14 shown` under a filter — also on
-    /// the iPhone once `All contexts` is on.
+    /// the iPhone once `Only mobile` is off.
     /// `nil` when every Next action is on screen — nothing to explain.
     public var visibleCountText: String? {
         let visible = items.count

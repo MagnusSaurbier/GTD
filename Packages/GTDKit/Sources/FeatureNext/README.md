@@ -23,7 +23,7 @@ overdue follow-ups (E1, E2, W2).
   device through `NextFilterStore`, namespaced by `NextViewMode` so the Mac's full list and the
   iPhone's on-the-go list don't share filters. `.onTheGo`'s context restriction lives in
   `Rules.onTheGoNextList` itself — the context chips just narrow within it. Only the separate
-  `All contexts` chip (`NextListModel.setShowsAllContexts`, E2, off by default, persisted per
+  `Only mobile` chip (`NextListModel.setShowsAllContexts`, E2, on by default, switching it off lifts it, persisted per
   device, untouched by `Clear filters`) lifts it; turning it back off drops picked contexts
   that are not on the go.
 - Chase section (overdue follow-ups) is unaffected by the filters; quick actions bump +7 d /

@@ -186,7 +186,7 @@ private struct NextListContent: View {
         VStack(alignment: .leading, spacing: Spacing.s) {
             filterHeader(Copy.contextFilterHeader)
             HStack(alignment: .top, spacing: Spacing.s) {
-                allContextsChip
+                onlyMobileChip
                 contextChips
             }
             filterHeader(Copy.timeFilterHeader)
@@ -203,7 +203,7 @@ private struct NextListContent: View {
             filterHeader(Copy.contextFilterHeader)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s) {
-                    allContextsChip
+                    onlyMobileChip
                     contextChips
                 }
                 .padding(.horizontal, Spacing.screenMargin)
@@ -237,12 +237,12 @@ private struct NextListContent: View {
             selection: Binding(get: { list.contexts }, set: { list.setContexts($0) }))
     }
 
-    /// E2 — on the iPhone the list shows only on-the-go contexts until this chip is on; then
-    /// every context's chip appears and the list is the whole Next list. Not a filter, so
-    /// `Clear filters` leaves it alone. Absent in `.full`, which never restricts.
-    @ViewBuilder private var allContextsChip: some View {
+    /// E2 — on the iPhone the list shows only on-the-go contexts while this chip is on (the
+    /// default); switched off, every context's chip appears and the list is the whole Next list.
+    /// Not a filter, so `Clear filters` leaves it alone. Absent in `.full`, which never restricts.
+    @ViewBuilder private var onlyMobileChip: some View {
         if list.mode == .onTheGo {
-            Chip(Copy.allContexts, state: list.showsAllContexts ? .confirmed : .unset) {
+            Chip(Copy.onlyMobile, state: list.isOnTheGoOnly ? .confirmed : .unset) {
                 list.setShowsAllContexts(!list.showsAllContexts)
             }
         }

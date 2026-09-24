@@ -113,7 +113,7 @@ struct NextListModelTests {
         #expect(list.items.isEmpty)
     }
 
-    // MARK: - All contexts on the iPhone (E2)
+    // MARK: - `Only mobile` off shows all contexts on the iPhone (E2)
 
     @Test func onTheGoIsTheDefaultOnThePhone() {
         let list = NextListModel(model: makeModel(), mode: .onTheGo, store: InMemoryNextFilterStore())

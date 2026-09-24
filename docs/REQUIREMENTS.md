@@ -128,7 +128,7 @@ Dropped: `priority`, `type`, `tags`, `scheduled`, `Ressources`.
 ## 8. Engage views
 
 - E1. **Next view** (default screen): filter chips for **context** and **time available**, below a plain list of actions (project shown as label). Max 15 items + chase items.
-- E2. **iPhone**: Next view filtered to on-the-go contexts by default; an `All contexts` chip lifts that filter for an overview of every open Next action (remembered per device; the context chips alone cannot lift it). Tick off actions. Exception: the **Lists tab is fully available** (L5).
+- E2. **iPhone**: Next view filtered to on-the-go contexts by default; an `Only mobile` chip (on by default) keeps that filter; switching it off shows every open Next action for an overview (remembered per device; the context chips alone cannot lift it). Tick off actions. Exception: the **Lists tab is fully available** (L5).
 - E3. **Mac overview**: sidebar with live counts (Inbox · Next · Someday · Waiting · Lists · Projects · Deferred), list in the middle, note preview/editor on the right. Primary grouping **by area/project**; context and time are filters, not groupings.
 - E4. Projects list: each row = project, its active action(s), remaining step count, stalled badge.
 
