@@ -184,7 +184,9 @@ private struct NextListContent: View {
     @ViewBuilder private var filterChips: some View {
         #if os(macOS)
         VStack(alignment: .leading, spacing: Spacing.s) {
+            filterHeader(Copy.contextFilterHeader)
             contextChips
+            filterHeader(Copy.timeFilterHeader)
             HStack(alignment: .firstTextBaseline, spacing: Spacing.l) {
                 TimeBucketChipGroup(selection: timeBucketBinding)
                 clearFiltersButton
@@ -194,16 +196,32 @@ private struct NextListContent: View {
         .padding(.horizontal, Spacing.screenMargin)
         .padding(.vertical, Spacing.s)
         #else
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.l) {
-                contextChips
-                TimeBucketChipGroup(selection: timeBucketBinding)
-                clearFiltersButton
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            filterHeader(Copy.contextFilterHeader)
+            ScrollView(.horizontal, showsIndicators: false) {
+                contextChips.padding(.horizontal, Spacing.screenMargin)
             }
-            .padding(.horizontal, Spacing.screenMargin)
-            .padding(.vertical, Spacing.s)
+            filterHeader(Copy.timeFilterHeader)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Spacing.l) {
+                    TimeBucketChipGroup(selection: timeBucketBinding)
+                    clearFiltersButton
+                }
+                .padding(.horizontal, Spacing.screenMargin)
+            }
         }
+        .padding(.vertical, Spacing.s)
         #endif
+    }
+
+    /// The caption over each chip group — same look as Someday's (`ActionListView`).
+    private func filterHeader(_ text: String) -> some View {
+        Text(text)
+            .font(Typo.meta)
+            .foregroundStyle(Color.textSecondary)
+            #if !os(macOS)
+            .padding(.horizontal, Spacing.screenMargin)
+            #endif
     }
 
     private var contextChips: some View {
