@@ -194,8 +194,10 @@ Unplug the mouse for this one.
       Knowledge / List card `1 Knowledge · 2 Read · 3 Watch · 4 Wish · 0 More… · Esc Back`.
 - [ ] Each of those keys does what the legend says: `A`/`K`/`X`/`D` on step 1, `←`/`→`/`W`/`P`
       and `⌘↩` on the action card, `1`…`9`/`0` on the navbar.
-- [ ] `Tab` moves title → `Why?` → `What?` → chips. `Esc` blurs a focused field so the single
-      keys act on the card again.
+- [ ] In `Why?`, `Tab` indents the line (`⇧Tab` outdents) and focus stays put; `⌘↩` puts the
+      caret on `What?`'s input line, `⌘↩` again (no input line left) moves focus on to the chips.
+      `Esc` blurs a focused field so the single keys act on the card again. (2026-09-25, not
+      yet seen on screen.)
 - [ ] With no field focused: `1…8` toggle contexts and `⇧1…⇧4` pick a time bucket.
 - [ ] `⌘Z` undoes the last filing from anywhere on the screen.
 - [ ] Filing with a key animates the card out **in that key's direction**.

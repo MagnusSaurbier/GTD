@@ -151,8 +151,10 @@ holds none of them. Adding is normal, renaming is a cross-target change.
 
 `Interaction/ListEditing.swift` — `ListEditing.edit(_:text:selection:)`: the Obsidian list
 shortcuts of the note-body fields (STYLEGUIDE §4.5) as a pure text rewrite on UTF-16 offsets, the
-fixed key table `ListEditShortcut.table`, and `ListEditing.newline(text:selection:)` (Return
-continues a list). Linux-compilable and tested (`ListEditingTests`).
+fixed key table `ListEditShortcut.table`, `ListEditing.newline(text:selection:)` (Return
+continues a list), the `indent`/`outdent` commands behind `Tab`/`⇧Tab`, and
+`ListEditing.nextInputLine(text:caret:)` behind `⌘↩` (the next empty or marker-only line past the
+next block of text; `nil` means "move focus on"). Linux-compilable and tested (`ListEditingTests`).
 
 `Editor/MarkdownRendering.swift` — the live preview of note bodies (STYLEGUIDE §4.4) as pure data:
 `runs(_:selection:)` says which UTF-16 range gets which `MarkdownAttributes` (bold, heading, link,

@@ -472,7 +472,29 @@ public final class NoteTextView: NSTextView {
             perform(command)
             return true
         }
+        if isFocused, Self.isCommandReturn(event) {
+            moveToNextInputLineOrField()
+            return true
+        }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// `⌘↩` — to the next input line of this field (STYLEGUIDE §4.4), or, when the field has
+    /// none left, on to the next field: what `Tab` did before it became indentation.
+    func moveToNextInputLineOrField() {
+        if let target = ListEditing.nextInputLine(text: string, caret: selectedRange().location) {
+            setSelectedRange(NSRange(location: target, length: 0))
+            scrollRangeToVisible(selectedRange())
+        } else {
+            window?.selectNextKeyView(self)
+        }
+    }
+
+    static func isCommandReturn(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard flags == .command, let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first
+        else { return false }
+        return scalar == "\r" || scalar == "\n" || scalar == "\u{3}"
     }
 
     public override func keyDown(with event: NSEvent) {
@@ -492,9 +514,10 @@ public final class NoteTextView: NSTextView {
         }
     }
 
-    /// `Tab` moves on to the next field, as it did from the `TextField` this replaces.
-    public override func insertTab(_ sender: Any?) { window?.selectNextKeyView(self) }
-    public override func insertBacktab(_ sender: Any?) { window?.selectPreviousKeyView(self) }
+    /// `Tab` indents the caret's line(s), `⇧Tab` outdents them (2026-09-25). Moving on to the
+    /// next field is `⌘↩` once the field has no input line left.
+    public override func insertTab(_ sender: Any?) { perform(.indent) }
+    public override func insertBacktab(_ sender: Any?) { perform(.outdent) }
 
     private func perform(_ command: ListEditCommand) {
         let selection = selectedRange()
@@ -707,7 +730,16 @@ public final class NoteTextView: UITextView {
     }
 
     public override var keyCommands: [UIKeyCommand]? {
-        ListEditShortcut.table.map { shortcut, command in
+        // Hardware keyboard: Tab / ⇧Tab indent and outdent, ⌘↩ jumps to the next input line
+        // (there is no key-view loop to hand focus on to, so with none left it does nothing).
+        let tab = UIKeyCommand(title: "", action: #selector(listCommand(_:)), input: "\t",
+                               modifierFlags: [], propertyList: ListEditCommand.indent.rawValue)
+        let backtab = UIKeyCommand(title: "", action: #selector(listCommand(_:)), input: "\t",
+                                   modifierFlags: .shift, propertyList: ListEditCommand.outdent.rawValue)
+        let next = UIKeyCommand(title: "", action: #selector(nextInputLine(_:)), input: "\r",
+                                modifierFlags: .command)
+        for key in [tab, backtab, next] { key.wantsPriorityOverSystemBehavior = true }
+        return [tab, backtab, next] + ListEditShortcut.table.map { shortcut, command in
             var flags: UIKeyModifierFlags = []
             if shortcut.command { flags.insert(.command) }
             if shortcut.option { flags.insert(.alternate) }
@@ -718,6 +750,12 @@ public final class NoteTextView: UITextView {
             key.wantsPriorityOverSystemBehavior = true
             return key
         }
+    }
+
+    @objc private func nextInputLine(_ sender: UIKeyCommand) {
+        guard let target = ListEditing.nextInputLine(text: text, caret: selectedRange.location) else { return }
+        selectedRange = NSRange(location: target, length: 0)
+        scrollRangeToVisible(selectedRange)
     }
 
     @objc private func listCommand(_ sender: UIKeyCommand) {

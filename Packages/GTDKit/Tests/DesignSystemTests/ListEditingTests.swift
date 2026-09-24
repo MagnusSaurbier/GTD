@@ -162,4 +162,51 @@ struct ListEditingTests {
         #expect(ListEditShortcut.command(for: .init(key: "l", option: true)) == .toggleCheckbox)
         #expect(ListEditShortcut.command(for: .init(key: "l", command: true)) == nil)
     }
+
+    // MARK: - Tab / ⇧Tab (indent, outdent)
+
+    @Test func tabIndentsTheCaretLineAndKeepsTheCaretOnItsText() {
+        #expect(run(.indent, "buy mi|lk") == "\tbuy mi|lk")
+        #expect(run(.indent, "- [ ] ca|ll") == "\t- [ ] ca|ll")
+        // A caret at the very start of a plain line ends up after the new tab, as typing would.
+        #expect(run(.indent, "|task") == "\t|task")
+        // An empty line indents too (Tab on a fresh input line).
+        #expect(run(.indent, "|") == "\t|")
+    }
+
+    @Test func tabIndentsEveryLineASelectionTouches() {
+        #expect(run(.indent, "«a\n- b»\nc") == "«\ta\n\t- b»\nc")
+    }
+
+    @Test func shiftTabRemovesOneTabOrUpToFourSpaces() {
+        #expect(run(.outdent, "\t\t- [ ] ca|ll") == "\t- [ ] ca|ll")
+        #expect(run(.outdent, "      x|") == "  x|")
+        #expect(run(.outdent, "  y|") == "y|")
+        #expect(run(.outdent, "plain|") == nil)
+    }
+
+    // MARK: - ⌘↩ (next input line)
+
+    private func next(_ marked: String) -> Int? {
+        let (text, selection) = unmark(marked)
+        return ListEditing.nextInputLine(text: text, caret: selection.lowerBound)
+    }
+
+    @Test func commandReturnJumpsPastTheNextHeadingToItsInputLine() {
+        let body = "# Why?\n|\n# What?\n\n"
+        let (text, _) = unmark(body)
+        #expect(next(body) == text.utf16.count - 1)             // the empty line under `# What?`
+        // A marker-only line counts as an input line, and the caret lands after the marker.
+        #expect(next("# Why?\nbeca|use\n# What?\n- [ ] \nrest") == "# Why?\nbecause\n# What?\n- [ ] ".utf16.count)
+    }
+
+    @Test func commandReturnSkipsEmptyLinesRightBelowTheCaretFirst() {
+        #expect(next("|\n\n# What?\n\n") == "\n\n# What?\n".utf16.count)
+    }
+
+    @Test func commandReturnIsNilWhenNoInputLineIsLeft() {
+        #expect(next("# What?\n- [ ] do|ne") == nil)
+        #expect(next("# Why?\n|\n# What?\n- [ ] done") == nil)
+        #expect(next("|") == nil)
+    }
 }

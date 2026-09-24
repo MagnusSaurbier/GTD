@@ -15,6 +15,11 @@ public enum ListEditCommand: String, CaseIterable, Sendable {
     /// Obsidian's "Toggle checkbox status" (⌥L here): per line, `- [ ]` ↔ `- [x]`; a line that
     /// is no checkbox yet becomes `- [ ] `.
     case toggleCheckbox
+    /// `Tab` in a body field (2026-09-25): one more tab of indentation on every line the
+    /// selection touches — the field never hands focus on; that is `⌘↩`'s job (`nextInputLine`).
+    case indent
+    /// `⇧Tab`: one tab (or up to four spaces) of indentation less on every touched line.
+    case outdent
 }
 
 /// A key combination as the Mac key monitor matches it: one letter plus an exact modifier set.
@@ -80,12 +85,13 @@ public enum ListEditing {
                 let lineStart = lines[index].start
                 if offset <= lines[index].end, offset >= lineStart {
                     let column = offset - lineStart
-                    let head = old.indent.utf16.count
-                    let oldMarker = old.marker.utf16.count, newMarker = new.marker.utf16.count
+                    let head = old.indent.utf16.count, newHead = new.indent.utf16.count
+                    let oldPrefix = head + old.marker.utf16.count
+                    let newPrefix = newHead + new.marker.utf16.count
                     let mapped: Int
-                    if column < head || (column == head && keepsLineStart) { mapped = column }
-                    else if column < head + oldMarker || column == head { mapped = head + newMarker }
-                    else { mapped = column + newMarker - oldMarker }
+                    if column < head || (column == head && keepsLineStart) { mapped = min(column, newHead) }
+                    else if column < oldPrefix || column == head { mapped = newPrefix }
+                    else { mapped = column + newPrefix - oldPrefix }
                     return lineStart + shift + mapped
                 }
                 shift += new.text.utf16.count - old.text.utf16.count
@@ -160,7 +166,31 @@ public enum ListEditing {
                 if case .task(let checked) = line.kind { return line.with(.task(checked: !checked)) }
                 return line.with(.task(checked: false))
             }
+        case .indent:
+            // Every touched line, blank ones included: Tab on an empty line indents it too.
+            return lines.map { $0.indented(by: "\t") }
+        case .outdent:
+            return lines.map { $0.outdented() }
         }
+    }
+
+    // MARK: - Navigation
+
+    /// `⌘↩` — where the next **input line** is: past the block of non-empty lines that follows
+    /// the caret's line, the first empty line (blank, or only a list marker such as `- [ ] `).
+    /// Returns the caret offset at the end of that line, or `nil` when there is none — the
+    /// editor then hands focus to the next field. Empty lines directly below the caret are
+    /// skipped first, so from one input line the jump lands on the *next* heading's input line.
+    public static func nextInputLine(text: String, caret: Int) -> Int? {
+        let lines = split(text)
+        var index = lineIndex(containing: caret, in: lines) + 1
+        func isInput(_ span: Span) -> Bool {
+            Line(parsing: span.text).content.allSatisfy { $0 == " " || $0 == "\t" }
+        }
+        while index < lines.count, isInput(lines[index]) { index += 1 }
+        while index < lines.count, !isInput(lines[index]) { index += 1 }
+        guard index < lines.count else { return nil }
+        return lines[index].end
     }
 
     // MARK: - Lines
@@ -250,6 +280,22 @@ private struct Line: Equatable {
             }
         }
         self.content = String(rest)
+    }
+
+    func indented(by unit: String) -> Line {
+        Line(indent: unit + indent, marker: marker, content: content, kind: kind)
+    }
+
+    /// One tab, or up to four spaces, less. A line with no indentation is returned unchanged.
+    func outdented() -> Line {
+        var rest = Substring(indent)
+        if rest.first == "\t" {
+            rest = rest.dropFirst()
+        } else {
+            var removed = 0
+            while removed < 4, rest.first == " " { rest = rest.dropFirst(); removed += 1 }
+        }
+        return Line(indent: String(rest), marker: marker, content: content, kind: kind)
     }
 
     func with(_ kind: Kind) -> Line {
