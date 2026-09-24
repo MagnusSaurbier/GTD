@@ -53,6 +53,9 @@ private struct NextListContent: View {
     @State private var list: NextListModel
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// #36 — the filter chips folded away behind the toggle on the caption line. A per-device
+    /// view preference, not a filter: the chips' selection stays in force while hidden.
+    @AppStorage("next.filtersCollapsed") private var filtersCollapsed = false
     /// R-2 — the app coming to the foreground re-arms the `Next is full` sheet if Next is still
     /// over the cap (`NextListModel.enteredForeground()`).
     @Environment(\.scenePhase) private var scenePhase
@@ -181,15 +184,17 @@ private struct NextListContent: View {
     @ViewBuilder private var filterChips: some View {
         #if os(macOS)
         VStack(alignment: .leading, spacing: Spacing.s) {
-            filterHeader(Copy.contextFilterHeader)
-            HStack(alignment: .top, spacing: Spacing.s) {
-                onlyMobileChip
-                contextChips
-            }
-            filterHeader(Copy.timeFilterHeader)
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.l) {
-                TimeBucketChipGroup(selection: timeBucketBinding)
-                clearFiltersButton
+            filterToggleRow
+            if !filtersCollapsed {
+                HStack(alignment: .top, spacing: Spacing.s) {
+                    onlyMobileChip
+                    contextChips
+                }
+                filterHeader(Copy.timeFilterHeader)
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.l) {
+                    TimeBucketChipGroup(selection: timeBucketBinding)
+                    clearFiltersButton
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -197,25 +202,54 @@ private struct NextListContent: View {
         .padding(.vertical, Spacing.s)
         #else
         VStack(alignment: .leading, spacing: Spacing.s) {
-            filterHeader(Copy.contextFilterHeader)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Spacing.s) {
-                    onlyMobileChip
-                    contextChips
+            filterToggleRow
+                .padding(.trailing, Spacing.screenMargin)
+            if !filtersCollapsed {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.s) {
+                        onlyMobileChip
+                        contextChips
+                    }
+                    .padding(.horizontal, Spacing.screenMargin)
                 }
-                .padding(.horizontal, Spacing.screenMargin)
-            }
-            filterHeader(Copy.timeFilterHeader)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Spacing.l) {
-                    TimeBucketChipGroup(selection: timeBucketBinding)
-                    clearFiltersButton
+                filterHeader(Copy.timeFilterHeader)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.l) {
+                        TimeBucketChipGroup(selection: timeBucketBinding)
+                        clearFiltersButton
+                    }
+                    .padding(.horizontal, Spacing.screenMargin)
                 }
-                .padding(.horizontal, Spacing.screenMargin)
             }
         }
         .padding(.vertical, Spacing.s)
         #endif
+    }
+
+    /// #36 — the context caption with the collapse toggle at its right end. Collapsed, the
+    /// caption reads `Filters` (there are no chips under it to explain), and the icon is filled
+    /// while a filter is set, so a hidden filter never goes unnoticed.
+    private var filterToggleRow: some View {
+        HStack(alignment: .center, spacing: Spacing.s) {
+            filterHeader(filtersCollapsed ? Copy.filters : Copy.contextFilterHeader)
+            Spacer(minLength: 0)
+            Button {
+                withAnimation(Motion.standard(reduceMotion: reduceMotion)) {
+                    filtersCollapsed.toggle()
+                }
+            } label: {
+                Image(systemName: list.isFiltered ? Symbols.filterActive : Symbols.filter)
+                    .font(Typo.meta)
+                    .imageScale(.large)
+                    .foregroundStyle(list.isFiltered ? Color.gtdAccent : Color.textSecondary)
+                    // A 44 pt target without making the caption line any taller.
+                    .padding(Spacing.m)
+                    .contentShape(Rectangle())
+                    .padding(-Spacing.m)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(filtersCollapsed ? Copy.showFilters : Copy.hideFilters)
+        }
     }
 
     /// The caption over each chip group — same look as Someday's (`ActionListView`).
