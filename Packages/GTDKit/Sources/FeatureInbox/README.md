@@ -16,9 +16,11 @@ Inbox processing: one card at a time, LIFO, forced order, exit only by quitting 
 - `MoveCoordinator(model:bindings:)` + `View.moveNoteHost(_:)` — drag-to-category (E3): the
   shell applies the modifier once (the Mac window, the iPhone's Next tab); it sets the
   `\.moveNote` environment for every row and drop target below and presents the dialogue a drop
-  needs over the coordinator: the action card, `DeferDateSheet`, or the project picker
-  (`ProjectChoiceSheet`, shared with the card's `+ project` chip). `move(_:to:)` runs
-  `GTDAppCore.MovePlan`; `confirmDefer`, `chooseProject`, `createProject`, `cancel()`.
+  needs over the coordinator: the action card, `DeferDateSheet`, the project picker
+  (`ProjectChoiceSheet`, shared with the card's `+ project` chip) or the list picker
+  (`ListChoiceSheet`, shared with the inbox's `More…` slot — a drop onto Lists sends
+  `moveActionToList`). `move(_:to:)` runs `GTDAppCore.MovePlan`; `confirmDefer`,
+  `chooseProject`, `createProject`, `chooseList`, `createListAndMove`, `cancel()`.
 - `MakeActionCardView(model:onFinished:)` — **Make action**'s view: the opened action card alone
   (STYLEGUIDE §3.5 step 2a), the same field layout and `ActionCardBar` the inbox uses for its own
   action card, over a `MakeActionModel`. `FeatureLists` (T10) presents it as a sheet:

@@ -35,10 +35,11 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   feature target or on `FeatureSettings` (ARCHITECTURE §2) — `GTDAppCore` is the one target all
   three already depend on.
 - `MoveDestination` / `MovePlan` — drag-to-category (E3). `MovePlan.plan(action:to:snapshot:today:)`
-  says what a row dropped on `.next`/`.someday`/`.waiting`/`.deferred`/`.projects`/`.project(id)`
-  needs: `.alreadyThere`, `.perform(command)` (nothing missing), `.card(status:missing:)` (the
-  action card with those fields marked — `RequiredField.missing` with the action's real
-  `previous` status), `.deferDate`, `.pickProject`; `accepts(…)` is the drop highlight. The
+  says what a row dropped on `.next`/`.someday`/`.waiting`/`.deferred`/`.projects`/`.project(id)`/
+  `.lists`/`.list(name)` needs: `.alreadyThere`, `.perform(command)` (nothing missing),
+  `.card(status:missing:)` (the action card with those fields marked — `RequiredField.missing`
+  with the action's real `previous` status), `.deferDate`, `.pickProject`, `.pickList`;
+  `accepts(…)` is the drop highlight. The
   reducer stays the authority; this only decides whether a dialogue is needed before sending.
 - `ObsidianLink` — the one builder of "Open in Obsidian" URLs: `url(for: NoteID, vaultRoot:form:)`
   / `url(forVaultPath:vaultRoot:form:)`. Obsidian's `path=` must be an **absolute** path (a

@@ -14,6 +14,10 @@ public enum MoveDestination: Hashable, Sendable {
     case deferred
     case projects
     case project(NoteID)
+    /// The Lists *section* — the person picks the list (the inbox's own list picker).
+    case lists
+    /// One list by name: the action becomes an item of it (`moveActionToList`).
+    case list(String)
 }
 
 /// What a drop (or a `Move to…` choice) has to do, decided without SwiftUI so the rules are
@@ -35,6 +39,8 @@ public enum MovePlan: Equatable, Sendable {
     case deferDate
     /// The Projects *section*: ask which project.
     case pickProject
+    /// The Lists *section*: ask which list — the same picker as the inbox's `More…` sheet.
+    case pickList
 
     /// Decides for `action` dropped on `destination`.
     public static func plan(
@@ -62,6 +68,10 @@ public enum MovePlan: Equatable, Sendable {
             var updated = action
             updated.project = id
             return .perform(.updateAction(updated))
+        case .lists:
+            return .pickList
+        case let .list(name):
+            return .perform(.moveActionToList(action.id, list: name))
         }
     }
 

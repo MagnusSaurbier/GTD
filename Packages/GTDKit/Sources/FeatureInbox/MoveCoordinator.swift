@@ -25,19 +25,22 @@ public final class MoveCoordinator {
         case deferDate(Action)
         /// `MovePlan.pickProject`.
         case pickProject(Action)
+        /// `MovePlan.pickList` — the inbox's list picker (`More…`), over an action.
+        case pickList(Action)
 
         public var id: String {
             switch self {
             case let .card(model): "card:\(model.source.id.path)"
             case let .deferDate(action): "defer:\(action.id.path)"
             case let .pickProject(action): "project:\(action.id.path)"
+            case let .pickList(action): "list:\(action.id.path)"
             }
         }
 
         public var action: NoteID {
             switch self {
             case let .card(model): model.source.id
-            case let .deferDate(action), let .pickProject(action): action.id
+            case let .deferDate(action), let .pickProject(action), let .pickList(action): action.id
             }
         }
     }
@@ -84,7 +87,48 @@ public final class MoveCoordinator {
             dialogue = .deferDate(action)
         case .pickProject:
             dialogue = .pickProject(action)
+        case .pickList:
+            newListRefusal = nil
+            dialogue = .pickList(action)
         }
+    }
+
+    // MARK: Lists
+
+    /// Every list, for the picker (§5a) — the same rows as the inbox's `More…` sheet.
+    public var allLists: [GTDList] { Rules.lists(model.snapshot) }
+    public var hasNoLists: Bool { allLists.isEmpty }
+    public var listsFolderName: String { model.snapshot.config.layout.lists }
+
+    /// The picker's `New list…` refusal (an empty or reserved name), shown next to the field.
+    public private(set) var newListRefusal: String?
+    public func clearNewListRefusal() { newListRefusal = nil }
+
+    /// The list picker's choice: the action becomes an item of `name` (`moveActionToList`).
+    public func chooseList(_ action: Action, named name: String) async {
+        dialogue = nil
+        await model.perform(.moveActionToList(action.id, list: name))
+    }
+
+    /// `New list…` — creates the list and moves the action into it, exactly as picking an
+    /// existing one does (`InboxSession.createListAndFile`). A refused name keeps the sheet
+    /// open with the reason; the action stays where it is.
+    @discardableResult
+    public func createListAndMove(_ action: Action, named name: String) async -> Bool {
+        do {
+            try await model.send(.createList(name: name))
+        } catch let error as GTDError {
+            newListRefusal = InboxCopy.newListRefusal(for: error)
+            return false
+        } catch {
+            newListRefusal = Copy.actionFailed
+            return false
+        }
+        newListRefusal = nil
+        let created = model.snapshot.list(named: VaultLayout.sanitize(name))?.name
+            ?? VaultLayout.sanitize(name)
+        await chooseList(action, named: created)
+        return true
     }
 
     /// The defer-date sheet's `Done`. A cleared date is a "not deferred after all" and is

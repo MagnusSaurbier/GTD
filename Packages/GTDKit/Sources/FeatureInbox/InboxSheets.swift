@@ -378,8 +378,36 @@ struct CapSheet: View {
 /// what a list is instead of showing an empty table. Decisions are `InboxSession`'s.
 struct MoreListsSheet: View {
     @Bindable var session: InboxSession
-    @Environment(\.dismiss) private var dismiss
 
+    var body: some View {
+        ListChoiceSheet(
+            lists: session.allLists,
+            hasNoLists: session.hasNoLists,
+            listsFolderName: session.listsFolderName,
+            newListRefusal: session.newListRefusal,
+            onChoose: { name in Task { await session.take(.list(name)) } },
+            onCreate: { name in Task { await session.createListAndFile(name: name) } },
+            onNameChanged: { session.clearNewListRefusal() },
+            onCancel: { session.cancelSheet() })
+    }
+}
+
+/// The list picker as a sheet: every list, `New list…` with its inline refusal, and the
+/// no-lists explanation. Shared by the inbox's `More…` slot and a drop onto the Lists section
+/// (E3), so the picker exists once; the owner decides what a choice does. `onCreate`'s owner
+/// closes the sheet by clearing its own presentation once the list exists (a refused name keeps
+/// it open — the refusal arrives through `newListRefusal`).
+struct ListChoiceSheet: View {
+    let lists: [GTDList]
+    let hasNoLists: Bool
+    let listsFolderName: String
+    let newListRefusal: String?
+    let onChoose: (String) -> Void
+    let onCreate: (String) -> Void
+    let onNameChanged: () -> Void
+    let onCancel: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
     @State private var newListName = ""
     @State private var isAddingList = false
     @FocusState private var isNameFocused: Bool
@@ -387,21 +415,21 @@ struct MoreListsSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if session.hasNoLists && !isAddingList {
+                if hasNoLists && !isAddingList {
                     ContentUnavailableView {
                         Label(InboxCopy.noListsTitle, systemImage: Symbols.listBullet)
                     } description: {
-                        Text(InboxCopy.noListsBody(folder: session.listsFolderName))
+                        Text(InboxCopy.noListsBody(folder: listsFolderName))
                     } actions: {
                         Button(InboxCopy.newList) { startAdding() }
                             .tint(Color.gtdAccent)
                     }
                 } else {
                     List {
-                        ForEach(session.allLists) { list in
+                        ForEach(lists) { list in
                             Button {
                                 dismiss()
-                                Task { await session.take(.list(list.name)) }
+                                onChoose(list.name)
                             } label: {
                                 Label(list.name, systemImage: Symbols.list(named: list.name))
                                     .font(Typo.body)
@@ -419,7 +447,7 @@ struct MoreListsSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(InboxCopy.cancel) {
                         dismiss()
-                        session.cancelSheet()
+                        onCancel()
                     }
                 }
             }
@@ -435,11 +463,11 @@ struct MoreListsSheet: View {
                         .focused($isNameFocused)
                         .submitLabel(.done)
                         .onSubmit { create() }
-                        .onChange(of: newListName) { session.clearNewListRefusal() }
+                        .onChange(of: newListName) { onNameChanged() }
                     Button(InboxCopy.createList) { create() }
                         .disabled(newListName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                if let refusal = session.newListRefusal {
+                if let refusal = newListRefusal {
                     Text(refusal).font(Typo.meta).foregroundStyle(Color.signalAttention)
                 }
             }
@@ -459,10 +487,9 @@ struct MoreListsSheet: View {
         isNameFocused = true
     }
 
-    /// The session closes the sheet once the card is filed; a refused name keeps it open.
+    /// The owner closes the sheet once the note has moved; a refused name keeps it open.
     private func create() {
-        let name = newListName
-        Task { await session.createListAndFile(name: name) }
+        onCreate(newListName)
     }
 }
 #endif

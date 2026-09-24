@@ -74,8 +74,8 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     }
 
     /// E3 — what a row dropped on this section asks for (`MovePlan`). `nil` for the sections
-    /// nothing can be dropped on: the inbox is processed in forced order (I1), a list item is
-    /// not an action (L4 goes the other way), and the flows are not categories.
+    /// nothing can be dropped on: the inbox is processed in forced order (I1), and the flows
+    /// are not categories. Lists asks which list, like the inbox's `More…` sheet.
     public var moveDestination: MoveDestination? {
         switch self {
         case .next: .next
@@ -83,7 +83,8 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         case .waiting: .waiting
         case .deferred: .deferred
         case .projects: .projects
-        case .inbox, .lists, .review, .routines: nil
+        case .lists: .lists
+        case .inbox, .review, .routines: nil
         }
     }
 

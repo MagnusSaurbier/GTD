@@ -181,6 +181,49 @@ struct MoveCoordinatorTests {
         #expect(app.snapshot.action(item.id)?.project == project.id)
     }
 
+    // MARK: Lists
+
+    /// Dropping on the Lists section opens the picker; choosing a list moves the note out of
+    /// `Actions/` into that list, body and all.
+    @Test func droppingOnListsAsksWhichListAndMovesTheNoteIntoIt() async {
+        let (mover, app) = make()
+        let list = Rules.lists(app.snapshot).first!
+        let item = action(app, status: .someday)
+
+        await mover.move(item.id, to: .lists)
+        guard case let .pickList(asked)? = mover.dialogue else { Issue.record("no list picker"); return }
+        #expect(asked.id == item.id)
+        #expect(mover.allLists.map(\.name).contains(list.name))
+
+        await mover.chooseList(asked, named: list.name)
+
+        #expect(mover.dialogue == nil)
+        #expect(app.snapshot.action(item.id) == nil)
+        let moved = app.snapshot.listItems.first { $0.list == list.name && $0.title == item.title }
+        #expect(moved != nil)
+        #expect(moved?.notes.contains(item.what) == true)
+    }
+
+    /// `New list…` in that picker: the list is created, then the note moves into it; a refused
+    /// name keeps the picker open with the reason and moves nothing.
+    @Test func creatingAListFromThePickerMovesTheNoteIntoIt() async {
+        let (mover, app) = make()
+        let item = action(app, status: .someday)
+        await mover.move(item.id, to: .lists)
+        guard case let .pickList(asked)? = mover.dialogue else { Issue.record("no list picker"); return }
+
+        #expect(await mover.createListAndMove(asked, named: "   ") == false)
+        #expect(mover.newListRefusal != nil)
+        #expect(mover.dialogue != nil)
+        #expect(app.snapshot.action(item.id) != nil)
+
+        #expect(await mover.createListAndMove(asked, named: "Gifts"))
+        #expect(mover.newListRefusal == nil)
+        #expect(mover.dialogue == nil)
+        #expect(app.snapshot.list(named: "Gifts") != nil)
+        #expect(app.snapshot.listItems.contains { $0.list == "Gifts" && $0.title == item.title })
+    }
+
     /// R-8 — the picker's create row: the project is born by its own command, then attached.
     @Test func creatingAProjectFromThePickerAttachesTheNewOne() async {
         let (mover, app) = make()

@@ -95,6 +95,17 @@ struct MovePlanTests {
         #expect(updated.status == .someday)
     }
 
+    // MARK: Lists
+
+    @Test func theListsSectionAsksWhichList() {
+        #expect(plan(action(.next), .lists) == .pickList)
+    }
+
+    @Test func aListMovesTheActionIntoIt() {
+        let item = action(.someday)
+        #expect(plan(item, .list("Read")) == .perform(.moveActionToList(item.id, list: "Read")))
+    }
+
     @Test func droppingOnTheOwnProjectDoesNothing() {
         #expect(plan(action(.next, project: project), .project(project)) == .alreadyThere)
     }

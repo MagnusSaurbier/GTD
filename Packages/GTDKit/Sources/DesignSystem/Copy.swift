@@ -30,6 +30,8 @@ public enum Copy {
     public static let moveTo = "Move to"
     /// The `Move to` entry that asks which project: `Project…`.
     public static let projectEllipsis = "Project…"
+    /// The `Move to` entry that asks which list: `List…`.
+    public static let listEllipsis = "List…"
     public static let due = "Due"
     public static let followUp = "Follow-up"
     public static let chase = "Chase"

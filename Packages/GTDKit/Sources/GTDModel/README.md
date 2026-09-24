@@ -81,10 +81,12 @@ Compiles and tests on Linux.
   reserved name, list names are compared case-insensitively (the file system is), and the list
   commands are `createList` / `renameList` / `removeList` / `setFavouriteLists` /
   `pruneFavouriteLists` /
-  `updateListItem` / `completeListItem` / `trashListItem` / `promoteListItem`.
+  `updateListItem` / `completeListItem` / `trashListItem` / `promoteListItem` /
+  `moveActionToList`.
 - **A list item is never an action**: no `Rules` query for actions, no stat, no notification and
-  no review card can see one, and `promoteListItem` is the only door between the two — it goes
-  through the same `makeAction` + `checkCap` as an inbox filing.
+  no review card can see one, and the only two doors between them are `promoteListItem` (item →
+  action, through the same `makeAction` + `checkCap` as an inbox filing) and `moveActionToList`
+  (action → item, E3's drop onto a list: the file moves, the body becomes the notes).
 - `GTDConfig.favouriteLists` is `Optional` on purpose: `nil` means "never chosen" and
   `Rules.favouriteLists` derives the first four lists alphabetically, which is never written back.
   A stored favourite follows its list: `renameList` renames it in place, `removeList` drops it,

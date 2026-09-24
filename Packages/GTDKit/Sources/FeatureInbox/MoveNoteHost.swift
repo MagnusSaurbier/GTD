@@ -63,6 +63,19 @@ private struct MoveNoteHostModifier: ViewModifier {
                     DeferDateSheet(initial: action.deferDate, today: coordinator.today) { date in
                         Task { await coordinator.confirmDefer(action, date: date) }
                     }
+                case let .pickList(action):
+                    ListChoiceSheet(
+                        lists: coordinator.allLists,
+                        hasNoLists: coordinator.hasNoLists,
+                        listsFolderName: coordinator.listsFolderName,
+                        newListRefusal: coordinator.newListRefusal,
+                        onChoose: { name in Task { await coordinator.chooseList(action, named: name) } },
+                        onCreate: { name in Task { await coordinator.createListAndMove(action, named: name) } },
+                        onNameChanged: { coordinator.clearNewListRefusal() },
+                        onCancel: { coordinator.cancel() })
+                    #if os(iOS)
+                        .presentationDetents([.medium, .large])
+                    #endif
                 case let .pickProject(action):
                     ProjectChoiceSheet(
                         picker: { coordinator.projectPicker(search: $0) },

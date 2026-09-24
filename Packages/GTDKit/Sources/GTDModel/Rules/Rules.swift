@@ -623,7 +623,7 @@ public enum Rules {
              .setStatus, .trashAction, .complete, .toggleCheckbox, .convertActionToProject,
              .createArea, .createProject, .updateProject, .promoteStep,
              .renameList, .removeList, .updateListItem, .completeListItem, .trashListItem,
-             .promoteListItem:
+             .promoteListItem, .moveActionToList:
             true
         }
     }

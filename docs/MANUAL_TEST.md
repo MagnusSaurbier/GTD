@@ -303,8 +303,8 @@ Unplug the mouse for this one.
 ### 3.7 Drag a row onto a category (E3, 2026-09-24)
 
 Mac, on fixtures. Every row in Next, Someday, Waiting and Deferred can be dragged; the sidebar
-sections Next · Someday · Waiting · Projects · Deferred and the rows of the Projects list take
-the drop. Inbox, Lists, Review and Routines never highlight and never take a drop.
+sections Next · Someday · Waiting · Lists · Projects · Deferred and the rows of the Projects
+list take the drop. Inbox, Review and Routines never highlight and never take a drop.
 
 - [ ] Drag a Next row onto **Someday**: the section lights up light blue (`dropTargetWash`) while the row hovers,
       the item moves at once, the `Moved to Someday` toast appears, `⌘Z` brings it back.
@@ -326,10 +326,15 @@ the drop. Inbox, Lists, Review and Routines never highlight and never take a dro
       row to drag onto a project row today; the project rows still take a dropped action
       (attach, replacing the old project) for whenever a view shows both. `Move to… → Project…`
       on any action row is the reachable path.
+- [ ] Drag a row onto **Lists**: the inbox's list picker (every list, `New list…`). Pick one →
+      the row leaves its list and appears under that list in the Lists section with its Why/What
+      text as notes; the toast says `Added to <list>` and `⌘Z` brings the action back.
+      `New list…` with a blank name shows the refusal and moves nothing; a real name creates
+      the list and moves the row into it.
 - [ ] Drop a row on the section it is already in (Next row on Next, a deferred row on
       Deferred): no highlight, nothing happens, no toast.
 - [ ] Right-click any row: the context menu ends with **Move to ▸** Next / Someday / Waiting /
-      Deferred / Project…, the current section's entry disabled; each does exactly what the
+      Deferred / Project… / List…, the current section's entry disabled; each does exactly what the
       drop does. VoiceOver reaches the menu; nobody needs the gesture.
 - [ ] iPhone, Next tab: long-press a row → **Move to ▸** works the same (the card, the defer
       sheet and the picker are sheets over the tab). There is no sidebar on the iPhone, so

@@ -181,6 +181,7 @@ public struct MoveToMenu: View {
         (.waiting, Copy.waiting, Symbols.waiting),
         (.deferred, Copy.deferred, Symbols.deferred),
         (.projects, Copy.projectEllipsis, Symbols.projects),
+        (.lists, Copy.listEllipsis, Symbols.listBullet),
     ]
 }
 #endif

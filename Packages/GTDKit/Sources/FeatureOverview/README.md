@@ -30,8 +30,9 @@ action editor no other feature target owns.
   `NavigationRemap`). `⌘1…7` now covers all seven counted sections in STYLEGUIDE §4.1 order.
 - Drag-to-category (E3, 2026-09-24): `OverviewView` applies `FeatureInbox.moveNoteHost()` to
   the window, so every row of Next / Someday / Waiting / Deferred is draggable and the sidebar's
-  Next · Someday · Waiting · Projects · Deferred rows (`SidebarItem.moveDestination`) and the
-  project rows take the drop; `ActionListView`'s context menu carries the `Move to…` twin.
+  Next · Someday · Waiting · Lists · Projects · Deferred rows (`SidebarItem.moveDestination`) and
+  the project rows take the drop (Lists opens the inbox's list picker; the action becomes an item
+  of the chosen list); `ActionListView`'s context menu carries the `Move to…` twin.
 - `SidebarItem`, `OverviewNavigation`, `OverviewDetail`, `ActionListModel`, `ActionGroup`,
   `ActionEditModel`, `ActionField`.
 
