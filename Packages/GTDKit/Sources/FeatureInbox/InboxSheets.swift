@@ -26,6 +26,9 @@ struct KnowledgeSheet: View {
     @State private var notes: String = ""
     @State private var newFolder: String = ""
     @State private var isAddingFolder = false
+    /// Paths of the folders whose children are shown (#24). Starts empty: the tree opens
+    /// collapsed, as the stock outline did.
+    @State private var expandedFolders: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -45,15 +48,11 @@ struct KnowledgeSheet: View {
                     }
                     .buttonStyle(.plain)
 
-                    OutlineGroup(KnowledgeTree.build(folders), children: \.childNodes) { node in
-                        Button {
-                            selection = node.path
-                            projectTarget = nil
-                        } label: {
-                            folderRow(name: node.name, path: node.path)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    // Own tree rows instead of `OutlineGroup`: inside a `Form` on macOS the
+                    // stock outline draws a child's label *left* of its parent (where the
+                    // parent's chevron sits) and animates open/close. Here every level is
+                    // shifted right by one step and toggling is instant (#24).
+                    folderTreeRows(KnowledgeTree.build(folders), depth: 0)
 
                     if isAddingFolder {
                         HStack {
@@ -124,8 +123,57 @@ struct KnowledgeSheet: View {
         .onAppear { folders = session.knowledgeFolders }
     }
 
-    private func folderRow(name: String, path: String) -> some View {
-        HStack {
+    /// One row per visible folder, depth-first. Collapsed folders hide their subtree; the set
+    /// of open folders is device state for the sheet's lifetime only.
+    @ViewBuilder
+    private func folderTreeRows(_ nodes: [FolderNode], depth: Int) -> some View {
+        ForEach(nodes) { node in
+            Button {
+                selection = node.path
+                projectTarget = nil
+            } label: {
+                folderRow(name: node.name, path: node.path, node: node, depth: depth)
+            }
+            .buttonStyle(.plain)
+
+            if expandedFolders.contains(node.path) {
+                AnyView(folderTreeRows(node.children, depth: depth + 1))
+            }
+        }
+    }
+
+    private func folderRow(
+        name: String, path: String, node: FolderNode? = nil, depth: Int = 0
+    ) -> some View {
+        HStack(spacing: Spacing.xs) {
+            // Every row reserves the chevron's width so that siblings without children line
+            // up with siblings that have some; the indent per level is one chevron slot.
+            Group {
+                if let node, node.childNodes != nil {
+                    Button {
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            if !expandedFolders.insert(node.path).inserted {
+                                expandedFolders.remove(node.path)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: expandedFolders.contains(node.path)
+                              ? Symbols.collapse : Symbols.nextMonth)
+                            .font(Typo.controlGlyph)
+                            .foregroundStyle(Color.textSecondary)
+                            .frame(width: Spacing.l, height: Spacing.l)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(expandedFolders.contains(node.path)
+                                        ? InboxCopy.collapseFolder : InboxCopy.expandFolder)
+                } else {
+                    Color.clear.frame(width: Spacing.l, height: Spacing.l)
+                }
+            }
+            .padding(.leading, CGFloat(depth) * Spacing.l)
             Label(name, systemImage: Symbols.area)
                 .font(Typo.body)
                 .foregroundStyle(Color.ink)
