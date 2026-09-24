@@ -17,6 +17,7 @@ so it never compiles on Linux and none of it has ever been built.
 | `MacShell.swift` | macOS only: `ReviewResumeBanner` + `OverviewView(navigation:)` with the `VersionStamp` bottom right, and the `Settings` scene's content. |
 | `NotificationService.swift` | Plan + sync on every snapshot change (2 s debounce), on foreground and in background refresh; permission after onboarding; `UNUserNotificationCenterDelegate` for taps. |
 | `BackgroundRefresh.swift` | `BGAppRefreshTaskRequest` scheduling, and the main-actor registry the `@Sendable` background-task closure needs. |
+| `Version.xcconfig` | `MARKETING_VERSION`, the version every build carries (`docs/TICKETS.md` rule 2). Tracked and read at build time, so a merge that moves it needs no xcodegen run. |
 | `AppSupport.swift` | Launch options, the device id (routine-log file names, N3), shell strings, `AppError`. |
 
 `AppTests/` holds unit tests for the four things above that are pure logic; `AppUITests/` holds

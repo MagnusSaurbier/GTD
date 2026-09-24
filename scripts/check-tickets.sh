@@ -17,7 +17,7 @@
 #     Outcome filled in — reported so that whoever sees it does it.
 #  5. Versions: every "in progress" issue claims a version (**Version:** in its body) that is
 #     above main's MARKETING_VERSION and that no other open issue claims; on the current branch,
-#     project.yml's MARKETING_VERSION equals the version its issue claims. --status prints the
+#     App/Version.xcconfig's MARKETING_VERSION equals the version its issue claims. --status prints the
 #     next free version, which is what a new issue claims. Only what concerns the current
 #     branch's issue fails the gate; another branch's missing claim or collision is a NOTE, so
 #     one session's omission never blocks another's push.
@@ -116,13 +116,15 @@ if [ "$in_git" -eq 1 ] && [ "$current_branch" != "main" ] && [ "$current_branch"
     fi
 fi
 
-# 5. Versions — the board is the registry: main's project.yml is what shipped, every "in progress"
+# 5. Versions — the board is the registry: main's App/Version.xcconfig is what shipped, every "in progress"
 #    issue's **Version:** is a claim, and the next free one is one minor above the highest of both.
 main_version=""
 if [ "$in_git" -eq 1 ]; then
-    main_version="$(git show main:project.yml 2>/dev/null | sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' | head -1)"
+    main_version="$(git show main:App/Version.xcconfig 2>/dev/null | sed -n 's/^ *MARKETING_VERSION *= *\([0-9][0-9.]*\).*/\1/p' | head -1)"
+    # Before 0.17 the number lived in project.yml.
+    [ -n "$main_version" ] || main_version="$(git show main:project.yml 2>/dev/null | sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' | head -1)"
 fi
-here_version="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' project.yml 2>/dev/null | head -1)"
+here_version="$(sed -n 's/^ *MARKETING_VERSION *= *\([0-9][0-9.]*\).*/\1/p' App/Version.xcconfig 2>/dev/null | head -1)"
 version_report="$(python3 - "$main_version" "$here_version" "$current_branch" "$rows" <<'PY2'
 import sys
 main_v, here_v, current, rows = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
@@ -142,7 +144,7 @@ for line in rows.splitlines():
     own = branch == current
     if own: mine.add(number)
     if not version:
-        findings.append((own, "#%s claims no version — put the next free one in **Version:** and project.yml (docs/TICKETS.md rule 2)" % number))
+        findings.append((own, "#%s claims no version — put the next free one in **Version:** and App/Version.xcconfig (docs/TICKETS.md rule 2)" % number))
         continue
     v = parse(version)
     if v is None: continue
@@ -151,7 +153,7 @@ for line in rows.splitlines():
     if main_v and parse(main_v) and v <= parse(main_v):
         findings.append((own, "#%s claims version %s, but main already is %s — claim the next free one" % (number, version, main_v)))
     if own and here_v and here_v != version:
-        findings.append((True, "#%s claims version %s, but project.yml on '%s' says MARKETING_VERSION %s — set it to %s" % (number, version, current, here_v, version)))
+        findings.append((True, "#%s claims version %s, but App/Version.xcconfig on '%s' says MARKETING_VERSION %s — set it to %s" % (number, version, current, here_v, version)))
 for version, numbers in sorted(claims.items()):
     if len(numbers) > 1:
         findings.append((bool(mine & set(numbers)), "version %s is claimed by #%s — one version per issue; the later claim takes the next free version" % (version, " and #".join(numbers))))
@@ -160,7 +162,7 @@ for own, text in findings: print(("PROBLEM " if own else "NOTE ") + text)
 PY2
 )"
 echo "versions"
-echo "  main: ${main_version:-?} · next free: $(echo "$version_report" | sed -n 's/^NEXT //p') (claim it in a new issue's **Version:** and in project.yml)"
+echo "  main: ${main_version:-?} · next free: $(echo "$version_report" | sed -n 's/^NEXT //p') (claim it in a new issue's **Version:** and in App/Version.xcconfig)"
 while IFS= read -r line; do
     case "$line" in
         PROBLEM\ *) problem "${line#PROBLEM }" ;;
