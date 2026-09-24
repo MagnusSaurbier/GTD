@@ -137,10 +137,23 @@ struct SnapshotDiffTests {
         ]
 
         let expected = SnapshotDiff.expectedContents(before: ops, in: sample)
-        #expect(expected == [
-            action.id.path: ContentHash.of(NoteCodec.encode(action)),
-            newPath: ContentHash.absent,
-        ])
+        #expect(expected == [action.id.path: [NoteCodec.encode(action)], newPath: []])
+    }
+
+    /// A capture typed outside the app has no `created`; reading it takes the file's date and
+    /// encoding it would add the line. The file as it is must still count as unchanged.
+    @Test func theGuardAcceptsTheFileTextOfANoteThatReadingNormalised() throws {
+        let id = NoteID(path: "Inbox/typed in Obsidian.md")
+        let text = "Just a thought.\n"
+        let item = try NoteCodec.decodeInboxItem(id: id, text: text, fileDate: Date(timeIntervalSince1970: 1_000))
+        var snapshot = sample
+        snapshot.inbox.append(item)
+
+        let expected = SnapshotDiff.expectedContents(
+            before: [.move(from: id.path, to: "Inbox/renamed.md")], in: snapshot)
+        let acceptable = try #require(expected[id.path])
+        #expect(acceptable.contains(text), "the bytes on disk")
+        #expect(acceptable.first != text, "and the encoding, which adds `created`")
     }
 
     @Test func onlyTheChangedDayAndDeviceOfTheRoutineLogIsRewritten() throws {

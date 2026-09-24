@@ -47,6 +47,11 @@ struct PhoneShell: View {
                 InboxProcessingView(onFinished: { router.isProcessingInbox = false })
             }
         }
+        // N3 — processing begins on what the files say *now* (see `MacShell`).
+        .onChange(of: router.isProcessingInbox) { _, began in
+            guard began else { return }
+            Task { await composition.refreshFromDisk() }
+        }
         .sheet(isPresented: $router.isSettingsPresented) {
             PhoneSettingsSheet(composition: composition, router: router)
                 .environment(model)

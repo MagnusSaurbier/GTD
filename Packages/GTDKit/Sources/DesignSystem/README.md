@@ -22,6 +22,8 @@ Platform-free (compiles on Linux, unit-tested):
   the SwiftUI `DayPicker` (§3.1's date chips). `NavbarPlatform`/`NavbarSlot`/`NavbarLayout.slots(favourites:platform:)`
   — the Knowledge/List navbar's fixed-slot layout (§3.6): which slots exist for N favourites and a
   platform limit (4 on iPhone, 8 on Mac), in which order, with which Mac key index.
+  `MergedNote.path(folder:title:)` — the file the conflict sheet's title field names (trimmed,
+  `/` → `-`, empty → `nil`).
   `AppVersion(infoDictionary:)` / `.current` — the bundle's version as the corner stamp
   (`stampLabel`: `0.2`), Settings (`settingsLabel`: `0.2 (1)`) and VoiceOver (`spokenLabel`) word
   it; an unversioned bundle reads as empty, never as an invented "1.0". All are
@@ -51,6 +53,11 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   asterisk (§3.6: leading `asterisk` in `signalAttention`, VoiceOver says "required"),
   `WaitingInfoSheet(initial:suggestedWho:today:onSave:)` — follow-up date **required** (+7 d is a
   suggested chip until confirmed), who optional, `Set waiting` disabled until a date is confirmed.
+- `ConflictSheet(conflict:onDone:onKeepVault:)` — the stale-write conflict (N3, ARCHITECTURE §6
+  2026-09-25): "On this device" and "In the vault now" read-only side by side (stacked when
+  narrow), under them the merged title and text to edit, opened on `WriteConflict.suggestion`;
+  Done (`⌘↩`) hands back path + text, "Keep the vault's version" (Escape) closes. Interactive
+  dismissal is off so typed text is never lost. Wide Mac frame from `SheetMetrics.wide*`.
 - Sheets that scroll (`Components/SheetScrolling.swift`, sizes in `SheetMetrics`):
   `View.sheetFormStyle()` for every `Form` in a sheet — `.formStyle(.grouped)` plus the Mac sheet
   frame; macOS' default `.columns` never scrolls and draws a text field's title as a left-column
