@@ -177,6 +177,11 @@ public enum GTDCommand: Sendable, Equatable {
     /// L4 "Make action" — the note moves to `Actions/` and then obeys exactly the rules of an
     /// inbox action filing (required fields, the cap).
     case promoteListItem(NoteID, ActionDraft)
+    /// E3 — the other door: an action dropped on a list becomes an item of that list. The note
+    /// moves to `Lists/<name>/`, its `Why?`/`What?` text becomes the item's notes, and the
+    /// action leaves every list, cap and signal it was in. `list` must exist (`createList`
+    /// first); the item's title is the action's title.
+    case moveActionToList(NoteID, list: String)
     case saveWeeklyReview(WeeklyReview)
     case logRoutineStep(routine: NoteID, stepID: String, RoutineStepResult)
     case setRoutineTime(routine: NoteID, DayTime?)

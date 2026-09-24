@@ -88,7 +88,8 @@ struct ListsModelTests {
         let (_, lists) = make()
         let item = lists.openItems(in: "Read")[0]
         let makeAction = lists.makeActionModel(for: item)
-        #expect(makeAction.item.id == item.id)
+        #expect(makeAction.item?.id == item.id)
+        #expect(makeAction.source == .listItem(item))
         #expect(makeAction.draft.title == item.title)
         #expect(makeAction.isFiled == false)
     }

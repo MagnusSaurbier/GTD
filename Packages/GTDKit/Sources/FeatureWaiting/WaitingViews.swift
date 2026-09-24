@@ -111,9 +111,9 @@ private struct WaitingRow: View {
         }
         .padding(.vertical, Spacing.rowVertical)
         .contentShape(Rectangle())
-        #if !os(macOS)
+        .draggableNote(action.id)
+        // Mac too: the drag source takes the click before the list's selection does (M2).
         .onTapGesture { onOpen(action.id) }
-        #endif
         .swipeActions(edge: .trailing) {
             Button {
                 Task { await model.perform(.complete(action.id)) }
@@ -154,6 +154,8 @@ private struct WaitingRow: View {
             } label: {
                 Label("Edit who", systemImage: Symbols.waiting)
             }
+            // The drag-to-section twin (E3).
+            MoveToMenu(id: action.id)
         }
     }
 
@@ -262,9 +264,8 @@ private struct DeferredRow: View {
         }
         .padding(.vertical, Spacing.rowVertical)
         .contentShape(Rectangle())
-        #if !os(macOS)
+        .draggableNote(action.id)
         .onTapGesture { onOpen(action.id) }
-        #endif
         .swipeActions(edge: .trailing) {
             Button {
                 Task { await model.perform(.updateAction(list.unDeferred(action))) }
@@ -278,6 +279,7 @@ private struct DeferredRow: View {
             } label: {
                 Label("Un-defer now", systemImage: Symbols.deferred)
             }
+            MoveToMenu(id: action.id)
         }
     }
 

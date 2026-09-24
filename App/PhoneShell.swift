@@ -72,6 +72,9 @@ struct PhoneShell: View {
     // MARK: - Next (E2)
 
     private var nextTab: some View {
+        // No sidebar to drop a row on here; the rows' `Move to…` menu is the drag's twin, and
+        // the dialogue a move needs (the action card, a defer date, the project picker) is
+        // presented over this tab (`FeatureInbox.moveNoteHost`).
         NavigationStack(path: $router.nextPath) {
             NextView(
                 mode: .onTheGo,
@@ -103,6 +106,7 @@ struct PhoneShell: View {
                         .toolbar(.hidden, for: .tabBar)
                 }
         }
+        .moveNoteHost()
     }
 
     // MARK: - Lists (L5)

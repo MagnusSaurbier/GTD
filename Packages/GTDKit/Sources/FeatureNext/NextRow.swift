@@ -50,11 +50,13 @@ struct NextRow: View {
 
     @ViewBuilder private var openTarget: some View {
         #if os(macOS)
-        // The Mac list is a `List(selection:)`: the click (and the arrow keys) select the row
-        // and the selection opens it, so there is no gesture of our own to lose a click. The
+        // The Mac list is a `List(selection:)`: the arrow keys select the row and the selection
+        // opens it. The click needs its own gesture since the rows became drag sources (E3):
+        // the drag source takes the mouse-down before the list's selection sees it. The
         // element still has to *say* it is a button and be activatable from VoiceOver.
         content
             .contentShape(Rectangle())
+            .onTapGesture(perform: onOpen)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spokenLabel)
             .accessibilityAddTraits(.isButton)
