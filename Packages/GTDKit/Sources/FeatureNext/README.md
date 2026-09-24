@@ -21,8 +21,11 @@ overdue follow-ups (E1, E2, W2).
 - Filter chips (context multi-select, time-available single-select via `TimeBucketChipGroup`,
   reusing its 10/30/60/90 buckets for "time I have" rather than "time this takes") persist per
   device through `NextFilterStore`, namespaced by `NextViewMode` so the Mac's full list and the
-  iPhone's on-the-go list don't share filters. `.onTheGo`'s hard context restriction lives in
-  `Rules.onTheGoNextList` itself — the chips just narrow within it.
+  iPhone's on-the-go list don't share filters. `.onTheGo`'s context restriction lives in
+  `Rules.onTheGoNextList` itself — the context chips just narrow within it. Only the separate
+  `Only mobile` chip (`NextListModel.setShowsAllContexts`, E2, on by default, switching it off lifts it, persisted per
+  device, untouched by `Clear filters`) lifts it; turning it back off drops picked contexts
+  that are not on the go.
 - Chase section (overdue follow-ups) is unaffected by the filters; quick actions bump +7 d /
   resolved (= complete).
 - Tick-off completes immediately; an undo toast (`AppModel.undoLabel`, auto-dismiss 5 s) covers

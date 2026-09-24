@@ -7,7 +7,8 @@ import DesignSystem
 /// Which Next list this is (N5): the Mac's full list, or the iPhone's on-the-go list.
 public enum NextViewMode: String, Sendable, Equatable, Hashable, CaseIterable, CustomStringConvertible {
     case full
-    /// iPhone: hard-filtered to `config.onTheGoContexts`; the filter cannot be removed (E2).
+    /// iPhone: filtered to `config.onTheGoContexts` by default (E2). The context chips cannot
+    /// lift that restriction; only switching the explicit `Only mobile` chip off (`showsAllContexts`) can.
     case onTheGo
 
     public var description: String { rawValue }
@@ -25,6 +26,10 @@ public final class NextListModel {
     public private(set) var contexts: [String]
     /// Time available in minutes; `nil` = no time filter. Mutate through `setTimeAvailable`.
     public private(set) var timeAvailable: Int?
+    /// iPhone only (E2): `true` once the user switched the on-the-go restriction off to see every
+    /// open Next action. Off by default; remembered per device. Ignored in `.full`, which never
+    /// restricts. Mutate through `setShowsAllContexts`.
+    public private(set) var showsAllContexts: Bool
 
     private let model: AppModel
     private let store: any NextFilterStore
@@ -35,16 +40,33 @@ public final class NextListModel {
         self.store = store
         self.contexts = store.contexts(for: mode)
         self.timeAvailable = store.timeAvailable(for: mode)
+        self.showsAllContexts = store.showsAllContexts(for: mode)
     }
 
     public var today: Day { model.today() }
 
     // MARK: - Filters (E1)
 
-    /// Contexts the chips may offer — on-the-go mode narrows the set, and that narrowing
-    /// cannot be lifted from the UI (E2).
+    /// True while the list is restricted to the on-the-go contexts: the iPhone, unless the user
+    /// switched `Only mobile` off (E2).
+    public var isOnTheGoOnly: Bool { mode == .onTheGo && !showsAllContexts }
+
+    /// Contexts the chips may offer — the on-the-go restriction narrows the set, and the chips
+    /// themselves cannot lift it (E2); only `setShowsAllContexts(true)` does.
     public var availableContexts: [String] {
-        mode == .onTheGo ? model.snapshot.config.onTheGoContexts : model.snapshot.config.contexts
+        isOnTheGoOnly ? model.snapshot.config.onTheGoContexts : model.snapshot.config.contexts
+    }
+
+    /// E2 — lifts (`true`) or restores (`false`) the on-the-go restriction. Restoring it drops
+    /// picked contexts that are not on the go: their chips disappear, and a selection the user
+    /// can no longer see or clear would be a lying filter.
+    public func setShowsAllContexts(_ showsAll: Bool) {
+        showsAllContexts = showsAll
+        if isOnTheGoOnly {
+            let allowed = Set(model.snapshot.config.onTheGoContexts)
+            contexts.removeAll { !allowed.contains($0) }
+        }
+        persist()
     }
 
     public var isFiltered: Bool { !contexts.isEmpty || timeAvailable != nil }
@@ -76,6 +98,7 @@ public final class NextListModel {
 
     private func persist() {
         store.save(contexts: contexts, timeAvailable: timeAvailable, for: mode)
+        store.save(showsAllContexts: showsAllContexts, for: mode)
     }
 
     // MARK: - Lists
@@ -86,11 +109,10 @@ public final class NextListModel {
 
     /// The Next list itself: in-progress pinned on top, then Next.
     public var items: [Action] {
-        switch mode {
-        case .full:
-            Rules.nextList(model.snapshot, contexts: contexts, timeAvailable: timeAvailable, today: today)
-        case .onTheGo:
+        if isOnTheGoOnly {
             Rules.onTheGoNextList(model.snapshot, contexts: contexts, timeAvailable: timeAvailable, today: today)
+        } else {
+            Rules.nextList(model.snapshot, contexts: contexts, timeAvailable: timeAvailable, today: today)
         }
     }
 
@@ -147,15 +169,13 @@ public final class NextListModel {
     }
 
     /// Why the list shows fewer rows than the cap count says: `8 of 14 on the go` on the iPhone
-    /// (whose hard context restriction hides the rest, E2), `3 of 14 shown` under a filter.
+    /// (whose context restriction hides the rest, E2), `3 of 14 shown` under a filter — also on
+    /// the iPhone once `Only mobile` is off.
     /// `nil` when every Next action is on screen — nothing to explain.
     public var visibleCountText: String? {
         let visible = items.count
-        guard visible != capCount || mode == .onTheGo else { return nil }
-        switch mode {
-        case .onTheGo: return "\(visible) of \(capCount) on the go"
-        case .full: return "\(visible) of \(capCount) shown"
-        }
+        guard visible != capCount || isOnTheGoOnly else { return nil }
+        return isOnTheGoOnly ? "\(visible) of \(capCount) on the go" : "\(visible) of \(capCount) shown"
     }
 
     // MARK: - Row content
