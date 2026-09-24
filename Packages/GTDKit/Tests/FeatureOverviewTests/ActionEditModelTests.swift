@@ -102,8 +102,8 @@ struct ActionEditModelTests {
 
     // MARK: - Risk 1: a snapshot arriving mid-edit
 
-    /// The user is typing in `Why?` while the vault changes `What?` (sync, another device, a
-    /// command from another view). Neither side may lose its value.
+    /// The user is typing in the body while the vault changes a *different* field (sync,
+    /// another device, a command from another view). Neither side may lose its value.
     @Test func aSnapshotArrivingMidEditClobbersNeitherSide() async throws {
         let action = fixture()
         let (model, editor) = make(action)
@@ -113,37 +113,85 @@ struct ActionEditModelTests {
 
         // 2. Something else rewrites a *different* field of the same note.
         var remote = try #require(model.snapshot.action(action.id))
-        remote.what = "- [ ] remote what"
+        remote.timeEstimate = 45
         try await model.send(.updateAction(remote))
         editor.refresh()
 
         // The editor shows the user's text *and* the remote change.
         #expect(editor.why == "my new why")
-        #expect(editor.what == "- [ ] remote what")
+        #expect(editor.timeBucket == TimeBucket(minutes: 45))
 
         // 3. The debounced save lands: it writes only the edited field.
         await editor.waitForPendingSave()
 
         let saved = try #require(model.snapshot.action(editor.id))
         #expect(saved.why == "my new why")
-        #expect(saved.what == "- [ ] remote what")     // NOT reverted to the stale draft
+        #expect(saved.timeEstimate == 45)               // NOT reverted to the stale draft
         #expect(editor.hasUnsavedEdits == false)
     }
 
-    /// An untouched field keeps following the vault; a touched one does not jump back.
+    /// An untouched field keeps following the vault; a touched one does not jump back. The body
+    /// is **one** field (2026-09-24): while the person is typing in it, a remote change to any
+    /// part of it — `Why?` or `What?` alike — waits until the edit is written.
     @Test func refreshAdoptsRemoteValuesOnlyForUntouchedFields() async throws {
         let action = fixture()
         let (model, editor) = make(action)
         editor.setWhy("local why")
 
         var remote = try #require(model.snapshot.action(action.id))
-        remote.why = "remote why"
         remote.what = "remote what"
+        remote.timeEstimate = 45
         try await model.send(.updateAction(remote))
         editor.refresh()
 
         #expect(editor.why == "local why")
-        #expect(editor.what == "remote what")
+        #expect(editor.what == "old what")
+        #expect(editor.timeBucket == TimeBucket(minutes: 45))
+    }
+
+    // MARK: - A1: the body is one document with its two headings
+
+    /// The editor shows the note's whole body — a section the app does not know about included —
+    /// and writes back exactly what was typed.
+    @Test func theWholeBodyIsEditedAsOneDocument() async throws {
+        var action = fixture()
+        action.body = "# Why?\nold why\n\n# Notes\nKeep this.\n\n# What?\nold what"
+        let (model, editor) = make(action)
+        #expect(editor.body == action.body)
+
+        editor.setBody(action.body + "\n- [ ] one more")
+        await editor.flush()
+
+        let saved = try #require(model.snapshot.action(editor.id))
+        #expect(saved.body == "# Why?\nold why\n\n# Notes\nKeep this.\n\n# What?\nold what\n- [ ] one more")
+        #expect(saved.what == "old what\n- [ ] one more")
+    }
+
+    /// A note without the action headings shows them (its text under `# What?`, where the codec
+    /// has always read it) — and nothing is written until the person edits.
+    @Test func missingHeadingsAreShownAndWrittenWithTheFirstEdit() async throws {
+        var action = fixture()
+        action.body = "Just a line somebody typed in Obsidian."
+        let (model, editor) = make(action)
+        #expect(editor.body == "# Why?\n\n# What?\nJust a line somebody typed in Obsidian.")
+        #expect(editor.hasUnsavedEdits == false)
+        await editor.flush()
+        #expect(model.snapshot.action(editor.id)?.body == "Just a line somebody typed in Obsidian.")
+
+        editor.setBody("# Why?\nBecause.\n\n# What?\nJust a line somebody typed in Obsidian.")
+        await editor.flush()
+        let saved = try #require(model.snapshot.action(editor.id))
+        #expect(saved.body == "# Why?\nBecause.\n\n# What?\nJust a line somebody typed in Obsidian.")
+        #expect(saved.why == "Because.")
+    }
+
+    /// The editor echoing the displayed text back (SwiftUI does that on focus) is not an edit.
+    @Test func echoingTheDisplayedBodyIsNotAnEdit() async {
+        var action = fixture()
+        action.body = "Just a line."
+        let (_, editor) = make(action)
+        editor.setBody(editor.body)
+        #expect(editor.hasUnsavedEdits == false)
     }
 
     /// An edit made while the save is in flight survives it: it stays dirty and is written next.
@@ -419,4 +467,17 @@ struct ActionEditModelTests {
         editor.setWhat("- [ ] one\n- [ ] two")
         #expect(editor.suggestsProject)
     }
+}
+
+/// The tests type into one section of the single body field, as a person would.
+@MainActor
+private extension ActionEditModel {
+    func setWhy(_ value: String) {
+        setBody(NoteBody.setText("Why?", value, in: body, canonicalOrder: NoteBody.actionSections))
+    }
+    func setWhat(_ value: String) {
+        setBody(NoteBody.setText("What?", value, in: body, canonicalOrder: NoteBody.actionSections))
+    }
+    var why: String { NoteBody.text(of: "Why?", in: body) ?? "" }
+    var what: String { NoteBody.text(of: "What?", in: body) ?? "" }
 }

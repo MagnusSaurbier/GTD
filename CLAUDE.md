@@ -33,7 +33,7 @@ From the repo root. Verified on Linux with Swift 6.4, and on macOS with Xcode 27
 scripts/check.sh                             # the gate: build + test + docs check + migration tests
 scripts/check.sh --app                       # additionally xcodegen + build the app
 cd Packages/GTDKit && swift build
-cd Packages/GTDKit && swift test              # 1 350 tests across 19 test targets
+cd Packages/GTDKit && swift test              # 1 385 tests across 19 test targets
 cd Packages/GTDKit && swift test --filter GTDModelTests               # one test target
 cd Packages/GTDKit && swift test --filter "RulesTests/sidebarCounts"  # one test
 cd Tools/migrate && pytest -q                # the migration script's 90 tests

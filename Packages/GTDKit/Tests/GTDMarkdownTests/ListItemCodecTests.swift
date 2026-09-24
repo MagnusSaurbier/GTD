@@ -137,7 +137,8 @@ struct ListItemCodecTests {
     // MARK: - L4: promoting an item keeps its notes
 
     /// The note *moves* into `Actions/` (L4), so the codec patches the list item's own file.
-    /// Its body is somebody else's content — the action headings go **below** it, never over it.
+    /// Its body is somebody else's content — the reducer (`promoteListItem`) hands it over as
+    /// the action's lead paragraph, so the action headings go **below** it, never over it.
     @Test func promotingAnItemKeepsItsNotesAboveTheActionHeadings() throws {
         let itemText = "---\ncreated: 2026-09-01T09:30:00+02:00\ntags: [buch]\n---\nMarie's copy.\n"
         let action = Action(
@@ -147,6 +148,7 @@ struct ListItemCodecTests {
             contexts: ["home"],
             timeEstimate: 60,
             created: Fixtures.date(Fixtures.day(-18), 9, 30),
+            preamble: "Marie's copy.",
             why: "Marie keeps asking",
             what: "Read the first 50 pages",
             passthrough: NoteCodec.passthrough(itemText))
