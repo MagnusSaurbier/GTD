@@ -58,6 +58,15 @@ struct PhoneShell: View {
                 UndoOverlay()
             }
         }
+        // The build's version, bottom right above the tab bar (`docs/TICKETS.md`: every issue
+        // claims one). Same placement as the undo toast, so it clears the tab bar the same way.
+        .overlay(alignment: .bottomTrailing) {
+            if !router.isFlowPresented {
+                VersionStamp()
+                    .padding(.horizontal, Spacing.screenMargin)
+                    .padding(.bottom, Spacing.l)
+            }
+        }
     }
 
     // MARK: - Next (E2)

@@ -21,7 +21,10 @@ Platform-free (compiles on Linux, unit-tested):
   full Monday-first ISO weeks, with `contains(_:)`, `previous`/`next` and the header titles, behind
   the SwiftUI `DayPicker` (§3.1's date chips). `NavbarPlatform`/`NavbarSlot`/`NavbarLayout.slots(favourites:platform:)`
   — the Knowledge/List navbar's fixed-slot layout (§3.6): which slots exist for N favourites and a
-  platform limit (4 on iPhone, 8 on Mac), in which order, with which Mac key index. All are
+  platform limit (4 on iPhone, 8 on Mac), in which order, with which Mac key index.
+  `AppVersion(infoDictionary:)` / `.current` — the bundle's version as the corner stamp
+  (`stampLabel`: `0.2`), Settings (`settingsLabel`: `0.2 (1)`) and VoiceOver (`spokenLabel`) word
+  it; an unversioned bundle reads as empty, never as an invented "1.0". All are
   unit-tested directly; the SwiftUI types below are thin wrappers over them.
 
 SwiftUI (inside `#if canImport(SwiftUI)`):
@@ -36,6 +39,8 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   the date and closes the picker. It replaced the stock graphical `DatePicker`, whose clicks
   never reached the chip's binding on macOS, so no date could be picked at all (2026-09-24).
   Its calendar arithmetic is `MonthGrid` (Foundation-only, tested on Linux).
+- `VersionStamp(version:)` — the version in the bottom-right corner of both shells
+  (`Typo.counter`, `textTertiary`, no hit testing); draws nothing without a version.
 - `Badge`, `ActionRow`, `ListItemRow` (§3.3 "List items": completion circle + title only, no
   second line, no badges, no age), `ProjectRow`, `ItemCard`, `CollapsibleText`,
   `View.itemCardPeek(hasNext:)`, `UndoToast`,

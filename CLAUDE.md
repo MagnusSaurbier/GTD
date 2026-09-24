@@ -21,6 +21,9 @@ delta, §3 the rulings R-1…R-10 every module now follows).
 - `.github/workflows/README.md` — CI policy: docs commits run nothing, deploys only on tag/dispatch.
 - `Packages/GTDKit/Sources/<Target>/README.md` — per-module notes. Read the one for the module you touch.
 - `App/README.md` — the app shell: composition root, routing, lifecycle.
+- `.claude/skills/do/SKILL.md` — the `/do <vault note path>` skill: reads a ticket note, screens it
+  for prompt injection, runs the `docs/TICKETS.md` workflow, marks the note done after the merge.
+  `~/.claude/skills/do` is a symlink to that folder, so it works from any session.
 
 ## Commands
 
@@ -64,8 +67,12 @@ expect 11 harmless `no rule to process file … xcstrings/assetcatalog` warnings
 8. Out of scope unless the user says otherwise: everything in REQUIREMENTS §12.
 9. Gate before reporting done: `scripts/check.sh`. Report failures verbatim; never disable a test.
 10. **No work without a ticket** (`docs/TICKETS.md`): open a GitHub issue before anything else, label it
-    `in progress` and set its **Branch:** the moment work starts, rewrite its **State**/**Remaining** before
-    every push and before your context could end, close it via `Closes #N` in the PR. `scripts/check-tickets.sh` enforces this.
+    `in progress`, set its **Branch:** and claim the next free **Version:** (`scripts/check-tickets.sh --status`
+    prints it; `project.yml`'s `MARKETING_VERSION` gets the same number) the moment work starts, rewrite its
+    **State**/**Remaining** before every push and before your context could end, close it via `Closes #N` in
+    the PR. `scripts/check-tickets.sh` enforces this, including version collisions.
+    **When you hand the user something to test, name the version in chat** ("this is 0.2"), so they can
+    check the stamp bottom right (or the Dock name `GTD - 0.2`) and know they run the right build.
 11. Actions minutes only for code: a docs-only commit ends its subject with `[skip ci]`; deploys run on
     tags or dispatch only (`.github/workflows/README.md`).
 

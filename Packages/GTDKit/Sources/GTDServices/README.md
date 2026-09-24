@@ -22,7 +22,7 @@ Foundation-only — every file here compiles and is tested on Linux.
   replaces whatever the file holds (never a stale copy of the capture), its own text rides along
   so unknown frontmatter survives, and the put comes after the move that put the file there.
 - `UndoJournal` (actor) — device-local, persisted in Application Support, keeps 20 entries.
-- `ServiceError` — `.nothingToUndo`, `.undoStale(path:)`, `.writeDiscarded`.
+- `ServiceError` — `.nothingToUndo`, `.undoStale(path:)`, `.writeDiscarded`, `.staleWrite(path:)`.
 
 ## Invariants
 
@@ -37,7 +37,16 @@ Foundation-only — every file here compiles and is tested on Linux.
    on entity equality first: `encode` is a pure function of the entity, so an unchanged
    note costs a comparison instead of two encodes. Without it one command re-encoded the whole
    vault twice — 4.4 s on 1 000 notes.
-4. **Undo is refused, never forced.** Each entry stores a content hash per file it would touch;
+4. **A write built on a snapshot the vault has moved past is refused, never merged** (N3,
+   ARCHITECTURE §6 2026-09-24). Before its commit, every file a command would overwrite or move
+   away from is read and compared with the base snapshot's entity *encoded* — byte for byte what
+   the file held when it was decoded, or what the previous queued command wrote — and a path the
+   snapshot has no note for must be absent. A mismatch is `ServiceError.staleWrite(path:)`, handled
+   like any refused write (below). Staleness is about the files, never the snapshot's age: offline
+   edits to untouched notes commit. Exempt: the per-device routine log, `.moveFolder`, move
+   destinations. `perform` pulls the store's newest snapshot before reducing, so a change the store
+   has indexed already is reduced on, not refused. `SnapshotDiff.expectedContents` builds the list.
+   **Undo is refused, never forced.** Each entry stores a content hash per file it would touch;
    anything that moved in the meantime (sync, Obsidian, another device) turns the undo into
    `ServiceError.undoStale`. For a `.moveFolder` that means the files **inside** the folder:
    they are the ones the undo carries back, so the journal asks the store for

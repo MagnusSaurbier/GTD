@@ -15,6 +15,12 @@
 #     issue's last edit (GitHub's updatedAt).
 #  4. An "in progress" issue whose branch is already merged into main must be closed with its
 #     Outcome filled in — reported so that whoever sees it does it.
+#  5. Versions: every "in progress" issue claims a version (**Version:** in its body) that is
+#     above main's MARKETING_VERSION and that no other open issue claims; on the current branch,
+#     project.yml's MARKETING_VERSION equals the version its issue claims. --status prints the
+#     next free version, which is what a new issue claims. Only what concerns the current
+#     branch's issue fails the gate; another branch's missing claim or collision is a NOTE, so
+#     one session's omission never blocks another's push.
 # Without gh, without auth or without network the script prints SKIPPED and exits 0: the rule
 # still applies, it just cannot be checked here.
 set -uo pipefail
@@ -36,7 +42,7 @@ current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
 code_excludes=(-- . ':(exclude)docs' ':(exclude)*.md' ':(exclude).claude' ':(exclude).github')
 in_git=1; git rev-parse --verify main >/dev/null 2>&1 || in_git=0
 
-# One line per issue: number|state|branch|updated_epoch|url|title|shape_problems
+# One line per issue: number|state|branch|version|updated_epoch|url|title|shape_problems
 rows="$(python3 - "$issues_json" <<'PY'
 import json, re, sys, datetime
 issues = json.loads(sys.argv[1])
@@ -48,12 +54,16 @@ for i in sorted(issues, key=lambda i: i["number"]):
     branch = (m.group(1).strip() if m else "").strip("`").strip()
     if branch in ("", "—", "-"): branch = ""
     problems = []
+    m = re.search(r"\*\*Version:\*\*\s*`?([^`·\n]*)`?", body)
+    version = (m.group(1).strip() if m else "").strip("`").strip()
+    if version in ("—", "-"): version = ""
     if state == "in progress":
         for h in ("State", "Remaining", "Handover"):
             if not re.search(r"^## %s\b" % h, body, re.M): problems.append("missing '## %s'" % h)
         if not branch: problems.append("**Branch:** is empty")
+        if version and not re.fullmatch(r"\d+\.\d+", version): problems.append("**Version:** '%s' is not <major>.<minor>" % version)
     updated = int(datetime.datetime.fromisoformat(i["updatedAt"].replace("Z", "+00:00")).timestamp())
-    print("|".join([str(i["number"]), state, branch, str(updated), i["url"], i["title"].replace("|", "/"), "; ".join(problems)]))
+    print("|".join([str(i["number"]), state, branch, version, str(updated), i["url"], i["title"].replace("|", "/"), "; ".join(problems)]))
 PY
 )"
 
@@ -62,11 +72,11 @@ problem() { echo "  PROBLEM: $*"; problems=$((problems + 1)); }
 
 echo "in progress"
 found=0; tickets_for_current=0
-while IFS='|' read -r number state branch updated url title shape; do
+while IFS='|' read -r number state branch version updated url title shape; do
     [ "$state" = "in progress" ] || continue
     found=1
     echo "  #$number — $title"
-    echo "      branch: ${branch:-—} · $url"
+    echo "      branch: ${branch:-—} · version: ${version:-—} · $url"
     [ -n "$shape" ] && problem "#$number: $shape"
     [ -n "$branch" ] || continue
     [ "$branch" = "$current_branch" ] && tickets_for_current=$((tickets_for_current + 1))
@@ -89,7 +99,7 @@ done <<<"$rows"
 
 echo "open, not started"
 found=0
-while IFS='|' read -r number state branch updated url title shape; do
+while IFS='|' read -r number state branch version updated url title shape; do
     [ "$state" = "open" ] || continue
     found=1; echo "  #$number — $title"
 done <<<"$rows"
@@ -105,6 +115,58 @@ if [ "$in_git" -eq 1 ] && [ "$current_branch" != "main" ] && [ "$current_branch"
         fi
     fi
 fi
+
+# 5. Versions — the board is the registry: main's project.yml is what shipped, every "in progress"
+#    issue's **Version:** is a claim, and the next free one is one minor above the highest of both.
+main_version=""
+if [ "$in_git" -eq 1 ]; then
+    main_version="$(git show main:project.yml 2>/dev/null | sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' | head -1)"
+fi
+here_version="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\}.*/\1/p' project.yml 2>/dev/null | head -1)"
+version_report="$(python3 - "$main_version" "$here_version" "$current_branch" "$rows" <<'PY2'
+import sys
+main_v, here_v, current, rows = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+def parse(v):
+    try:
+        major, minor = v.split("."); return (int(major), int(minor))
+    except Exception:
+        return None
+claims = {}   # version -> [issue numbers]
+mine = set()  # issues whose branch is the current one: these fail the gate, the rest are notes
+highest = parse(main_v) or (0, 0)
+findings = []  # (concerns_current, text)
+for line in rows.splitlines():
+    if not line.strip(): continue
+    number, state, branch, version, *_ = line.split("|")
+    if state != "in progress": continue
+    own = branch == current
+    if own: mine.add(number)
+    if not version:
+        findings.append((own, "#%s claims no version — put the next free one in **Version:** and project.yml (docs/TICKETS.md rule 2)" % number))
+        continue
+    v = parse(version)
+    if v is None: continue
+    claims.setdefault(version, []).append(number)
+    if v > highest: highest = v
+    if main_v and parse(main_v) and v <= parse(main_v):
+        findings.append((own, "#%s claims version %s, but main already is %s — claim the next free one" % (number, version, main_v)))
+    if own and here_v and here_v != version:
+        findings.append((True, "#%s claims version %s, but project.yml on '%s' says MARKETING_VERSION %s — set it to %s" % (number, version, current, here_v, version)))
+for version, numbers in sorted(claims.items()):
+    if len(numbers) > 1:
+        findings.append((bool(mine & set(numbers)), "version %s is claimed by #%s — one version per issue; the later claim takes the next free version" % (version, " and #".join(numbers))))
+print("NEXT %d.%d" % (highest[0], highest[1] + 1))
+for own, text in findings: print(("PROBLEM " if own else "NOTE ") + text)
+PY2
+)"
+echo "versions"
+echo "  main: ${main_version:-?} · next free: $(echo "$version_report" | sed -n 's/^NEXT //p') (claim it in a new issue's **Version:** and in project.yml)"
+while IFS= read -r line; do
+    case "$line" in
+        PROBLEM\ *) problem "${line#PROBLEM }" ;;
+        NOTE\ *) echo "  NOTE: ${line#NOTE }" ;;
+    esac
+done <<<"$version_report"
 
 if [ "$problems" -gt 0 ]; then
     echo "check-tickets.sh: $problems problem(s) — see docs/TICKETS.md"
