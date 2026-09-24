@@ -89,6 +89,10 @@ swipes, Mac with keys. Open it with the `Process inbox` button, `⌘I`, or `gtd:
       closes the calendar at once; `‹` / `›` page months and the middle dot returns to the month
       you started on, none of them changing the date. (Before 2026-09-24 this was a stock
       graphical `DatePicker` whose clicks never reached the chip: no date could be set at all.)
+- [ ] The same on a **waiting row with no who** (W1/D39's optional who — `Edit who`, clear the
+      field, `Set waiting`; on a migrated vault this is *every* imported waiting item): picking a
+      date in the row's calendar must set the follow-up. Until 2026-09-24 the row dropped it
+      silently, because the bump it builds required a who.
 - [ ] A one-time hint overlay (`← Someday` / `→ Next` / `↓ Back`) appears the first time an
       **action card** is opened — not on the session's first card.
 
