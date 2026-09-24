@@ -15,6 +15,10 @@ public enum Symbols {
     public static let knowledge = "books.vertical"
     public static let trash = "trash"
     public static let capture = "plus.circle"
+    /// The Next filter bar's collapse toggle (#36); `.fill` while a filter is set, so a hidden
+    /// filter still shows. Not in STYLEGUIDE §7 yet (the guide is a synced vault note).
+    public static let filter = "line.3.horizontal.decrease.circle"
+    public static let filterActive = "line.3.horizontal.decrease.circle.fill"
     /// The leading glyph of an unset "add a value" chip (`Defer`, `Due`, `Project`). The chip's
     /// title never repeats it as a literal "+".
     public static let addValue = "plus"

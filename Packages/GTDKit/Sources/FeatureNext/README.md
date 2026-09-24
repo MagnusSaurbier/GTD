@@ -68,8 +68,10 @@ overdue follow-ups (E1, E2, W2).
   keys; selecting is opening, the system selection colour is the selected state. iPhone: the
   row's text area is a plain `Button`. Both are exposed to accessibility as one button whose
   label is `NextListModel.spokenLabel(for:)`; the circle is a separate `Done <title>` button.
-- Filter chips sit in the list's top safe-area bar, under the headline (`pinnedScreenTitle`,
-  #33); the list is the screen's scroll view and neither headline nor chips move with it. iPhone: one horizontally scrolling line. Mac: two
+- Filter chips sit in the list's top safe-area bar, under the inline bar title
+  (`pinnedScreenTitle`); the list is the screen's scroll view and neither moves with it. A filter
+  icon at the right end of the context caption folds all chips away (#36, `@AppStorage
+  "next.filtersCollapsed"`, per device); it is filled in the accent while a filter is set. iPhone: one horizontally scrolling line. Mac: two
   wrapping rows (contexts, then time + `Clear filters`) — nothing is cut off at narrow widths.
 
 ## Contract-adjacent additions (recorded here, not a §4 contract change)

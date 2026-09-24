@@ -12,7 +12,7 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: true
-    MARKETING_VERSION: "0.15"
+    MARKETING_VERSION: "0.16"
     CURRENT_PROJECT_VERSION: "1"
     # Signing is the user's: set your team here (or in Xcode → Signing & Capabilities) before
     # running on a device. The macOS and simulator builds work unsigned — see App/README.md.

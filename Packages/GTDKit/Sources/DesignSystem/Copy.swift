@@ -70,6 +70,11 @@ public enum Copy {
     /// contexts are *all* the ones at hand, time is the *most* that is free right now.
     public static let contextFilterHeader = "Context - pick all available right now"
     public static let timeFilterHeader = "Time - maximum available right now"
+    /// The caption left of the collapse toggle while the filter chips are hidden (#36), and
+    /// the toggle's spoken labels.
+    public static let filters = "Filters"
+    public static let hideFilters = "Hide filters"
+    public static let showFilters = "Show filters"
     /// iPhone Next filter bar (E2): the switch that keeps the list to on-the-go contexts —
     /// on by default, off shows every context.
     public static let onlyMobile = "Only mobile"
