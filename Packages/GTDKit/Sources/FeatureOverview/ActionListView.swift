@@ -118,6 +118,7 @@ public struct ActionListView: View {
                 onComplete: { send(.complete(action.id)) })
                 .contentShape(Rectangle())
                 .tag(action.id)
+                .draggableNote(action.id)
                 #if !os(macOS)
                 .onTapGesture { onOpen(action.id) }
                 #endif
@@ -130,6 +131,9 @@ public struct ActionListView: View {
                             send(.setStatus(action.id, target, waiting: nil))
                         }
                     }
+                    // The drag-to-section twin (E3): Waiting, Deferred and a project go
+                    // through the dialogue each needs, like a drop would.
+                    MoveToMenu(id: action.id)
                 }
         }
     }

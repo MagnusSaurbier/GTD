@@ -14,6 +14,25 @@ import GTDFixtures
 /// a click or the arrow keys select a row, selecting opens the project in the detail column
 /// (`onOpenProject`), and `selection` — the project that column shows — is what the list
 /// highlights. The list keeps no selection of its own. iOS keeps tap-to-open.
+/// One project row as a drop target for a dragged action (E3). Without a `moveNote` handler
+/// (a screen with nowhere to move to) it is the plain row.
+private struct ProjectDropRow<Content: View>: View {
+    let project: NoteID
+    @ViewBuilder let content: () -> Content
+    @Environment(\.moveNote) private var moveNote
+
+    var body: some View {
+        if let moveNote {
+            NoteDropRow(
+                accepts: { moveNote.accepts($0, .project(project)) },
+                perform: { moveNote.move($0, .project(project)) },
+                content: content)
+        } else {
+            content()
+        }
+    }
+}
+
 public struct ProjectsListView: View {
     private let selection: NoteID?
     private let onOpenProject: (NoteID) -> Void
@@ -42,12 +61,16 @@ public struct ProjectsListView: View {
                     ForEach(Array(list.sections.enumerated()), id: \.offset) { _, section in
                         Section {
                             ForEach(section.rows, id: \.project.id) { row in
-                                ProjectRow(row: row, today: list.today, onOpenAction: onOpenAction)
-                                    .contentShape(Rectangle())
-                                    .tag(row.project.id)
-                                    #if !os(macOS)
-                                    .onTapGesture { onOpenProject(row.project.id) }
-                                    #endif
+                                // A dragged action dropped here is attached to this project
+                                // (E3); it replaces the project the action named before.
+                                ProjectDropRow(project: row.project.id) {
+                                    ProjectRow(row: row, today: list.today, onOpenAction: onOpenAction)
+                                        .contentShape(Rectangle())
+                                        #if !os(macOS)
+                                        .onTapGesture { onOpenProject(row.project.id) }
+                                        #endif
+                                }
+                                .tag(row.project.id)
                             }
                         } header: {
                             if let area = section.area { Text(area.title) }

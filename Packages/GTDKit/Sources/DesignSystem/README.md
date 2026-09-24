@@ -66,6 +66,15 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   `View.cardDragOverlay(controller:tint:label:)` (the destination label + tint). FeatureInbox owns
   which GTD target each direction files to (`FeatureInbox.CardTarget`/`DragResolver`); this target
   only owns the geometry and the gesture.
+- Drag-to-category (E3, `Interaction/NoteDragging.swift`): `NoteDragItem` (the `Transferable`
+  a dragged row carries — the `NoteID` under an app-private UTType, so nothing leaves the app),
+  `View.draggableNote(_:)` for a row, `View.noteDropTarget(isTargeted:accepts:perform:)` and
+  `NoteDropRow { }` (drop target + the `accentWash` row tint while targeted) for a section or
+  project row, the `\.moveNote` environment (`MoveNoteHandler`: `accepts`/`move` over
+  `GTDAppCore.MoveDestination`, set by the shell that hosts the dialogues, `nil` where there is
+  nowhere to move to) and `MoveToMenu(id:)`, the drag's context-menu twin (renders nothing
+  without a handler). `DeferDateSheet(initial:today:onConfirm:)` — a `DateValueChip` in the
+  smallest sheet that can hold one, for a defer date asked outside a card.
 - Reward moments (§5): `RewardMoment.inboxZero(processed:minutes:)`,
   `.routineComplete(routine:done:total:)`, `.reviewComplete(done:total:)` — no third kind.
 - Review pieces (§3.10, Mac-only): `StatTile`, `RoutineHeatmap` (+ `HeatmapCellState`),

@@ -8,6 +8,17 @@ Inbox processing: one card at a time, LIFO, forced order, exit only by quitting 
 - `InboxProcessingView(showsChrome:onFinished:)` — the whole session. `FeatureReview` embeds it (§10.1) with `showsChrome: false`, which drops the counter and `Close` from the toolbar.
 - `InboxStartButton(action:)` — home-screen entry point with the live queue count.
 - `MakeActionModel(model:item:bindings:)` — **Make action** (L4)'s state, for `FeatureLists`: see below.
+  `MakeActionModel(model:action:target:missing:bindings:)` — the same card over an **existing
+  action** that was dropped onto a tier it is not ready for (`MovePlan.card`): starts from the
+  action's own values with `missing` already marked, opens the waiting sheet at once for
+  `.waiting`, and sends `updateAction` (a project created from the picker is born first by
+  `createProject`). `source` says which; `item` is `nil` for an action.
+- `MoveCoordinator(model:bindings:)` + `View.moveNoteHost(_:)` — drag-to-category (E3): the
+  shell applies the modifier once (the Mac window, the iPhone's Next tab); it sets the
+  `\.moveNote` environment for every row and drop target below and presents the dialogue a drop
+  needs over the coordinator: the action card, `DeferDateSheet`, or the project picker
+  (`ProjectChoiceSheet`, shared with the card's `+ project` chip). `move(_:to:)` runs
+  `GTDAppCore.MovePlan`; `confirmDefer`, `chooseProject`, `createProject`, `cancel()`.
 - `MakeActionCardView(model:onFinished:)` — **Make action**'s view: the opened action card alone
   (STYLEGUIDE §3.5 step 2a), the same field layout and `ActionCardBar` the inbox uses for its own
   action card, over a `MakeActionModel`. `FeatureLists` (T10) presents it as a sheet:
@@ -44,10 +55,14 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
   state). `InboxSession` and `MakeActionModel` both drive exactly this; neither owns a copy of a
   required field, the cap flow or the asterisk rule. `InboxRefusal` is the one list of ways the
   card says no.
-- `MakeActionModel.swift` — L4's entry point: the opened action card alone, over a `ListItem`,
-  sending `promoteListItem`. Same draft, same validation, same cap flow; exits → Next / ← Someday
-  / Waiting / Done; `cancel()` leaves the item in its list. There is no step 1 under it, so `Esc`
-  blurs then cancels, and `undo` belongs to the list, not to the card.
+- `MakeActionModel.swift` — L4's entry point: the opened action card alone, over a `ListItem`
+  (sending `promoteListItem`) or an `Action` (sending `updateAction`; `ActionCardState.previousStatus`
+  is set so the card asks exactly what `Reducer.normalize` asks of a note already in a tier).
+  Same draft, same validation, same cap flow; exits → Next / ← Someday / Waiting / Done;
+  `cancel()` leaves the note as it was. There is no step 1 under it, so `Esc` blurs then
+  cancels, and `undo` belongs to the list, not to the card.
+- `MoveCoordinator.swift` — a drop or `Move to…` → `MovePlan` → perform at once, or hold the
+  `dialogue` (`card` / `deferDate` / `pickProject`) until it confirms or is cancelled.
 - `InboxPickers.swift` — `KnowledgeTree` (+ `KnowledgePickerModel`: suggestion, tree, `Projects`
   section), `ProjectPicker` (+ `ProjectPickerModel`: filtered tree, `Create project "<text>"`),
   `InboxDefaultsStore` (device-local last-used folder + one-time hint; `EphemeralInboxDefaults`

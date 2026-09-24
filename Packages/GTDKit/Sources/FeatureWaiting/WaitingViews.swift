@@ -111,6 +111,7 @@ private struct WaitingRow: View {
         }
         .padding(.vertical, Spacing.rowVertical)
         .contentShape(Rectangle())
+        .draggableNote(action.id)
         #if !os(macOS)
         .onTapGesture { onOpen(action.id) }
         #endif
@@ -154,6 +155,8 @@ private struct WaitingRow: View {
             } label: {
                 Label("Edit who", systemImage: Symbols.waiting)
             }
+            // The drag-to-section twin (E3).
+            MoveToMenu(id: action.id)
         }
     }
 
@@ -262,6 +265,7 @@ private struct DeferredRow: View {
         }
         .padding(.vertical, Spacing.rowVertical)
         .contentShape(Rectangle())
+        .draggableNote(action.id)
         #if !os(macOS)
         .onTapGesture { onOpen(action.id) }
         #endif
@@ -278,6 +282,7 @@ private struct DeferredRow: View {
             } label: {
                 Label("Un-defer now", systemImage: Symbols.deferred)
             }
+            MoveToMenu(id: action.id)
         }
     }
 

@@ -300,6 +300,41 @@ Unplug the mouse for this one.
 - [ ] The contexts editor no longer offers `reading` as a default — but a vault whose
       `Config.md` lists it still shows it (the list in the file is yours).
 
+### 3.7 Drag a row onto a category (E3, 2026-09-24)
+
+Mac, on fixtures. Every row in Next, Someday, Waiting and Deferred can be dragged; the sidebar
+sections Next · Someday · Waiting · Projects · Deferred and the rows of the Projects list take
+the drop. Inbox, Lists, Review and Routines never highlight and never take a drop.
+
+- [ ] Drag a Next row onto **Someday**: the section tints (`accentWash`) while the row hovers,
+      the item moves at once, the `Moved to Someday` toast appears, `⌘Z` brings it back.
+- [ ] Drag a Someday row that has a time estimate onto **Next**: moves at once (or the shell's
+      cap alert at 15/15 — no automatic demotion).
+- [ ] Drag a Someday row **without** a time estimate (`Digitise the old notes`) onto **Next**:
+      the opened action card appears as a sheet with the note's own title, Why?, What? and
+      chips, and an asterisk on **Time** only. Pick a bucket, swipe/`→`/`⋯ → Next`: the sheet
+      closes and the row is in Next. `Close` instead: nothing changed.
+- [ ] Drag any row onto **Waiting**: the card opens **with the follow-up sheet already up**.
+      Confirm a date → the row is in Waiting with that date; `Cancel` on the sheet shows the
+      card behind it, `Close` leaves the note where it was.
+- [ ] Drag a row onto **Deferred**: a small `Defer` sheet with the date chip. `Done` with a
+      future date → the row is in Deferred; `Cancel` → unchanged.
+- [ ] Drag a row onto **Projects**: the project picker (search, `Create project "…"`). Pick one
+      → the row's meta line names it. Drag it onto Projects again and pick another: the first
+      is replaced (an action names one project).
+- [ ] With **Projects** selected the middle column shows projects, not actions, so there is no
+      row to drag onto a project row today; the project rows still take a dropped action
+      (attach, replacing the old project) for whenever a view shows both. `Move to… → Project…`
+      on any action row is the reachable path.
+- [ ] Drop a row on the section it is already in (Next row on Next, a deferred row on
+      Deferred): no highlight, nothing happens, no toast.
+- [ ] Right-click any row: the context menu ends with **Move to ▸** Next / Someday / Waiting /
+      Deferred / Project…, the current section's entry disabled; each does exactly what the
+      drop does. VoiceOver reaches the menu; nobody needs the gesture.
+- [ ] iPhone, Next tab: long-press a row → **Move to ▸** works the same (the card, the defer
+      sheet and the picker are sheets over the tab). There is no sidebar on the iPhone, so
+      there is nothing to drop on there; that is by design, not a gap.
+
 ### 3.6 The weekly review deck (§10.2)
 
 - [ ] The deck is **Next → Someday → on-hold & someday projects**. There is no Backlog phase and

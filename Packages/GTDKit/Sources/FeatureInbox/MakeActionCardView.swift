@@ -309,7 +309,7 @@ private struct MakeActionCardBody: View {
 
     var body: some View {
         ItemCard {
-            if let created = model.item.created {
+            if let created = model.created {
                 HStack(spacing: Spacing.s) {
                     Text(InboxCopy.captureStamp(created, today: model.today))
                         .font(Typo.counter)
@@ -445,83 +445,17 @@ private struct MakeActionCardBody: View {
 }
 
 /// `+ project` for `MakeActionModel` — same picker rules as the inbox's (`ProjectPicker`), just
-/// over the list-item model instead of `InboxSession`.
+/// over the card model instead of `InboxSession`.
 private struct MakeActionProjectSheet: View {
     @Bindable var model: MakeActionModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var search = ""
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField(InboxCopy.pickProject, text: $search, prompt: Text(InboxCopy.pickProject))
-                        .textFieldStyle(.plain)
-                        .labelsHidden()
-                }
-                if model.draft.project != nil || model.draft.newProjectTitle != nil {
-                    Section {
-                        Button(InboxCopy.clearProject) { choose(nil) }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.gtdAccent)
-                    }
-                }
-                ForEach(pickerModel.groups) { group in
-                    if let title = group.title {
-                        Section(title) { rows(of: group) }
-                    } else {
-                        Section { rows(of: group) }
-                    }
-                }
-                if let name = pickerModel.createTitle {
-                    Section {
-                        Button {
-                            model.createProject(named: name)
-                            dismiss()
-                        } label: {
-                            Label(InboxCopy.createProject(name), systemImage: "plus")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.gtdAccent)
-                    }
-                }
-            }
-            .sheetFormStyle()
-            .navigationTitle(Copy.project)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(InboxCopy.cancel) {
-                        dismiss()
-                        model.cancelSheet()
-                    }
-                }
-            }
-        }
-    }
-
-    private var pickerModel: ProjectPickerModel { model.projectPicker(search: search) }
-
-    private func rows(of group: ProjectGroup) -> some View {
-        ForEach(group.projects) { project in
-            Button {
-                choose(project.id)
-            } label: {
-                HStack {
-                    Text(project.title).font(Typo.body).foregroundStyle(Color.ink)
-                    Spacer(minLength: 0)
-                    if model.draft.project == project.id {
-                        Image(systemName: Symbols.done).foregroundStyle(Color.gtdAccent)
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func choose(_ id: NoteID?) {
-        model.chooseProject(id)
-        dismiss()
+        ProjectChoiceSheet(
+            picker: { model.projectPicker(search: $0) },
+            current: model.draft.project,
+            onChoose: { model.chooseProject($0) },
+            onCreate: { model.createProject(named: $0) },
+            onCancel: { model.cancelSheet() })
     }
 }
 
