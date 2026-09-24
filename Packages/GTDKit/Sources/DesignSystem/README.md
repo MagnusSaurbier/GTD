@@ -138,3 +138,7 @@ holds none of them. Adding is normal, renaming is a cross-target change.
 `Interaction/VaultRootEnvironment.swift` — `EnvironmentValues.vaultRootPath`: the vault folder's
 absolute path, set by the app shell (`RootView` and the Mac `Settings` scene), `nil` on fixtures.
 Its one use is `GTDAppCore.ObsidianLink`.
+
+`Interaction/Clipboard.swift` — `Clipboard.copy(_:)`: the general pasteboard (`NSPasteboard` /
+`UIPasteboard`) behind one call, so a feature never imports AppKit or UIKit for it. Used by the
+detail view's "Copy path" button.

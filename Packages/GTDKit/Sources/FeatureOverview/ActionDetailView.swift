@@ -198,12 +198,21 @@ private struct ActionDetailEditor: View {
                 .foregroundStyle(Color.gtdAccent)
                 #endif
 
-                // No vault root (fixtures) means no link Obsidian could resolve: no button.
-                if let url = ObsidianLink.url(for: editor.id, vaultRoot: vaultRootPath) {
-                    Button {
-                        openURL(url)
-                    } label: {
-                        Label(OverviewCopy.openInObsidian, systemImage: OverviewSymbols.openExternally)
+                // No vault root (fixtures) means no link Obsidian could resolve and no path
+                // worth copying: neither button.
+                if let url = ObsidianLink.url(for: editor.id, vaultRoot: vaultRootPath),
+                   let path = ObsidianLink.filePath(for: editor.id, vaultRoot: vaultRootPath) {
+                    HStack(spacing: Spacing.l) {
+                        Button {
+                            openURL(url)
+                        } label: {
+                            Label(OverviewCopy.openInObsidian, systemImage: OverviewSymbols.openExternally)
+                        }
+                        Button {
+                            Clipboard.copy(path)
+                        } label: {
+                            Label(OverviewCopy.copyPath, systemImage: OverviewSymbols.copy)
+                        }
                     }
                     .buttonStyle(.plain)
                     .font(Typo.meta)
