@@ -142,11 +142,11 @@ public struct ActionListView: View {
 
     @ViewBuilder private func filterChips(_ list: ActionListModel) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
-            Text(OverviewCopy.context).font(Typo.meta).foregroundStyle(Color.textSecondary)
+            Text(Copy.contextFilterHeader).font(Typo.meta).foregroundStyle(Color.textSecondary)
             ContextChipGroup(
                 contexts: list.availableContexts,
                 selection: Binding(get: { list.contexts }, set: { list.contexts = $0 }))
-            Text(OverviewCopy.time).font(Typo.meta).foregroundStyle(Color.textSecondary)
+            Text(Copy.timeFilterHeader).font(Typo.meta).foregroundStyle(Color.textSecondary)
             TimeBucketChipGroup(selection: Binding(
                 get: { list.timeAvailable.flatMap { TimeBucket(minutes: $0) } },
                 set: { list.timeAvailable = $0?.minutes }))

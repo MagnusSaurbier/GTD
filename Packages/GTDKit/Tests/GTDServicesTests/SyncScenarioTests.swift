@@ -7,8 +7,8 @@ import GTDFixtures
 import GTDServices
 import GTDVault
 
-/// N3 through the whole stack: two devices, a late sync and a conflict copy, on a temp copy of
-/// the sample vault (T41).
+/// N3 through the whole stack: two devices, a late sync, a conflict copy and the stale-write
+/// guard, on a temp copy of the sample vault (T41, brief 53).
 ///
 /// `GTDVaultTests` proves each piece on its own. This suite runs the situations that only appear
 /// when two `VaultBackend`s (or a backend and "Obsidian") touch the same folder — the ones that
@@ -184,13 +184,11 @@ import GTDVault
     /// The same situation across two devices, where the second one cannot know yet: the phone's
     /// snapshot still has the note at its old path because nothing has told it otherwise.
     ///
-    /// **This is a documented limitation, not a fixed bug** (ARCHITECTURE §7 "one writer per
-    /// file where possible"): a device acting on a snapshot older than the rename writes the old
-    /// path, and the vault ends up with two notes instead of one. Nothing is *lost* — both files
-    /// are on disk with their content intact, and the user resolves it like any duplicate. The
-    /// test pins the actual behaviour so it cannot get quietly worse, and
-    /// `docs/follow-ups/53-stale-write-guard.md` is the follow-up that would refuse the write.
-    @Test func aDeviceWritingFromABeforeTheRenameSnapshotDuplicatesRatherThanLoses() async throws {
+    /// N3 — the stale-write guard (ARCHITECTURE §6, 2026-09-24): the phone's write is **refused**,
+    /// the old path is not written back, and the phone is re-read so it now shows the rename.
+    /// Before brief 53 this produced two notes; nothing was lost, but the user had a duplicate to
+    /// reconcile by hand.
+    @Test func aDeviceWritingFromABeforeTheRenameSnapshotIsRefusedRatherThanDuplicating() async throws {
         let root = try SampleVault.copyToTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -206,19 +204,150 @@ import GTDVault
         var renamed = original
         renamed.title = "Renamed on the Mac"
         _ = try await mac.vault.perform(.updateAction(renamed))
+        let afterRename = try rescan(root)
 
         // The phone never saw it (its watcher is a `NullVaultWatcher` here, as it would be while
         // the device is asleep) and edits the note it still believes in.
         var edited = original
         edited.why = "edited on the phone"
-        _ = try await phone.vault.perform(.updateAction(edited))
+        await #expect(throws: ServiceError.staleWrite(path: original.id.path)) {
+            _ = try await phone.vault.perform(.updateAction(edited))
+        }
 
         let after = try rescan(root)
-        let macCopy = try #require(after.action(NoteID(path: "Actions/Renamed on the Mac.md")))
-        let phoneCopy = try #require(after.action(original.id))
-        #expect(macCopy.why == original.why)
-        #expect(phoneCopy.why == "edited on the phone")
-        #expect(after.issues.isEmpty, "two real notes, not a corrupt one")
+        let newID = NoteID(path: "Actions/Renamed on the Mac.md")
+        #expect(after.action(original.id) == nil, "the old path was not written back")
+        #expect(try #require(after.action(newID)).why == original.why, "the Mac's note is untouched")
+        #expect(after.actions.count == afterRename.actions.count, "one note, not two")
+        #expect(after.issues.isEmpty)
+
+        // The refusal re-read the vault: what the phone shows now is the rename, so reopening
+        // the note and making the change again works on the fresh file.
+        let phoneNow = await phone.vault.currentSnapshot()
+        #expect(phoneNow.action(original.id) == nil)
+        #expect(phoneNow.action(newID) != nil)
+        var again = try #require(phoneNow.action(newID))
+        again.why = "edited on the phone"
+        _ = try await phone.vault.perform(.updateAction(again))
+        #expect(try rescan(root).action(newID)?.why == "edited on the phone")
+    }
+
+    /// The other shape of the same race: no rename, just a field. The Mac changes the status,
+    /// the phone (still on the old snapshot) saves the whole note with a new *why* — which would
+    /// carry the old status back over the Mac's. Refused; the Mac's edit stays.
+    @Test func aFieldEditedElsewhereIsNotOverwrittenByAStaleSnapshot() async throws {
+        let root = try SampleVault.copyToTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let mac = try backend(at: root, deviceID: "mac-1")
+        let phone = try backend(at: root, deviceID: "iphone-2")
+        defer { mac.cleanUp(); phone.cleanUp() }
+        try await mac.vault.start()
+        try await phone.vault.start()
+
+        let snapshot = await phone.vault.currentSnapshot()
+        let original = try #require(snapshot.actions.first { $0.status == .next })
+        _ = try await mac.vault.perform(.setStatus(original.id, .someday, waiting: nil))
+
+        var edited = original
+        edited.why = "edited on the phone"
+        await #expect(throws: ServiceError.staleWrite(path: original.id.path)) {
+            _ = try await phone.vault.perform(.updateAction(edited))
+        }
+
+        let onDisk = try #require(try rescan(root).action(original.id))
+        #expect(onDisk.status == .someday, "the Mac's status survived")
+        #expect(onDisk.why == original.why, "and the phone's edit was not merged in")
+    }
+
+    /// Offline, or on a slow sync, a stale snapshot is the normal case — and it must not stop
+    /// the person working. The Mac changes two other notes; the phone, which has seen none of
+    /// it, edits a third note twice. Both writes land, because the files *it* touches did not
+    /// change. Nothing may ever refuse a write merely because the snapshot is old.
+    @Test func aLongStaleSnapshotStillCommitsWhenItsOwnFilesDidNotChange() async throws {
+        let root = try SampleVault.copyToTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let mac = try backend(at: root, deviceID: "mac-1")
+        let phone = try backend(at: root, deviceID: "iphone-2")
+        defer { mac.cleanUp(); phone.cleanUp() }
+        try await mac.vault.start()
+        try await phone.vault.start()
+
+        let snapshot = await phone.vault.currentSnapshot()
+        let open = snapshot.actions.filter { !$0.status.isClosed }
+        let macFirst = try #require(open.first)
+        let macSecond = try #require(open.dropFirst().first)
+        let phoneNote = try #require(open.dropFirst(2).first)
+
+        var renamed = macFirst
+        renamed.title = "Renamed on the Mac while the phone slept"
+        _ = try await mac.vault.perform(.updateAction(renamed))
+        _ = try await mac.vault.perform(.setStatus(macSecond.id, .someday, waiting: nil))
+
+        // The phone is a world behind — and edits a note nobody else touched. Twice: the second
+        // command is reduced on the first one's snapshot, whose file the phone itself just wrote.
+        var edited = phoneNote
+        edited.why = "edited on the phone"
+        _ = try await phone.vault.perform(.updateAction(edited))
+        _ = try await phone.vault.perform(.setStatus(phoneNote.id, .someday, waiting: nil))
+
+        let after = try rescan(root)
+        let phoneOnDisk = try #require(after.action(phoneNote.id))
+        #expect(phoneOnDisk.why == "edited on the phone")
+        #expect(phoneOnDisk.status == .someday)
+        #expect(after.action(NoteID(path: "Actions/Renamed on the Mac while the phone slept.md")) != nil)
+        #expect(after.action(macSecond.id)?.status == .someday)
+        #expect(after.issues.isEmpty)
+    }
+
+    /// A command that *creates* a file has nothing to compare — so it expects the file to be
+    /// absent. Two devices creating the same title while apart: the second one is refused, not
+    /// written over the first.
+    @Test func aNoteCreatedElsewhereUnderTheSameTitleIsNotOverwritten() async throws {
+        let root = try SampleVault.copyToTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let mac = try backend(at: root, deviceID: "mac-1")
+        let phone = try backend(at: root, deviceID: "iphone-2")
+        defer { mac.cleanUp(); phone.cleanUp() }
+        try await mac.vault.start()
+        try await phone.vault.start()
+
+        func draft(_ why: String) -> ActionDraft {
+            ActionDraft(title: "Created on both devices", status: .someday,
+                        contexts: ["mac"], why: why, what: "Find out which one wins.")
+        }
+        _ = try await mac.vault.perform(.createAction(draft("from the Mac")))
+        let path = "Actions/Created on both devices.md"
+        await #expect(throws: ServiceError.staleWrite(path: path)) {
+            _ = try await phone.vault.perform(.createAction(draft("from the phone")))
+        }
+        #expect(try rescan(root).action(NoteID(path: path))?.why == "from the Mac")
+    }
+
+    /// N3 §7.2 — the routine log is per device by construction, so it is exempt from the guard:
+    /// even when this device's own log file changed under it (a restored backup, a sync of the
+    /// same device's file from elsewhere), logging a step is never refused.
+    @Test func loggingARoutineStepIsNeverRefused() async throws {
+        let vault = try TestVault.onDisk(deviceID: "mac-1")
+        defer { vault.cleanUp() }
+        try await vault.backend.start()
+
+        let snapshot = await vault.backend.currentSnapshot()
+        let routine = try #require(snapshot.routines.first { $0.title == "Morning" })
+        _ = try await vault.backend.perform(
+            .logRoutineStep(routine: routine.id, stepID: routine.steps[0].id, .done))
+
+        let logPath = "GTD/RoutineLog/\(Fixtures.today.iso)--mac-1.md"
+        let logged = try #require(try vault.text(logPath))
+        try vault.fileSystem.writeText(logged + "\n<!-- touched elsewhere -->\n", to: logPath)
+
+        _ = try await vault.backend.perform(
+            .logRoutineStep(routine: routine.id, stepID: routine.steps[1].id, .skipped))
+        let rescanned = try vault.rescan()
+        let today = rescanned.routineLog.filter { $0.day == Fixtures.today && $0.device == "mac-1" }
+        #expect(today.count == 2, "both steps are in today's log: \(today)")
     }
 
     // MARK: - Helpers

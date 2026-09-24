@@ -17,6 +17,12 @@ public enum ServiceError: Error, Equatable {
     /// state the vault never reached. Also what `undo()` answers when the thing it was meant to
     /// undo turned out not to have been saved.
     case writeDiscarded
+
+    /// The command would overwrite or move a file that no longer holds what the snapshot it was
+    /// reduced on says — another device, Obsidian or a sync landed in between (N3, ARCHITECTURE
+    /// §6 2026-09-24). Refused, never merged: the vault is re-read and published, and the person
+    /// makes the change again on the fresh note.
+    case staleWrite(path: String)
 }
 
 extension ServiceError: CustomStringConvertible {
@@ -28,11 +34,14 @@ extension ServiceError: CustomStringConvertible {
             "\(path) changed since then, so undoing would overwrite that change."
         case .writeDiscarded:
             "That change was not saved to the vault, so it has already been reverted."
+        case let .staleWrite(path):
+            "\(path) changed elsewhere since this device last read it. Reopen the note and make the change again."
         }
     }
 }
 
-/// Content hash used to notice that a file changed between a command and its undo.
+/// Content hash used to notice that a file changed between a snapshot and the write built on it,
+/// or between a command and its undo.
 ///
 /// FNV-1a over the UTF-8 bytes plus the byte count. It is a *change detector*, not a security
 /// primitive: CryptoKit does not exist on Linux, and a vault note is compared against a value

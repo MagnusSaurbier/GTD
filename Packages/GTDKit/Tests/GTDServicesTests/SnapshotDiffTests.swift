@@ -2,7 +2,7 @@ import Foundation
 import GTDFixtures
 import GTDMarkdown
 import GTDModel
-import GTDServices
+@testable import GTDServices
 import Testing
 
 /// The diff on its own: no files, no reducer — just "these two snapshots differ, so write this".
@@ -122,6 +122,26 @@ struct SnapshotDiffTests {
     }
 
     // MARK: - The collections that are not `[Entity]`
+
+    /// N3 — what the stale-write guard checks before a rename with an edit: the source path
+    /// must still hold the old note, the destination must be absent, and the per-device routine
+    /// log is never in the list.
+    @Test func theGuardExpectsTheOldTextAtTheSourceAndNothingAtTheDestination() throws {
+        let action = try #require(sample.actions.first { $0.title == "Fix the bike light" })
+        let newPath = "Actions/Fix the bike light tonight.md"
+        let ops: [VaultFileOp] = [
+            .move(from: action.id.path, to: newPath),
+            .put(path: newPath, text: "irrelevant"),
+            .put(path: "GTD/RoutineLog/2026-09-19--fixtures.md", text: "irrelevant"),
+            .moveFolder(from: "Lists/Read", to: "Lists/Reading"),
+        ]
+
+        let expected = SnapshotDiff.expectedContents(before: ops, in: sample)
+        #expect(expected == [
+            action.id.path: ContentHash.of(NoteCodec.encode(action)),
+            newPath: ContentHash.absent,
+        ])
+    }
 
     @Test func onlyTheChangedDayAndDeviceOfTheRoutineLogIsRewritten() throws {
         var next = sample

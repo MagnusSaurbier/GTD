@@ -1,6 +1,7 @@
 import Foundation
 import GTDAppCore
 import GTDFixtures
+import GTDMarkdown
 import GTDModel
 import GTDServices
 import GTDVault
@@ -98,6 +99,35 @@ struct QueuedWriteTests {
         _ = try await rig.backend.perform(.setStatus(other.id, .someday, waiting: nil))
         await rig.backend.flush()
         #expect(try rig.rescan().action(other.id)?.status == .someday)
+    }
+
+    /// N3 — the stale-write guard under the production policy: the file changed after the
+    /// command was reduced (Obsidian, a sync), so when its turn comes it is refused, the snapshot
+    /// goes back to what the file says — the other writer's text included — and the refusal names
+    /// the path on `writeFailures()`.
+    @Test func aWriteBuiltOnAStaleSnapshotIsRefusedAndTheOtherEditKept() async throws {
+        let rig = try await Rig()
+        defer { rig.cleanUp() }
+        let action = try await rig.nextAction()
+        var failures = rig.backend.writeFailures().makeAsyncIterator()
+
+        _ = try await rig.backend.perform(.setStatus(action.id, .someday, waiting: nil))
+        // Behind the shut gate, "Obsidian" appends to the note the queued write would rewrite.
+        let elsewhere = try #require(try rig.fileSystem.readText(action.id.path))
+            + "\nA line typed elsewhere.\n"
+        try rig.fileSystem.writeText(elsewhere, to: action.id.path)
+
+        await rig.store.open()
+        let failure = try #require(await failures.next())
+        await rig.backend.flush()
+
+        #expect(failure.reason as? ServiceError == .staleWrite(path: action.id.path))
+        #expect(failure.description.contains("Reopen the note"), "\(failure)")
+        #expect(try rig.fileSystem.readText(action.id.path) == elsewhere, "not a byte written")
+        let shown = try #require(await rig.backend.currentSnapshot().action(action.id))
+        #expect(shown.status == action.status, "the change was taken back off the screen")
+        #expect(NoteCodec.encode(shown) == elsewhere, "and the note shows the other writer's text")
+        #expect(await rig.store.commits == 0)
     }
 
     @Test func undoWaitsForTheQueueAndThenRestoresTheFile() async throws {
