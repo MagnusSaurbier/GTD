@@ -13,8 +13,8 @@ so it never compiles on Linux and none of it has ever been built.
 | `AppRouter.swift` | Where the app is looking: iPhone tab + pushed detail, the one `OverviewNavigation` the Mac window and the menu bar share, and the flows the shell presents. |
 | `AppRoute.swift` | One parser for every deep link: `gtd://routine/<id>`, `gtd://action/<path>`, `gtd://waiting` (`NotificationRoute`) and `gtd://inbox` (`InboxDeepLink`). Resolves a routine by title when the path was built from another layout. |
 | `RootView.swift` | Phase switch (loading / onboarding / shell), global flows (`WhatsNextSheet`, quick capture, routine runner, error alert) and the lifecycle wiring. |
-| `PhoneShell.swift` | iOS only: the four tabs (Inbox · Next · Lists · Routines, opening on Next), the processing cover, the settings sheet, the shell's undo toast. |
-| `MacShell.swift` | macOS only: `ReviewResumeBanner` + `OverviewView(navigation:)`, and the `Settings` scene's content. |
+| `PhoneShell.swift` | iOS only: the four tabs (Inbox · Next · Lists · Routines, opening on Next), the processing cover, the settings sheet, the shell's undo toast, the `VersionStamp` bottom right. |
+| `MacShell.swift` | macOS only: `ReviewResumeBanner` + `OverviewView(navigation:)` with the `VersionStamp` bottom right, and the `Settings` scene's content. |
 | `NotificationService.swift` | Plan + sync on every snapshot change (2 s debounce), on foreground and in background refresh; permission after onboarding; `UNUserNotificationCenterDelegate` for taps. |
 | `BackgroundRefresh.swift` | `BGAppRefreshTaskRequest` scheduling, and the main-actor registry the `@Sendable` background-task closure needs. |
 | `AppSupport.swift` | Launch options, the device id (routine-log file names, N3), shell strings, `AppError`. |
