@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-# Enforces docs/TICKETS.md — the parts a script can see:
+# Enforces docs/TICKETS.md — tickets are GitHub issues — the parts a script can see:
 #
 #   scripts/check-tickets.sh            gate mode: exits 1 on any problem (called by check.sh)
 #   scripts/check-tickets.sh --status   board mode: prints the board and problems, always exits 0
 #                                       (run at session start by .claude/settings.json)
 #
-# Checks:
-#  1. docs/open_tickets/ and docs/in_progress/ hold only README.md and YYYY-MM-DD-<slug>.md files.
-#  2. Every ticket carries the template's header fields and the Goal/State/Remaining/Handover/
-#     Outcome headings, and its Status agrees with the folder it is in.
-#  3. An in-progress ticket names a branch. On a branch other than main, exactly one
-#     in-progress ticket names the current branch — no code without a ticket.
-#  4. An in-progress ticket is not stale: no commit on its branch (since main) that touches code
-#     is newer than the last commit that touched the ticket. Docs-only commits do not count.
-#  5. An in-progress ticket that is already in main's tree (its branch was merged) must be moved
-#     to docs/history/ (rule 4) — reported so that whoever sees it does the move.
+# Checks (all against the open issues of the GitHub repo `origin` points at):
+#  1. Every issue labelled "in progress" names a branch and has the State/Remaining/Handover
+#     sections of the template.
+#  2. On a branch other than main that has code commits (anything outside docs/*.md/.claude/
+#     .github) since main, exactly one "in progress" issue names that branch — no code without
+#     a ticket.
+#  3. An "in progress" issue is not stale: no code commit on its branch is newer than the
+#     issue's last edit (GitHub's updatedAt).
+#  4. An "in progress" issue whose branch is already merged into main must be closed with its
+#     Outcome filled in — reported so that whoever sees it does it.
+# Without gh, without auth or without network the script prints SKIPPED and exits 0: the rule
+# still applies, it just cannot be checked here.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,100 +25,83 @@ cd "$REPO_ROOT"
 STATUS_MODE=0
 [ "${1:-}" = "--status" ] && STATUS_MODE=1
 
+if ! command -v gh >/dev/null 2>&1; then
+    echo "SKIPPED: gh not installed — cannot check the issue board (docs/TICKETS.md still applies)"; exit 0
+fi
+if ! issues_json="$(gh issue list --state open --limit 200 --json number,title,labels,body,updatedAt,url 2>&1)"; then
+    echo "SKIPPED: gh could not list issues (${issues_json%%$'\n'*}) — docs/TICKETS.md still applies"; exit 0
+fi
+
+current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
+code_excludes=(-- . ':(exclude)docs' ':(exclude)*.md' ':(exclude).claude' ':(exclude).github')
+in_git=1; git rev-parse --verify main >/dev/null 2>&1 || in_git=0
+
+# One line per issue: number|state|branch|updated_epoch|url|title|shape_problems
+rows="$(python3 - "$issues_json" <<'PY'
+import json, re, sys, datetime
+issues = json.loads(sys.argv[1])
+for i in sorted(issues, key=lambda i: i["number"]):
+    labels = {l["name"] for l in i["labels"]}
+    state = "in progress" if "in progress" in labels else "open"
+    body = i["body"] or ""
+    m = re.search(r"\*\*Branch:\*\*\s*`?([^`·\n]*)`?", body)
+    branch = (m.group(1).strip() if m else "").strip("`").strip()
+    if branch in ("", "—", "-"): branch = ""
+    problems = []
+    if state == "in progress":
+        for h in ("State", "Remaining", "Handover"):
+            if not re.search(r"^## %s\b" % h, body, re.M): problems.append("missing '## %s'" % h)
+        if not branch: problems.append("**Branch:** is empty")
+    updated = int(datetime.datetime.fromisoformat(i["updatedAt"].replace("Z", "+00:00")).timestamp())
+    print("|".join([str(i["number"]), state, branch, str(updated), i["url"], i["title"].replace("|", "/"), "; ".join(problems)]))
+PY
+)"
+
 problems=0
 problem() { echo "  PROBLEM: $*"; problems=$((problems + 1)); }
 
-field() { # field <file> <name>  → the value after **<name>:** up to the next ·
-    sed -n "s/.*\*\*$2:\*\* *\([^·]*\).*/\1/p" "$1" | head -1 | sed 's/[[:space:]]*$//'
-}
-
-check_ticket_shape() { # <file> <expected status>
-    local f="$1" expected="$2" name status
-    name="$(basename "$f")"
-    case "$name" in
-        [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*.md) ;;
-        *) problem "$f: ticket files are named YYYY-MM-DD-<slug>.md" ;;
-    esac
-    head -1 "$f" | grep -q '^# ' || problem "$f: first line must be the '# Title'"
-    for key in Status Branch PR Opened "Last updated" Agent; do
-        grep -q "\*\*$key:\*\*" "$f" || problem "$f: header is missing **$key:**"
-    done
-    for h in Goal State Remaining Handover Outcome; do
-        grep -q "^## $h" "$f" || problem "$f: missing '## $h' section"
-    done
-    status="$(field "$f" Status)"
-    case "$expected" in
-        open)        [ "$status" = "open" ] || problem "$f: in open_tickets/ but Status is '$status'" ;;
-        in-progress) [ "$status" = "in progress" ] || problem "$f: in in_progress/ but Status is '$status'" ;;
-    esac
-    field "$f" "Last updated" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
-        || problem "$f: **Last updated:** must be a YYYY-MM-DD date"
-}
-
-for dir in docs/open_tickets docs/in_progress docs/history; do
-    [ -d "$dir" ] || problem "$dir/ is missing"
-done
-
-echo "open tickets"
-found=0
-for f in docs/open_tickets/*.md; do
-    [ -e "$f" ] || continue
-    [ "$(basename "$f")" = "README.md" ] && continue
-    found=1
-    check_ticket_shape "$f" open
-    echo "  $(basename "$f") — $(head -1 "$f" | sed 's/^# //')"
-done
-[ "$found" -eq 0 ] && echo "  (none)"
-
-current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
-in_git=1; git rev-parse --verify main >/dev/null 2>&1 || in_git=0
-
 echo "in progress"
-found=0
-tickets_for_current=0
-for f in docs/in_progress/*.md; do
-    [ -e "$f" ] || continue
-    [ "$(basename "$f")" = "README.md" ] && continue
+found=0; tickets_for_current=0
+while IFS='|' read -r number state branch updated url title shape; do
+    [ "$state" = "in progress" ] || continue
     found=1
-    check_ticket_shape "$f" in-progress
-    branch="$(field "$f" Branch | tr -d '\`')"
-    echo "  $(basename "$f") — $(head -1 "$f" | sed 's/^# //')"
-    echo "      branch: ${branch:-—} · updated: $(field "$f" "Last updated") · pr: $(field "$f" PR)"
-    if [ -z "$branch" ] || [ "$branch" = "—" ]; then
-        problem "$f: in progress but **Branch:** is empty"
-        continue
-    fi
+    echo "  #$number — $title"
+    echo "      branch: ${branch:-—} · $url"
+    [ -n "$shape" ] && problem "#$number: $shape"
+    [ -n "$branch" ] || continue
     [ "$branch" = "$current_branch" ] && tickets_for_current=$((tickets_for_current + 1))
     [ "$in_git" -eq 1 ] || continue
-    # 5. merged already? The ticket only reaches main's tree through the branch's merge (rule 2
-    #    commits the move on the branch), so "ticket on main + still in in_progress" = move it.
-    if [ "$branch" != "main" ] && git cat-file -e "main:$f" 2>/dev/null; then
-        problem "$f: its branch '$branch' is merged into main — git mv the ticket to docs/history/, fill in ## Outcome, commit on main with [skip ci]"
-        continue
-    fi
     if git rev-parse --verify --quiet "$branch" >/dev/null; then
-        # 4. stale? last code commit on the branch vs last commit touching the ticket
-        last_code="$(git log -1 --format=%ct "main..$branch" -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude).claude' ':(exclude).github' 2>/dev/null || true)"
-        last_ticket="$(git log -1 --format=%ct "$branch" -- "$f" 2>/dev/null || true)"
-        if [ -n "$last_code" ] && [ -n "$last_ticket" ] && [ "$last_code" -gt "$last_ticket" ]; then
-            problem "$f: stale — '$branch' has code commits newer than the ticket's last edit ($(git log -1 --format=%h "main..$branch" -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude).claude' ':(exclude).github')). Update ## State / ## Remaining and commit."
-        elif [ -n "$last_code" ] && [ -z "$last_ticket" ]; then
-            problem "$f: the ticket is not committed on '$branch' yet"
+        if [ "$branch" != "main" ] && git merge-base --is-ancestor "$branch" main 2>/dev/null \
+           && [ "$(git rev-parse "$branch")" != "$(git rev-parse main)" ]; then
+            problem "#$number: branch '$branch' is merged into main — fill in ## Outcome and close the issue (docs/TICKETS.md rule 4)"
+            continue
+        fi
+        last_code="$(git log -1 --format=%ct "main..$branch" "${code_excludes[@]}" 2>/dev/null || true)"
+        if [ -n "$last_code" ] && [ "$last_code" -gt "$updated" ]; then
+            problem "#$number: stale — '$branch' has code commits newer than the issue's last edit ($(git log -1 --format='%h %cs' "main..$branch" "${code_excludes[@]}")). Update ## State / ## Remaining: gh issue edit $number --body-file …"
         fi
     elif [ "$branch" != "$current_branch" ]; then
-        echo "      (branch '$branch' not present in this checkout — fetch it or check the PR)"
+        echo "      (branch '$branch' not in this checkout)"
     fi
-done
+done <<<"$rows"
 [ "$found" -eq 0 ] && echo "  (none)"
 
-# 3. code on a branch needs a ticket
+echo "open, not started"
+found=0
+while IFS='|' read -r number state branch updated url title shape; do
+    [ "$state" = "open" ] || continue
+    found=1; echo "  #$number — $title"
+done <<<"$rows"
+[ "$found" -eq 0 ] && echo "  (none)"
+
 if [ "$in_git" -eq 1 ] && [ "$current_branch" != "main" ] && [ "$current_branch" != "HEAD" ]; then
-    has_code="$(git log -1 --format=%h "main..$current_branch" -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude).claude' ':(exclude).github' 2>/dev/null || true)"
+    has_code="$(git log -1 --format=%h "main..$current_branch" "${code_excludes[@]}" 2>/dev/null || true)"
     if [ -n "$has_code" ] || [ "$STATUS_MODE" -eq 0 ]; then
         if [ "$tickets_for_current" -eq 0 ]; then
-            problem "no in-progress ticket names the current branch '$current_branch' — create one in docs/open_tickets/, move it to docs/in_progress/ and set **Branch:** (docs/TICKETS.md rules 1–2)"
+            problem "no 'in progress' issue names the current branch '$current_branch' — open one (or label the existing one) and set **Branch:** (docs/TICKETS.md rules 1–2)"
         elif [ "$tickets_for_current" -gt 1 ]; then
-            problem "$tickets_for_current in-progress tickets name '$current_branch'; one ticket per branch"
+            problem "$tickets_for_current 'in progress' issues name '$current_branch'; one issue per branch"
         fi
     fi
 fi
