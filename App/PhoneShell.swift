@@ -13,8 +13,8 @@ import FeatureLists
 /// The iPhone (N5, E2, STYLEGUIDE §4.2): four tabs, in order — **Inbox** (count +
 /// `Process inbox`), **Next** (on-the-go; the tab the app opens on, E1 — `AppRouter.tab` starts
 /// at `.next`), **Lists** (L5: lists with counts → items → item editor), **Routines**. No full
-/// task overview, no settings tab: settings live behind the gear on Next, and inbox processing
-/// and routines run full-screen.
+/// task overview, no settings tab: the settings gear and quick capture sit on every tab's root
+/// screen (`tabToolbar`), and inbox processing and routines run full-screen.
 struct PhoneShell: View {
     let composition: AppComposition
     @Bindable var router: AppRouter
@@ -83,17 +83,8 @@ struct PhoneShell: View {
         NavigationStack(path: $router.nextPath) {
             NextView(
                 mode: .onTheGo,
-                onOpen: { router.nextPath.append($0) },
-                onQuickCapture: { router.isCapturePresented = true })
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            router.isSettingsPresented = true
-                        } label: {
-                            Label(AppCopy.settings, systemImage: Symbols.settings)
-                        }
-                    }
-                }
+                onOpen: { router.nextPath.append($0) })
+                .tabToolbar(router)
                 .navigationDestination(for: NoteID.self) { id in
                     // The editable, wrapping title in the detail *is* the title (P5); a second,
                     // truncated copy in the bar only repeats it. A rename moves the note (A1)
@@ -116,6 +107,7 @@ struct PhoneShell: View {
     private var listsTab: some View {
         NavigationStack(path: $router.listsPath) {
             ListsHomeView()
+                .tabToolbar(router)
                 .navigationDestination(for: ListsRoute.self) { route in
                     switch route {
                     case let .list(name):
@@ -136,16 +128,7 @@ struct PhoneShell: View {
         NavigationStack {
             InboxTabContent(onProcess: { router.isProcessingInbox = true })
                 .pinnedScreenTitle(Copy.inbox)
-                // P17 — captures land here, so this is where the capture button belongs too.
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            router.isCapturePresented = true
-                        } label: {
-                            Label(Copy.quickCapture, systemImage: Symbols.capture)
-                        }
-                    }
-                }
+                .tabToolbar(router)
         }
     }
 
@@ -154,6 +137,32 @@ struct PhoneShell: View {
     private var routinesTab: some View {
         NavigationStack {
             RoutinesHomeView()
+                .tabToolbar(router)
+        }
+    }
+}
+
+private extension View {
+    /// Every tab's root screen carries the same two buttons: the gear that opens settings
+    /// (STYLEGUIDE §4.2: no settings tab) top leading, and quick capture (P17) top trailing.
+    /// Pushed screens bring their own toolbars and don't get them.
+    func tabToolbar(_ router: AppRouter) -> some View {
+        toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    router.isSettingsPresented = true
+                } label: {
+                    Label(AppCopy.settings, systemImage: Symbols.settings)
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    router.isCapturePresented = true
+                } label: {
+                    Label(Copy.quickCapture, systemImage: Symbols.capture)
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
         }
     }
 }
