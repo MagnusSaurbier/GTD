@@ -41,7 +41,9 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   `.vaultAndFile` elsewhere (the path an iOS bookmark resolves to is not known to be the one
   Obsidian's sandbox uses). Values are escaped down to RFC 3986 unreserved characters, so `&`,
   `#`, `+`, `=` in a file name survive. `nil` without a vault root — the views then show no link.
-  Here because three feature targets need it and may not depend on each other.
+  `filePath(for:vaultRoot:)` / `filePath(forVaultPath:vaultRoot:)` is the same join unescaped, for
+  the detail view's "Copy path" (a `/do <path>` prompt takes it). Here because three feature
+  targets need it and may not depend on each other.
 
 ## Invariants
 

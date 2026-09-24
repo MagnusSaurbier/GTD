@@ -71,8 +71,9 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
   other features' lists ignore it until they read that environment value.
 - `OverviewNavigation.isCaptureRequested` is a request to the app shell: capture writes through
   `GTDVault`, which feature targets must not import.
-- "Open in Obsidian" is `GTDAppCore.ObsidianLink` fed by `\.vaultRootPath` (`DesignSystem`, set
-  by the app shell); without a root (fixtures) the button is not shown.
+- "Open in Obsidian" and "Copy path" (the note's absolute file path, via
+  `DesignSystem.Clipboard`) are `GTDAppCore.ObsidianLink` fed by `\.vaultRootPath`
+  (`DesignSystem`, set by the app shell); without a root (fixtures) neither button is shown.
 - Both sheets this view presents bring their own navigation container: `InboxProcessingView`
   needs one for its toolbar, and `VaultIssuesView` needs a `Done` button or the Mac sheet cannot
   be closed at all.

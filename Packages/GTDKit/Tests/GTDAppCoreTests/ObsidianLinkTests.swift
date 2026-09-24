@@ -50,6 +50,25 @@ struct ObsidianLinkTests {
         #expect(items.first?.value == "\(root)/Actions/A & B.md")
     }
 
+    // MARK: file path (Copy path)
+
+    @Test func filePathJoinsRootAndRelativePathUnescaped() {
+        #expect(ObsidianLink.filePath(forVaultPath: "Actions/A & B #3.md", vaultRoot: root)
+            == "\(root)/Actions/A & B #3.md")
+        #expect(ObsidianLink.filePath(forVaultPath: "/Note.md", vaultRoot: "/Users/me/Vault/")
+            == "/Users/me/Vault/Note.md")
+        let id = NoteID(path: "Actions/Write DAAD motivation letter.md")
+        #expect(ObsidianLink.filePath(for: id, vaultRoot: "/Users/me/Vault")
+            == "/Users/me/Vault/Actions/Write DAAD motivation letter.md")
+    }
+
+    @Test func thereIsNoFilePathWithoutAVaultRoot() {
+        #expect(ObsidianLink.filePath(forVaultPath: "Actions/A.md", vaultRoot: nil) == nil)
+        #expect(ObsidianLink.filePath(forVaultPath: "Actions/A.md", vaultRoot: "") == nil)
+        #expect(ObsidianLink.filePath(forVaultPath: "Actions/A.md", vaultRoot: "/") == nil)
+        #expect(ObsidianLink.filePath(forVaultPath: "", vaultRoot: root) == nil)
+    }
+
     // MARK: no link
 
     @Test func thereIsNoLinkWithoutAVaultRoot() {
