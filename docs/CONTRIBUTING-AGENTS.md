@@ -7,7 +7,7 @@ touch first — they are short and they carry the traps.
 Four things are true of every change:
 
 - **It has a GitHub issue before it has a branch.** `docs/TICKETS.md`: open the issue, label it
-  `in progress`, set **Branch:** and claim the next free **Version:** (also in `project.yml`)
+  `in progress`, set **Branch:** and claim the next free **Version:** (also in `App/Version.xcconfig`)
   when you start, keep **State** and **Remaining** current
   before every push, write **Outcome** and `Closes #N` in the PR. The issue is how the next
   agent continues if this session dies; `scripts/check-tickets.sh` fails when it is missing or

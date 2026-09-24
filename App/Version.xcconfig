@@ -1,0 +1,8 @@
+// The app's version — the one number every build carries (docs/TICKETS.md rule 2: each
+// `in progress` issue claims the next free 0.N and sets it here in its first code commit).
+//
+// It lives in this tracked xcconfig rather than in project.yml on purpose: xcodegen bakes
+// project.yml's settings into the gitignored GTD.xcodeproj at generation time, so a merge that
+// moved the version changed nothing Xcode read until someone re-ran xcodegen (0.15 built as 0.8,
+// 2026-09-25). Xcode reads an xcconfig at build time, so a pull is enough.
+MARKETING_VERSION = 0.18
