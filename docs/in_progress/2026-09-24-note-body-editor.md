@@ -1,6 +1,6 @@
 # The action detail shows the whole note body as one live-preview markdown editor
 
-**Status:** in progress · **Branch:** `feature/note-body-editor` · **PR:** — · **Opened:** 2026-09-24 · **Last updated:** 2026-09-24 · **Agent:** local
+**Status:** in progress · **Branch:** `feature/note-body-editor` · **PR:** https://github.com/MagnusSaurbier/GTD/pull/13 · **Opened:** 2026-09-24 · **Last updated:** 2026-09-24 · **Agent:** local
 
 ## Goal
 
@@ -37,7 +37,7 @@ Requirement rows touched: A1 (`docs/TRACEABILITY.md`), STYLEGUIDE §4.4 detail c
 
 ## Remaining
 
-1. `scripts/check.sh` tail green, push, open the PR (base `main`; the branch also carries the
+1. PR #13 is open (base `main`; the branch also carries the
    unmerged `feature/list-editing-shortcuts` + `feature/markdown-live-preview` commits).
 2. On screen (MANUAL_TEST §3.7): Mac detail, typing under `# What?`, the first edit writing the
    added heading, iPhone.
