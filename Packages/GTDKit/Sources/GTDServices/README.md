@@ -7,7 +7,7 @@ Foundation-only — every file here compiles and is tested on Linux.
 
 - `VaultBackend` (actor, conforms to `GTDAppCore.GTDBackend`) — `init(store:deviceID:)`, plus a
   full initialiser taking `journal`, `stateDirectory` and `env` for tests. `start()` / `stop()`
-  bracket its lifetime; `perform`, `undo`, `undoLabel`, `snapshots`, `currentSnapshot` are the
+  bracket its lifetime; `perform`, `undo`, `undoLabel`, `resolve`, `snapshots`, `currentSnapshot` are the
   protocol, plus `writeFailures()` and `flush()`; `writes: WritePolicy` (`.queued` by default,
   `.awaited` for tests that read files straight after a command). `lastHousekeepingError` says why the last automatic archive did not run.
 - `SnapshotDiff.ops(from:to:extraOps:filedNotes:timeZone:)` — two snapshots, the reducer's
@@ -45,7 +45,12 @@ Foundation-only — every file here compiles and is tested on Linux.
    like any refused write (below). Staleness is about the files, never the snapshot's age: offline
    edits to untouched notes commit. Exempt: the per-device routine log, `.moveFolder`, move
    destinations. `perform` pulls the store's newest snapshot before reducing, so a change the store
-   has indexed already is reduced on, not refused. `SnapshotDiff.expectedContents` builds the list.
+   has indexed already is reduced on, not refused. `SnapshotDiff.expectedContents` builds the list
+   (path → text, so a refusal can show it). Under the queued policy the `WriteFailure` carries a
+   `WriteConflict` — mine, theirs (found under a new name by identical content when the vault
+   renamed the note), base — and `resolve(_:path:text:)` writes the person's merged text as-is,
+   moving the vault's file first when the title changed, journaled as `Merged “…”`, published with
+   the rename (ARCHITECTURE §6, 2026-09-25). The app proposes; it never merges on its own.
    **Undo is refused, never forced.** Each entry stores a content hash per file it would touch;
    anything that moved in the meantime (sync, Obsidian, another device) turns the undo into
    `ServiceError.undoStale`. For a `.moveFolder` that means the files **inside** the folder:

@@ -7,14 +7,23 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
 
 - `GTDBackend` — `snapshots() -> AsyncStream<SnapshotUpdate>`, `currentUpdate()`,
   `perform(_:) -> [AppPrompt]`, `undo()`, `undoLabel()`, `writeFailures()` (defaults to a
-  stream that never yields — for a backend whose `perform` returns only once stored); `currentSnapshot()` is an extension
-  over `currentUpdate()`.
+  stream that never yields — for a backend whose `perform` returns only once stored),
+  `resolve(_:path:text:)` (writes the conflict sheet's merged note as-is; defaults to throwing
+  `ConflictError.unsupported`); `currentSnapshot()` is an extension over `currentUpdate()`.
+- `WriteConflict` — a refused stale write for the conflict sheet (N3, ARCHITECTURE §6
+  2026-09-25): `basePath`/`base`, `path`/`mine` (this device), `theirsPath`/`theirs` (the vault
+  now; a rename elsewhere is found by identical content), `theirsRenamed`/`mineRenamed`, and
+  `suggestion: MergeSuggestion` (path + text + the number of hunks both sides changed).
+  `ThreeWayMerge.merge(base:mine:theirs:)` is the line-based diff3 behind it: one side's
+  change is taken, both sides' different change takes *theirs* and is counted. Rides on
+  `WriteFailure.conflict`.
 - `SnapshotUpdate` — one published state: the `VaultSnapshot` and the `RenameMap` of the command
   that produced it.
 - `NavigationRemap` — `path(_:renames:exists:)` / `selection(_:renames:exists:)`: follow a
   rename, then drop what is gone. Both shells navigate by it.
 - `AppModel` — `@MainActor @Observable`. `snapshot`, `renames`/`consumeRenames()`, `undoLabel`,
-  `prompt`, `lastError`, `writeFailure`,
+  `prompt`, `lastError`, `writeFailure`, `conflict` (a refusal that carries one lands here, not
+  in `writeFailure`) with `resolveConflict(path:text:) async -> Bool` / `discardConflict()`,
   `today: () -> Day`; `send(_:) async throws`, `send(deriving:) async throws`,
   `perform(_:) async -> Bool`, `report(_:) async -> Bool`, `undo() async`, `start()`/`stop()`.
   Views get it with `@Environment(AppModel.self)`.

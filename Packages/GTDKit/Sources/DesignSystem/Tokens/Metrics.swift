@@ -57,6 +57,14 @@ public enum SheetMetrics {
     public static let cardMaxHeight: CGFloat = 520
     /// Shortest the card is ever capped to, so a small window still shows a few lines.
     public static let cardMinHeight: CGFloat = 240
+    /// The conflict sheet shows two notes side by side and a third to edit, so it opens wider
+    /// and taller than a form sheet (macOS only; iOS sizes sheets itself).
+    public static let wideMinWidth: CGFloat = 720
+    public static let wideIdealWidth: CGFloat = 880
+    public static let wideIdealHeight: CGFloat = 680
+    public static let versionPanelMinHeight: CGFloat = 120
+    public static let versionPanelMaxHeight: CGFloat = 220
+    public static let mergedTextMinHeight: CGFloat = 160
     /// What the card's Mac sheet needs besides the card: counter, action bar, legend, toast
     /// slot, the `Undo`/`Close` row and the spacing between them.
     public static let cardSheetChrome: CGFloat = 240

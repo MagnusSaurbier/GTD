@@ -121,6 +121,26 @@ public enum Copy {
         "Still missing: " + fields.map(fieldName).joined(separator: ", ")
     }
 
+    // The stale-write conflict sheet (N3, ARCHITECTURE §6 2026-09-25).
+    public static let conflictTitle = "This note changed elsewhere"
+    /// `“Edit ‘Call the bank’” could not be saved: …`
+    public static func conflictBody(label: String) -> String {
+        "\u{201C}\(label)\u{201D} could not be saved because the note changed in the vault first. "
+            + "Edit the merged version below; Done writes it over both."
+    }
+    public static let conflictMine = "On this device"
+    public static let conflictTheirs = "In the vault now"
+    public static let conflictMerged = "Merged"
+    public static let conflictTrashedHere = "Trashed on this device"
+    public static let conflictGoneFromVault = "No longer in the vault"
+    public static let keepVaultVersion = "Keep the vault's version"
+    public static let titlePlaceholder = "Title"
+    /// `2 passages changed on both sides; the vault's version was kept there.`
+    public static func conflictHunks(_ count: Int) -> String {
+        let passages = count == 1 ? "1 passage" : "\(count) passages"
+        return "\(passages) changed on both sides; the vault's version was kept there."
+    }
+
     public static let capSheetTitle = "Next is full"
     public static let capSheetBody = "Demote one to make room."
     public static let sendToSomedayInstead = "Send to Someday instead"
