@@ -355,6 +355,7 @@ private struct MakeActionCardBody: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(label, isMissing: isMissing)
             NoteEditor(text: text, prompt: placeholder)
+                .onAdvance { focus = InboxCardView.next(after: field) }
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: field)
                 .accessibilityLabel(label)
@@ -377,6 +378,7 @@ private struct MakeActionCardBody: View {
                 .foregroundStyle(Color.textSecondary)
             }
             NoteEditor(text: $model.draft.what, prompt: Copy.whatPlaceholder)
+                .onAdvance { focus = InboxCardView.next(after: .what) }
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: .what)
                 .accessibilityLabel(Copy.what)

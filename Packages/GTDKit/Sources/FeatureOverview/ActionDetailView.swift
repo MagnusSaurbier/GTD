@@ -166,6 +166,7 @@ private struct ActionDetailEditor: View {
                 NoteEditor(
                     text: Binding(get: { editor.body }, set: { editor.setBody($0) }),
                     minLines: 6)
+                    .onAdvance { focus = nil }        // ⌘↩ past the last input line: keyboard away
                     .fixedSize(horizontal: false, vertical: true)
                     .focused($focus, equals: .body)
                     .id(TextEntry.body)

@@ -172,12 +172,19 @@ struct InboxCardView: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(label, isMissing: isMissing)
             NoteEditor(text: text, prompt: placeholder)
+                .onAdvance { focus = Self.next(after: field) }
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: field)
                 .accessibilityLabel(label)
         }
         .id(field)
+    }
+
+    /// `⌘↩` past a field's last input line (STYLEGUIDE §4.4): `Why?` → `What?`; after `What?`
+    /// (and every other body field) the keyboard goes back to the card, so the keys act on it.
+    static func next(after field: CardField) -> CardField? {
+        field == .why ? .what : nil
     }
 
     /// A placeholder must never read as an entered value (no lying defaults): it is tertiary,
@@ -203,6 +210,7 @@ struct InboxCardView: View {
                 .foregroundStyle(Color.textSecondary)
             }
             NoteEditor(text: $session.draft.what, prompt: Copy.whatPlaceholder)
+                .onAdvance { focus = Self.next(after: .what) }
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: .what)

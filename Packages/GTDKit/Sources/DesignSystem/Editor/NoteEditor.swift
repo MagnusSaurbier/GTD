@@ -326,6 +326,7 @@ public struct NoteEditor: NSViewRepresentable {
     var font: NoteEditorFont
     var tone: NoteEditorTone
     var minLines: Int
+    var onAdvance: (() -> Void)?
 
     public init(text: Binding<String>, prompt: String = "", font: NoteEditorFont = .body,
                 tone: NoteEditorTone = .ink, minLines: Int = 1) {
@@ -334,6 +335,16 @@ public struct NoteEditor: NSViewRepresentable {
         self.font = font
         self.tone = tone
         self.minLines = minLines
+    }
+
+    /// What `⌘↩` does once the field has no input line left (STYLEGUIDE §4.4): the owner moves
+    /// its SwiftUI focus on — `focus = .what`, or `nil` to give the keys back to the card. Without
+    /// it the field asks AppKit for the next key view, which SwiftUI's hosting does not reliably
+    /// answer (the inbox card's `Why?` never reached `What?` that way, 2026-09-25).
+    public func onAdvance(_ action: @escaping () -> Void) -> NoteEditor {
+        var copy = self
+        copy.onAdvance = action
+        return copy
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
@@ -389,6 +400,7 @@ public struct NoteEditor: NSViewRepresentable {
         view.styler = NoteStyler(font: font, tone: tone)
         view.placeholder = prompt
         view.minLines = minLines
+        view.onAdvance = onAdvance
     }
 
     @MainActor
@@ -416,6 +428,8 @@ public final class NoteTextView: NSTextView {
     var storage: NSTextStorage?
     var placeholder = "" { didSet { if placeholder != oldValue { needsDisplay = true } } }
     var minLines = 1
+    /// `⌘↩` with no input line left (see `NoteEditor.onAdvance`).
+    var onAdvance: (() -> Void)?
     private var isRestyling = false
     private var lastStyle: (text: String, selection: NSRange?)?
 
@@ -485,6 +499,8 @@ public final class NoteTextView: NSTextView {
         if let target = ListEditing.nextInputLine(text: string, caret: selectedRange().location) {
             setSelectedRange(NSRange(location: target, length: 0))
             scrollRangeToVisible(selectedRange())
+        } else if let onAdvance {
+            onAdvance()
         } else {
             window?.selectNextKeyView(self)
         }
@@ -588,6 +604,7 @@ public struct NoteEditor: UIViewRepresentable {
     var font: NoteEditorFont
     var tone: NoteEditorTone
     var minLines: Int
+    var onAdvance: (() -> Void)?
 
     public init(text: Binding<String>, prompt: String = "", font: NoteEditorFont = .body,
                 tone: NoteEditorTone = .ink, minLines: Int = 1) {
@@ -596,6 +613,16 @@ public struct NoteEditor: UIViewRepresentable {
         self.font = font
         self.tone = tone
         self.minLines = minLines
+    }
+
+    /// What `⌘↩` does once the field has no input line left (STYLEGUIDE §4.4): the owner moves
+    /// its SwiftUI focus on — `focus = .what`, or `nil` to give the keys back to the card. Without
+    /// it the field asks AppKit for the next key view, which SwiftUI's hosting does not reliably
+    /// answer (the inbox card's `Why?` never reached `What?` that way, 2026-09-25).
+    public func onAdvance(_ action: @escaping () -> Void) -> NoteEditor {
+        var copy = self
+        copy.onAdvance = action
+        return copy
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
@@ -647,6 +674,7 @@ public struct NoteEditor: UIViewRepresentable {
     private func configure(_ view: NoteTextView) {
         view.styler = NoteStyler(font: font, tone: tone)
         view.placeholder = prompt
+        view.onAdvance = onAdvance
     }
 
     @MainActor
@@ -695,6 +723,8 @@ public final class NoteTextView: UITextView {
     /// Keeps the TextKit stack alive (see `NoteText.makeStack`).
     var storage: NSTextStorage?
     var placeholder = "" { didSet { if placeholder != oldValue { setNeedsDisplay() } } }
+    /// `⌘↩` with no input line left (see `NoteEditor.onAdvance`).
+    var onAdvance: (() -> Void)?
     private var isRestyling = false
     private var lastStyle: (text: String, selection: NSRange?)?
 
@@ -731,7 +761,7 @@ public final class NoteTextView: UITextView {
 
     public override var keyCommands: [UIKeyCommand]? {
         // Hardware keyboard: Tab / ⇧Tab indent and outdent, ⌘↩ jumps to the next input line
-        // (there is no key-view loop to hand focus on to, so with none left it does nothing).
+        // or, with none left, calls `onAdvance` (there is no key-view loop to fall back on).
         let tab = UIKeyCommand(title: "", action: #selector(listCommand(_:)), input: "\t",
                                modifierFlags: [], propertyList: ListEditCommand.indent.rawValue)
         let backtab = UIKeyCommand(title: "", action: #selector(listCommand(_:)), input: "\t",
@@ -753,7 +783,10 @@ public final class NoteTextView: UITextView {
     }
 
     @objc private func nextInputLine(_ sender: UIKeyCommand) {
-        guard let target = ListEditing.nextInputLine(text: text, caret: selectedRange.location) else { return }
+        guard let target = ListEditing.nextInputLine(text: text, caret: selectedRange.location) else {
+            onAdvance?()
+            return
+        }
         selectedRange = NSRange(location: target, length: 0)
         scrollRangeToVisible(selectedRange)
     }
