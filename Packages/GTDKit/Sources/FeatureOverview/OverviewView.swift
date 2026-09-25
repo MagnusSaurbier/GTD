@@ -90,6 +90,9 @@ public struct OverviewView: View {
                         }
                     }
             }
+            // A `List` has no intrinsic height: without a frame the content-sized Mac sheet
+            // collapses it to nothing and shows only the title and `Done` (#42).
+            .scrollingSheetFrame()
         }
         .onChange(of: model.snapshot) { _, snapshot in
             nav.apply(snapshot: snapshot, renames: model.renames)
