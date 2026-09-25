@@ -859,13 +859,12 @@ public struct VaultIssuesView: View {
         .navigationTitle("Vault issues")
     }
 
-    /// Best effort: this target only has the vault-relative path (no root URL —
-    /// `FeatureSettings` intentionally does not import `GTDVault`, ARCHITECTURE §2). A future
-    /// contract addition could hand this view the resolved vault root if that turns out not to
-    /// be enough for these two actions. Unverified — see the module README.
+    /// `issue.path` is vault-relative; Finder needs the absolute path, resolved against the root
+    /// the shell hands down (`\.vaultRootPath`).
     private func reveal(_ path: String) {
         #if canImport(AppKit)
-        NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+        guard let file = ObsidianLink.filePath(forVaultPath: path, vaultRoot: vaultRootPath) else { return }
+        NSWorkspace.shared.selectFile(file, inFileViewerRootedAtPath: "")
         #endif
         // No Files-app equivalent on iOS without a resolvable URL.
     }
