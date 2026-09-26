@@ -206,7 +206,10 @@ public struct ProjectDetailView: View {
     }
 
     public var body: some View {
-        let detail = detailModel ?? ProjectDetailModel(project: projectID, model: model)
+        // The Mac detail column keeps this view (and its state) when the sidebar hands it
+        // another project, so a cached model bound to a different project is dropped.
+        let detail = detailModel.flatMap { $0.projectID == projectID ? $0 : nil }
+            ?? ProjectDetailModel(project: projectID, model: model)
         Group {
             if let project = detail.project {
                 // Stock `List` throughout (STYLEGUIDE §1.5) — the steps section needs one for
@@ -240,7 +243,13 @@ public struct ProjectDetailView: View {
                 ContentUnavailableView(Copy.project, systemImage: Symbols.projects)
             }
         }
-        .task { if detailModel == nil { detailModel = detail } }
+        .task(id: projectID) {
+            guard detailModel?.projectID != projectID else { return }
+            detailModel = detail
+            newStepText = ""
+            promptingStepIndex = nil
+            demotionNotice = nil
+        }
         .sheet(item: promptingStepIndexBinding) { identified in
             PromoteStepSheet(detailModel: detail, stepIndex: identified.value)
         }
