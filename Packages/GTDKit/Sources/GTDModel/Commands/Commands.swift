@@ -170,6 +170,10 @@ public enum GTDCommand: Sendable, Equatable {
     case pruneFavouriteLists
     /// L2 — the SF Symbol shown for a list; `nil` goes back to the built-in glyph.
     case setListIcon(list: String, symbol: String?)
+    /// L1 — a new item typed inside the list itself (the `+` in the list view): a note
+    /// `Lists/<name>/<title>.md` stamped `created` now, `notes` is the body. The other door for
+    /// an item is the inbox (`fileInbox` → `.list`), which *moves* a capture instead.
+    case addListItem(list: String, title: String, notes: String)
     /// Editing one item: a changed title renames its file, `notes` is the body.
     case updateListItem(NoteID, title: String, notes: String)
     /// L3 — checked off: the note moves to `Lists/<name>/Done/` and is kept as a log.

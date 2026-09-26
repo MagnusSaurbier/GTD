@@ -50,6 +50,34 @@ struct ListsModelTests {
         #expect(lists.openItems(in: "Watch").allSatisfy { $0.list == "Watch" })
     }
 
+    // MARK: - Adding (L1)
+
+    @Test func addAppendsAnOpenItemToTheList() async {
+        let (model, lists) = make()
+        let before = lists.openItems(in: "Wish").count
+        let ok = await lists.add("  A hammock ", to: "Wish")
+        #expect(ok)
+        #expect(model.lastError == nil)
+        let added = lists.openItems(in: "Wish").first { $0.title == "A hammock" }
+        #expect(added != nil, "the trimmed title is the item")
+        #expect(added?.created != nil)
+        #expect(lists.openItems(in: "Wish").count == before + 1)
+        #expect(model.undoLabel == "Added to Wish")
+    }
+
+    @Test func addRefusesAnEmptyTitleThroughPerform() async {
+        let (model, lists) = make()
+        let ok = await lists.add("   ", to: "Wish")
+        #expect(ok == false)
+        #expect(model.lastError != nil, "the refusal reaches the shell's alert, never swallowed")
+    }
+
+    @Test func canAddIsFalseForWhitespaceOnly() {
+        #expect(ListsModel.canAdd("") == false)
+        #expect(ListsModel.canAdd(" \n") == false)
+        #expect(ListsModel.canAdd(" Milk") == true)
+    }
+
     // MARK: - Row commands
 
     @Test func completeMovesTheItemToDone() async {

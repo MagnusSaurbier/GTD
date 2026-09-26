@@ -222,6 +222,12 @@ Unplug the mouse for this one.
 - [ ] The `Lists` tab shows every list with its open count. Tap one → its items; tap an item →
       the note editor (title + notes). Items show a completion circle and a title only: no
       second line, no badges, no age.
+- [ ] **Add an item inside a list** (issue #44): in a list's items screen the toolbar `+`
+      (`Add item`) opens a short sheet; on Mac every section header has a small `+`. Type a
+      title, `Add` (or ↩): the row appears at the top of the open half, a new file
+      `Lists/<list>/<title>.md` exists with a `created` line and no `status`, the undo toast
+      says `Added to <list>`. `Add` is disabled while the field is blank; the same title twice
+      is refused with an alert and the sheet stays open; `Cancel` writes nothing.
 - [ ] Swipe an item to `Done`: it disappears from the open half. `Show done` at the end of the
       list reveals it, and the file has **moved** to `Lists/<list>/Done/` — byte for byte the
       same note, not a copy.

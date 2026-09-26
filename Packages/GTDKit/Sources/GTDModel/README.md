@@ -88,7 +88,7 @@ Compiles and tests on Linux.
   optional `created` and free notes, and `Lists/<name>/Done/` is the finished log. `Done` is a
   reserved name, list names are compared case-insensitively (the file system is), and the list
   commands are `createList` / `renameList` / `removeList` / `setFavouriteLists` /
-  `pruneFavouriteLists` /
+  `pruneFavouriteLists` / `addListItem` (a new open note stamped now — the `+` inside a list) /
   `updateListItem` / `completeListItem` / `trashListItem` / `promoteListItem` /
   `moveActionToList`.
 - **A list item is never an action**: no `Rules` query for actions, no stat, no notification and

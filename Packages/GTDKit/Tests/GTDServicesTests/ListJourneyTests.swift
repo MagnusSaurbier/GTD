@@ -126,6 +126,42 @@ import GTDVault
         #expect(Rules.openListItemCount(rescanned) == 6)
     }
 
+    /// L1 — the `+` inside a list writes one new note, stamped now, and undo takes it back out.
+    @Test func anItemTypedInsideAListBecomesANote() async throws {
+        let vault = try TestVault.onDisk(deviceID: "mac-1")
+        defer { vault.cleanUp() }
+        try await vault.backend.start()
+        let model = AppModel(backend: vault.backend, today: { Fixtures.today })
+        defer { model.stop() }
+        await settle(model) { !$0.actions.isEmpty }
+        let openBefore = Rules.openListItemCount(model.snapshot)
+
+        try await model.send(.addListItem(list: "Wish", title: "A hammock", notes: ""))
+
+        let itemPath = "Lists/Wish/A hammock.md"
+        let text = try #require(try vault.text(itemPath))
+        #expect(text.contains("created: "), "a brand-new note carries its own timestamp")
+        #expect(!text.contains("status:"), "a list item is not a commitment (L1)")
+        #expect(model.undoLabel == "Added to Wish")
+        #expect(Rules.openListItemCount(model.snapshot) == openBefore + 1)
+
+        // The same title again is refused, and the file is untouched.
+        await #expect(throws: GTDError.titleCollision("A hammock")) {
+            try await model.send(.addListItem(list: "Wish", title: "A hammock", notes: ""))
+        }
+        #expect(try vault.text(itemPath) == text)
+
+        // Undo: the note leaves the list (into the trash — nothing is hard-deleted).
+        await model.undo()
+        #expect(model.lastError == nil)
+        #expect(try vault.text(itemPath) == nil)
+        #expect(Rules.openListItemCount(model.snapshot) == openBefore)
+
+        let rescanned = try vault.rescan()
+        #expect(rescanned.listItem(NoteID(path: itemPath)) == nil)
+        #expect(rescanned.issues.isEmpty)
+    }
+
     /// L2/R-5 — the three folder commands, against the files: create, rename, remove, undo.
     @Test func listsAreFoldersAndTheAppMovesThemAsSuch() async throws {
         let vault = try TestVault.onDisk(deviceID: "mac-1")

@@ -255,6 +255,46 @@ struct ReducerListTests {
             == .notFound(ghost))
     }
 
+    // MARK: - addListItem (L1)
+
+    @Test func addingAnItemCreatesAnOpenNoteStampedNow() throws {
+        let result = try Reducer.reduce(
+            vault(), .addListItem(list: "Read", title: "  Sapiens ", notes: "Marie's tip"), env: env)
+
+        let id = NoteID(path: "Lists/Read/Sapiens.md")
+        let item = try #require(result.snapshot.listItem(id))
+        #expect(item.list == "Read")
+        #expect(item.title == "Sapiens", "the title is trimmed: it is the file name")
+        #expect(item.isFinished == false)
+        #expect(item.created == env.now)
+        #expect(item.notes == "Marie's tip")
+        #expect(result.snapshot.listItems.count == 1)
+        #expect(result.extraOps.isEmpty, "a brand-new note is the snapshot diff's to write")
+        #expect(result.renames.isEmpty)
+    }
+
+    @Test func addingAnItemFollowsTheListsOwnSpelling() throws {
+        let result = try Reducer.reduce(
+            vault(), .addListItem(list: "read", title: "Sapiens", notes: ""), env: env)
+        #expect(result.snapshot.listItems.first?.id == NoteID(path: "Lists/Read/Sapiens.md"))
+    }
+
+    @Test func addingToAnUnknownListIsRefused() {
+        #expect(TestVault.error(vault(), .addListItem(list: "Cook", title: "Pasta", notes: ""))
+            == .invalid("Unknown list: Cook"))
+    }
+
+    @Test func addingAnItemWithoutATitleIsRefused() {
+        #expect(TestVault.error(vault(), .addListItem(list: "Read", title: "  \n", notes: ""))
+            == .invalid("A title is required"))
+    }
+
+    @Test func addingAnItemWhoseNameIsTakenIsRefused() {
+        let taken = TestVault.listItem("Read", "Sapiens")
+        #expect(TestVault.error(vault(items: [taken]), .addListItem(list: "Read", title: "Sapiens", notes: ""))
+            == .titleCollision("Sapiens"))
+    }
+
     // MARK: - completeListItem (L3)
 
     @Test func finishingAnItemMovesItIntoTheListsDoneFolder() throws {
@@ -459,6 +499,7 @@ struct ReducerListTests {
         #expect(Rules.isUndoable(.removeList(name: "Read")))
         #expect(Rules.isUndoable(.updateListItem(id, title: "x", notes: "")))
         #expect(Rules.isUndoable(.completeListItem(id)))
+        #expect(Rules.isUndoable(.addListItem(list: "Read", title: "Sapiens", notes: "")))
         #expect(Rules.isUndoable(.trashListItem(id)))
         #expect(Rules.isUndoable(.promoteListItem(id, ActionDraft(title: "x"))))
         #expect(Rules.isUndoable(.fileInbox(id, .list(name: "Read", notes: ""))))

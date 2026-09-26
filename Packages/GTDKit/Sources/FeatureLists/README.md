@@ -1,6 +1,7 @@
 # FeatureLists
 
-Lists home, one list's items, the title+notes item editor and **Make action** (§5a, L1–L6).
+Lists home, one list's items (with a `+` to add one), the title+notes item editor and **Make
+action** (§5a, L1–L6).
 
 ## Public API
 
@@ -10,18 +11,23 @@ Lists home, one list's items, the title+notes item editor and **Make action** (�
   it does for the Next tab's `[NoteID]` push.
 - `ListItemsView(list:)` — one list's items: `ListItemRow`s (completion circle + title only,
   §3.3), trailing swipe `Done`, context menu `Make action` / `Trash`, a quiet `Show done` button
-  revealing `Lists/<name>/Done/`. Pushes `ListItemEditorView` via `ListsRoute.item(_:)`.
+  revealing `Lists/<name>/Done/`, and a `+` toolbar button (`Add item`) that opens
+  `AddListItemSheet`. Pushes `ListItemEditorView` via `ListsRoute.item(_:)`.
+- `AddListItemSheet(list:)` (internal) — the `+`'s sheet: one title field, `Cancel` / `Add`, the
+  shell's quick-capture shape. `Add` runs `ListsModel.add`; the sheet closes only when the item
+  exists, a refusal is the shell alert's (`AppModel.perform`).
 - `ListItemEditorView(item:)` — the title + notes editor (autosaving, no Save button), with
   `Make action` in the toolbar. Shared by the iPhone push destination and the Mac detail column.
 - `ListsSectionsView(selection:onOpen:)` — the Mac content column for the single `Lists` sidebar
-  row (STYLEGUIDE §4.1): every list as a `Section` (name + open count header, `Show done` at the
-  end when it has finished items), a stock selectable `List` exactly like
-  `FeatureOverview.ActionListView`'s macOS list.
+  row (STYLEGUIDE §4.1): every list as a `Section` (name + open count + a `+` opening
+  `AddListItemSheet` for that list in the header, `Show done` at the end when it has finished
+  items), a stock selectable `List` exactly like `FeatureOverview.ActionListView`'s macOS list.
 - `MakeActionSheet(model:item:)` — L4: hosts `FeatureInbox.MakeActionCardView` in a sheet, driven end to end by
   `FeatureInbox.MakeActionModel`. It holds no view code of its own — the card is the inbox's.
 - `ListsModel(model:)` — rows with counts (`Rules.listRows`), a list's open/finished items,
-  `complete`/`trash` (both go through `AppModel.perform`, so a refusal reaches the shell's alert),
-  and `makeActionModel(for:)`.
+  `add(_:to:)` (trims the title, sends `addListItem`), `canAdd(_:)` (what the sheet's button
+  disables on), `complete`/`trash` (all go through `AppModel.perform`, so a refusal reaches the
+  shell's alert), and `makeActionModel(for:)`.
 - `ListItemEditModel(model:id:)` — the title/notes autosave brain (typed text is held until
   blur, close or `AppModel.flushHeldEdits()`; no typing-pause timer in the app), the same shape as
   `FeatureOverview.ActionEditModel` reduced to the two fields a list item has: dirty-field overlay
@@ -37,8 +43,10 @@ Linux-compilable (and therefore tested): `ListsModel`, `ListItemEditModel`, `Lis
 
 - List items never reach `Rules`' action/stats/notification/review queries — nothing here changes
   that; `ListsModel` only reads `Rules.listRows`/`listItems`/`openListItemCount`.
-- Adding items from inside this target is out of scope (STYLEGUIDE, REQUIREMENTS §12 sibling
-  rule): items arrive only through the inbox (`InboxDecision.list`).
+- Two doors into a list: the inbox (`InboxDecision.list` *moves* a capture) and the list's own
+  `+` (`GTDCommand.addListItem` creates a fresh note, stamped now — the vault ticket "List view
+  add items feature", 2026-09-26, asked for a shopping-list flow that skips the inbox). Both
+  obey the same title rules (`titleRequired`, `titleCollision`) in the reducer.
 - Every row/editor command goes through `AppModel.perform`/`send`, never `try? await …` — a
   refusal (`titleCollision`, `notFound`) must reach the person.
 
@@ -53,4 +61,4 @@ Linux-compilable (and therefore tested): `ListsModel`, `ListItemEditModel`, `Lis
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureListsTests` — 18 tests.
+`cd Packages/GTDKit && swift test --filter FeatureListsTests` — 21 tests.

@@ -107,6 +107,9 @@ public enum Reducer {
         case let .setListIcon(list, symbol):
             return try setListIcon(s, list: list, symbol: symbol)
 
+        case let .addListItem(list, title, notes):
+            return try addListItem(s, list: list, title: title, notes: notes, env: env)
+
         case let .updateListItem(id, title, notes):
             return try updateListItem(s, id: id, title: title, notes: notes)
 
@@ -806,6 +809,29 @@ public enum Reducer {
         var next = s
         next.config.listIcons = s.config.listIcons.filter { !GTDList.sameName($0.key, list.name) }
         if !clean.isEmpty { next.config.listIcons[list.name] = clean }
+        return Reduction(snapshot: next)
+    }
+
+    /// A new item typed inside its list (L1). The title is the file name, so an empty one is
+    /// refused (`titleRequired`) and a taken one is never overwritten (`titleCollision`) — the
+    /// same two rules `updateListItem` applies. The note is brand new, so it is stamped with the
+    /// env's `now`; the snapshot diff writes it because it appears in `listItems` at a path no
+    /// entity had before. `Done/` is out of reach: a new item is always open.
+    private static func addListItem(
+        _ s: VaultSnapshot, list name: String, title: String, notes: String, env: ReducerEnv
+    ) throws(GTDError) -> Reduction {
+        guard let list = s.list(named: name) else { throw .invalid(Message.unknownList(name)) }
+        let clean = try requireTitle(title)
+        let id = s.config.layout.listItemPath(list: list.name, title: clean)
+        guard !pathExists(id, in: s) else { throw .titleCollision(clean) }
+        var next = s
+        next.listItems.append(ListItem(
+            id: id,
+            list: list.name,
+            title: clean,
+            isFinished: false,
+            created: env.now,
+            notes: notes))
         return Reduction(snapshot: next)
     }
 
