@@ -6,8 +6,8 @@ import DesignSystem
 import FeatureInbox
 
 /// The Mac content column for the single `Lists` sidebar row (STYLEGUIDE §4.1): every list as a
-/// section (header = list name + count), `ListItemRow`s, a quiet `Show done` button at the end of
-/// a section that has finished items. Selecting a row opens it in the detail column
+/// section (header = list name + count + a `+` that opens `AddListItemSheet` for that list),
+/// `ListItemRow`s, a quiet `Show done` button at the end of a section that has finished items. Selecting a row opens it in the detail column
 /// (`ListItemEditorView`), the same click-or-arrow-keys pattern `ActionListView` uses.
 public struct ListsSectionsView: View {
     private let selection: NoteID?
@@ -16,6 +16,13 @@ public struct ListsSectionsView: View {
     @Environment(AppModel.self) private var model
     @State private var expanded: Set<String> = []
     @State private var makeActionTarget: ListItem?
+    @State private var addTarget: AddTarget?
+
+    /// The list the add sheet is for — a wrapper so `.sheet(item:)` can present a `String`.
+    private struct AddTarget: Identifiable {
+        let list: String
+        var id: String { list }
+    }
 
     public init(selection: NoteID? = nil, onOpen: @escaping (NoteID) -> Void) {
         self.selection = selection
@@ -43,11 +50,23 @@ public struct ListsSectionsView: View {
                                         .font(Typo.counter)
                                         .foregroundStyle(Color.textSecondary)
                                 }
+                                Button {
+                                    addTarget = AddTarget(list: row.list.name)
+                                } label: {
+                                    Image(systemName: Symbols.addValue)
+                                        .font(Typo.counter)
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(Color.gtdAccent)
+                                .accessibilityLabel(ListsCopy.addTo(row.list.name))
                             }
                         }
                     }
                 }
             }
+        }
+        .sheet(item: $addTarget) { target in
+            AddListItemSheet(list: target.list)
         }
         .sheet(item: $makeActionTarget) { item in
             MakeActionSheet(model: model, item: item)

@@ -33,6 +33,11 @@ import GTDFixtures
         .environment(previewModel())
 }
 
+#Preview("Add item sheet") {
+    AddListItemSheet(list: "Read")
+        .environment(previewModel())
+}
+
 #Preview("List items · empty") {
     NavigationStack { ListItemsView(list: "Wish") }
         .environment(previewModel(snapshot: Fixtures.sampleSnapshot.withNoLists()))

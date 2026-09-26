@@ -36,6 +36,23 @@ public final class ListsModel {
         Rules.listItems(snapshot, in: list, finished: true)
     }
 
+    // MARK: - Adding (L1)
+
+    /// The `+` inside a list: one new open item in `list`, stamped now. Whitespace around the
+    /// title is dropped here so the view's "nothing typed yet" and the reducer's `titleRequired`
+    /// agree; an empty title, an unknown list or a taken title come back as `false` through
+    /// `AppModel.perform`, so the shell's alert says why.
+    @discardableResult
+    public func add(_ title: String, to list: String, notes: String = "") async -> Bool {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return await model.perform(.addListItem(list: list, title: clean, notes: notes))
+    }
+
+    /// What the sheet's `Add` button disables on: nothing but whitespace typed.
+    public static func canAdd(_ title: String) -> Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     // MARK: - Row commands
 
     /// Moves the item to `Lists/<name>/Done/` (L3). Undoable, so a mis-swipe is never final.

@@ -11,6 +11,11 @@ enum ListsCopy {
     static let notSaved = "Not saved"
     static let titleTaken = "Another item already has that title."
     static let makeAction = "Make action"
+    static let addItem = "Add item"
+    static let add = "Add"
+    static let newItemPlaceholder = "New item"
+    /// `Add to Read` — the add sheet's heading, spelled with the list's name like the undo toast.
+    static func addTo(_ list: String) -> String { "Add to \(list)" }
     static let emptyListsTitle = "No lists yet"
     static let emptyListsBody = "Lists are created from Settings, or by filing a capture to one."
 

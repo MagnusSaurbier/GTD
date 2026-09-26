@@ -59,6 +59,12 @@ struct UndoLabelTests {
                 == "Added to Wish")
     }
 
+    /// L1 — an item typed inside a list reads like an inbox filing into it.
+    @Test func addingAListItemSaysAddedToTheList() {
+        #expect(UndoLabel.of(.addListItem(list: "Read", title: "Sapiens", notes: ""), in: snapshot)
+            == "Added to Read")
+    }
+
     /// §6.3 — a finished list item is just `Done`.
     @Test func finishingAListItemSaysDone() {
         let item = NoteID(path: "Lists/Read/Sapiens.md")

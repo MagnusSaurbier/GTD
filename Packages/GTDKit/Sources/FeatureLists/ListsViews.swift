@@ -50,7 +50,8 @@ public struct ListsHomeView: View {
 
 /// One list's items (L1, L3): completion circle + title only rows (§3.3), trailing swipe
 /// `Done`, context menu `Make action` / `Trash`, a quiet `Show done` button revealing
-/// `Lists/<name>/Done/` when it has entries. Tapping a row pushes the item editor.
+/// `Lists/<name>/Done/` when it has entries, and a `+` toolbar button that opens
+/// `AddListItemSheet` for this list. Tapping a row pushes the item editor.
 public struct ListItemsView: View {
     @Environment(\.listIcons) private var listIcons
     private let list: String
@@ -58,6 +59,7 @@ public struct ListItemsView: View {
     @Environment(AppModel.self) private var model
     @State private var showDone = false
     @State private var makeActionTarget: ListItem?
+    @State private var isAdding = false
 
     public init(list: String) {
         self.list = list
@@ -91,6 +93,18 @@ public struct ListItemsView: View {
             }
         }
         .pinnedScreenTitle(list)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    isAdding = true
+                } label: {
+                    Label(ListsCopy.addItem, systemImage: Symbols.addValue)
+                }
+            }
+        }
+        .sheet(isPresented: $isAdding) {
+            AddListItemSheet(list: list)
+        }
         .sheet(item: $makeActionTarget) { item in
             MakeActionSheet(model: model, item: item)
         }
