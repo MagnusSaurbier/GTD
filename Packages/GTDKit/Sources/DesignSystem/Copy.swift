@@ -28,6 +28,11 @@ public enum Copy {
     public static let deferred = "Deferred"
     /// A row's context-menu submenu that twins the drag onto a sidebar section (E3, §8).
     public static let moveTo = "Move to"
+    /// The note's `obsidian://` link, bottom of the action and project detail (`NoteFileLinks`).
+    public static let openInObsidian = "Open in Obsidian"
+    /// The note's absolute file path to the clipboard, to hand the ticket to a terminal or a
+    /// `/do <path>` prompt.
+    public static let copyPath = "Copy path"
     /// The `Move to` entry that asks which project: `Project…`.
     public static let projectEllipsis = "Project…"
     /// The `Move to` entry that asks which list: `List…`.

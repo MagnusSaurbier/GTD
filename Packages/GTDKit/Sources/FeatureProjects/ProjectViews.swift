@@ -237,6 +237,9 @@ public struct ProjectDetailView: View {
                             logSection(detail)
                         }
                     }
+                    Section {
+                        NoteFileLinks(note: project.id)
+                    }
                 }
                 .navigationTitle(project.title)
             } else {
@@ -325,6 +328,7 @@ public struct ProjectDetailView: View {
                 onEdit: { text in Task { try? await detail.editStep(at: index, text: text) } },
                 onMoveUp: { Task { try? await detail.moveStepUp(at: index) } },
                 onMoveDown: { Task { try? await detail.moveStepDown(at: index) } },
+                onDelete: { Task { try? await detail.deleteStep(at: index) } },
                 onPromote: step.done || step.promotedTo != nil ? nil : { promptingStepIndex = index })
         }
         .onMove { offsets, destination in
@@ -396,6 +400,7 @@ private struct StepRow: View {
     let onEdit: (String) -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
+    let onDelete: () -> Void
     let onPromote: (() -> Void)?
 
     @State private var text: String
@@ -407,6 +412,7 @@ private struct StepRow: View {
         onEdit: @escaping (String) -> Void,
         onMoveUp: @escaping () -> Void,
         onMoveDown: @escaping () -> Void,
+        onDelete: @escaping () -> Void,
         onPromote: (() -> Void)?
     ) {
         self.step = step
@@ -414,6 +420,7 @@ private struct StepRow: View {
         self.onEdit = onEdit
         self.onMoveUp = onMoveUp
         self.onMoveDown = onMoveDown
+        self.onDelete = onDelete
         self.onPromote = onPromote
         self._text = State(initialValue: step.text)
     }
@@ -471,6 +478,13 @@ private struct StepRow: View {
             }
             .foregroundStyle(Color.textTertiary)
             .font(Typo.controlGlyph)
+
+            Button(action: onDelete) {
+                Image(systemName: Symbols.trash)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.textTertiary)
+            .accessibilityLabel("Delete step")
         }
     }
 }
