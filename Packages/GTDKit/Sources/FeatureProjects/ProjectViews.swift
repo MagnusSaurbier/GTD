@@ -316,7 +316,9 @@ public struct ProjectDetailView: View {
 
     @ViewBuilder
     private func stepsSection(_ detail: ProjectDetailModel) -> some View {
-        ForEach(Array(detail.steps.enumerated()), id: \.offset) { index, step in
+        // Row IDs are namespaced per section: steps and log both enumerate from 0 inside one
+        // `List`, and bare offsets let the Mac table hand a log row to step 0 (#48).
+        ForEach(Array(detail.steps.enumerated()), id: \.offset.stepRowID) { index, step in
             StepRow(
                 step: step,
                 onToggle: { Task { try? await detail.toggleStep(at: index) } },
@@ -365,7 +367,7 @@ public struct ProjectDetailView: View {
 
     @ViewBuilder
     private func logSection(_ detail: ProjectDetailModel) -> some View {
-        ForEach(Array(detail.log.enumerated()), id: \.offset) { _, entry in
+        ForEach(Array(detail.log.enumerated()), id: \.offset.logRowID) { _, entry in
             HStack(alignment: .top, spacing: Spacing.s) {
                 Text(DateText.short(entry.day, today: detail.today))
                     .font(Typo.counter)
@@ -374,6 +376,12 @@ public struct ProjectDetailView: View {
             }
         }
     }
+}
+
+/// Distinct row IDs for the sections of `ProjectDetailView`'s one `List` (#48).
+private extension Int {
+    var stepRowID: String { "step-\(self)" }
+    var logRowID: String { "log-\(self)" }
 }
 
 private struct IdentifiedInt: Identifiable {
@@ -428,6 +436,11 @@ private struct StepRow: View {
                 .onSubmit { onEdit(text) }
                 .onChange(of: isFocused) { _, focused in
                     if !focused { onEdit(text) }
+                }
+                // Rows are keyed by position, so after an add or a move this row can be handed
+                // another step: take the model's text unless the user is typing here.
+                .onChange(of: step.text) { _, newText in
+                    if !isFocused { text = newText }
                 }
 
             if step.promotedTo != nil {
