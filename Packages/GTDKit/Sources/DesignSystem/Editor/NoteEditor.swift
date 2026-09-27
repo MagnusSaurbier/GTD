@@ -289,11 +289,24 @@ enum NoteText {
         return after.count - suffix
     }
 
-    /// The width to measure at: the proposal when it is a real width, else the width the view
-    /// already has, else a guess (only before the first layout).
-    static func measuringWidth(_ proposed: CGFloat?, current: CGFloat) -> CGFloat {
-        if let proposed, proposed.isFinite, proposed > 0 { return proposed }
-        return current > 0 ? current : 320
+    /// The width a body is measured at when the proposal is no real width (a `0` or `nil`/infinite probe).
+    static let unproposedWidth: CGFloat = 320
+
+    /// The size a `NoteEditor` answers a probe with. A pure function of the proposal, never of
+    /// the view's current frame: answering the `0` probe with the frame's width made that width
+    /// the field's *minimum*, so a legacy scroller appearing (17 pt narrower) and disappearing
+    /// flipped the layout between two answers forever, and AppKit killed the app for too many
+    /// Update Constraints passes (2026-09-27 crash, `NoteLayoutTests`).
+    /// `measure` gives the text's height at a wrap width.
+    static func fittingSize(proposedWidth proposed: CGFloat?,
+                            measure: (CGFloat) -> CGFloat) -> CGSize {
+        if let proposed, proposed.isFinite, proposed > 0 {
+            return CGSize(width: proposed, height: measure(proposed))
+        }
+        let height = measure(unproposedWidth)
+        // The `0` probe asks for the minimum width: a text field can wrap to any width.
+        if let proposed, proposed.isFinite { return CGSize(width: 0, height: height) }
+        return CGSize(width: unproposedWidth, height: height)
     }
 
     static func height(layout: NSLayoutManager, container: NSTextContainer, font: PlatformFont,
@@ -386,14 +399,15 @@ public struct NoteEditor: NSViewRepresentable {
     public func sizeThatFits(_ proposal: ProposedViewSize, nsView view: NoteTextView,
                              context: Context) -> CGSize? {
         guard let layout = view.layoutManager, let container = view.textContainer else { return nil }
-        let width = NoteText.measuringWidth(proposal.width, current: view.bounds.width)
         let previous = container.containerSize
-        container.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
-        let height = NoteText.height(layout: layout, container: container,
-                                     font: view.styler.baseFont, minLines: minLines)
+        let size = NoteText.fittingSize(proposedWidth: proposal.width) { width in
+            container.containerSize = CGSize(width: width, height: .greatestFiniteMagnitude)
+            return NoteText.height(layout: layout, container: container,
+                                   font: view.styler.baseFont, minLines: minLines)
+        }
         container.containerSize = view.bounds.width > 0
             ? CGSize(width: view.bounds.width, height: .greatestFiniteMagnitude) : previous
-        return CGSize(width: width, height: height)
+        return size
     }
 
     private func configure(_ view: NoteTextView) {
@@ -660,15 +674,16 @@ public struct NoteEditor: UIViewRepresentable {
 
     public func sizeThatFits(_ proposal: ProposedViewSize, uiView view: NoteTextView,
                              context: Context) -> CGSize? {
-        let width = NoteText.measuringWidth(proposal.width, current: view.bounds.width)
         let previous = view.textContainer.size
-        view.textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
-        let height = NoteText.height(layout: view.layoutManager, container: view.textContainer,
-                                     font: view.styler.baseFont, minLines: minLines)
+        let size = NoteText.fittingSize(proposedWidth: proposal.width) { width in
+            view.textContainer.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+            return NoteText.height(layout: view.layoutManager, container: view.textContainer,
+                                   font: view.styler.baseFont, minLines: minLines)
+        }
         // `widthTracksTextView` follows the frame once there is one; until then keep the probe.
         view.textContainer.size = view.bounds.width > 0
             ? CGSize(width: view.bounds.width, height: .greatestFiniteMagnitude) : previous
-        return CGSize(width: width, height: height)
+        return size
     }
 
     private func configure(_ view: NoteTextView) {
