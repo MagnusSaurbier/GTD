@@ -1158,10 +1158,16 @@ public enum Reducer {
             action.followUpDate = nil
         }
 
+        // A project this command sets has to exist. A link the note already carries is never
+        // judged again: a project renamed or moved in Obsidian leaves it dangling (a vault issue),
+        // and that must not stop the action from being ticked off or edited (#53).
         if let projectID = action.project {
-            guard let project = s.project(projectID) else { throw .notFound(projectID) }
-            if action.status.countsTowardCap, project.status != .active {
-                throw .invalid(Message.projectNotActive)
+            if let project = s.project(projectID) {
+                if action.status.countsTowardCap, project.status != .active {
+                    throw .invalid(Message.projectNotActive)
+                }
+            } else if projectID != previous?.project {
+                throw .notFound(projectID)
             }
         }
 
