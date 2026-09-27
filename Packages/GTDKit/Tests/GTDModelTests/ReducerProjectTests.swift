@@ -106,6 +106,27 @@ struct ReducerProjectTests {
             what: "CV updaten")), env: env) == nil)
     }
 
+    /// #53 — a project renamed or moved in Obsidian leaves the action's link dangling. Ticking
+    /// the action off or editing it must still work; only a project the command *sets* must exist.
+    @Test func aDanglingProjectLinkDoesNotBlockTheAction() throws {
+        let ghost = NoteID(path: "Projects/Karriere/Manage&More 1/Manage&More.md")
+        let vault = TestVault.snapshot(actions: [TestVault.action("Hackathon", .next, project: ghost)])
+        let id = TestVault.actionID("Hackathon")
+
+        let done = try Reducer.reduce(vault, .complete(id), env: env)
+        #expect(done.snapshot.action(id)?.status == .done)
+        #expect(done.snapshot.action(id)?.project == ghost)
+
+        var edited = try #require(vault.action(id))
+        edited.timeEstimate = 30
+        #expect(TestVault.error(vault, .updateAction(edited), env: env) == nil)
+
+        // Pointing an action at a project that does not exist is still refused.
+        var moved = try #require(vault.action(id))
+        moved.project = NoteID(path: "Projects/Nowhere/Nowhere.md")
+        #expect(TestVault.error(vault, .updateAction(moved), env: env) == .notFound(moved.project!))
+    }
+
     @Test(arguments: [ProjectStatus.onHold, .someday, .done])
     func leavingActiveDemotesTheProjectsNextActions(status: ProjectStatus) throws {
         let project = TestVault.project("DAAD")

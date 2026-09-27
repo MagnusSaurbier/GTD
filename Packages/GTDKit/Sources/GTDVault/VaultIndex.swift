@@ -326,6 +326,20 @@ public struct VaultIndex: Sendable {
             }
         }
 
+        // #53 — a `project:` link that names no project (renamed or moved in Obsidian, or a bare
+        // `[[Title]]`). The action still works; the user is told where to fix the link. A target
+        // that exists but failed to decode or is still in iCloud already has its own issue.
+        let projectIDs = Set(projects.map(\.id))
+        for action in actions where !action.status.isClosed {
+            guard let projectID = action.project, !projectIDs.contains(projectID),
+                  entries[projectID.path] == nil
+            else { continue }
+            issues.append(VaultIssue(
+                path: action.id.path,
+                message: "`project:` links to \(projectID.path), which is not a project note. "
+                    + "Fix the link in Obsidian."))
+        }
+
         // N3 §7.5 — surfaced, never resolved.
         for path in VaultClassifier.conflictCopies(among: Array(entries.keys)) {
             issues.append(VaultIssue(
