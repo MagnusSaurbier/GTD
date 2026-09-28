@@ -25,6 +25,14 @@ public enum InboxCopy {
     public static let cancel = "Cancel"
     public static let keyLegendLabel = "Keys"
 
+    // The keyboard walk over the action card's chips and outcome buttons (#65).
+    public static let cursorMoveKeys = "Tab ⇧Tab"
+    public static let returnKey = "↩"
+    public static let cursorMove = "Move"
+    public static let cursorToggle = "Select"
+    public static let cursorPress = "Choose"
+    public static let cursorNextRow = "Next row"
+
     /// `Defer to review` under an action-bar icon and in the Mac key legend, where the full
     /// wording does not fit.
     public static let reviewShort = "Review"

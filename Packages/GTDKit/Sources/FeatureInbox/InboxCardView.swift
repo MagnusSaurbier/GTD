@@ -14,6 +14,20 @@ enum CardField: Hashable {
     case why
     case what
     case notes
+    /// Scroll anchors only — never focused: the chip rows the keyboard cursor walks (#65), so a
+    /// long card scrolls the highlighted row into view the way it does a focused field.
+    case contextChips
+    case timeChips
+
+    /// The anchor of the row the keyboard cursor stands on. The outcome row sits under the card,
+    /// outside the scroll view, so it needs none.
+    static func anchor(for cursor: CardKeyCursor?) -> CardField? {
+        switch cursor?.row {
+        case .context: .contextChips
+        case .time: .timeChips
+        case .outcome, nil: nil
+        }
+    }
 }
 
 /// The inbox card (STYLEGUIDE §3.5): same view in both steps, expanding **in place**. Step 1 is
@@ -29,6 +43,9 @@ struct InboxCardView: View {
     let dragTarget: InboxExit?
     let translation: CGSize
     let shake: CGFloat
+    /// `⌘↩` past the last text field (`What?`): the host hands the keyboard to the card and
+    /// starts the chip walk (#65).
+    var onLeaveFields: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.listIcons) private var listIcons
@@ -173,7 +190,7 @@ struct InboxCardView: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(label, isMissing: isMissing)
             NoteEditor(text: text, prompt: placeholder)
-                .onAdvance { focus = Self.next(after: field) }
+                .onAdvance { advance(from: field) }
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: field)
@@ -186,6 +203,15 @@ struct InboxCardView: View {
     /// (and every other body field) the keyboard goes back to the card, so the keys act on it.
     static func next(after field: CardField) -> CardField? {
         field == .why ? .what : nil
+    }
+
+    /// After `What?` the host takes over: the keyboard leaves the fields for the chip walk.
+    private func advance(from field: CardField) {
+        if let next = Self.next(after: field) {
+            focus = next
+        } else {
+            onLeaveFields()
+        }
     }
 
     /// A placeholder must never read as an entered value (no lying defaults): it is tertiary,
@@ -211,7 +237,7 @@ struct InboxCardView: View {
                 .foregroundStyle(Color.textSecondary)
             }
             NoteEditor(text: $session.draft.what, prompt: Copy.whatPlaceholder)
-                .onAdvance { focus = Self.next(after: .what) }
+                .onAdvance { advance(from: .what) }
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: .what)
@@ -243,14 +269,20 @@ struct InboxCardView: View {
                 SectionLabel(
                     InboxCopy.contextGroupLabel, isMissing: session.isMissing(.context),
                     font: Typo.meta, foreground: .textSecondary)
-                ContextChipGroup(contexts: session.contexts, selection: $session.draft.contexts)
+                ContextChipGroup(
+                    contexts: session.contexts, selection: $session.draft.contexts,
+                    highlighted: session.keyHighlight(in: .context))
             }
+            .id(CardField.contextChips)
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 SectionLabel(
                     InboxCopy.timeGroupLabel, isMissing: session.isMissing(.timeEstimate),
                     font: Typo.meta, foreground: .textSecondary)
-                TimeBucketChipGroup(selection: $session.draft.timeBucket)
+                TimeBucketChipGroup(
+                    selection: $session.draft.timeBucket,
+                    highlighted: session.keyHighlight(in: .time))
             }
+            .id(CardField.timeChips)
             FlowLayout {
                 DateValueChip(
                     label: Copy.deferLabel,

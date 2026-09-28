@@ -110,6 +110,8 @@ public enum Copy {
     public static let setWaiting = "Set waiting"
     /// The action-card `⋯` menu (§3.6): repeats the two swipe targets, Next / Someday.
     public static let fileTo = "File to"
+    /// VoiceOver hint on a control carrying the keyboard semi-highlight (#65).
+    public static let keyHighlightHint = "Keyboard highlight: Return acts on it."
 
     /// `3 of 14 left`
     public static func counter(remaining: Int, total: Int) -> String {
