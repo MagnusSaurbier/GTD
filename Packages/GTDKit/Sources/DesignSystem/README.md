@@ -58,6 +58,9 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   narrow), under them the merged title and text to edit, opened on `WriteConflict.suggestion`;
   Done (`⌘↩`) hands back path + text, "Keep the vault's version" (Escape) closes. Interactive
   dismissal is off so typed text is never lost. Wide Mac frame from `SheetMetrics.wide*`.
+- `UnsavedTextSheet(entry:position:canRestore:onRestore:onDiscard:)` — text an earlier run never
+  saved (#56): note, time, the typed text read-only and selectable, Restore (`⌘↩`), Copy text,
+  Discard; with the note gone only copying is left. Interactive dismissal is off.
 - Sheets that scroll (`Components/SheetScrolling.swift`, sizes in `SheetMetrics`):
   `View.sheetFormStyle()` for every `Form` in a sheet — `.formStyle(.grouped)` plus the Mac sheet
   frame; macOS' default `.columns` never scrolls and draws a text field's title as a left-column

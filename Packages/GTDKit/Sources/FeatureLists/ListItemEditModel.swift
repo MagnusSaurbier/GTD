@@ -32,8 +32,15 @@ public final class ListItemEditModel: AppModel.HeldEdits {
     /// The note being edited. Changes when a rename lands.
     public private(set) var id: NoteID
     /// What the editor shows. `nil` once the item is gone from the vault.
-    public private(set) var draft: ListItem?
-    public private(set) var dirty: Set<ListItemField> = []
+    public private(set) var draft: ListItem? { didSet { model.heldEditsChanged() } }
+    public private(set) var dirty: Set<ListItemField> = [] {
+        didSet {
+            if dirty.isEmpty { unsavedSince = nil } else if unsavedSince == nil { unsavedSince = Date() }
+            model.heldEditsChanged()
+        }
+    }
+    /// When the fields in `dirty` started to differ from the vault — the journal entry's time.
+    private var unsavedSince: Date?
     public private(set) var lastError: (any Error)?
     public private(set) var isSaving = false
     /// True when the item disappeared from the snapshot (completed, trashed, promoted, renamed
@@ -77,6 +84,16 @@ public final class ListItemEditModel: AppModel.HeldEdits {
     public var list: String? { draft?.list }
     public var isFinished: Bool { draft?.isFinished ?? false }
     public var hasUnsavedEdits: Bool { !dirty.isEmpty }
+
+    /// The typed title and notes not yet in the vault, for the crash journal (#56).
+    /// Only those two: every other field is a click, and is saved at once.
+    public var unsavedText: UnsavedText? {
+        guard let draft, let since = unsavedSince else { return nil }
+        let title = dirty.contains(.title) ? draft.title : nil
+        let text = dirty.contains(.notes) ? draft.notes : nil
+        guard title != nil || text != nil else { return nil }
+        return UnsavedText(kind: .listItem, path: id.path, title: title, text: text, savedAt: since)
+    }
 
     // MARK: - Editing
 

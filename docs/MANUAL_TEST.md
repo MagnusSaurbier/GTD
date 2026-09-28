@@ -427,6 +427,12 @@ Run **without** `-useFixtures`.
       note's absolute path, unescaped (`open "$(pbpaste)"` in Terminal opens the file). Absent on
       fixtures, like its neighbour.
 - [ ] `Settings → Change vault…` then pick the copy again: everything still works.
+- [ ] **Unsaved text after a crash (#56):** open an action, type a new line into its body and
+      stay in the field; after a second, `kill -9` the app. Relaunch: "Text that wasn't saved"
+      shows that note and the line. **Restore** puts it into the note file; relaunch again and
+      nothing is offered. Repeat with **Discard** (the file keeps its old body) and once after
+      renaming the note in Obsidian first (only **Copy text** is left). A clean ⌘Q while typing
+      offers nothing next launch.
 
 ## 5. Two devices (Mac + iPhone, same iCloud vault copy)
 

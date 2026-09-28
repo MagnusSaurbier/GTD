@@ -90,7 +90,10 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   `clearError()` clears it. The snapshot has already been reverted by the backend.
 - **Held edits.** An editor that keeps typed text back until blur/close conforms to
   `AppModel.HeldEdits` and calls `register(_:)` (held weakly). `flushHeldEdits()` is the shell's
-  "the app is about to stop running" — it runs before the write queue is flushed.
+  "the app is about to stop running" — it runs before the write queue is flushed. A holder also
+  reports its `unsavedText` (typed title/body only) and calls `heldEditsChanged()`; the model
+  forwards it to `unsavedJournal` (`UnsavedTextJournal`, #56), the crash-safe copy the shell
+  hands every model. `restoreUnsaved` / `discardUnsaved` settle what an earlier run left.
 - `snapshots()` is synchronous on purpose, so an actor backend must implement it `nonisolated`.
   `SnapshotHub` does the fan-out under an `NSLock` — the one justified `@unchecked Sendable`
   in this target. Its first element is always the current snapshot.

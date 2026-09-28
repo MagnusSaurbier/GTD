@@ -154,6 +154,29 @@ public enum Copy {
         return "\(passages) changed on both sides; the vault's version was kept there."
     }
 
+    // Text an earlier run never saved (#56).
+    public static let unsavedTitle = "Text that wasn't saved"
+    /// `GTD quit before saving what you typed in “Call the bank”.`
+    public static func unsavedBody(note: String) -> String {
+        "GTD quit before saving what you typed in \u{201C}\(note)\u{201D}. "
+            + "Restore writes it into the note; Discard lets it go."
+    }
+    /// The note moved, was completed or trashed since: nothing to restore into.
+    public static func unsavedNoteGone(note: String) -> String {
+        "\u{201C}\(note)\u{201D} is no longer where it was. Copy the text and paste it where it belongs."
+    }
+    /// `2 of 3` — more than one note had unsaved text.
+    public static func unsavedCounter(_ index: Int, of total: Int) -> String { "\(index) of \(total)" }
+    public static let unsavedTyped = "What you typed"
+    public static let restore = "Restore"
+    public static let discard = "Discard"
+    public static let copyText = "Copy text"
+    public static let copied = "Copied"
+    /// The journal file could not be read or written: typing is not being kept safe.
+    public static func unsavedJournalFailed(_ reason: String) -> String {
+        "GTD can't keep a safety copy of unsaved typing on this device: \(reason)"
+    }
+
     public static let capSheetTitle = "Next is full"
     public static let capSheetBody = "Demote one to make room."
     public static let sendToSomedayInstead = "Send to Someday instead"

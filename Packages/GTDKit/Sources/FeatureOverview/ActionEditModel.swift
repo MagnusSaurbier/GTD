@@ -42,9 +42,16 @@ public final class ActionEditModel: AppModel.HeldEdits {
     /// The note being edited. Changes when a rename lands.
     public private(set) var id: NoteID
     /// What the editor shows. `nil` once the action is gone from the vault.
-    public private(set) var draft: Action?
+    public private(set) var draft: Action? { didSet { model.heldEditsChanged() } }
     /// Fields edited since the last successful save.
-    public private(set) var dirty: Set<ActionField> = []
+    public private(set) var dirty: Set<ActionField> = [] {
+        didSet {
+            if dirty.isEmpty { unsavedSince = nil } else if unsavedSince == nil { unsavedSince = Date() }
+            model.heldEditsChanged()
+        }
+    }
+    /// When the fields in `dirty` started to differ from the vault — the journal entry's time.
+    private var unsavedSince: Date?
     /// A refused command (cap, waiting info, title collision). The view renders it inline.
     public private(set) var lastError: (any Error)?
     public private(set) var isSaving = false
@@ -117,6 +124,16 @@ public final class ActionEditModel: AppModel.HeldEdits {
     public var isClosed: Bool {
         guard let draft else { return model.snapshot.action(id) == nil }
         return draft.status.isClosed
+    }
+
+    /// The typed title and body not yet in the vault, for the crash journal (#56).
+    /// Only those two: every other field is a click, and is saved at once.
+    public var unsavedText: UnsavedText? {
+        guard let draft, let since = unsavedSince else { return nil }
+        let title = dirty.contains(.title) ? draft.title : nil
+        let text = dirty.contains(.body) ? draft.body : nil
+        guard title != nil || text != nil else { return nil }
+        return UnsavedText(kind: .action, path: id.path, title: title, text: text, savedAt: since)
     }
 
     // MARK: - Editing
