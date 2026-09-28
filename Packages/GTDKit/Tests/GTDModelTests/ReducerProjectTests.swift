@@ -316,6 +316,48 @@ struct ReducerProjectTests {
         #expect(result.snapshot.projects[0].openSteps.isEmpty)
     }
 
+    // MARK: - #61: linking an existing action as a step
+
+    @Test func linkingAnActionAddsAStepAndSetsTheProject() throws {
+        let project = TestVault.project("DAAD", steps: [ProjectStep(text: "Collect")])
+        let action = TestVault.action("Book the language test")
+        let result = try Reducer.reduce(
+            TestVault.snapshot(actions: [action], projects: [project]),
+            .linkStep(project: project.id, action: action.id), env: env)
+
+        let steps = result.snapshot.projects[0].steps
+        #expect(steps.count == 2)
+        #expect(steps[1] == ProjectStep(text: "Book the language test", promotedTo: action.id))
+        #expect(result.snapshot.action(action.id)?.project == project.id)
+        #expect(result.snapshot.action(action.id)?.status == .someday)
+    }
+
+    @Test func linkingRefusesClosedForeignAndDuplicateActions() {
+        let other = TestVault.project("Nebenjob")
+        let done = TestVault.action("Done thing", .done, completed: -1)
+        let foreign = TestVault.action("Foreign", project: other.id)
+        let linked = TestVault.action("Linked")
+        let project = TestVault.project("DAAD", steps: [ProjectStep(text: "Linked", promotedTo: linked.id)])
+        let vault = TestVault.snapshot(actions: [done, foreign, linked], projects: [project, other])
+
+        #expect(TestVault.error(vault, .linkStep(project: project.id, action: done.id), env: env)
+                == .invalid("A finished action cannot become a step"))
+        #expect(TestVault.error(vault, .linkStep(project: project.id, action: foreign.id), env: env)
+                == .invalid("This action belongs to another project"))
+        #expect(TestVault.error(vault, .linkStep(project: project.id, action: linked.id), env: env)
+                == .invalid("This action is already a step of the project"))
+        #expect(TestVault.error(vault, .linkStep(project: project.id, action: TestVault.actionID("Ghost")), env: env)
+                == .notFound(TestVault.actionID("Ghost")))
+    }
+
+    @Test func aNextActionCannotBeLinkedToAnOnHoldProject() {
+        let onHold = TestVault.project("Nebenjob", status: .onHold)
+        let action = TestVault.action("Send CV", .next, contexts: ["mac"], timeEstimate: 30)
+        #expect(TestVault.error(TestVault.snapshot(actions: [action], projects: [onHold]),
+                                .linkStep(project: onHold.id, action: action.id), env: env)
+                == .invalid("Only active projects put actions into Next"))
+    }
+
     @Test func promotingRespectsTheCapAndTheProjectStatus() {
         let project = TestVault.project("DAAD", steps: [ProjectStep(text: "Write")])
         var full = TestVault.nextOccupied(15)

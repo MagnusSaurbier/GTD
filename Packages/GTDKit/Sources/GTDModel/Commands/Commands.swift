@@ -152,6 +152,10 @@ public enum GTDCommand: Sendable, Equatable {
     case createProject(ProjectDraft)
     case updateProject(Project)
     case promoteStep(project: NoteID, stepIndex: Int, ActionDraft)
+    /// P6 — adds a step that points at an action note that already exists (`- [ ] Title →
+    /// [[Action]]`), and links that action to the project. Refused when the action is closed,
+    /// belongs to another project, or a step of this project already points at it (#61).
+    case linkStep(project: NoteID, action: NoteID)
 
     // MARK: Lists (§5a)
 

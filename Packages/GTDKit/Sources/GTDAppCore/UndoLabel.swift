@@ -39,6 +39,7 @@ public enum UndoLabel {
         case .createProject, .convertActionToProject: "Created project"
         case .createArea: "Created area"
         case .promoteStep: "Promoted step"
+        case .linkStep: "Linked step"
         case .deferInboxToReview: "Deferred to review"
 
         // §5a — the list commands. `Done` is STYLEGUIDE §6.3's wording for a finished list item;

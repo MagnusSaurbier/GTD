@@ -197,6 +197,8 @@ public struct ProjectDetailView: View {
     @Environment(\.vaultRootPath) private var vaultRootPath
     @State private var detailModel: ProjectDetailModel?
     @State private var newStepText = ""
+    /// The suggestion row `↓`/`↑` has moved to; Return links it instead of adding plain text.
+    @State private var highlightedSuggestion: Int?
     @State private var promptingStepIndex: Int?
     @State private var demotionNotice: String?
 
@@ -250,6 +252,7 @@ public struct ProjectDetailView: View {
             guard detailModel?.projectID != projectID else { return }
             detailModel = detail
             newStepText = ""
+            highlightedSuggestion = nil
             promptingStepIndex = nil
             demotionNotice = nil
         }
@@ -335,15 +338,49 @@ public struct ProjectDetailView: View {
             Task { try? await detail.moveStep(fromOffsets: offsets, toOffset: destination) }
         }
 
+        // #61 — typing offers existing actions; picking one links it instead of adding text.
+        let suggestions = detail.linkSuggestions(for: newStepText)
         TextField("New step", text: $newStepText)
             .textFieldStyle(.plain)
             .font(Typo.body)
+            .onChange(of: newStepText) { highlightedSuggestion = nil }
+            .onKeyPress(.downArrow) {
+                guard !suggestions.isEmpty else { return .ignored }
+                highlightedSuggestion = min((highlightedSuggestion ?? -1) + 1, suggestions.count - 1)
+                return .handled
+            }
+            .onKeyPress(.upArrow) {
+                guard let current = highlightedSuggestion else { return .ignored }
+                highlightedSuggestion = current == 0 ? nil : current - 1
+                return .handled
+            }
+            .onKeyPress(.escape) {
+                guard highlightedSuggestion != nil else { return .ignored }
+                highlightedSuggestion = nil
+                return .handled
+            }
             .onSubmit {
-                Task {
-                    try? await detail.addStep(newStepText)
-                    newStepText = ""
+                if let index = highlightedSuggestion, suggestions.indices.contains(index) {
+                    link(suggestions[index], detail)
+                } else {
+                    Task {
+                        try? await detail.addStep(newStepText)
+                        newStepText = ""
+                    }
                 }
             }
+
+        ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, action in
+            StepLinkSuggestionRow(action: action, isHighlighted: index == highlightedSuggestion) {
+                link(action, detail)
+            }
+        }
+    }
+
+    private func link(_ action: Action, _ detail: ProjectDetailModel) {
+        newStepText = ""
+        highlightedSuggestion = nil
+        Task { await model.report { try await detail.linkStep(to: action.id) } }
     }
 
     @ViewBuilder
@@ -493,6 +530,33 @@ private struct StepRow: View {
             .foregroundStyle(Color.textTertiary)
             .accessibilityLabel("Delete step")
         }
+    }
+}
+
+/// One existing action the "New step" field offers (#61). Tapping it links the action as a step.
+private struct StepLinkSuggestionRow: View {
+    let action: Action
+    let isHighlighted: Bool
+    let onLink: () -> Void
+
+    var body: some View {
+        Button(action: onLink) {
+            HStack(spacing: Spacing.m) {
+                Image(systemName: Symbols.linkStep)
+                    .foregroundStyle(Color.textTertiary)
+                Text(action.title)
+                    .font(Typo.body)
+                    .foregroundStyle(Color.ink)
+                Spacer(minLength: Spacing.s)
+                Text(Copy.status(action.status))
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.textSecondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(isHighlighted ? Color.accentWash : nil)
+        .accessibilityLabel(Copy.linkAsStep(action.title))
     }
 }
 
