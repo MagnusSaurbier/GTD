@@ -403,7 +403,10 @@ private struct StepRow: View {
     let onDelete: () -> Void
     let onPromote: (() -> Void)?
 
-    @State private var text: String
+    /// What the user is typing, only while they edit this row. Otherwise the row shows
+    /// `step.text` straight from the model: the Mac `List` reuses row views, and a copy taken
+    /// at init could show — and on blur write back — another step's text (#48, #62).
+    @State private var draft: String?
     @FocusState private var isFocused: Bool
 
     init(
@@ -422,7 +425,16 @@ private struct StepRow: View {
         self.onMoveDown = onMoveDown
         self.onDelete = onDelete
         self.onPromote = onPromote
-        self._text = State(initialValue: step.text)
+    }
+
+    private var text: Binding<String> {
+        Binding(get: { draft ?? step.text }, set: { draft = $0 })
+    }
+
+    /// Hands a changed draft to the model and drops it, so the row follows the note again.
+    private func commit() {
+        if let draft, draft != step.text { onEdit(draft) }
+        draft = nil
     }
 
     var body: some View {
@@ -434,20 +446,15 @@ private struct StepRow: View {
             .buttonStyle(.plain)
             .disabled(step.promotedTo != nil)
 
-            TextField("Step", text: $text, axis: .vertical)
+            TextField("Step", text: text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typo.body)
                 .strikethrough(step.done)
                 .foregroundStyle(step.done ? Color.textSecondary : Color.ink)
                 .focused($isFocused)
-                .onSubmit { onEdit(text) }
+                .onSubmit { commit() }
                 .onChange(of: isFocused) { _, focused in
-                    if !focused { onEdit(text) }
-                }
-                // Rows are keyed by position, so after an add or a move this row can be handed
-                // another step: take the model's text unless the user is typing here.
-                .onChange(of: step.text) { _, newText in
-                    if !isFocused { text = newText }
+                    if !focused { commit() }
                 }
 
             if step.promotedTo != nil {
