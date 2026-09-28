@@ -1,5 +1,6 @@
 #if canImport(SwiftUI)
 import SwiftUI
+import os
 #if os(macOS)
 import AppKit
 typealias PlatformFont = NSFont
@@ -301,13 +302,53 @@ enum NoteText {
     static func fittingSize(proposedWidth proposed: CGFloat?,
                             measure: (CGFloat) -> CGFloat) -> CGSize {
         if let proposed, proposed.isFinite, proposed > 0 {
-            return CGSize(width: proposed, height: measure(proposed))
+            // Measured at whole points: a live resize proposes fractional widths that differ
+            // only in rounding, and each distinct answer is another layout pass.
+            return CGSize(width: proposed, height: measure(max(1, proposed.rounded(.down))))
         }
         let height = measure(unproposedWidth)
         // The `0` probe asks for the minimum width: a text field can wrap to any width.
         if let proposed, proposed.isFinite { return CGSize(width: 0, height: height) }
         return CGSize(width: unproposedWidth, height: height)
     }
+
+    /// Answers a `NoteEditor` gives once layout is caught in a loop, before AppKit aborts.
+    ///
+    /// AppKit kills the app when a window needs more Update Constraints passes than it has views
+    /// (the 2026-09-27 and 2026-09-28 crashes). A loop shows up here as the proposed width
+    /// flipping within one run-loop turn — a live resize moves it about once per turn. Past
+    /// `widthChangeLimit` flips the guard trips and, until the turn ends, stops the answers from
+    /// moving: every real width gets the tallest height of the turn, the minimum and ideal probes
+    /// get the answer they had when it tripped. With nothing left to change, the layout settles;
+    /// the field may be a line too tall or a little clipped until the next turn — not a crash.
+    struct SizeGuard {
+        static let widthChangeLimit = 12
+        private var lastWidth: CGFloat?
+        private var changes = 0
+        private var tallest: CGFloat = 0
+        private var minimum: CGSize?
+        private var ideal: CGSize?
+        /// Set the first time a turn trips the guard; the owner logs it.
+        private(set) var tripped = false
+
+        mutating func settle(_ size: CGSize, proposedWidth proposed: CGFloat?) -> CGSize {
+            guard let proposed, proposed.isFinite, proposed > 0 else {
+                let isMinimum = proposed?.isFinite == true
+                if tripped { return (isMinimum ? minimum : ideal) ?? size }
+                if isMinimum { minimum = size } else { ideal = size }
+                return size
+            }
+            if let lastWidth, lastWidth != proposed { changes += 1 }
+            lastWidth = proposed
+            tallest = max(tallest, size.height)
+            if changes > Self.widthChangeLimit { tripped = true }
+            return tripped ? CGSize(width: size.width, height: tallest) : size
+        }
+
+        mutating func endTurn() { self = SizeGuard() }
+    }
+
+    static let layoutLog = Logger(subsystem: "com.magnussaurbier.gtd", category: "layout")
 
     static func height(layout: NSLayoutManager, container: NSTextContainer, font: PlatformFont,
                        minLines: Int) -> CGFloat {
@@ -407,7 +448,7 @@ public struct NoteEditor: NSViewRepresentable {
         }
         container.containerSize = view.bounds.width > 0
             ? CGSize(width: view.bounds.width, height: .greatestFiniteMagnitude) : previous
-        return size
+        return view.settle(size, proposedWidth: proposal.width)
     }
 
     private func configure(_ view: NoteTextView) {
@@ -437,6 +478,28 @@ public struct NoteEditor: NSViewRepresentable {
 }
 
 public final class NoteTextView: NSTextView {
+
+    private var sizeGuard = NoteText.SizeGuard()
+    private var sizeTurnScheduled = false
+
+    /// Passes a `sizeThatFits` answer through `NoteText.SizeGuard`, which is reset once the
+    /// current run-loop turn — one layout, or one step of a live resize — is over.
+    func settle(_ size: CGSize, proposedWidth: CGFloat?) -> CGSize {
+        if !sizeTurnScheduled {
+            sizeTurnScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                self?.sizeGuard.endTurn()
+                self?.sizeTurnScheduled = false
+            }
+        }
+        let wasTripped = sizeGuard.tripped
+        let answer = sizeGuard.settle(size, proposedWidth: proposedWidth)
+        if sizeGuard.tripped, !wasTripped {
+            NoteText.layoutLog.error(
+                "NoteEditor: layout loop, width kept changing in one turn; height held at \(answer.height) pt")
+        }
+        return answer
+    }
     var styler = NoteStyler(font: .body, tone: .ink)
     /// Keeps the TextKit stack alive (see `NoteText.makeStack`).
     var storage: NSTextStorage?
@@ -482,8 +545,10 @@ public final class NoteTextView: NSTextView {
         super.setFrameSize(newSize)
         guard newSize.width > 0, let container = textContainer,
               container.containerSize.width != newSize.width else { return }
+        // No `invalidateIntrinsicContentSize()` here: SwiftUI set this frame from our answer
+        // at this very width, and invalidating from inside its layout pass asked for another
+        // pass per frame — fuel for the Update Constraints loop that crashed on a resize.
         container.containerSize = CGSize(width: newSize.width, height: .greatestFiniteMagnitude)
-        invalidateIntrinsicContentSize()
     }
 
     public override var intrinsicContentSize: NSSize {
@@ -683,7 +748,7 @@ public struct NoteEditor: UIViewRepresentable {
         // `widthTracksTextView` follows the frame once there is one; until then keep the probe.
         view.textContainer.size = view.bounds.width > 0
             ? CGSize(width: view.bounds.width, height: .greatestFiniteMagnitude) : previous
-        return size
+        return view.settle(size, proposedWidth: proposal.width)
     }
 
     private func configure(_ view: NoteTextView) {
@@ -734,6 +799,28 @@ public struct NoteEditor: UIViewRepresentable {
 }
 
 public final class NoteTextView: UITextView {
+
+    private var sizeGuard = NoteText.SizeGuard()
+    private var sizeTurnScheduled = false
+
+    /// Passes a `sizeThatFits` answer through `NoteText.SizeGuard`, which is reset once the
+    /// current run-loop turn — one layout, or one step of a live resize — is over.
+    func settle(_ size: CGSize, proposedWidth: CGFloat?) -> CGSize {
+        if !sizeTurnScheduled {
+            sizeTurnScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                self?.sizeGuard.endTurn()
+                self?.sizeTurnScheduled = false
+            }
+        }
+        let wasTripped = sizeGuard.tripped
+        let answer = sizeGuard.settle(size, proposedWidth: proposedWidth)
+        if sizeGuard.tripped, !wasTripped {
+            NoteText.layoutLog.error(
+                "NoteEditor: layout loop, width kept changing in one turn; height held at \(answer.height) pt")
+        }
+        return answer
+    }
     var styler = NoteStyler(font: .body, tone: .ink)
     /// Keeps the TextKit stack alive (see `NoteText.makeStack`).
     var storage: NSTextStorage?
