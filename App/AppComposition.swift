@@ -117,6 +117,29 @@ final class AppComposition {
         }
     }
 
+    /// Onboarding → "Create new vault" (#60): creates `<location>/<name>` with the layout's
+    /// folders and opens it like a picked vault. Returns `nil` on success, otherwise why it did
+    /// not — onboarding shows that under the name field and the person picks again.
+    /// `VaultCreator` refuses a folder that already has content before writing anything.
+    ///
+    /// The location's security scope stays open across creating the folder *and* bookmarking
+    /// it: the new folder is reachable only through the location the person picked. Opening
+    /// then goes through the new folder's own bookmark, like any picked vault.
+    func createVault(named name: String, in location: URL) async -> String? {
+        do {
+            let root = try bookmark.withAccess(to: location) {
+                let root = try VaultCreator.create(named: name, in: location)
+                try bookmark.save(url: root)
+                return root
+            }
+            deviceSettings.vaultDisplayName = root.lastPathComponent
+            try await openVault()
+            return nil
+        } catch {
+            return AppError(error).message
+        }
+    }
+
     /// The last onboarding step was read.
     func finishOnboarding() {
         phase = vaultRootPath == nil ? .onboarding : .ready

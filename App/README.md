@@ -27,7 +27,11 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
 
 - **Launch:** `bootstrap()` resolves the security-scoped bookmark. No bookmark (or it no longer
   resolves) → `OnboardingView`; the folder it returns is saved, the vault opens behind it so the
-  validation step shows real counts, and `onFinished` takes onboarding down.
+  validation step shows real counts, and `onFinished` takes onboarding down. "Create new vault…"
+  (#60) goes through `AppComposition.createVault(named:in:)`: `VaultCreator` makes the folder
+  inside the picked location (under that location's security scope, which also covers
+  bookmarking it), then it opens exactly like a picked folder. Settings → "Change vault…" returns
+  to the same onboarding.
 - **Snapshots:** `AppModel` is swapped when the vault opens, and it is the only thing features
   see. The environment carries it plus `\.vaultRootPath` (for "Open in Obsidian"; the Mac
   `Settings` scene inherits nothing from `RootView`, so `GTDApp` sets both there too).
