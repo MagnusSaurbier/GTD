@@ -20,10 +20,6 @@ enum OverviewCopy {
     static let go = "Go"
     static let filter = "Filter"
     static let filterPlaceholder = "Filter by title"
-    static let openInObsidian = "Open in Obsidian"
-    /// The note's absolute file path to the clipboard, to hand the ticket to a terminal or a
-    /// `/do <path>` prompt.
-    static let copyPath = "Copy path"
     static let vaultIssues = "Vault issues"
     static let calendar = "Calendar"
     static let newCapture = "New capture"
@@ -59,8 +55,6 @@ enum OverviewCopy {
 enum OverviewSymbols {
     static let filter = "line.3.horizontal.decrease.circle"
     static let issues = "exclamationmark.triangle"
-    static let openExternally = "arrow.up.forward.app"
-    static let copy = "doc.on.doc"
     static let collapse = "chevron.down"
     static let expand = "chevron.up"
     static let calendar = "calendar"

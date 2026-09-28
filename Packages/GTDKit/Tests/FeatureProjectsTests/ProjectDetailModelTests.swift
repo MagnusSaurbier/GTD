@@ -131,6 +131,23 @@ struct ProjectDetailModelTests {
         #expect(detail.steps[2].done == false)
     }
 
+    @Test func deleteStepRemovesOnlyThatStep() async throws {
+        let model = makeModel()
+        let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
+        var expected = Fixtures.daadProject.steps.map(\.text)
+        expected.remove(at: 2)
+        try await detail.deleteStep(at: 2)
+        #expect(detail.steps.map(\.text) == expected)
+    }
+
+    @Test func deleteStepOutOfRangeIsANoOp() async throws {
+        let model = makeModel()
+        let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
+        let before = detail.steps
+        try await detail.deleteStep(at: before.count)
+        #expect(detail.steps == before)
+    }
+
     // MARK: - Steps: reorder (P6 — drag + ⌥↑↓)
 
     @Test func moveStepUpAndDownPersistTheNewOrder() async throws {
