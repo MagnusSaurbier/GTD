@@ -184,13 +184,32 @@ public enum ListEditing {
     public static func nextInputLine(text: String, caret: Int) -> Int? {
         let lines = split(text)
         var index = lineIndex(containing: caret, in: lines) + 1
-        func isInput(_ span: Span) -> Bool {
-            Line(parsing: span.text).content.allSatisfy { $0 == " " || $0 == "\t" }
-        }
         while index < lines.count, isInput(lines[index]) { index += 1 }
         while index < lines.count, !isInput(lines[index]) { index += 1 }
         guard index < lines.count else { return nil }
         return lines[index].end
+    }
+
+    /// `⇧⌘↩` — `nextInputLine`'s counterpart: the **previous input line**, i.e. the topmost
+    /// input line between the first and the second block of non-empty lines above the caret
+    /// (the input line under the previous heading). Input lines directly above the caret are
+    /// skipped first — they belong to the caret's own section — so from one input line the jump
+    /// lands on the *previous* heading's input line, and `⌘↩` from there comes straight back.
+    /// Same notion of input line as `nextInputLine` (blank, or only a list marker). Returns the
+    /// caret offset at the end of that line, or `nil` when there is none — the editor then
+    /// hands focus to the previous field.
+    public static func previousInputLine(text: String, caret: Int) -> Int? {
+        let lines = split(text)
+        var index = lineIndex(containing: caret, in: lines) - 1
+        while index >= 0, isInput(lines[index]) { index -= 1 }
+        while index >= 0, !isInput(lines[index]) { index -= 1 }
+        guard index >= 0 else { return nil }
+        while index > 0, isInput(lines[index - 1]) { index -= 1 }
+        return lines[index].end
+    }
+
+    private static func isInput(_ span: Span) -> Bool {
+        Line(parsing: span.text).content.allSatisfy { $0 == " " || $0 == "\t" }
     }
 
     // MARK: - Lines

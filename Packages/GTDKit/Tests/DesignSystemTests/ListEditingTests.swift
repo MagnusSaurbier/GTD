@@ -209,4 +209,52 @@ struct ListEditingTests {
         #expect(next("# Why?\n|\n# What?\n- [ ] done") == nil)
         #expect(next("|") == nil)
     }
+
+    // MARK: - ⇧⌘↩ (previous input line)
+
+    private func previous(_ marked: String) -> Int? {
+        let (text, selection) = unmark(marked)
+        return ListEditing.previousInputLine(text: text, caret: selection.lowerBound)
+    }
+
+    @Test func shiftCommandReturnJumpsBackPastThePreviousHeadingToItsInputLine() {
+        // From `What?`'s input line back to `Why?`'s, caret at the end of that line.
+        #expect(previous("# Why?\n\n# What?\n|\n") == "# Why?\n".utf16.count)
+        // A marker-only line counts as an input line; the caret lands after the marker.
+        #expect(previous("# Why?\n- [ ] \n# What?\nsome|thing") == "# Why?\n- [ ] ".utf16.count)
+    }
+
+    @Test func shiftCommandReturnLandsOnTheTopmostInputLineOfThatGap() {
+        // Several input lines between the two blocks: the topmost one, under the heading.
+        #expect(previous("# Why?\n\n\n\n# What?\n|") == "# Why?\n".utf16.count)
+        // The block above the caret may be several non-empty lines (heading plus text).
+        #expect(previous("# Why?\n\n# What?\ntext\n\nmo|re") == "# Why?\n".utf16.count)
+    }
+
+    @Test func shiftCommandReturnSkipsEmptyLinesRightAboveTheCaretFirst() {
+        #expect(previous("# Why?\n\n# What?\n\n\n|") == "# Why?\n".utf16.count)
+    }
+
+    @Test func shiftCommandReturnReachesTheTopWithoutASecondBlock() {
+        // No second non-empty line above: the gap runs to the start of the text.
+        #expect(previous("\n\n# What?\n|") == 0)
+    }
+
+    @Test func shiftCommandReturnIsNilWhenNoInputLineIsAbove() {
+        #expect(previous("# Why?\nbecause\n# What?\n|") == nil)
+        #expect(previous("# Why?\n|") == nil)
+        #expect(previous("|") == nil)
+        #expect(previous("\n\n|") == nil)
+    }
+
+    @Test func shiftCommandReturnRetracesCommandReturn() {
+        let text = "# Why?\n\n# What?\n- [ ] \n# Notes\n"
+        let why = "# Why?\n".utf16.count, what = "# Why?\n\n# What?\n- [ ] ".utf16.count
+        let notes = text.utf16.count
+        #expect(ListEditing.nextInputLine(text: text, caret: why) == what)
+        #expect(ListEditing.nextInputLine(text: text, caret: what) == notes)
+        #expect(ListEditing.previousInputLine(text: text, caret: notes) == what)
+        #expect(ListEditing.previousInputLine(text: text, caret: what) == why)
+        #expect(ListEditing.previousInputLine(text: text, caret: why) == nil)
+    }
 }

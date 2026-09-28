@@ -174,6 +174,7 @@ struct InboxCardView: View {
             SectionLabel(label, isMissing: isMissing)
             NoteEditor(text: text, prompt: placeholder)
                 .onAdvance { focus = Self.next(after: field) }
+                .onRetreat { focus = Self.previous(before: field, showsBody: session.showsBody) }
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: field)
@@ -186,6 +187,17 @@ struct InboxCardView: View {
     /// (and every other body field) the keyboard goes back to the card, so the keys act on it.
     static func next(after field: CardField) -> CardField? {
         field == .why ? .what : nil
+    }
+
+    /// `⇧⌘↩` above a field's first input line: `What?` → `Why?` → the note's body when the card
+    /// shows one, else the title. Every other field keeps the focus where it is (`nil` would
+    /// give the keys back to the card, which is not "previous").
+    static func previous(before field: CardField, showsBody: Bool) -> CardField? {
+        switch field {
+        case .what: .why
+        case .why: showsBody ? .body : .text
+        case .text, .body, .notes: field
+        }
     }
 
     /// A placeholder must never read as an entered value (no lying defaults): it is tertiary,
@@ -212,6 +224,7 @@ struct InboxCardView: View {
             }
             NoteEditor(text: $session.draft.what, prompt: Copy.whatPlaceholder)
                 .onAdvance { focus = Self.next(after: .what) }
+                .onRetreat { focus = Self.previous(before: .what, showsBody: session.showsBody) }
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
                 .focused($focus, equals: .what)
