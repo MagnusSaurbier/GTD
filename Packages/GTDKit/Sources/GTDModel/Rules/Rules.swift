@@ -621,7 +621,7 @@ public enum Rules {
             false
         case .renameInboxItem, .editInboxBody, .fileInbox, .deferInboxToReview, .createAction, .updateAction,
              .setStatus, .trashAction, .complete, .toggleCheckbox, .convertActionToProject,
-             .createArea, .createProject, .updateProject, .promoteStep,
+             .createArea, .createProject, .updateProject, .promoteStep, .linkStep,
              .renameList, .removeList, .addListItem, .updateListItem, .completeListItem,
              .trashListItem, .promoteListItem, .moveActionToList:
             true

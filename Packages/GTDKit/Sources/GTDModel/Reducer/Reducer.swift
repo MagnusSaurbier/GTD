@@ -89,6 +89,9 @@ public enum Reducer {
         case let .promoteStep(projectID, stepIndex, draft):
             return try promoteStep(s, projectID: projectID, stepIndex: stepIndex, draft: draft, env: env)
 
+        case let .linkStep(projectID, actionID):
+            return try linkStep(s, projectID: projectID, actionID: actionID, env: env)
+
         case let .createList(name):
             return try createList(s, name: name)
 
@@ -611,6 +614,38 @@ public enum Reducer {
         let action = try makeAction(from: linked, in: &next, env: env)
         next.actions.append(action)
         next.projects[projectIndex].steps[stepIndex].promotedTo = action.id
+        try checkCap(old: s, new: next, today: env.today)
+        return Reduction(snapshot: next)
+    }
+
+    /// P6/#61 — a new step that is already an action: the step line reads the action's title and
+    /// points at it (`→ [[Action]]`), and the action's `project:` names this project. One
+    /// command, so one undo takes back both halves.
+    private static func linkStep(
+        _ s: VaultSnapshot, projectID: NoteID, actionID: NoteID, env: ReducerEnv
+    ) throws(GTDError) -> Reduction {
+        guard let projectIndex = s.projects.firstIndex(where: { $0.id == projectID }) else {
+            throw .notFound(projectID)
+        }
+        guard let actionIndex = s.actions.firstIndex(where: { $0.id == actionID }) else {
+            throw .notFound(actionID)
+        }
+        let previous = s.actions[actionIndex]
+        guard !previous.status.isClosed else { throw .invalid(Message.linkClosedAction) }
+        guard previous.project == nil || previous.project == projectID else {
+            throw .invalid(Message.actionInOtherProject)
+        }
+        guard !s.projects[projectIndex].steps.contains(where: { $0.promotedTo == actionID }) else {
+            throw .invalid(Message.actionAlreadyAStep)
+        }
+
+        var next = s
+        var linked = previous
+        linked.project = projectID
+        // Same checks as any edit of the action — e.g. a Next action cannot join an on-hold project.
+        try normalize(&linked, previous: previous, waiting: previous.waiting, in: s, env: env)
+        next.actions[actionIndex] = linked
+        next.projects[projectIndex].steps.append(ProjectStep(text: linked.title, promotedTo: actionID))
         try checkCap(old: s, new: next, today: env.today)
         return Reduction(snapshot: next)
     }
@@ -1275,6 +1310,9 @@ public enum Reducer {
             + "and cannot be an area"
         static let stepAlreadyPromoted = "This step is already promoted"
         static let stepAlreadyDone = "This step is already done"
+        static let linkClosedAction = "A finished action cannot become a step"
+        static let actionInOtherProject = "This action belongs to another project"
+        static let actionAlreadyAStep = "This action is already a step of the project"
         static let knowledgeTargetIsSource = "The knowledge note would overwrite the capture"
         static let listNameRequired = "A list name is required"
         static let listNameReserved =

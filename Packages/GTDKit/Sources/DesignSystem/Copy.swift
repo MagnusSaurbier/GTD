@@ -55,6 +55,8 @@ public enum Copy {
     public static let turnIntoProject = "Turn into project"
     public static let deferToReview = "Defer to review"
     public static let promote = "Promote"
+    /// Accessibility label of a "New step" suggestion row (#61): linking that action as a step.
+    public static func linkAsStep(_ title: String) -> String { "Link \(title) as a step" }
     public static let demote = "Demote"
     /// Review deck's fourth choice (STYLEGUIDE §3.10): leaves a card exactly where it is.
     public static let keep = "Keep"
