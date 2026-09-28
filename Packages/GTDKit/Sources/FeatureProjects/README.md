@@ -24,7 +24,14 @@ symbol) that opens the project list in a popover / medium sheet — a bare `List
 height inside the action detail's `ScrollView`. `ProjectPickerContent` decides title, state and rows.
 
 Linux-compilable models (no SwiftUI — this is where the logic worth testing lives):
-- `ProjectsListModel` — grouping by area/status filters, open steps, demotion count, create area/project.
+- `ProjectsListModel` — status filters, the folder tree (`tree`, `lines(collapsed:)`), open steps,
+  demotion count, create area/project.
+- `ProjectTree` / `ProjectTreePath` (#67) — the projects overview as a folder tree built from the
+  project notes' paths: area-less projects (`Projects/no_area/…`, `Projects/<Name>/`) flat on top,
+  every other project under the folders it sits in (area note or not), alphabetical with
+  sub-folders first; `lines(collapsed:)` is the visible rows. `ProjectsListView` keeps the folded
+  folders in `@AppStorage("projects.collapsedFolders")` (device state, never the vault) and draws
+  folder rows like the Knowledge sheet's tree (#24) — the whole row toggles, no animation.
 - `ProjectDetailModel` — header edits, **area** (`areas`, `area`, `setArea(_:)` — R-7: picking an
   area moves the project's folder, one command, one commit, one undo; `nil` moves it into
   `Projects/no_area/`, and `titleCollision`/`notFound` are thrown for the picker to show), status +
