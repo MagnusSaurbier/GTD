@@ -198,6 +198,14 @@ Unplug the mouse for this one.
       caret on `What?`'s input line, `⌘↩` again (no input line left) moves focus on to the chips.
       `Esc` blurs a focused field so the single keys act on the card again. (2026-09-25, not
       yet seen on screen.)
+- [ ] The chip walk (#65, build 0.34): from `What?`, `⌘↩` (no input line left) puts a ring on
+      the first context chip and the legend reads `Tab ⇧Tab Move · ↩ Select · ⌘↩ Next row · Esc
+      Back`. `Tab`/`⇧Tab` move the ring (it wraps), `↩` toggles the chip — an unset chip under the
+      ring shows a faint fill, a set one a lighter fill. `⌘↩` → the time chips (single-select),
+      `⌘↩` → the action bar becomes `Next · Someday · Waiting · Done · Project` with the ring on
+      `Next`. `↩` on `Next` with a context or time missing puts the ring back on that row; with
+      everything filled it files the card. `Esc` first removes the ring, then collapses the card.
+      A long card scrolls the ringed row into view.
 - [ ] With no field focused: `1…8` toggle contexts and `⇧1…⇧4` pick a time bucket.
 - [ ] `⌘Z` undoes the last filing from anywhere on the screen.
 - [ ] Filing with a key animates the card out **in that key's direction**.
