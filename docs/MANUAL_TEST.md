@@ -196,6 +196,10 @@ Unplug the mouse for this one.
       and `⌘↩` on the action card, `1`…`9`/`0` on the navbar.
 - [ ] In `Why?`, `Tab` indents the line (`⇧Tab` outdents) and focus stays put; `⌘↩` puts the
       caret on `What?`'s input line, `⌘↩` again (no input line left) moves focus on to the chips.
+- [ ] `⇧⌘↩` walks back: in `What?` it moves focus to `Why?`, in `Why?` to the title (or the
+      inbox note's body when shown). In the action detail's body, with the caret under `# What?`,
+      `⇧⌘↩` puts it on `# Why?`'s empty line; `⌘↩` from there comes back; `⇧⌘↩` on `# Why?`'s line
+      focuses the title. (#69, build 0.37, not yet seen on screen.)
       `Esc` blurs a focused field so the single keys act on the card again. (2026-09-25, not
       yet seen on screen.)
 - [ ] The chip walk (#65, build 0.34): from `What?`, `⌘↩` (no input line left) puts a ring on

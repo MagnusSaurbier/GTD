@@ -167,6 +167,7 @@ private struct ActionDetailEditor: View {
                     text: Binding(get: { editor.body }, set: { editor.setBody($0) }),
                     minLines: 6)
                     .onAdvance { focus = nil }        // ⌘↩ past the last input line: keyboard away
+                    .onRetreat { focus = .title }     // ⇧⌘↩ above the first one: up to the title
                     .fixedSize(horizontal: false, vertical: true)
                     .focused($focus, equals: .body)
                     .id(TextEntry.body)
