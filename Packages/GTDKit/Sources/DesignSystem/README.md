@@ -178,6 +178,14 @@ works on it as on a `TextField` (checked on macOS 26). The text storage must be 
 a layout manager holds it weakly. Where a box or dot goes is computed from glyph locations
 (`NoteLayoutManager.rectFor`): after an incremental relayout TextKit 1's `boundingRect` answers a
 zero-wide rect for glyphs that follow hidden (null) glyphs at a line start (`NoteLayoutTests`).
+Its `sizeThatFits` answers from the proposal alone (`NoteText.fittingSize`), never from the
+view's current frame: a frame-dependent answer to the `0` probe made a legacy scroller flip the
+detail column between two widths until AppKit crashed on too many Update Constraints passes
+(`NoteSizingTests`). Its answers also pass `NoteText.SizeGuard`: when the proposed width flips
+more than a dozen times in one run-loop turn (a layout loop; a live resize moves it about once),
+the answers stop moving until the turn ends and the loop is logged (`com.magnussaurbier.gtd`,
+category `layout`) instead of AppKit aborting (2026-09-28 resize crash). `setFrameSize` only
+re-wraps the text; it does not invalidate the intrinsic size mid-layout.
 `MarkdownText.attributed(_:)` renders read-only note text
 (`CollapsibleText`).
 
