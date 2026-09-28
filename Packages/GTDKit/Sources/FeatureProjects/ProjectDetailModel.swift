@@ -126,6 +126,14 @@ public final class ProjectDetailModel {
         try await model.send(.updateProject(project))
     }
 
+    /// The step's trash button. Removes the line from the project note; an action the step was
+    /// promoted to stays where it is. Undoable like every other edit (N6).
+    public func deleteStep(at index: Int) async throws {
+        guard var project, project.steps.indices.contains(index) else { return }
+        project.steps.remove(at: index)
+        try await model.send(.updateProject(project))
+    }
+
     // MARK: - Steps: reorder (drag + ⌥↑↓)
 
     public func moveStep(fromOffsets: IndexSet, toOffset: Int) async throws {
