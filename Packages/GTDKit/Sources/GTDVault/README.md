@@ -13,6 +13,12 @@ The only module that touches the file system.
   pieces; the full `init(fileSystem:layout:parser:watcher:debounce:clock:today:)` is what tests use.
   Also `scan()`, `currentSnapshot`, `startWatching()`, `stopWatching()`, `close()`.
 - `VaultBookmark` + `BookmarkStore` / `PathBookmarkStore` — durable folder access.
+  `withAccess(to:_:)` brackets a freshly picked folder's security scope around a body (#60).
+- `VaultCreator` (#60) — `create(named:in:layout:)` makes `<location>/<name>/` and
+  `VaultLayout.requiredFolders` inside it, folders only; `folderName(for:)` trims and sanitises
+  the typed name. `VaultCreator.Refusal` (empty/hidden name, missing location, a file of that
+  name, a folder with content — `.DS_Store` aside) is thrown before anything is written; its
+  `errorDescription` is the wording onboarding shows.
 - `InboxWriter` — standalone capture (C1/C3); needs only the bookmark, no index, no codec.
   Writes `Inbox/<title>.md` named after the text (`CaptureText.note(for:)`); a taken name —
   including an evicted file's `.<name>.icloud` placeholder — gets ` 2`, ` 3`, …; an empty capture

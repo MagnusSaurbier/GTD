@@ -8,9 +8,11 @@ name, Mac key rebinds) and the vault-issues list.
 
 ## Public API
 
-`OnboardingView(onVaultPicked:onFinished:)` (`onFinished` is optional and defaulted — the
+`OnboardingView(onVaultPicked:onCreateVault:onFinished:)` (`onFinished` is optional and defaulted — the
 shell presents onboarding, so only the shell can take it down; it backs the last step's `Start`
-button), `SettingsView(deviceSettings:onChangeVault:)`, `VaultIssuesView()`.
+button; `onCreateVault` (#60), also optional, adds "Create new vault…": a name field, then the
+folder picker for the location; the closure returns `nil` on success or the refusal to show
+under the field, and the person picks again), `SettingsView(deviceSettings:onChangeVault:)`, `VaultIssuesView()`.
 
 The Contexts and Lists sections edit differently per platform: iOS uses stock list editing (`Edit`
 in the Contexts header → drag handles + delete, swipe for Rename / Remove; Lists/Favourites use
