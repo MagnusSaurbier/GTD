@@ -8,6 +8,21 @@ import DesignSystem
 /// Feature code never inlines a user-facing string.
 enum SettingsCopy {
 
+    // MARK: Onboarding — a new, empty vault (#60)
+
+    static let newVaultOffer = "No vault yet? The app can create an empty one for you."
+    static let createNewVault = "Create new vault…"
+    static let createVaultTitle = "Create a new vault"
+    static let createVaultExplanation =
+        "Name the vault, then choose where to put it. The app creates a new folder with that name "
+            + "and the GTD folders inside it (Inbox, Actions, Projects, …) — no sample notes. "
+            + "It never writes into a folder that already has something in it."
+    static let newVaultDefaultName = "GTD"
+    static let newVaultNamePlaceholder = "Vault name"
+    static let chooseNewVaultLocation = "Choose location…"
+    static let back = "Back"
+    static let changeVaultFooter = "Choose another folder, or create a new empty vault."
+
     // MARK: Lists (L2, R-5, I4b)
 
     static let addList = "Add a list"

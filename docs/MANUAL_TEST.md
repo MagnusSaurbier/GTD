@@ -202,6 +202,14 @@ Unplug the mouse for this one.
       focuses the title. (#69, build 0.37, not yet seen on screen.)
       `Esc` blurs a focused field so the single keys act on the card again. (2026-09-25, not
       yet seen on screen.)
+- [ ] The chip walk (#65, build 0.34): from `What?`, `⌘↩` (no input line left) puts a ring on
+      the first context chip and the legend reads `Tab ⇧Tab Move · ↩ Select · ⌘↩ Next row · Esc
+      Back`. `Tab`/`⇧Tab` move the ring (it wraps), `↩` toggles the chip — an unset chip under the
+      ring shows a faint fill, a set one a lighter fill. `⌘↩` → the time chips (single-select),
+      `⌘↩` → the action bar becomes `Next · Someday · Waiting · Done · Project` with the ring on
+      `Next`. `↩` on `Next` with a context or time missing puts the ring back on that row; with
+      everything filled it files the card. `Esc` first removes the ring, then collapses the card.
+      A long card scrolls the ringed row into view.
 - [ ] With no field focused: `1…8` toggle contexts and `⇧1…⇧4` pick a time bucket.
 - [ ] `⌘Z` undoes the last filing from anywhere on the screen.
 - [ ] Filing with a key animates the card out **in that key's direction**.
@@ -401,6 +409,12 @@ list take the drop. Inbox, Review and Routines never highlight and never take a 
 Run **without** `-useFixtures`.
 
 - [ ] Onboarding: pick `~/Desktop/GTD Test Vault`. The counts it shows match the folder.
+- [ ] Onboarding → "Create new vault…" (#60), name `GTD New`, location `~/Desktop`: the app
+      opens with 0 actions / 0 projects / empty inbox and no vault issues; `~/Desktop/GTD New`
+      holds only the empty folders (Inbox, Actions, Projects, Knowledge, Lists, GTD/…). Repeat
+      with the same name and location after dropping a file into it: the create step says the
+      folder is not empty, nothing is written, and a different name works. On iPhone, the same
+      in an iCloud Drive folder.
 - [ ] Quit and relaunch: it opens straight into the app — no second folder prompt (Gate 3).
 - [ ] Capture `buy milk` twice: `Inbox/buy milk.md` and `Inbox/buy milk 2.md`, neither
       overwritten. An empty capture writes nothing.

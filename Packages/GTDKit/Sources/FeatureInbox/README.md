@@ -57,6 +57,14 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
   state). `InboxSession` and `MakeActionModel` both drive exactly this; neither owns a copy of a
   required field, the cap flow or the asterisk rule. `InboxRefusal` is the one list of ways the
   card says no.
+- `CardKeyCursor.swift` — the Mac chip walk of the opened action card (#65): `CardKeyRow`
+  (`context` → `time` → `outcome`), `CardOutcome` (`Next · Someday · Waiting · Done · Project`,
+  each with its `InboxExit`) and `CardKeyCursor` (`first`, `advanced` = `⌘↩`, `moved(by:)` =
+  `Tab`/`⇧Tab` wrapping in the row, `forMissing` = where a refusal sends it). `InboxSession`
+  stores the one cursor (`keyCursor`) and drives it: `advanceKeyCursor()`, `moveKeyCursor(by:)`,
+  `pressKeyCursor()`, `perform(_: CardOutcome)`; `handle(.done)` walks instead of filing while a
+  cursor exists; `escape()` clears it first (`.clearedCursor`); a focused field, a collapse, a
+  filing and undo end it.
 - `MakeActionModel.swift` — L4's entry point: the opened action card alone, over a `ListItem`
   (sending `promoteListItem`) or an `Action` (sending `updateAction`; `ActionCardState.previousStatus`
   is set so the card asks exactly what `Reducer.normalize` asks of a note already in a tier).
@@ -138,6 +146,20 @@ swallows it: one press, one rung, whatever has focus. A nested sheet is another 
 takes key focus back (`hasKeyFocus`), so the single keys and the next `Esc` still land.
 `InboxSessionView` and `MakeActionCardView` both use it.
 
+## The chip walk on the Mac (#65)
+
+`⌘↩` in `What?` with no input line left calls `NoteEditor.onAdvance`, which `InboxCardView` hands
+to its host (`onLeaveFields`): the view drops field focus, takes key focus back and calls
+`advanceKeyCursor()`. From then on `InboxSessionView.macContent`'s `.onKeyPress(keys: [.tab,
+"\u{19}"])` (`⇧Tab` may arrive either as a shifted tab or as the back-tab character) and
+`.onKeyPress(.return)` route to the session; `⌘↩` goes through `perform(.done)` →
+`handle(.done)`, which walks while a cursor exists. The chips draw the cursor through
+`ContextChipGroup`/`TimeBucketChipGroup(highlighted:)` → `Chip(isKeyHighlighted:)` and
+`DesignSystem.keyHighlight(_:in:)`; the rows carry `CardField.contextChips`/`.timeChips` ids so
+`MacCardScroll` scrolls the highlighted row into view. On the outcome row the Mac action bar is
+replaced by `outcomeRow` (bordered buttons, `Next`/`Someday` fly like their keys). iOS draws
+none of this. `MakeActionCardView` (L4) has no walk yet.
+
 ## Sheets on the Mac (gotcha)
 
 Every `Form` in `InboxSheets.swift` and `MakeActionProjectSheet` ends in
@@ -208,7 +230,9 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 125 tests, all Linux-compilable.
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 155 tests, all Linux-compilable.
+`CardKeyCursorTests` covers the #65 chip walk: the pure row order and wrapping, and in the session
+`⌘↩` walking vs. Done, `↩` toggling, a refusal moving the cursor, `Esc`, focus and the legend.
 
 `InboxSessionTests` pins one transition or one refusal at a time: the LIFO queue, every step
 change, every exit of STYLEGUIDE §3.6's three tables, the validation flags and the asterisk
