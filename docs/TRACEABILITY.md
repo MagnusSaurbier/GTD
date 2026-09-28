@@ -129,7 +129,7 @@ screen**, so every view row below is "compiled + unit-tested, not clicked";
 
 | ID | Requirement | Implemented in | Tested by | Status |
 | --- | --- | --- | --- | --- |
-| R1 | Routines defined as markdown templates in the vault (Morning, Bedtime) | `GTD/Routines/<Name>.md` (ARCHITECTURE §3), `NoteCodec.decodeRoutine`, `GTDFixtures` sample vault | `GTDMarkdownTests/DecodeTests`, `GTDVaultTests/SampleVaultScanTests` | **done** |
+| R1 | Routines defined as markdown templates in the vault (Morning, Bedtime) | `GTD/Routines/<Name>.md` (ARCHITECTURE §3; optional `day:` for a weekly routine, #58), `NoteCodec.decodeRoutine`, `GTDFixtures` sample vault | `GTDMarkdownTests/DecodeTests`, `GTDVaultTests/SampleVaultScanTests` | **done** |
 | R2 | Step-by-step cards, big done/skip, sub-steps inline | `FeatureRoutines/RoutineViews` over `ItemCard` + `GlassActionBar`; `RoutineRun` drives it | `FeatureRoutinesTests/RoutineRunTests` | **done (blind)** for the cards; the run is **done**. |
 | R3 | Start via scheduled notification **and** home-screen button / Shortcut | `NotificationKind.routineStart` + `RoutineDeepLink` (`gtd://routine/<path>`), the iPhone Routines tab, `GTDIntents.StartRoutineIntent` | `GTDNotificationsTests/NotificationRouteTests`, `GTDIntentsTests/DeepLinkTests`, `PendingRouteTests` | **partial** — no Control Centre widget and no Shortcuts picker for routines → `docs/follow-ups/52-notification-actions-and-widget.md`. Notification, tab and intent are in place. |
 | R4 | Journaling steps have no text input (journaling is on the reMarkable) | `RoutineStep.isJournaling` only changes the meta line; **no** routine step anywhere takes text | `FeatureRoutinesTests/RoutineRunTests` | **done** |

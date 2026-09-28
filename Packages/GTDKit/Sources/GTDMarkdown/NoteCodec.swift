@@ -342,6 +342,14 @@ public enum NoteCodec {
             }
             time = parsed
         }
+        var day: Weekday?
+        if let raw = doc.scalar("day"), !raw.trimmingCharacters(in: .whitespaces).isEmpty {
+            guard let parsed = Weekday(name: raw) else {
+                throw NoteCodecError.unreadable(
+                    path: id.path, reason: "`day` is not a weekday (e.g. Sunday): \(raw)")
+            }
+            day = parsed
+        }
         var steps: [RoutineStep] = []
         for item in CheckboxList.parse(doc.bodyLines) {
             if item.depth == 0 {
@@ -351,7 +359,8 @@ public enum NoteCodec {
             }
         }
         return Routine(
-            id: id, title: id.title, time: time, steps: steps, passthrough: passthrough(text))
+            id: id, title: id.title, time: time, day: day, steps: steps,
+            passthrough: passthrough(text))
     }
 
     public static func encode(_ routine: Routine) -> String {
@@ -365,6 +374,13 @@ public enum NoteCodec {
                 doc.setValue("time", YAMLScalar.quoted(time.hhmm), canonicalOrder: Keys.routine)
             } else {
                 doc.removeValue("time")
+            }
+        }
+        if reference?.day != routine.day {
+            if let day = routine.day {
+                doc.setValue("day", day.name, canonicalOrder: Keys.routine)
+            } else {
+                doc.removeValue("day")
             }
         }
         if (reference?.steps ?? []) != routine.steps {
@@ -733,7 +749,7 @@ public enum NoteCodec {
         public static let listItem = ["created"]
         public static let area = ["kind"]
         public static let project = ["kind", "status", "area"]
-        public static let routine = ["time"]
+        public static let routine = ["time", "day"]
         public static let config = [
             "contexts", "onTheGoContexts", "nextCap", "favouriteLists", "listIcons", "layout",
         ]

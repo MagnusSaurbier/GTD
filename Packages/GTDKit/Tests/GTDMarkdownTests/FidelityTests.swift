@@ -146,6 +146,7 @@ struct FidelityTests {
         let routine = Routine(
             id: NoteID(path: "GTD/Routines/R.md"), title: "R",
             time: DayTime(hour: 0, minute: 5),
+            day: .sunday,
             steps: [
                 RoutineStep(id: RoutineStep.slug("Frühstück"), title: "Frühstück",
                             substeps: ["Brainsmoothie", "Brötchen"]),
@@ -153,6 +154,7 @@ struct FidelityTests {
             ])
         let back = try NoteCodec.decodeRoutine(id: routine.id, text: NoteCodec.encode(routine))
         #expect(back.time == routine.time)
+        #expect(back.day == routine.day)
         #expect(back.steps == routine.steps)
     }
 

@@ -33,7 +33,12 @@ public struct SystemNotificationCenter: NotificationCenterPort {
         content.userInfo = ["deepLink": notification.deepLink]
 
         let trigger: UNCalendarNotificationTrigger
-        if notification.repeatsDaily {
+        if let weekday = notification.repeatsWeekly {
+            // Weekday + hour/minute, so it fires every week on that day (a routine with `day:`).
+            var components = calendar.dateComponents([.hour, .minute], from: notification.fireDate)
+            components.weekday = weekday.gregorianWeekday
+            trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        } else if notification.repeatsDaily {
             // Hour/minute only, so it fires every day at that time (a routine's start).
             let time = calendar.dateComponents([.hour, .minute], from: notification.fireDate)
             trigger = UNCalendarNotificationTrigger(dateMatching: time, repeats: true)

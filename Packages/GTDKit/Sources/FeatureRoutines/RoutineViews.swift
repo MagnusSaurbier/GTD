@@ -61,13 +61,9 @@ public struct RoutinesHomeView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// `07:00 · Not started`, `07:00 · 3 of 8`, `07:00 · Finished` — omits the time when the
-    /// routine has none, same "missing values are simply omitted" rule as everywhere else.
+    /// `Routine.homeMetaLine(progress:)` (tested in `RoutineRunTests`).
     private func metaLine(routine: Routine, progress: RoutineProgress) -> String {
-        var parts: [String] = []
-        if let time = routine.time { parts.append(time.hhmm) }
-        parts.append(progress.homeText)
-        return parts.joined(separator: " · ")
+        routine.homeMetaLine(progress: progress)
     }
 }
 

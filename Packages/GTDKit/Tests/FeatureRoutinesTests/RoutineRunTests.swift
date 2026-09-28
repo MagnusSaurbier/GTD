@@ -100,6 +100,19 @@ struct RoutineRunTests {
         #expect(progress.homeText == "Finished")
     }
 
+    // MARK: - Home row meta line (issue #58)
+
+    @Test func metaLineLeadsWithTheWeekdayOnlyWhenTheRoutineHasOne() {
+        var routine = Routine(id: NoteID(path: "GTD/Routines/R.md"), title: "R")
+        #expect(routine.homeMetaLine(progress: .notStarted) == "Not started")
+        routine.time = DayTime(hour: 7, minute: 0)
+        #expect(routine.homeMetaLine(progress: .notStarted) == "07:00 · Not started")
+        routine.day = .sunday
+        #expect(routine.homeMetaLine(progress: .inProgress(completed: 3, total: 8)) == "Sunday 07:00 · 3 of 8")
+        routine.time = nil
+        #expect(routine.homeMetaLine(progress: .finished) == "Sunday · Finished")
+    }
+
     // MARK: - Journaling heuristic (R4 — no text input, ever, regardless of this match)
 
     @Test func journalingStepsAreDetectedFromTheirOwnWords() {

@@ -257,6 +257,35 @@ struct DecodeTests {
         #expect(CheckboxList.parseLine("- [ ] A → B")?.text == "A → B")
     }
 
+    // MARK: - Routine day
+
+    /// The vault note that motivated issue #58: `GTD/Routines/Topic Probe Research.md`.
+    @Test func decodesAWeeklyRoutine() throws {
+        let text = "---\ntime: 9:00\nday: Sunday\n---\n- [ ] Select one topic\n- [ ] Ask claude for\n\t- [ ] overview\n"
+        let routine = try NoteCodec.decodeRoutine(
+            id: NoteID(path: "GTD/Routines/Topic Probe Research.md"), text: text)
+        #expect(routine.time == DayTime(hour: 9, minute: 0))
+        #expect(routine.day == .sunday)
+        #expect(routine.steps.map(\.title) == ["Select one topic", "Ask claude for"])
+    }
+
+    @Test func aMissingOrEmptyDayMeansEveryDay() throws {
+        let id = NoteID(path: "GTD/Routines/Morning.md")
+        #expect(try NoteCodec.decodeRoutine(id: id, text: "---\ntime: \"07:00\"\n---\n").day == nil)
+        #expect(try NoteCodec.decodeRoutine(id: id, text: "---\ntime: \"07:00\"\nday:\n---\n").day == nil)
+        #expect(try NoteCodec.decodeRoutine(id: id, text: "---\nday: \"\"\n---\n").day == nil)
+    }
+
+    @Test func anInvalidDayIsRefusedWithPathAndReason() throws {
+        let id = NoteID(path: "GTD/Routines/Weekly.md")
+        #expect {
+            _ = try NoteCodec.decodeRoutine(id: id, text: "---\ntime: \"09:00\"\nday: Someday\n---\n")
+        } throws: { error in
+            guard case let NoteCodecError.unreadable(path, reason) = error else { return false }
+            return path == id.path && reason.contains("`day`") && reason.contains("Someday")
+        }
+    }
+
     // MARK: - Routine log
 
     @Test func decodesARoutineLogFile() throws {

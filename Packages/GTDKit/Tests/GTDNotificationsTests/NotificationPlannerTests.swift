@@ -230,6 +230,44 @@ struct NotificationPlannerTests {
         #expect(planned[0].deepLink == "gtd://routine/GTD/Routines/Morning.md")
     }
 
+    @Test func aRoutineWithADayRepeatsWeeklyFromItsNextOccurrence() throws {
+        let monday = Day(year: 2026, month: 9, day: 28)
+        let now = Support.instant(monday, 9, 0, calendar: utc)
+        let snapshot = VaultSnapshot(routines: [
+            Routine(id: NoteID(path: "GTD/Routines/Weekly.md"), title: "Weekly",
+                    time: DayTime(hour: 9, minute: 30), day: .sunday),
+        ])
+        let planned = try #require(NotificationPlanner.plan(snapshot: snapshot, now: now, calendar: utc).first)
+        #expect(!planned.repeatsDaily)
+        #expect(planned.repeatsWeekly == .sunday)
+        #expect(planned.fireDate == Support.instant(Day(year: 2026, month: 10, day: 4), 9, 30, calendar: utc))
+        #expect(planned.id == "routineStart:GTD/Routines/Weekly.md:Sunday")
+    }
+
+    @Test func aRoutineWhoseDayIsTodayStartsToday() throws {
+        let sunday = Day(year: 2026, month: 10, day: 4)
+        let now = Support.instant(sunday, 8, 0, calendar: utc)
+        let snapshot = VaultSnapshot(routines: [
+            Routine(id: NoteID(path: "GTD/Routines/Weekly.md"), title: "Weekly",
+                    time: DayTime(hour: 9, minute: 0), day: .sunday),
+        ])
+        let planned = try #require(NotificationPlanner.plan(snapshot: snapshot, now: now, calendar: utc).first)
+        #expect(planned.fireDate == Support.instant(sunday, 9, 0, calendar: utc))
+    }
+
+    @Test func movingARoutineToAnotherDayChangesItsIdentifier() {
+        var routine = Routine(id: NoteID(path: "GTD/Routines/Weekly.md"), title: "Weekly",
+                              time: DayTime(hour: 9, minute: 0))
+        let now = Date()
+        let daily = NotificationPlanner.plan(snapshot: VaultSnapshot(routines: [routine]), now: now, calendar: utc)
+        routine.day = .sunday
+        let sunday = NotificationPlanner.plan(snapshot: VaultSnapshot(routines: [routine]), now: now, calendar: utc)
+        routine.day = .saturday
+        let saturday = NotificationPlanner.plan(snapshot: VaultSnapshot(routines: [routine]), now: now, calendar: utc)
+        #expect(Set([daily[0].id, sunday[0].id, saturday[0].id]).count == 3)
+        #expect(daily[0].repeatsWeekly == nil)
+    }
+
     @Test func routineWithoutATimeIsNeverPlanned() {
         let snapshot = VaultSnapshot(routines: [
             Routine(id: NoteID(path: "GTD/Routines/Untimed.md"), title: "Untimed", time: nil),

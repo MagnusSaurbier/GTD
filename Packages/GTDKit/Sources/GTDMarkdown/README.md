@@ -48,7 +48,7 @@ and then patched the same way.
 - `CheckboxList.parseLine` accepts exactly what `GTDModel.Checkbox.scan` accepts (`-`/`*`, a
   space, `[ ]`/`[x]`/`[X]`) — the reducer indexes checkboxes with the model's scanner.
 - Refused rather than guessed (each throws `.unreadable` with path + reason): unknown or missing
-  `status` (a word outside `ActionStatus.acceptedRawValues`), invalid YAML, duplicate frontmatter keys, an unknown routine-step `result`, a routine
+  `status` (a word outside `ActionStatus.acceptedRawValues`), invalid YAML, duplicate frontmatter keys, a routine `time` that is not `HH:mm` or a `day` that is not a weekday name, an unknown routine-step `result`, a routine
   log file whose name is not `<yyyy-MM-dd>--<device>.md`, an inbox item without `created`, and
   a routine log whose `entries:` is something other than a list or empty — reading that as
   "no entries" would let the next logged step regenerate the file over the day's history.

@@ -123,6 +123,16 @@ public enum RoutineProgress: Equatable, Sendable {
     }
 }
 
+extension Routine {
+    /// The home row's meta line: `07:00 · Not started`, `Sunday 09:00 · 3 of 8`, `Finished`.
+    /// The weekday leads when the routine has a `day`; a missing time or day is simply omitted,
+    /// same "missing values are simply omitted" rule as everywhere else.
+    public func homeMetaLine(progress: RoutineProgress) -> String {
+        let schedule = [day?.name, time?.hhmm].compactMap { $0 }.joined(separator: " ")
+        return schedule.isEmpty ? progress.homeText : "\(schedule) · \(progress.homeText)"
+    }
+}
+
 extension RoutineStep {
     /// Best-effort match for R4's journaling steps (dreams, achievements, gratitude,
     /// will-do-better). There is no model flag for this — ARCHITECTURE §3 explicitly dropped a

@@ -4,7 +4,7 @@ Routines: one step per screen, done/skip, resume from today's log (R1–R6).
 
 ## Public API
 
-- `RoutinesHomeView()` — one row per routine (icon, time, today's state); tapping one presents
+- `RoutinesHomeView()` — one row per routine (icon, weekday if the routine has a `day`, time, today's state — `Routine.homeMetaLine`); tapping one presents
   `RoutineRunnerView` (`fullScreenCover` on iOS, `sheet` on Mac).
 - `RoutineRunnerView(routine:onFinished:)` — one step per screen: `ItemCard` with the step title,
   sub-steps as a local tappable checklist (never logged; a journaling step with none shows "On

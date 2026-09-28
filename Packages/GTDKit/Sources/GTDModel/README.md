@@ -6,7 +6,7 @@ Compiles and tests on Linux.
 
 ## Public API
 
-- `Core/` — `NoteID`, `Day` + `DayTime` (integer civil calendar), `VaultLayout` (folder defaults
+- `Core/` — `NoteID`, `Day` + `DayTime` (integer civil calendar), `Weekday` (a routine's `day:`), `VaultLayout` (folder defaults
   and every path builder), `RenameMap` (old id → new id, `resolve`/`merging`), `CaptureText`
   (R-4: the title a capture is filed under, and the body that keeps what the title could not).
 - `Entities/` — `InboxItem`, `Action`, `GTDList`, `ListItem`, `Area`, `Project`, `ProjectStep`, `LogEntry`, `Routine`,

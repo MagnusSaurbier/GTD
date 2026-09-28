@@ -9,7 +9,7 @@ public enum NotificationKind: String, Sendable, CaseIterable, Codable, Hashable 
     case dueApproaching
     /// A waiting item's follow-up is due (W1).
     case followUp
-    /// A routine starts (R3) — a repeating daily trigger.
+    /// A routine starts (R3) — a repeating daily trigger, or weekly for a routine with a `day`.
     case routineStart
     /// Several same-morning items collapsed into one ("3 items came back today").
     case summary
@@ -17,7 +17,8 @@ public enum NotificationKind: String, Sendable, CaseIterable, Codable, Hashable 
 
 /// One pending local notification, fully described and platform-free so the planner stays pure.
 public struct PlannedNotification: Sendable, Equatable, Identifiable {
-    /// Stable: `<kind>:<note path>` (plus the day for non-repeating kinds).
+    /// Stable: `<kind>:<note path>` (plus the day for non-repeating kinds, and the weekday for a
+    /// weekly routine — so moving a routine to another weekday replaces the pending request).
     public let id: String
     public var kind: NotificationKind
     public var title: String
@@ -25,6 +26,8 @@ public struct PlannedNotification: Sendable, Equatable, Identifiable {
     /// When it fires. Repeating kinds use the time of day only.
     public var fireDate: Date
     public var repeatsDaily: Bool
+    /// Repeats every week on this weekday at `fireDate`'s time of day (a routine with a `day`).
+    public var repeatsWeekly: Weekday?
     /// `gtd://routine/<id>`, `gtd://action/<path>`, `gtd://waiting`.
     public var deepLink: String
 
@@ -35,6 +38,7 @@ public struct PlannedNotification: Sendable, Equatable, Identifiable {
         body: String,
         fireDate: Date,
         repeatsDaily: Bool = false,
+        repeatsWeekly: Weekday? = nil,
         deepLink: String
     ) {
         self.id = id
@@ -43,6 +47,7 @@ public struct PlannedNotification: Sendable, Equatable, Identifiable {
         self.body = body
         self.fireDate = fireDate
         self.repeatsDaily = repeatsDaily
+        self.repeatsWeekly = repeatsWeekly
         self.deepLink = deepLink
     }
 }
@@ -71,7 +76,8 @@ public struct DeviceNotificationSettings: Sendable, Equatable, Codable {
 /// - `deferReturn` — morning of `Action.deferDate`, once.
 /// - `dueApproaching` — morning of `due - 1 day` **and** morning of `due` (two notifications).
 /// - `followUp` — morning of `Action.followUpDate`, for `status == .waiting` only.
-/// - `routineStart` — a daily-repeating trigger at `Routine.time`.
+/// - `routineStart` — a daily-repeating trigger at `Routine.time`; with `Routine.day` set, a
+///   weekly-repeating one on that weekday instead (first fire date = its next occurrence).
 ///
 /// "Morning" is `settings.morningTime`; a fire date at or before `now` is dropped ("past dates
 /// ignored") so a device that has not synced in a while does not resurface stale reminders.
@@ -161,16 +167,27 @@ public enum NotificationPlanner {
         _ routine: Routine, now: Date, calendar: Calendar
     ) -> PlannedNotification? {
         guard let time = routine.time else { return nil }
-        guard let fireDate = calendar.date(
-            bySettingHour: time.hour, minute: time.minute, second: 0, of: now)
-        else { return nil }
+        var id = "\(NotificationKind.routineStart.rawValue):\(routine.id.path)"
+        let fireDate: Date?
+        if let weekday = routine.day {
+            // The next day on that weekday, today included (a weekly trigger only uses the
+            // weekday + time, so an earlier time today changes nothing).
+            let today = Day(now, calendar: calendar)
+            let ahead = (weekday.rawValue - today.isoWeekday + 7) % 7
+            fireDate = today.adding(days: ahead).date(at: time, in: calendar)
+            id += ":\(weekday.name)"
+        } else {
+            fireDate = calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: now)
+        }
+        guard let fireDate else { return nil }
         return PlannedNotification(
-            id: "\(NotificationKind.routineStart.rawValue):\(routine.id.path)",
+            id: id,
             kind: .routineStart,
             title: routine.title,
             body: "Time for \(routine.title).",
             fireDate: fireDate,
-            repeatsDaily: true,
+            repeatsDaily: routine.day == nil,
+            repeatsWeekly: routine.day,
             deepLink: NotificationRoute.routine(routine.id).url)
     }
 
