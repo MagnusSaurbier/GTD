@@ -147,8 +147,10 @@ public struct KeyHighlightRing<S: InsettableShape>: ViewModifier {
     public func body(content: Content) -> some View {
         content
             .overlay {
-                shape.inset(by: -3)
-                    .stroke(Color.ink, lineWidth: 2)
+                // Drawn in a frame 4 pt larger on every side rather than with `inset(by: -3)`:
+                // a negatively inset `Capsule` keeps its old corner radius and grows flat ends.
+                shape.strokeBorder(Color.ink, lineWidth: 2)
+                    .padding(-4)
                     .scaleEffect(isOn || reduceMotion ? 1 : 1.08)
                     .opacity(isOn ? 1 : 0)
                     .allowsHitTesting(false)

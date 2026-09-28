@@ -552,7 +552,9 @@ struct InboxSessionView: View {
             ForEach(Array(CardOutcome.allCases.enumerated()), id: \.element) { index, outcome in
                 Button { choose(outcome) } label: {
                     VStack(spacing: Spacing.xs) {
+                        // One fixed symbol height, so the five labels sit on one line.
                         Image(systemName: outcome.symbol).symbolRenderingMode(.hierarchical)
+                            .frame(height: Spacing.l)
                         Text(outcome.title).lineLimit(1)
                     }
                     .font(Typo.chip)
@@ -560,7 +562,7 @@ struct InboxSessionView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .keyHighlight(highlighted == index, in: RoundedRectangle(cornerRadius: 7))
+                .keyHighlight(highlighted == index, in: RoundedRectangle(cornerRadius: 10))
             }
         }
         .padding(.bottom, Spacing.s)
