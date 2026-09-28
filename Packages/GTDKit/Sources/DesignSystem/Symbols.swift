@@ -38,6 +38,8 @@ public enum Symbols {
     public static let weeklyReview = "checklist"
     public static let journaling = "pencil.and.scribble"
     public static let promoteStep = "arrow.up.right.circle"
+    /// The "New step" field's suggestion rows: an existing action that would become the step (#61).
+    public static let linkStep = "link"
 
     /// Inline checklist rows (A2, T21). Not yet in STYLEGUIDE §7 — flagged there is open;
     /// these are the stock SF Symbols pair for a checked/unchecked list item.
