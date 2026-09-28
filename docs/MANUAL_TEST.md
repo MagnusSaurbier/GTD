@@ -405,6 +405,12 @@ list take the drop. Inbox, Review and Routines never highlight and never take a 
 Run **without** `-useFixtures`.
 
 - [ ] Onboarding: pick `~/Desktop/GTD Test Vault`. The counts it shows match the folder.
+- [ ] Onboarding → "Create new vault…" (#60), name `GTD New`, location `~/Desktop`: the app
+      opens with 0 actions / 0 projects / empty inbox and no vault issues; `~/Desktop/GTD New`
+      holds only the empty folders (Inbox, Actions, Projects, Knowledge, Lists, GTD/…). Repeat
+      with the same name and location after dropping a file into it: the create step says the
+      folder is not empty, nothing is written, and a different name works. On iPhone, the same
+      in an iCloud Drive folder.
 - [ ] Quit and relaunch: it opens straight into the app — no second folder prompt (Gate 3).
 - [ ] Capture `buy milk` twice: `Inbox/buy milk.md` and `Inbox/buy milk 2.md`, neither
       overwritten. An empty capture writes nothing.

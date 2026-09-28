@@ -24,18 +24,37 @@ import UIKit
 /// steps see the loaded snapshot for free.
 public struct OnboardingView: View {
     private let onVaultPicked: (URL) -> Void
+    private let onCreateVault: ((URL, String) async -> String?)?
     private let onFinished: (() -> Void)?
     @Environment(AppModel.self) private var model
     @State private var isPickerPresented = false
+    /// What the one folder picker is for (#60): an existing vault, or where a new one goes.
+    /// One `.fileImporter` per view — SwiftUI does not reliably present two on the same view.
+    @State private var pickerPurpose: PickerPurpose = .existingVault
     @State private var step: Step = .welcome
+    @State private var newVaultName = SettingsCopy.newVaultDefaultName
+    /// Why the last "Create new vault" was refused (#60) — shown under the field, the person
+    /// picks again. Nothing was written when this is set.
+    @State private var createRefusal: String?
+    @State private var isCreating = false
 
-    private enum Step { case welcome, validate, notifications, shortcut }
+    private enum Step { case welcome, create, validate, notifications, shortcut }
+    private enum PickerPurpose { case existingVault, newVaultLocation }
 
     /// `onFinished` (T40-1, defaulted so the frozen one-argument form still compiles) is how the
     /// shell learns that the last step has been read: onboarding is presented by the shell, so
     /// only the shell can take it down.
-    public init(onVaultPicked: @escaping (URL) -> Void, onFinished: (() -> Void)? = nil) {
+    ///
+    /// `onCreateVault` (#60) creates `<location>/<name>` with the vault's folder skeleton and
+    /// opens it; it returns `nil` on success or the reason it refused (a non-empty folder, …),
+    /// which the create step shows so the person can pick again. `nil` hides "Create new vault".
+    public init(
+        onVaultPicked: @escaping (URL) -> Void,
+        onCreateVault: ((URL, String) async -> String?)? = nil,
+        onFinished: (() -> Void)? = nil
+    ) {
         self.onVaultPicked = onVaultPicked
+        self.onCreateVault = onCreateVault
         self.onFinished = onFinished
     }
 
@@ -43,6 +62,7 @@ public struct OnboardingView: View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             switch step {
             case .welcome: welcomeStep
+            case .create: createStep
             case .validate: validateStep
             case .notifications: notificationsStep
             case .shortcut: shortcutStep
@@ -51,9 +71,13 @@ public struct OnboardingView: View {
         .padding(Spacing.screenMargin)
         .frame(maxWidth: Spacing.cardMaxWidth, alignment: .leading)
         .fileImporter(isPresented: $isPickerPresented, allowedContentTypes: [.folder]) { result in
-            if case let .success(url) = result {
+            guard case let .success(url) = result else { return }
+            switch pickerPurpose {
+            case .existingVault:
                 onVaultPicked(url)
                 step = .validate
+            case .newVaultLocation:
+                createVault(in: url)
             }
         }
     }
@@ -66,9 +90,67 @@ public struct OnboardingView: View {
             Text("Choose the Obsidian folder that contains Actions/. The app reads and writes markdown files there — nothing else is touched.")
                 .font(Typo.body)
                 .foregroundStyle(Color.textSecondary)
-            Button("Choose folder…") { isPickerPresented = true }
+            Button("Choose folder…") {
+                pickerPurpose = .existingVault
+                isPickerPresented = true
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.gtdAccent)
+            if onCreateVault != nil {
+                Text(SettingsCopy.newVaultOffer)
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.textSecondary)
+                Button(SettingsCopy.createNewVault) {
+                    createRefusal = nil
+                    step = .create
+                }
+                .buttonStyle(.bordered)
+                .tint(Color.gtdAccent)
+            }
+        }
+    }
+
+    // MARK: Step 1b — create a new, empty vault (#60)
+
+    private var createStep: some View {
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            Text(SettingsCopy.createVaultTitle).font(Typo.screenTitle).foregroundStyle(Color.ink)
+            Text(SettingsCopy.createVaultExplanation)
+                .font(Typo.body)
+                .foregroundStyle(Color.textSecondary)
+            TextField(SettingsCopy.newVaultNamePlaceholder, text: $newVaultName)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(chooseNewVaultLocation)
+            if let createRefusal {
+                Text(createRefusal)
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.signalAttention)
+            }
+            Button(SettingsCopy.chooseNewVaultLocation, action: chooseNewVaultLocation)
                 .buttonStyle(.borderedProminent)
                 .tint(Color.gtdAccent)
+                .disabled(isCreating || newVaultName.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button(SettingsCopy.back) { step = .welcome }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.textSecondary)
+        }
+    }
+
+    private func chooseNewVaultLocation() {
+        guard !isCreating, !newVaultName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        pickerPurpose = .newVaultLocation
+        isPickerPresented = true
+    }
+
+    private func createVault(in location: URL) {
+        guard let onCreateVault else { return }
+        isCreating = true
+        let name = newVaultName
+        Task {
+            let refusal = await onCreateVault(location, name)
+            isCreating = false
+            createRefusal = refusal
+            if refusal == nil { step = .validate }
         }
     }
 
@@ -773,6 +855,8 @@ public struct SettingsView: View {
             Button("Change vault…", action: onChangeVault)
         } header: {
             Text("Vault")
+        } footer: {
+            Text(SettingsCopy.changeVaultFooter)
         }
     }
 
@@ -871,7 +955,7 @@ public struct VaultIssuesView: View {
 }
 
 #Preview("Onboarding") {
-    OnboardingView(onVaultPicked: { _ in })
+    OnboardingView(onVaultPicked: { _ in }, onCreateVault: { _, _ in nil })
         .environment(AppModel(
             backend: InMemoryBackend(snapshot: Fixtures.sampleSnapshot),
             snapshot: Fixtures.sampleSnapshot,
@@ -879,7 +963,7 @@ public struct VaultIssuesView: View {
 }
 
 #Preview("Onboarding — dark") {
-    OnboardingView(onVaultPicked: { _ in })
+    OnboardingView(onVaultPicked: { _ in }, onCreateVault: { _, _ in nil })
         .environment(AppModel(
             backend: InMemoryBackend(snapshot: Fixtures.sampleSnapshot),
             snapshot: Fixtures.sampleSnapshot,
@@ -888,7 +972,7 @@ public struct VaultIssuesView: View {
 }
 
 #Preview("Onboarding — AX1") {
-    OnboardingView(onVaultPicked: { _ in })
+    OnboardingView(onVaultPicked: { _ in }, onCreateVault: { _, _ in nil })
         .environment(AppModel(
             backend: InMemoryBackend(snapshot: Fixtures.sampleSnapshot),
             snapshot: Fixtures.sampleSnapshot,

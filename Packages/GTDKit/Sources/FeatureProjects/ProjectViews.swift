@@ -197,6 +197,8 @@ public struct ProjectDetailView: View {
     @Environment(\.vaultRootPath) private var vaultRootPath
     @State private var detailModel: ProjectDetailModel?
     @State private var newStepText = ""
+    /// The suggestion row `↓`/`↑` has moved to; Return links it instead of adding plain text.
+    @State private var highlightedSuggestion: Int?
     @State private var promptingStepIndex: Int?
     @State private var demotionNotice: String?
 
@@ -250,6 +252,7 @@ public struct ProjectDetailView: View {
             guard detailModel?.projectID != projectID else { return }
             detailModel = detail
             newStepText = ""
+            highlightedSuggestion = nil
             promptingStepIndex = nil
             demotionNotice = nil
         }
@@ -335,15 +338,49 @@ public struct ProjectDetailView: View {
             Task { try? await detail.moveStep(fromOffsets: offsets, toOffset: destination) }
         }
 
+        // #61 — typing offers existing actions; picking one links it instead of adding text.
+        let suggestions = detail.linkSuggestions(for: newStepText)
         TextField("New step", text: $newStepText)
             .textFieldStyle(.plain)
             .font(Typo.body)
+            .onChange(of: newStepText) { highlightedSuggestion = nil }
+            .onKeyPress(.downArrow) {
+                guard !suggestions.isEmpty else { return .ignored }
+                highlightedSuggestion = min((highlightedSuggestion ?? -1) + 1, suggestions.count - 1)
+                return .handled
+            }
+            .onKeyPress(.upArrow) {
+                guard let current = highlightedSuggestion else { return .ignored }
+                highlightedSuggestion = current == 0 ? nil : current - 1
+                return .handled
+            }
+            .onKeyPress(.escape) {
+                guard highlightedSuggestion != nil else { return .ignored }
+                highlightedSuggestion = nil
+                return .handled
+            }
             .onSubmit {
-                Task {
-                    try? await detail.addStep(newStepText)
-                    newStepText = ""
+                if let index = highlightedSuggestion, suggestions.indices.contains(index) {
+                    link(suggestions[index], detail)
+                } else {
+                    Task {
+                        try? await detail.addStep(newStepText)
+                        newStepText = ""
+                    }
                 }
             }
+
+        ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, action in
+            StepLinkSuggestionRow(action: action, isHighlighted: index == highlightedSuggestion) {
+                link(action, detail)
+            }
+        }
+    }
+
+    private func link(_ action: Action, _ detail: ProjectDetailModel) {
+        newStepText = ""
+        highlightedSuggestion = nil
+        Task { await model.report { try await detail.linkStep(to: action.id) } }
     }
 
     @ViewBuilder
@@ -403,7 +440,10 @@ private struct StepRow: View {
     let onDelete: () -> Void
     let onPromote: (() -> Void)?
 
-    @State private var text: String
+    /// What the user is typing, only while they edit this row. Otherwise the row shows
+    /// `step.text` straight from the model: the Mac `List` reuses row views, and a copy taken
+    /// at init could show — and on blur write back — another step's text (#48, #62).
+    @State private var draft: String?
     @FocusState private var isFocused: Bool
 
     init(
@@ -422,7 +462,16 @@ private struct StepRow: View {
         self.onMoveDown = onMoveDown
         self.onDelete = onDelete
         self.onPromote = onPromote
-        self._text = State(initialValue: step.text)
+    }
+
+    private var text: Binding<String> {
+        Binding(get: { draft ?? step.text }, set: { draft = $0 })
+    }
+
+    /// Hands a changed draft to the model and drops it, so the row follows the note again.
+    private func commit() {
+        if let draft, draft != step.text { onEdit(draft) }
+        draft = nil
     }
 
     var body: some View {
@@ -434,20 +483,15 @@ private struct StepRow: View {
             .buttonStyle(.plain)
             .disabled(step.promotedTo != nil)
 
-            TextField("Step", text: $text, axis: .vertical)
+            TextField("Step", text: text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typo.body)
                 .strikethrough(step.done)
                 .foregroundStyle(step.done ? Color.textSecondary : Color.ink)
                 .focused($isFocused)
-                .onSubmit { onEdit(text) }
+                .onSubmit { commit() }
                 .onChange(of: isFocused) { _, focused in
-                    if !focused { onEdit(text) }
-                }
-                // Rows are keyed by position, so after an add or a move this row can be handed
-                // another step: take the model's text unless the user is typing here.
-                .onChange(of: step.text) { _, newText in
-                    if !isFocused { text = newText }
+                    if !focused { commit() }
                 }
 
             if step.promotedTo != nil {
@@ -486,6 +530,33 @@ private struct StepRow: View {
             .foregroundStyle(Color.textTertiary)
             .accessibilityLabel("Delete step")
         }
+    }
+}
+
+/// One existing action the "New step" field offers (#61). Tapping it links the action as a step.
+private struct StepLinkSuggestionRow: View {
+    let action: Action
+    let isHighlighted: Bool
+    let onLink: () -> Void
+
+    var body: some View {
+        Button(action: onLink) {
+            HStack(spacing: Spacing.m) {
+                Image(systemName: Symbols.linkStep)
+                    .foregroundStyle(Color.textTertiary)
+                Text(action.title)
+                    .font(Typo.body)
+                    .foregroundStyle(Color.ink)
+                Spacer(minLength: Spacing.s)
+                Text(Copy.status(action.status))
+                    .font(Typo.meta)
+                    .foregroundStyle(Color.textSecondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(isHighlighted ? Color.accentWash : nil)
+        .accessibilityLabel(Copy.linkAsStep(action.title))
     }
 }
 
