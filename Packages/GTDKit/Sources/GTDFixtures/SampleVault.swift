@@ -166,7 +166,8 @@ public enum SampleVault {
             for substep in step.substeps { body += "    - [ ] \(substep)\n" }
         }
         let time = routine.time.map { ["time: \"\($0.hhmm)\""] } ?? []
-        return document(frontmatter: time, body: body)
+        let day = routine.day.map { ["day: \($0.name)"] } ?? []
+        return document(frontmatter: time + day, body: body)
     }
 
     static func renderRoutineLog(_ entries: [RoutineLogEntry]) -> String {

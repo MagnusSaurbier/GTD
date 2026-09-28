@@ -236,6 +236,32 @@ struct PatchTests {
             == text.replacingOccurrences(of: "time: \"07:00\"", with: "time: \"06:45\""))
     }
 
+    @Test func settingARoutineDayAddsOneLineAfterTheTime() throws {
+        let path = "GTD/Routines/Morning.md"
+        let text = try #require(SampleVault.files[path])
+        var routine = try NoteCodec.decodeRoutine(id: NoteID(path: path), text: text)
+        routine.day = .sunday
+        #expect(NoteCodec.encode(routine)
+            == text.replacingOccurrences(of: "time: \"07:00\"\n", with: "time: \"07:00\"\nday: Sunday\n"))
+    }
+
+    @Test func changingARoutineTimeKeepsItsDay() throws {
+        let path = "GTD/Routines/Weekly.md"
+        let text = "---\ntime: 9:00\nday: Sunday\n---\n- [ ] Pick a topic\n"
+        var routine = try NoteCodec.decodeRoutine(id: NoteID(path: path), text: text)
+        routine.time = DayTime(hour: 10, minute: 30)
+        #expect(NoteCodec.encode(routine)
+            == "---\ntime: \"10:30\"\nday: Sunday\n---\n- [ ] Pick a topic\n")
+    }
+
+    @Test func clearingARoutineDayRemovesTheLine() throws {
+        let path = "GTD/Routines/Weekly.md"
+        let text = "---\ntime: 9:00\nday: Sunday\n---\n- [ ] Pick a topic\n"
+        var routine = try NoteCodec.decodeRoutine(id: NoteID(path: path), text: text)
+        routine.day = nil
+        #expect(NoteCodec.encode(routine) == "---\ntime: 9:00\n---\n- [ ] Pick a topic\n")
+    }
+
     // MARK: - Config
 
     @Test func changingTheCapRewritesOneLine() throws {

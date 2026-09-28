@@ -334,7 +334,10 @@ public struct RoutineStep: Identifiable, Sendable, Equatable {
 public struct Routine: Identifiable, Sendable, Equatable {
     public let id: NoteID
     public var title: String
+    /// Daily start time (`time: "07:00"`); `nil` = never prompted.
     public var time: DayTime?
+    /// `day: Sunday` — only prompted on that weekday; `nil` = every day.
+    public var day: Weekday?
     public var steps: [RoutineStep]
     public var passthrough: NotePassthrough
 
@@ -342,14 +345,21 @@ public struct Routine: Identifiable, Sendable, Equatable {
         id: NoteID,
         title: String,
         time: DayTime? = nil,
+        day: Weekday? = nil,
         steps: [RoutineStep] = [],
         passthrough: NotePassthrough = .empty
     ) {
         self.id = id
         self.title = title
         self.time = time
+        self.day = day
         self.steps = steps
         self.passthrough = passthrough
+    }
+
+    /// Whether the routine is due on `date`: every day without a `day`, else only on that weekday.
+    public func isScheduled(on date: Day) -> Bool {
+        day.map { $0 == date.weekday } ?? true
     }
 }
 

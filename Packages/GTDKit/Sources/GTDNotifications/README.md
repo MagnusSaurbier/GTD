@@ -10,7 +10,8 @@ Local notification planning and scheduling (D2, R3, W2, D1). Public types: `Noti
   `[PlannedNotification]` out. Plans `deferReturn` (morning of `deferDate`), `dueApproaching`
   (morning of `due - 1` **and** morning of `due`), `followUp` (morning of `followUpDate`, only
   for `status == .waiting`), `routineStart` (daily-repeating, at the routine's own `time`, not
-  the morning time). Closed actions (`done`, legacy `trash`) are never planned; a fire date at or before `now` is
+  the morning time; a routine with a `day` repeats weekly on that weekday instead —
+  `repeatsWeekly`, id suffixed `:<Weekday>`). Closed actions (`done`, legacy `trash`) are never planned; a fire date at or before `now` is
   dropped ("past dates ignored"). Non-routine notifications landing on the exact same instant
   collapse into one `.summary` (unless `.summary` is disabled). Ids are
   `"<kind>:<note path>[:<day>]"` — stable across re-planning. Capped at

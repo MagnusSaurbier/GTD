@@ -120,6 +120,27 @@ struct SampleVaultScanTests {
         #expect(snapshot.actions.count == Fixtures.sampleSnapshot.actions.count)
     }
 
+    /// Issue #58: an invalid `day:` reaches the vault issues like an invalid `time:` does.
+    @Test func aRoutineWithAnInvalidDayBecomesAnIssue() async throws {
+        let root = try vault()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let routines = VaultLayout.default.routines
+        try "---\ntime: \"09:00\"\nday: Someday\n---\n- [ ] Pick a topic\n"
+            .write(to: root.appendingPathComponent("\(routines)/Weekly.md"),
+                   atomically: true, encoding: .utf8)
+        try "---\ntime: 9:00\nday: Sunday\n---\n- [ ] Pick a topic\n"
+            .write(to: root.appendingPathComponent("\(routines)/Topic Probe Research.md"),
+                   atomically: true, encoding: .utf8)
+
+        let snapshot = try await store(root).scan()
+        let issue = try #require(snapshot.issues.first)
+        #expect(snapshot.issues.map(\.path) == ["\(routines)/Weekly.md"])
+        #expect(issue.message.contains("Someday"))
+        let weekly = try #require(snapshot.routines.first { $0.title == "Topic Probe Research" })
+        #expect(weekly.day == .sunday)
+        #expect(weekly.time == DayTime(hour: 9, minute: 0))
+    }
+
     @Test func aConflictCopyInARealVaultIsReported() async throws {
         let root = try vault()
         defer { try? FileManager.default.removeItem(at: root) }
