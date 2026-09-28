@@ -44,7 +44,9 @@ launch-and-navigate smoke tests (always `-useFixtures`, never a real vault).
   A refusal that carries a `WriteConflict` opens `ConflictSheet` instead (N3): Done writes the
   merged note through `AppModel.resolveConflict`, "Keep the vault's version" discards. Both
   shells re-scan the vault (`refreshFromDisk`) the moment inbox processing begins.
-  Nothing is swallowed.
+  Text an earlier run never saved (`AppComposition.unsavedJournal.recovered`, #56) opens
+  `UnsavedTextSheet` once the vault is open, one note at a time; a journal that cannot be read
+  or written joins the one alert. Nothing is swallowed.
 - **Queued writes:** the vault is written behind the UI, and only when the person acts on an
   item — the shell triggers no write of its own (no archive on launch or foreground; the backend
   queues it behind the first change of the day). The one exception: launch runs

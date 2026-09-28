@@ -216,10 +216,17 @@ public final class AppModel {
     /// blur, close) and can be told that such a moment is now.
     public protocol HeldEdits: AnyObject {
         @MainActor func flush() async
+        /// The typed text not yet in the vault, for the crash journal (#56); `nil` when none.
+        /// A holder calls `heldEditsChanged()` whenever this may have changed.
+        @MainActor var unsavedText: UnsavedText? { get }
     }
 
     private struct WeakHolder { weak var value: (any HeldEdits)? }
     private var holders: [ObjectIdentifier: WeakHolder] = [:]
+
+    /// The crash-safe copy of held edits (#56). The shell hands its one journal to every model
+    /// it creates; `nil` (tests, previews) keeps no copy.
+    public var unsavedJournal: UnsavedTextJournal?
 
     /// Editors register themselves; they are held weakly and forgotten once they are gone.
     public func register(_ holder: any HeldEdits) {
@@ -227,10 +234,34 @@ public final class AppModel {
         holders[ObjectIdentifier(holder)] = WeakHolder(value: holder)
     }
 
+    /// A holder's unsaved text changed (typed, saved, refused): the journal follows shortly.
+    public func heldEditsChanged() {
+        unsavedJournal?.update(live: holders.values.compactMap { $0.value?.unsavedText })
+    }
+
     /// Sends every held edit now. The shell calls it when the app is about to stop running —
-    /// backgrounding on iOS, ⌘Q on the Mac — before it waits for the write queue.
+    /// backgrounding on iOS, ⌘Q on the Mac — before it waits for the write queue. The journal
+    /// is brought up to date at once, so a clean quit leaves no "unsaved text" behind.
     public func flushHeldEdits() async {
         for holder in holders.values.compactMap(\.value) { await holder.flush() }
+        heldEditsChanged()
+        unsavedJournal?.writeNow()
+    }
+
+    /// #56 — writes text an earlier run never saved back into its note. `false` when the note
+    /// is gone (nothing to write into; the sheet offers copying instead) or the write was
+    /// refused (in `lastError`, and the entry stays in the journal).
+    @discardableResult
+    public func restoreUnsaved(_ entry: UnsavedText) async -> Bool {
+        guard let command = entry.restoreCommand(in: snapshot) else { return false }
+        let done = await perform(command)
+        if done { unsavedJournal?.resolve(entry) }
+        return done
+    }
+
+    /// #56 — the person let an earlier run's unsaved text go.
+    public func discardUnsaved(_ entry: UnsavedText) {
+        unsavedJournal?.resolve(entry)
     }
 
     public func clearError() {

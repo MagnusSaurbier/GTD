@@ -103,6 +103,16 @@ private struct GlobalFlows: ViewModifier {
                     },
                     onKeepVault: { model.discardConflict() })
             }
+            // #56 — text an earlier run never saved, one note at a time, once the vault is open
+            // (restoring writes into the note as the vault has it now).
+            .sheet(item: unsaved) { entry in
+                UnsavedTextSheet(
+                    entry: entry,
+                    position: unsavedPosition(of: entry),
+                    canRestore: entry.restoreCommand(in: model.snapshot) != nil,
+                    onRestore: { Task { await model.restoreUnsaved(entry) } },
+                    onDiscard: { model.discardUnsaved(entry) })
+            }
             // R3 — a routine opened from a notification or an App Intent.
             .flowCover(item: $router.routineRun) { target in
                 RoutineRunnerView(routine: target.note, onFinished: { router.routineRun = nil })
@@ -127,6 +137,21 @@ private struct GlobalFlows: ViewModifier {
         Binding(get: { model.conflict }, set: { if $0 == nil { model.discardConflict() } })
     }
 
+    /// The sheet closes only through Restore or Discard (interactive dismissal is off).
+    private var unsaved: Binding<UnsavedText?> {
+        Binding(
+            get: {
+                guard composition.phase == .ready else { return nil }
+                return composition.unsavedJournal.recovered.first
+            },
+            set: { _ in })
+    }
+
+    private func unsavedPosition(of entry: UnsavedText) -> (index: Int, total: Int) {
+        let recovered = composition.unsavedJournal.recovered
+        return ((recovered.firstIndex(of: entry) ?? 0) + 1, recovered.count)
+    }
+
     private var whatsNext: Binding<NoteTarget?> {
         Binding(
             get: {
@@ -140,6 +165,7 @@ private struct GlobalFlows: ViewModifier {
     /// one alert: a failure the person cannot see is a lying UI (§1).
     private var currentError: AppError? {
         composition.error ?? model.writeFailure.map(AppError.init) ?? model.lastError.map(AppError.init)
+            ?? composition.unsavedJournal.failure.map { AppError(message: Copy.unsavedJournalFailed($0)) }
     }
 
     private var errorPresented: Binding<Bool> {
@@ -149,6 +175,7 @@ private struct GlobalFlows: ViewModifier {
     private func dismissError() {
         composition.error = nil
         model.clearError()
+        composition.unsavedJournal.clearFailure()
     }
 }
 

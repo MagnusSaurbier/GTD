@@ -47,6 +47,9 @@ final class AppComposition {
 
     let isUsingFixtures: Bool
     let pendingRoute = PendingRoute()
+    /// The crash-safe copy of text the editors hold (#56), one per run and handed to every
+    /// model. Fixture runs keep their own file, so they never offer the real vault's text.
+    let unsavedJournal: UnsavedTextJournal
 
     private let bookmark: VaultBookmark
     private let settingsStore: DeviceSettingsStore
@@ -63,6 +66,9 @@ final class AppComposition {
         bookmark = VaultBookmark()
         settingsStore = DeviceSettingsStore(store: UserDefaultsSettingsStore())
         deviceSettings = settingsStore.load()
+        let journalStore = FileUnsavedTextStore.standard(
+            fileName: useFixtures ? "unsaved-text-fixtures.json" : "unsaved-text.json")
+        unsavedJournal = UnsavedTextJournal(store: journalStore ?? InMemoryUnsavedTextStore())
         if useFixtures {
             let snapshot = Fixtures.sampleSnapshot
             model = AppModel(
@@ -76,6 +82,7 @@ final class AppComposition {
             model = AppModel(backend: InMemoryBackend(snapshot: .empty), snapshot: .empty)
             phase = .loading
         }
+        model.unsavedJournal = unsavedJournal
     }
 
     // MARK: - Launch
@@ -122,6 +129,7 @@ final class AppComposition {
         vaultRootPath = nil
         deviceSettings.vaultDisplayName = nil
         model = AppModel(backend: InMemoryBackend(snapshot: .empty), snapshot: .empty)
+        model.unsavedJournal = unsavedJournal
         phase = .onboarding
     }
 
@@ -147,6 +155,7 @@ final class AppComposition {
         vaultRootPath = root.path
         model.stop()
         model = AppModel(backend: backend)
+        model.unsavedJournal = unsavedJournal
     }
 
     private func teardown() async {
