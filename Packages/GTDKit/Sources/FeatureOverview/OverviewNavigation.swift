@@ -97,6 +97,13 @@ public final class OverviewNavigation {
 
     public func open(listItem id: NoteID) { detail = .listItem(id) }
 
+    /// The action detail's "Open project" (#72): the Projects section, with that project in the
+    /// detail column and highlighted in the list. Section first — changing it clears `detail`.
+    public func show(project id: NoteID) {
+        selection = .projects
+        detail = .project(id)
+    }
+
     /// Follows a rename: the note keeps its place in the detail column under its new `NoteID`.
     public func replace(_ old: NoteID, with new: NoteID) {
         switch detail {
