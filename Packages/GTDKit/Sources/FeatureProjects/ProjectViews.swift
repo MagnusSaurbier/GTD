@@ -577,24 +577,23 @@ private struct OptionArrowShortcut: ViewModifier {
     }
 }
 
-/// Promotion from the project detail (P6): the inbox's opened action card (STYLEGUIDE §3.5 step
-/// 2a), over `MakeActionModel`'s `.projectStep` source. The fields, asterisks, cap sheet and
-/// exits are the inbox's own, so a change to the card reaches this sheet without a copy here.
-private struct PromoteStepSheet: View {
+/// The inbox's opened action card (STYLEGUIDE §3.5 step 2a) over one `MakeActionModel`, for
+/// every sheet in this target that turns a step or a typed line into an action (#74). The
+/// fields, asterisks, cap sheet and exits are the inbox's own, so a change to the card reaches
+/// these sheets without a copy here. `onFinished(true)` once filed, `(false)` on cancel.
+private struct ProjectActionCard: View {
     @State private var makeAction: MakeActionModel
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.keyBindings) private var keyBindings
+    private let onFinished: (Bool) -> Void
 
-    init(model: AppModel, detailModel: ProjectDetailModel, stepIndex: Int) {
-        let text = detailModel.steps.indices.contains(stepIndex)
-            ? detailModel.steps[stepIndex].text : ""
-        _makeAction = State(initialValue: MakeActionModel(
-            model: model, project: detailModel.projectID, stepIndex: stepIndex, stepText: text))
+    init(_ makeAction: MakeActionModel, onFinished: @escaping (Bool) -> Void) {
+        _makeAction = State(initialValue: makeAction)
+        self.onFinished = onFinished
     }
 
     var body: some View {
         NavigationStack {
-            MakeActionCardView(model: makeAction) { dismiss() }
+            MakeActionCardView(model: makeAction) { onFinished(makeAction.isFiled) }
         }
         .onChange(of: keyBindings, initial: true) { _, bindings in
             makeAction.keyBindings = bindings
@@ -602,26 +601,53 @@ private struct PromoteStepSheet: View {
     }
 }
 
+/// Promotion from the project detail (P6): the card over the step.
+private struct PromoteStepSheet: View {
+    private let makeAction: MakeActionModel
+    @Environment(\.dismiss) private var dismiss
+
+    init(model: AppModel, detailModel: ProjectDetailModel, stepIndex: Int) {
+        let text = detailModel.steps.indices.contains(stepIndex)
+            ? detailModel.steps[stepIndex].text : ""
+        makeAction = MakeActionModel(
+            model: model, project: detailModel.projectID, stepIndex: stepIndex, stepText: text)
+    }
+
+    var body: some View {
+        ProjectActionCard(makeAction) { _ in dismiss() }
+    }
+}
+
 // MARK: - What's next? (P5)
 
 /// Presented by the app shell on the `whatsNext` prompt after completing a project action.
-/// **Owned by T22.**
+/// Choosing a step, or typing a new action, opens the inbox's action card in place (#74);
+/// cancelling the card comes back here. **Owned by T22.**
 public struct WhatsNextSheet: View {
     private let projectID: NoteID
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var whatsNextModel: WhatsNextModel?
     @State private var freeText = ""
-    @State private var capMessage: String?
-    @State private var pendingSomedayStepIndex: Int?
+    @State private var card: MakeActionModel?
 
     public init(project: NoteID) {
         self.projectID = project
     }
 
     public var body: some View {
+        if let card {
+            ProjectActionCard(card) { filed in
+                if filed { dismiss() } else { self.card = nil }
+            }
+        } else {
+            chooser
+        }
+    }
+
+    private var chooser: some View {
         let next = whatsNextModel ?? WhatsNextModel(project: projectID, model: model)
-        VStack(alignment: .leading, spacing: Spacing.l) {
+        return VStack(alignment: .leading, spacing: Spacing.l) {
             Text(Copy.whatsNext(project: next.title)).font(Typo.sectionHeader)
 
             // A long project's open steps scroll instead of pushing the buttons off the sheet.
@@ -629,7 +655,9 @@ public struct WhatsNextSheet: View {
                 OverflowScroll {
                     ForEach(next.openSteps) { entry in
                         Button {
-                            Task { await promote(next, stepIndex: entry.stepIndex) }
+                            card = MakeActionModel(
+                                model: model, project: projectID,
+                                stepIndex: entry.stepIndex, stepText: entry.step.text)
                         } label: {
                             Text(entry.step.text).font(Typo.body)
                         }
@@ -642,15 +670,9 @@ public struct WhatsNextSheet: View {
                 TextField("New action", text: $freeText)
                     .textFieldStyle(.plain)
                     .font(Typo.body)
-                Button(Copy.done) { Task { await createFreeText(next) } }
+                    .onSubmit(openFreeText)
+                Button(Copy.done, action: openFreeText)
                     .disabled(freeText.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-
-            if let capMessage {
-                VStack(alignment: .leading, spacing: Spacing.s) {
-                    Text(capMessage).font(Typo.meta).foregroundStyle(Color.textSecondary)
-                    Button(Copy.sendToSomedayInstead) { Task { await retryToSomeday(next) } }
-                }
             }
 
             if next.isStalled {
@@ -669,46 +691,10 @@ public struct WhatsNextSheet: View {
         .task { if whatsNextModel == nil { whatsNextModel = next } }
     }
 
-    private func promote(_ next: WhatsNextModel, stepIndex: Int) async {
-        do {
-            switch try await next.promote(stepIndex: stepIndex) {
-            case .success: dismiss()
-            case .capReached:
-                pendingSomedayStepIndex = stepIndex
-                capMessage = Copy.capSheetBody
-            case let .missingFields(fields):
-                // R-3 — Someday is one tap away and always possible; Next needs the fields.
-                pendingSomedayStepIndex = stepIndex
-                capMessage = Copy.missingFields(fields)
-            }
-        } catch {
-            capMessage = "\(error)"
-        }
-    }
-
-    private func retryToSomeday(_ next: WhatsNextModel) async {
-        if let stepIndex = pendingSomedayStepIndex {
-            _ = try? await next.promoteToSomeday(stepIndex: stepIndex)
-        } else {
-            _ = try? await next.createActionInSomeday(title: freeText)
-        }
-        dismiss()
-    }
-
-    private func createFreeText(_ next: WhatsNextModel) async {
-        do {
-            switch try await next.createAction(title: freeText) {
-            case .success: dismiss()
-            case .capReached:
-                pendingSomedayStepIndex = nil
-                capMessage = Copy.capSheetBody
-            case let .missingFields(fields):
-                pendingSomedayStepIndex = nil
-                capMessage = Copy.missingFields(fields)
-            }
-        } catch {
-            capMessage = "\(error)"
-        }
+    private func openFreeText() {
+        let title = freeText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        card = MakeActionModel(model: model, project: projectID, newActionTitle: title)
     }
 }
 
@@ -716,6 +702,8 @@ public struct WhatsNextSheet: View {
 
 /// Opened from the inline "Turn into project" button (T20 card, T25 detail): an action's
 /// checkboxes become steps, title/why carry over, first step starts pre-selected for promotion.
+/// `Done` converts; a selected step then opens the inbox's action card over that step of the
+/// new project (#74). Cancelling the card leaves the project with the step still open.
 /// **Owned by T22.**
 public struct ConvertToProjectSheet: View {
     private let actionID: NoteID
@@ -725,16 +713,25 @@ public struct ConvertToProjectSheet: View {
     @State private var title = ""
     @State private var steps: [String] = []
     @State private var selectedStepIndex: Int? = 0
-    @State private var capMessage: String?
+    @State private var errorMessage: String?
     @State private var didSeed = false
+    @State private var card: MakeActionModel?
 
     public init(action: NoteID) {
         self.actionID = action
     }
 
     public var body: some View {
+        if let card {
+            ProjectActionCard(card) { _ in dismiss() }
+        } else {
+            form
+        }
+    }
+
+    private var form: some View {
         let convert = convertModel ?? ConvertToProjectModel(action: actionID, model: model)
-        VStack(alignment: .leading, spacing: Spacing.l) {
+        return VStack(alignment: .leading, spacing: Spacing.l) {
             Text(Copy.turnIntoProject).font(Typo.sectionHeader)
 
             TextField("Project title", text: $title)
@@ -754,11 +751,8 @@ public struct ConvertToProjectSheet: View {
                 }
             }
 
-            if let capMessage {
-                VStack(alignment: .leading, spacing: Spacing.s) {
-                    Text(capMessage).font(Typo.meta).foregroundStyle(Color.textSecondary)
-                    Button(Copy.sendToSomedayInstead) { Task { await retryToSomeday(convert) } }
-                }
+            if let errorMessage {
+                Text(errorMessage).font(Typo.meta).foregroundStyle(Color.textSecondary)
             }
 
             HStack {
@@ -780,29 +774,21 @@ public struct ConvertToProjectSheet: View {
         }
     }
 
-    private func draft() -> ProjectDraft {
-        ProjectDraft(title: title, why: convertModel?.action?.why ?? "", steps: steps)
-    }
-
     private func convertNow(_ convert: ConvertToProjectModel) async {
-        let draft = draft()
+        let draft = ProjectDraft(title: title, why: convert.action?.why ?? "", steps: steps)
         do {
-            switch try await convert.convert(draft, promoteStepIndex: selectedStepIndex) {
-            case .success: dismiss()
-            case .capReached:
-                capMessage = Copy.capSheetBody
-            case let .missingFields(fields):
-                capMessage = Copy.missingFields(fields)
-            }
+            try await convert.convert(draft, promoteStepIndex: nil)
         } catch {
-            capMessage = "\(error)"
+            errorMessage = "\(error)"
+            return
         }
-    }
-
-    private func retryToSomeday(_ convert: ConvertToProjectModel) async {
-        guard let selectedStepIndex else { dismiss(); return }
-        _ = try? await convert.promoteConvertedStepToSomeday(draft(), stepIndex: selectedStepIndex)
-        dismiss()
+        guard let index = selectedStepIndex, draft.steps.indices.contains(index) else {
+            dismiss()
+            return
+        }
+        card = MakeActionModel(
+            model: model, project: convert.projectID(for: draft),
+            stepIndex: index, stepText: draft.steps[index])
     }
 }
 

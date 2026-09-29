@@ -64,16 +64,12 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 - `WhatsNextSheet` and `ConvertToProjectSheet` are content-sized `VStack` sheets; their step rows
   sit in `DesignSystem.OverflowScroll`, so a project with many open steps scrolls inside the
   sheet instead of pushing the buttons off the screen. Not yet seen on screen.
-- STYLEGUIDE §3.6 forbids "send to Someday instead" on the Next-is-full cap sheet, but that rule
-  is about *that* sheet (the inbox's, and `FeatureNext`'s R-2 sheet for an existing action) — the
-  step/project-promotion sheets here (`WhatsNextSheet`, `ConvertToProjectSheet`) are a different, simpler cap-refusal surface a step's own comment
-  already called out as "simplified from T20's full sheet", and D14's forced-demote dialog never
-  named them. T11 read STYLEGUIDE §3.6 and DECISIONS D14 and kept the fallback here on purpose: a
-  promoted project step must never be left stalled behind a cap it cannot see (ARCHITECTURE §6).
-- `Promote` on a step (P6, `PromoteStepSheet`) is **not** one of those since #74 (0.39): it hosts
-  `FeatureInbox.MakeActionCardView` over `MakeActionModel`'s `.projectStep` source — the inbox's
-  own action card, fields, asterisks, cap sheet and exits, so changes to the inbox card reach it.
-  The step line is the title and `What?`; the project chip is fixed to this project.
+- Every sheet here that makes an action — `Promote` on a step (P6, `PromoteStepSheet`), a step
+  or a typed line in `What's next?` (P5), and the selected step after `Turn into project` (A2) —
+  hosts `FeatureInbox.MakeActionCardView` over `MakeActionModel` (`.projectStep` /
+  `.newProjectAction`) since #74 (0.39): the inbox's own card, fields, asterisks, cap sheet and
+  exits, so changes to the inbox card reach them. The project chip is fixed to the project.
+  There is no "Send to Someday instead" shortcut any more — the card's Someday exit is it.
 - The reorder chevrons (`chevron.up`/`chevron.down`) and the convert-sheet selection dot
   (`Symbols.done`/`circle`) are the closest stock symbols; STYLEGUIDE §7's icon map has no
   "move up/down" or "selected step" concept and this target cannot edit the style guide.

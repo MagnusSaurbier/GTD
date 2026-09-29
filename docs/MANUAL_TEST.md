@@ -323,6 +323,10 @@ Unplug the mouse for this one.
       project chip showing this project (not changeable), and the Someday / Next / Waiting / Done
       exits. `Next` without a `Why?` marks `* Why?` and shakes; it never says "Next is full".
       With Next really full, the inbox's own `Next is full` demote sheet appears.
+- [ ] **What's next? (#74):** tapping a step, or typing a line and `Done`, opens the same card;
+      cancelling it returns to the What's next? list, filing closes the sheet.
+- [ ] **Turn into project (#74):** `Done` with a step selected creates the project, then opens
+      the card over that step; with no step selected the sheet just closes.
 
 ### 3.5 Settings (L2/R-5, N7)
 

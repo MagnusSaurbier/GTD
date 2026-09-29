@@ -1602,4 +1602,25 @@ struct MakeActionFromProjectStepTests {
         #expect(await model.handle(.command(.cardProject)) == false)
         #expect(model.sheet == nil)
     }
+
+    /// P5 — a line typed into "What's next?" becomes an action in that project, through the card.
+    @Test func aNewActionTypedIntoWhatsNextIsFiledInTheProject() async throws {
+        let snapshot = Fixtures.sampleSnapshot
+        let app = AppModel(
+            backend: TestBackend(snapshot: snapshot), snapshot: snapshot, today: { Fixtures.today })
+        let model = MakeActionModel(
+            model: app, project: Fixtures.daadProject.id, newActionTitle: "Email the DAAD office")
+        #expect(model.draft.title == "Email the DAAD office")
+        #expect(model.draft.what == "Email the DAAD office")
+        #expect(!model.canChangeProject)
+
+        await model.take(.next)
+        #expect(model.refusal?.reason == .missing([.why, .context, .timeEstimate]))
+
+        await model.take(.someday)
+        #expect(model.isFiled)
+        let action = try #require(app.snapshot.actions.first { $0.title == "Email the DAAD office" })
+        #expect(action.status == .someday)
+        #expect(action.project == Fixtures.daadProject.id)
+    }
 }
