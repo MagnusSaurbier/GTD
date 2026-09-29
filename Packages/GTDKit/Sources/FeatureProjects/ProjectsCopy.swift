@@ -17,4 +17,10 @@ enum ProjectsCopy {
 
     /// `GTDError.notFound` from `setArea` — the area disappeared (another device removed it).
     static let areaGone = "That area is gone."
+
+    // Projects tree folder rows (#67) — VoiceOver value and hint.
+    static let folderExpanded = "Expanded"
+    static let folderCollapsed = "Collapsed"
+    static let expandFolder = "Shows the projects in this folder"
+    static let collapseFolder = "Hides the projects in this folder"
 }
