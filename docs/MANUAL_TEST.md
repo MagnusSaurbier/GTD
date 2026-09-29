@@ -317,6 +317,10 @@ Unplug the mouse for this one.
       sheet scrolls the steps inside the sheet and its three buttons stay visible. With two or
       three steps there is no scroll view and no gap under them. Same for an action with many
       checkboxes › `Turn into project`.
+- [ ] **Mac, "Open project" (#72, 0.38):** an action with a project shows a small ↗ icon right
+      of its Project chip (none when the action has no project). Click it: the sidebar switches
+      to **Projects**, that project is highlighted and open in the detail column. The iPhone
+      shows no such icon (no project detail there).
 
 ### 3.5 Settings (L2/R-5, N7)
 

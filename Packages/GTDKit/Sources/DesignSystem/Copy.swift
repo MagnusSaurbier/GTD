@@ -33,6 +33,8 @@ public enum Copy {
     /// The note's absolute file path to the clipboard, to hand the ticket to a terminal or a
     /// `/do <path>` prompt.
     public static let copyPath = "Copy path"
+    /// The icon button beside the action detail's Project chip (#72): that project's detail.
+    public static let openProject = "Open project"
     /// The `Move to` entry that asks which project: `Project…`.
     public static let projectEllipsis = "Project…"
     /// The `Move to` entry that asks which list: `List…`.

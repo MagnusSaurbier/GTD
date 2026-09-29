@@ -37,7 +37,8 @@ public struct NoteFileLinks: View {
     }
 
     // Plain chrome affordances, not STYLEGUIDE §7 concepts, so they stay out of `Symbols`.
-    private static let openExternallySymbol = "arrow.up.forward.app"
+    /// Also the action detail's "Open project" button (#72): one "open" glyph in the app.
+    public static let openExternallySymbol = "arrow.up.forward.app"
     private static let copySymbol = "doc.on.doc"
 }
 #endif

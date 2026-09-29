@@ -123,6 +123,20 @@ struct SidebarRoutingTests {
 
     /// T10 — the single `Lists` row: counted, no calendar strip, has a detail column and reads
     /// `SidebarCounts.lists` (open items across every list, not any one list's count).
+    /// #72 — "Open project" beside the action detail's Project chip: from any section, the
+    /// window lands on Projects with that project open (and so highlighted in the list).
+    @Test func showProjectSwitchesToProjectsAndOpensIt() {
+        let nav = OverviewNavigation(selection: .next)
+        let action = Fixtures.sampleSnapshot.actions[0].id
+        let project = Fixtures.sampleSnapshot.projects[0].id
+        nav.open(action: action)
+        nav.show(project: project)
+        #expect(nav.selection == .projects)
+        #expect(nav.detail == .project(project))
+        #expect(nav.openProject == project)
+        #expect(nav.openAction == nil)
+    }
+
     @Test func listsIsACountedSectionWithNoCalendarStripAndItsOwnCount() {
         #expect(SidebarItem.counted.contains(.lists))
         #expect(SidebarItem.lists.showsCalendarStrip == false)
