@@ -4,6 +4,7 @@ import GTDModel
 import GTDAppCore
 import GTDFixtures
 @testable import FeatureProjects
+import FeatureInbox
 
 @MainActor
 struct ConvertToProjectModelTests {
@@ -146,5 +147,33 @@ struct ConvertToProjectModelTests {
         let created = try #require(model.snapshot.action(project.steps[0].promotedTo!))
         #expect(created.status == .someday)
         #expect(Rules.countsTowardCap(model.snapshot, today: Fixtures.today) == 1)   // still just the filler
+    }
+
+    // MARK: - Convert, then the inbox card over the chosen step (#74)
+
+    /// `ConvertToProjectSheet`'s flow: convert without promoting, then the inbox card over the
+    /// selected step of the new project. A missing `Why?` is flagged, not reported as the cap.
+    @Test func convertedStepIsPromotedThroughTheInboxCard() async throws {
+        let model = makeModel(snapshot: Fixtures.sampleSnapshot)
+        let convert = ConvertToProjectModel(action: multiStepAction.id, model: model)
+        var draft = convert.makeDraft()
+        draft.why = ""
+        #expect(try await convert.convert(draft, promoteStepIndex: nil) == .success)
+        let projectID = convert.projectID(for: draft)
+
+        let card = MakeActionModel(
+            model: model, project: projectID, stepIndex: 0, stepText: draft.steps[0])
+        card.draft.contexts = ["mac"]
+        card.draft.timeBucket = .upTo30
+        await card.take(.next)
+        #expect(card.refusal?.reason == .missing([.why]))
+        #expect(model.snapshot.project(projectID)?.steps[0].promotedTo == nil)
+
+        card.draft.why = "The talk is on Friday."
+        await card.take(.next)
+        #expect(card.isFiled)
+        let promoted = try #require(model.snapshot.project(projectID)?.steps[0].promotedTo)
+        #expect(model.snapshot.action(promoted)?.status == .next)
+        #expect(model.snapshot.action(promoted)?.project == projectID)
     }
 }

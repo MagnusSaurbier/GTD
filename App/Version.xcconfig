@@ -5,4 +5,4 @@
 // project.yml's settings into the gitignored GTD.xcodeproj at generation time, so a merge that
 // moved the version changed nothing Xcode read until someone re-ran xcodegen (0.15 built as 0.8,
 // 2026-09-25). Xcode reads an xcconfig at build time, so a pull is enough.
-MARKETING_VERSION = 0.38
+MARKETING_VERSION = 0.41

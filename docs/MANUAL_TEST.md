@@ -323,10 +323,20 @@ Unplug the mouse for this one.
       sheet scrolls the steps inside the sheet and its three buttons stay visible. With two or
       three steps there is no scroll view and no gap under them. Same for an action with many
       checkboxes › `Turn into project`.
-- [ ] **Mac, "Open project" (#72, 0.38):** an action with a project shows a small ↗ icon right
+- [ ] **Mac, "Open project" (#72, 0.41):** an action with a project shows a small ↗ icon right
       of its Project chip (none when the action has no project). Click it: the sidebar switches
       to **Projects**, that project is highlighted and open in the detail column. The iPhone
       shows no such icon (no project detail there).
+
+- [ ] **Promote a step (#74, 0.39):** a project's open step › Promote opens the inbox's action
+      card — `Why?`, `What?` (pre-filled with the step), context and time chips, defer/due, the
+      project chip showing this project (not changeable), and the Someday / Next / Waiting / Done
+      exits. `Next` without a `Why?` marks `* Why?` and shakes; it never says "Next is full".
+      With Next really full, the inbox's own `Next is full` demote sheet appears.
+- [ ] **What's next? (#74):** tapping a step, or typing a line and `Done`, opens the same card;
+      cancelling it returns to the What's next? list, filing closes the sheet.
+- [ ] **Turn into project (#74):** `Done` with a step selected creates the project, then opens
+      the card over that step; with no step selected the sheet just closes.
 
 ### 3.5 Settings (L2/R-5, N7)
 
