@@ -303,8 +303,14 @@ Unplug the mouse for this one.
 
 ### 3.4 Projects and areas (P1/R-6/R-7)
 
-- [ ] The projects list shows area-less projects **first, without a section header** (no
-      invented "No area" heading).
+- [ ] The projects list shows area-less projects (`no_area/` and directly under `Projects/`)
+      **first, flat, without a section header** (no invented "No area" heading).
+- [ ] Below them, every area folder is a tree node like the VS Code explorer (#67): chevron,
+      folder icon, sub-folders before projects, alphabetical, nested areas indented
+      (`Growth › Coding › BrainTrain`). Click a folder row: it folds/unfolds instantly. Quit and
+      relaunch: the folded folders are still folded. Switch the status chips so that a folder has
+      no visible project: the folder disappears. Mac: clicking or arrowing onto a project still
+      opens it in the detail column; folder rows are not selectable.
 - [ ] Open an area-less project → the area picker. Pick an area: the project's **folder moves**
       into that area, every action's `project:` link is rewritten in the same go, and the detail
       view you have open **stays open** on the same project.

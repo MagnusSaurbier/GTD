@@ -8,7 +8,8 @@ import GTDFixtures
 
 // MARK: - Projects list (E4)
 
-/// Projects list, grouped by area, with status filters and area/project creation.
+/// Projects list as a folder tree (#67: area-less projects flat on top, then area folders like
+/// the VS Code explorer), with status filters and area/project creation.
 /// **Owned by T22.**
 ///
 /// On the Mac the list is a stock selectable `List` (M2, same as `FeatureOverview.ActionListView`):
@@ -33,6 +34,9 @@ public struct ProjectsListView: View {
     @Environment(AppModel.self) private var model
     @State private var listModel: ProjectsListModel?
     @State private var isPresentingNewProject = false
+    /// Folders of the tree the user folded on this device (#67) — `ProjectTreePath.encode`'s
+    /// one-path-per-line string. Device state only, never written to the vault.
+    @AppStorage("projects.collapsedFolders") private var collapsedFoldersStorage = ""
 
     public init(
         selection: NoteID? = nil,
@@ -47,32 +51,38 @@ public struct ProjectsListView: View {
     public var body: some View {
         let list = listModel ?? ProjectsListModel(model: model)
         Group {
-            if list.sections.isEmpty {
+            if list.tree.isEmpty {
                 ContentUnavailableView(Copy.projects, systemImage: Symbols.projects)
             } else {
                 selectableList {
-                    ForEach(Array(list.sections.enumerated()), id: \.offset) { _, section in
-                        Section {
-                            ForEach(section.rows, id: \.project.id) { row in
-                                // A dragged action dropped here is attached to this project
-                                // (E3); it replaces the project the action named before.
-                                ProjectDropRow(project: row.project.id) {
-                                    ProjectRow(row: row, today: list.today, onOpenAction: onOpenAction)
-                                        .contentShape(Rectangle())
-                                        #if !os(macOS)
-                                        .onTapGesture { onOpenProject(row.project.id) }
-                                        #endif
-                                }
-                                .tag(row.project.id)
+                    // #67 — one flat `ForEach` over the visible tree lines (area-less projects
+                    // first, then folders like the VS Code explorer), so the Mac `List`'s
+                    // selection and arrow keys keep working on project rows; folder rows carry
+                    // no tag and are not selectable.
+                    ForEach(list.lines(collapsed: collapsedFolders)) { line in
+                        switch line {
+                        case let .folder(id, name, depth, isExpanded):
+                            ProjectFolderRow(name: name, depth: depth, isExpanded: isExpanded) {
+                                toggleFolder(id)
                             }
-                        } header: {
-                            if let area = section.area { Text(area.title) }
+                        case let .project(row, id, depth):
+                            // A dragged action dropped here is attached to this project
+                            // (E3); it replaces the project the action named before.
+                            ProjectDropRow(project: id) {
+                                ProjectRow(row: row, today: list.today, onOpenAction: onOpenAction)
+                                    .padding(.leading, ProjectFolderRow.indent(depth))
+                                    .contentShape(Rectangle())
+                                    #if !os(macOS)
+                                    .onTapGesture { onOpenProject(id) }
+                                    #endif
+                            }
+                            .tag(id)
                         }
                     }
                 }
             }
         }
-        .safeAreaInset(edge: .top) { StatusFilterBar(listModel: list) }
+    .safeAreaInset(edge: .top) { StatusFilterBar(listModel: list) }
         .navigationTitle(Copy.projects)
         .toolbar {
             ToolbarItem {
@@ -89,6 +99,18 @@ public struct ProjectsListView: View {
         .task { if listModel == nil { listModel = list } }
     }
 
+    private var collapsedFolders: Set<String> { ProjectTreePath.decode(collapsedFoldersStorage) }
+
+    /// Instant, like the Knowledge tree (#24) — no disclosure animation.
+    private func toggleFolder(_ id: String) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            collapsedFoldersStorage = ProjectTreePath.encode(
+                ProjectTreePath.toggling(id, in: collapsedFolders))
+        }
+    }
+
     /// macOS: `List(selection:)` — highlight, arrow keys and accessibility selection for free.
     /// iOS has no persistent row selection outside edit mode, so rows stay tap-to-open there.
     @ViewBuilder
@@ -101,6 +123,42 @@ public struct ProjectsListView: View {
         #else
         List(content: rows)
         #endif
+    }
+}
+
+/// A folder node of the projects tree (#67): chevron, folder icon, name — the look of the
+/// Knowledge sheet's own tree rows (#24). The whole row toggles the folder, as in VS Code.
+private struct ProjectFolderRow: View {
+    let name: String
+    let depth: Int
+    let isExpanded: Bool
+    let toggle: () -> Void
+
+    /// Leading inset of a row at `depth`: one chevron slot per level. A project inside a folder
+    /// lines up with its folder's icon.
+    static func indent(_ depth: Int) -> CGFloat {
+        depth > 0 ? CGFloat(depth) * Spacing.l + Spacing.xs : 0
+    }
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: isExpanded ? Symbols.collapse : Symbols.nextMonth)
+                    .font(Typo.controlGlyph)
+                    .foregroundStyle(Color.textSecondary)
+                    .frame(width: Spacing.l, height: Spacing.l)
+                Label(name, systemImage: Symbols.area)
+                    .font(Typo.body)
+                    .foregroundStyle(Color.ink)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, CGFloat(depth) * Spacing.l)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+        .accessibilityValue(isExpanded ? ProjectsCopy.folderExpanded : ProjectsCopy.folderCollapsed)
+        .accessibilityHint(isExpanded ? ProjectsCopy.collapseFolder : ProjectsCopy.expandFolder)
     }
 }
 

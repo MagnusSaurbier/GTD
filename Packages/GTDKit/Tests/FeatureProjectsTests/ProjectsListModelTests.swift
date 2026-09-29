@@ -16,25 +16,45 @@ struct ProjectsListModelTests {
 
     // MARK: - Grouping (E4)
 
-    @Test func ungroupedProjectsComeFirstWithoutAnAreaHeader() {
-        let list = ProjectsListModel(model: makeModel())
-        list.statuses = []   // empty == "all" statuses
-        let sections = list.sections
-        #expect(sections.first?.area == nil)
-        #expect(sections.first?.rows.contains { $0.project.id == Fixtures.flatProject.id } == true)
+    /// Every project row the list would show with nothing collapsed.
+    private func visibleRows(_ list: ProjectsListModel) -> [Rules.ProjectRow] {
+        list.lines(collapsed: []).compactMap {
+            if case let .project(row, _, _) = $0 { row } else { nil }
+        }
     }
 
-    @Test func groupedSectionsFollowVaultAreaOrder() {
+    @Test func areaLessProjectsComeFirstWithoutAFolder() {
+        let list = ProjectsListModel(model: makeModel())
+        list.statuses = []   // empty == "all" statuses
+        #expect(list.tree.top.contains { $0.project.id == Fixtures.flatProject.id })
+        guard case let .project(_, id, depth) = list.lines(collapsed: []).first else {
+            Issue.record("first line is not a project"); return
+        }
+        #expect(id == Fixtures.flatProject.id)
+        #expect(depth == 0)
+    }
+
+    @Test func areaFoldersAreTreeNodesAlphabetically() {
         let list = ProjectsListModel(model: makeModel())
         list.statuses = []
-        let areaTitles = list.sections.compactMap(\.area?.title)
-        #expect(areaTitles == Fixtures.areas.map(\.title))
+        #expect(list.tree.nodes.map(\.name) == Fixtures.areas.map(\.id.folder).map { NoteID(path: $0).title }
+            .sorted { $0.lowercased() < $1.lowercased() })
+        let daad = list.tree.nodes.first { $0.projects.contains { $0.project.id == Fixtures.daadProject.id } }
+        #expect(daad?.id == Fixtures.daadProject.id.folder.split(separator: "/").dropLast().joined(separator: "/"))
+    }
+
+    @Test func filteredOutFolderDisappears() {
+        let list = ProjectsListModel(model: makeModel())
+        list.statuses = [.onHold]
+        let names = list.tree.nodes.map(\.name)
+        let sideJobFolder = NoteID(path: Fixtures.sideJobProject.id.folder).folder
+        #expect(names == [NoteID(path: sideJobFolder).title])
     }
 
     @Test func defaultFilterShowsOnlyActiveProjects() {
         let list = ProjectsListModel(model: makeModel())
         #expect(list.statuses == [.active])
-        let shown = Set(list.sections.flatMap(\.rows).map(\.project.id))
+        let shown = Set(visibleRows(list).map(\.project.id))
         #expect(shown.contains(Fixtures.daadProject.id))
         #expect(!shown.contains(Fixtures.sideJobProject.id))   // on-hold, filtered out by default
     }
@@ -43,19 +63,19 @@ struct ProjectsListModelTests {
         let list = ProjectsListModel(model: makeModel())
         list.toggleStatus(.onHold)
         #expect(list.statuses == [.active, .onHold])
-        let shown = Set(list.sections.flatMap(\.rows).map(\.project.id))
+        let shown = Set(visibleRows(list).map(\.project.id))
         #expect(shown.contains(Fixtures.sideJobProject.id))
 
         list.toggleStatus(.active)
         list.toggleStatus(.onHold)
         #expect(list.statuses.isEmpty)   // empty == every status shown again
-        let all = Set(list.sections.flatMap(\.rows).map(\.project.id))
+        let all = Set(visibleRows(list).map(\.project.id))
         #expect(all.count == Fixtures.projects.count)
     }
 
     @Test func stalledProjectIsFlaggedInItsRow() {
         let list = ProjectsListModel(model: makeModel())
-        let flat = list.sections.flatMap(\.rows).first { $0.project.id == Fixtures.flatProject.id }
+        let flat = visibleRows(list).first { $0.project.id == Fixtures.flatProject.id }
         #expect(flat?.isStalled == true)
         #expect(flat?.activeActions.isEmpty == true)
     }
