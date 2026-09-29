@@ -10,8 +10,9 @@ import DesignSystem
 /// draft, the same required fields and the same cap flow as the inbox, because all of that is
 /// `ActionCardState` / `ActionCardEngine` and neither this type nor `InboxSession` owns a copy of
 /// it. The only differences are what it starts from (a `Source`, not a capture), the command it
-/// sends (`promoteListItem`, which *moves* the note out of `Lists/<n>/`, or `updateAction` for
-/// an action that was dropped onto a section it is not ready for — `MovePlan.card`) and that
+/// sends (`promoteListItem`, which *moves* the note out of `Lists/<n>/`, `promoteStep` for a
+/// project step (P6), `createAction` for a new action typed into "What's next?" (P5), or `updateAction` for an action that was dropped onto a section it is not
+/// ready for — `MovePlan.card`) and that
 /// there is no step 1 to collapse to: the way out is `cancel()`, which leaves the note as it was.
 ///
 /// The exits are the four of the action card: `→` Next, `←` Someday, `Waiting`, `Done`.
@@ -25,11 +26,18 @@ public final class MakeActionModel {
         case listItem(ListItem)
         /// A drop (or `Move to…`) that needs fields the action does not have yet.
         case action(Action)
+        /// P6 — an open step of a project, promoted from the project detail. The action is born
+        /// in that project and the step points at it (`promoteStep`).
+        case projectStep(project: NoteID, stepIndex: Int, text: String)
+        /// P5 — a new action typed into "What's next?", born in `project`.
+        case newProjectAction(project: NoteID, title: String)
 
         public var id: NoteID {
             switch self {
             case let .listItem(item): item.id
             case let .action(action): action.id
+            case let .projectStep(project, _, _): project
+            case let .newProjectAction(project, _): project
             }
         }
     }
@@ -47,6 +55,17 @@ public final class MakeActionModel {
         switch source {
         case let .listItem(item): item.created
         case let .action(action): action.created
+        case .projectStep, .newProjectAction: nil
+        }
+    }
+
+    /// A promoted step or a "What's next?" action belongs to the project it came from — it is
+    /// filed there whatever the draft says — so the card's project chip shows that project and
+    /// cannot be changed.
+    public var canChangeProject: Bool {
+        switch source {
+        case .projectStep, .newProjectAction: false
+        case .listItem, .action: true
         }
     }
 
@@ -114,6 +133,38 @@ public final class MakeActionModel {
         if target == .waiting { sheet = .waiting }
     }
 
+    /// P6 — the card over a project step. It opens with the step's line as the title and as
+    /// `What?` (the step *is* the next physical action — the reducer uses the same default), and
+    /// with the project on the project chip; everything else is asked for like any capture.
+    public init(
+        model: AppModel,
+        project: NoteID,
+        stepIndex: Int,
+        stepText: String,
+        bindings: KeyBindings = .defaults
+    ) {
+        self.model = model
+        self.source = .projectStep(project: project, stepIndex: stepIndex, text: stepText)
+        self.keyBindings = bindings
+        self.card = ActionCardState(
+            draft: InboxDraft(title: stepText, what: stepText, project: project))
+    }
+
+    /// P5 — the card over a new action typed into "What's next?": the typed line is the title
+    /// and `What?`, the project is the one being asked about.
+    public init(
+        model: AppModel,
+        project: NoteID,
+        newActionTitle: String,
+        bindings: KeyBindings = .defaults
+    ) {
+        self.model = model
+        self.source = .newProjectAction(project: project, title: newActionTitle)
+        self.keyBindings = bindings
+        self.card = ActionCardState(
+            draft: InboxDraft(title: newActionTitle, what: newActionTitle, project: project))
+    }
+
     // MARK: - Derived
 
     public var snapshot: VaultSnapshot { model.snapshot }
@@ -179,8 +230,14 @@ public final class MakeActionModel {
         await file(status: .waiting, waiting: info)
     }
 
-    public func chooseProject(_ id: NoteID?) { card.draft.chooseProject(id) }
-    public func createProject(named title: String) { card.draft.createProject(named: title) }
+    public func chooseProject(_ id: NoteID?) {
+        guard canChangeProject else { return }
+        card.draft.chooseProject(id)
+    }
+    public func createProject(named title: String) {
+        guard canChangeProject else { return }
+        card.draft.createProject(named: title)
+    }
     public func projectChipTitle(in snapshot: VaultSnapshot) -> String? {
         draft.projectChipTitle(in: snapshot)
     }
@@ -247,7 +304,9 @@ public final class MakeActionModel {
             case .cardNext: await take(.next)
             case .cardSomeday: await take(.someday)
             case .cardWaiting: await take(.waiting)
-            case .cardProject: sheet = .project
+            case .cardProject:
+                guard canChangeProject else { return false }
+                sheet = .project
             default: return false
             }
             return true
@@ -288,6 +347,13 @@ public final class MakeActionModel {
         switch source {
         case let .listItem(item):
             try await model.send(.promoteListItem(item.id, payload))
+        case let .projectStep(project, stepIndex, _):
+            try await model.send(.promoteStep(project: project, stepIndex: stepIndex, payload))
+        case let .newProjectAction(project, _):
+            var payload = payload
+            payload.project = project
+            payload.newProjectTitle = nil
+            try await model.send(.createAction(payload))
         case let .action(action):
             var payload = payload
             if let title = payload.newProjectTitle {

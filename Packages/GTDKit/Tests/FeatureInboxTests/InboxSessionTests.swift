@@ -1533,3 +1533,94 @@ struct MakeActionModelTests {
         #expect(!model.isFiled)
     }
 }
+
+// MARK: - Promote a project step (P6)
+
+/// The project detail's Promote opens this same card over a step (#74): the inbox's fields and
+/// refusals, and a missing `Why?` is reported as missing — never as "Next is full".
+@MainActor
+struct MakeActionFromProjectStepTests {
+
+    /// `Fixtures.daadProject`: steps 0 and 1 are done/promoted, 2 is the first open one.
+    private func makeModel() -> (model: MakeActionModel, app: AppModel, text: String) {
+        let snapshot = Fixtures.sampleSnapshot
+        let backend = TestBackend(snapshot: snapshot)
+        let app = AppModel(backend: backend, snapshot: snapshot, today: { Fixtures.today })
+        let text = snapshot.project(Fixtures.daadProject.id)!.steps[2].text
+        let model = MakeActionModel(
+            model: app, project: Fixtures.daadProject.id, stepIndex: 2, stepText: text)
+        return (model, app, text)
+    }
+
+    @Test func itStartsFromTheStepInItsProject() {
+        let (model, _, text) = makeModel()
+        #expect(model.step == .actionCard)
+        #expect(model.draft.title == text)
+        #expect(model.draft.what == text)
+        #expect(model.draft.project == Fixtures.daadProject.id)
+        #expect(model.draft.why.isEmpty)
+        #expect(!model.canChangeProject)
+    }
+
+    @Test func aMissingWhyIsFlaggedAsMissingNotAsACap() async {
+        let (model, app, _) = makeModel()
+        let before = app.snapshot.actions.count
+        model.draft.contexts = ["mac"]
+        model.draft.timeBucket = .upTo30
+
+        await model.take(.next)
+
+        #expect(model.refusal?.reason == .missing([.why]))
+        #expect(model.missingFields == [.why])
+        #expect(model.sheet == nil)
+        #expect(app.snapshot.actions.count == before)
+    }
+
+    @Test func filingPromotesTheStepIntoNext() async throws {
+        let (model, app, _) = makeModel()
+        model.draft.why = "The application needs it."
+        model.draft.contexts = ["mac"]
+        model.draft.timeBucket = .upTo30
+
+        await model.take(.next)
+
+        #expect(model.isFiled)
+        let step = try #require(app.snapshot.project(Fixtures.daadProject.id)?.steps[2])
+        let action = try #require(step.promotedTo.flatMap { app.snapshot.action($0) })
+        #expect(action.status == .next)
+        #expect(action.project == Fixtures.daadProject.id)
+        #expect(action.why == "The application needs it.")
+    }
+
+    @Test func theProjectChipCannotBeChanged() async {
+        let (model, app, _) = makeModel()
+        let other = try! #require(app.snapshot.projects.first { $0.id != Fixtures.daadProject.id })
+        model.chooseProject(other.id)
+        model.createProject(named: "Something else")
+        #expect(model.draft.project == Fixtures.daadProject.id)
+        #expect(model.draft.newProjectTitle == nil)
+        #expect(await model.handle(.command(.cardProject)) == false)
+        #expect(model.sheet == nil)
+    }
+
+    /// P5 — a line typed into "What's next?" becomes an action in that project, through the card.
+    @Test func aNewActionTypedIntoWhatsNextIsFiledInTheProject() async throws {
+        let snapshot = Fixtures.sampleSnapshot
+        let app = AppModel(
+            backend: TestBackend(snapshot: snapshot), snapshot: snapshot, today: { Fixtures.today })
+        let model = MakeActionModel(
+            model: app, project: Fixtures.daadProject.id, newActionTitle: "Email the DAAD office")
+        #expect(model.draft.title == "Email the DAAD office")
+        #expect(model.draft.what == "Email the DAAD office")
+        #expect(!model.canChangeProject)
+
+        await model.take(.next)
+        #expect(model.refusal?.reason == .missing([.why, .context, .timeEstimate]))
+
+        await model.take(.someday)
+        #expect(model.isFiled)
+        let action = try #require(app.snapshot.actions.first { $0.title == "Email the DAAD office" })
+        #expect(action.status == .someday)
+        #expect(action.project == Fixtures.daadProject.id)
+    }
+}

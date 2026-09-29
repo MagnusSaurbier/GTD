@@ -388,7 +388,7 @@ private struct MakeActionCardBody: View {
                     let formatted = ChecklistText.autoFormat(newValue)
                     if formatted != newValue { model.draft.what = formatted }
                 }
-            if model.draft.suggestsProject {
+            if model.draft.suggestsProject && model.canChangeProject {
                 Button {
                     model.sheet = .project
                 } label: {
@@ -424,7 +424,7 @@ private struct MakeActionCardBody: View {
                     state: isProjectChosen ? .confirmed : .unset,
                     symbol: isProjectChosen ? nil : "plus"
                 ) {
-                    model.sheet = .project
+                    if model.canChangeProject { model.sheet = .project }
                 }
             }
         }
