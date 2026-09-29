@@ -69,7 +69,14 @@ let package = Package(
             swiftSettings: swiftSettings),
         .target(name: "FeatureInbox", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
         .target(name: "FeatureNext", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
-        .target(name: "FeatureProjects", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
+        // Depends on FeatureInbox for `MakeActionModel`: promoting a step (P6) opens the inbox's
+        // action card, like FeatureLists' "Make action" (L4).
+        .target(
+            name: "FeatureProjects",
+            dependencies: featureDeps + ["FeatureInbox"],
+            exclude: excluded,
+            resources: uiResources,
+            swiftSettings: swiftSettings),
         .target(name: "FeatureWaiting", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
         .target(name: "FeatureRoutines", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),
         .target(name: "FeatureSettings", dependencies: featureDeps, exclude: excluded, resources: uiResources, swiftSettings: swiftSettings),

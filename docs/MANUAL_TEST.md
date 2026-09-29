@@ -318,6 +318,12 @@ Unplug the mouse for this one.
       three steps there is no scroll view and no gap under them. Same for an action with many
       checkboxes › `Turn into project`.
 
+- [ ] **Promote a step (#74, 0.39):** a project's open step › Promote opens the inbox's action
+      card — `Why?`, `What?` (pre-filled with the step), context and time chips, defer/due, the
+      project chip showing this project (not changeable), and the Someday / Next / Waiting / Done
+      exits. `Next` without a `Why?` marks `* Why?` and shakes; it never says "Next is full".
+      With Next really full, the inbox's own `Next is full` demote sheet appears.
+
 ### 3.5 Settings (L2/R-5, N7)
 
 - [ ] **Mac, `⌘,`: the Settings window scrolls.** At its default size (520×560) scroll from

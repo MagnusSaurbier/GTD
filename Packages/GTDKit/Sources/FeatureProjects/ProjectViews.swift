@@ -3,6 +3,7 @@ import SwiftUI
 import GTDModel
 import GTDAppCore
 import DesignSystem
+import FeatureInbox
 import GTDFixtures
 
 // MARK: - Projects list (E4)
@@ -257,7 +258,7 @@ public struct ProjectDetailView: View {
             demotionNotice = nil
         }
         .sheet(item: promptingStepIndexBinding) { identified in
-            PromoteStepSheet(detailModel: detail, stepIndex: identified.value)
+            PromoteStepSheet(model: model, detailModel: detail, stepIndex: identified.value)
         }
     }
 
@@ -576,77 +577,27 @@ private struct OptionArrowShortcut: ViewModifier {
     }
 }
 
-/// The small action-draft form promotion opens from the project detail (P6): contexts + time
-/// chips, status Next or Someday. Cap handling is simplified from T20: a single "Send to
-/// Someday instead" retry rather than the full "Next is full" demote sheet.
+/// Promotion from the project detail (P6): the inbox's opened action card (STYLEGUIDE §3.5 step
+/// 2a), over `MakeActionModel`'s `.projectStep` source. The fields, asterisks, cap sheet and
+/// exits are the inbox's own, so a change to the card reaches this sheet without a copy here.
 private struct PromoteStepSheet: View {
-    let detailModel: ProjectDetailModel
-    let stepIndex: Int
-    @Environment(AppModel.self) private var model
+    @State private var makeAction: MakeActionModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.keyBindings) private var keyBindings
 
-    @State private var title: String
-    @State private var contexts: [String] = []
-    @State private var timeBucket: TimeBucket?
-    @State private var status: ActionStatus = .next
-    @State private var capMessage: String?
-
-    init(detailModel: ProjectDetailModel, stepIndex: Int) {
-        self.detailModel = detailModel
-        self.stepIndex = stepIndex
-        _title = State(initialValue: detailModel.steps.indices.contains(stepIndex)
-            ? detailModel.steps[stepIndex].text : "")
+    init(model: AppModel, detailModel: ProjectDetailModel, stepIndex: Int) {
+        let text = detailModel.steps.indices.contains(stepIndex)
+            ? detailModel.steps[stepIndex].text : ""
+        _makeAction = State(initialValue: MakeActionModel(
+            model: model, project: detailModel.projectID, stepIndex: stepIndex, stepText: text))
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.l) {
-            Text(Copy.promote).font(Typo.sectionHeader)
-
-            TextField("Action title", text: $title)
-                .textFieldStyle(.plain)
-                .font(Typo.body)
-
-            ContextChipGroup(contexts: model.snapshot.config.contexts, selection: $contexts)
-            TimeBucketChipGroup(selection: $timeBucket)
-
-            HStack(spacing: Spacing.chipGap) {
-                Chip(Copy.next, state: status == .next ? .confirmed : .unset) { status = .next }
-                Chip(Copy.someday, state: status == .someday ? .confirmed : .unset) { status = .someday }
-            }
-
-            if let capMessage {
-                VStack(alignment: .leading, spacing: Spacing.s) {
-                    Text(Copy.capSheetTitle).font(Typo.sectionHeader)
-                    Text(capMessage).font(Typo.meta).foregroundStyle(Color.textSecondary)
-                    Button(Copy.sendToSomedayInstead) { Task { await promote(toSomeday: true) } }
-                }
-            }
-
-            HStack {
-                Spacer()
-                Button(Copy.promote) { Task { await promote(toSomeday: false) } }
-                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
+        NavigationStack {
+            MakeActionCardView(model: makeAction) { dismiss() }
         }
-        .padding(Spacing.cardPadding)
-    }
-
-    private func promote(toSomeday: Bool) async {
-        let draft = ActionDraft(
-            title: title, status: toSomeday ? .someday : status,
-            contexts: contexts, timeEstimate: timeBucket?.minutes)
-        do {
-            let outcome = try await detailModel.promoteStep(at: stepIndex, draft: draft)
-            switch outcome {
-            case .success:
-                dismiss()
-            case .capReached:
-                capMessage = Copy.capSheetBody
-            case let .missingFields(fields):
-                capMessage = Copy.missingFields(fields)
-            }
-        } catch {
-            capMessage = "\(error)"
+        .onChange(of: keyBindings, initial: true) { _, bindings in
+            makeAction.keyBindings = bindings
         }
     }
 }
