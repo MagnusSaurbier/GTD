@@ -43,6 +43,35 @@ public final class ProjectDetailModel {
 
     public var steps: [ProjectStep] { project?.steps ?? [] }
 
+    /// #76 — where a step stands: the badge on the right of its row in the one steps list.
+    public enum StepStanding: Equatable {
+        /// Open and not yet an action: `↗ Promote` opens the action card.
+        case promotable
+        /// Linked to an open action: `→ Next` / `→ Someday` / `→ Waiting` shows its status.
+        case action(Action)
+        /// Linked to another project's note — a subproject: `→ Project`.
+        case project(Project)
+        /// Nothing to show: done, or linked to a closed or missing note.
+        case settled
+    }
+
+    public func standing(of step: ProjectStep) -> StepStanding {
+        guard !step.done else { return .settled }
+        guard let target = step.promotedTo else { return .promotable }
+        if let action = model.snapshot.action(target) {
+            return action.status.isClosed ? .settled : .action(action)
+        }
+        if let project = model.snapshot.project(target) { return .project(project) }
+        return .settled
+    }
+
+    /// #76 — the project's active actions that no step points at. The one list shows them
+    /// under the steps, so every step and every Next item of the project is in one place.
+    public var looseActions: [Action] {
+        let linked = Set(steps.compactMap(\.promotedTo))
+        return activeActions.filter { !linked.contains($0.id) }
+    }
+
     // MARK: - Header
 
     public func setOutcome(_ text: String) async throws {

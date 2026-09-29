@@ -247,23 +247,41 @@ private struct NewProjectSheet: View {
 
 // MARK: - Project detail (P6)
 
-/// Mac-first project view, usable on iPhone: header, status, step checklist, active actions,
-/// reference files, dated log. **Owned by T22.**
+/// Mac-first project view, usable on iPhone: header, status, one list of steps and the
+/// project's active actions (#76), reference files, dated log. **Owned by T22.**
 public struct ProjectDetailView: View {
     private let projectID: NoteID
     private let onOpenAction: (NoteID) -> Void
+    private let onOpenProject: ((NoteID) -> Void)?
     @Environment(AppModel.self) private var model
     @Environment(\.vaultRootPath) private var vaultRootPath
     @State private var detailModel: ProjectDetailModel?
     @State private var newStepText = ""
     /// The suggestion row `↓`/`↑` has moved to; Return links it instead of adding plain text.
     @State private var highlightedSuggestion: Int?
-    @State private var promptingStepIndex: Int?
+    @State private var cardRequest: CardRequest?
     @State private var demotionNotice: String?
 
-    public init(project: NoteID, onOpenAction: @escaping (NoteID) -> Void) {
+    /// `onOpenProject` opens a subproject a step points at (`→ Project`); without it those rows
+    /// only show where the step stands.
+    public init(
+        project: NoteID,
+        onOpenAction: @escaping (NoteID) -> Void,
+        onOpenProject: ((NoteID) -> Void)? = nil
+    ) {
         self.projectID = project
         self.onOpenAction = onOpenAction
+        self.onOpenProject = onOpenProject
+    }
+
+    /// The action card a row's badge opens (#74, #76).
+    private enum CardRequest: Identifiable, Hashable {
+        /// `↗ Promote` on an open step.
+        case promote(stepIndex: Int)
+        /// `→ Next` etc. on a step's action or a loose action: change where it stands.
+        case status(NoteID)
+
+        var id: Self { self }
     }
 
     public var body: some View {
@@ -282,11 +300,6 @@ public struct ProjectDetailView: View {
                     }
                     Section("Steps") {
                         stepsSection(detail)
-                    }
-                    if !detail.activeActions.isEmpty {
-                        Section(Copy.next) {
-                            activeActionsSection(detail)
-                        }
                     }
                     if !detail.referenceFiles.isEmpty {
                         Section(Copy.knowledge) {
@@ -312,19 +325,19 @@ public struct ProjectDetailView: View {
             detailModel = detail
             newStepText = ""
             highlightedSuggestion = nil
-            promptingStepIndex = nil
+            cardRequest = nil
             demotionNotice = nil
         }
-        .sheet(item: promptingStepIndexBinding) { identified in
-            PromoteStepSheet(model: model, detailModel: detail, stepIndex: identified.value)
+        .sheet(item: $cardRequest) { request in
+            switch request {
+            case let .promote(stepIndex):
+                PromoteStepSheet(model: model, detailModel: detail, stepIndex: stepIndex)
+            case let .status(id):
+                if let action = model.snapshot.action(id) {
+                    ChangeStatusSheet(model: model, action: action)
+                }
+            }
         }
-    }
-
-    /// `.sheet(item:)` needs an `Identifiable`; wraps the plain `Int?` state.
-    private var promptingStepIndexBinding: Binding<IdentifiedInt?> {
-        Binding(
-            get: { promptingStepIndex.map(IdentifiedInt.init) },
-            set: { promptingStepIndex = $0?.value })
     }
 
     @ViewBuilder
@@ -386,15 +399,28 @@ public struct ProjectDetailView: View {
         ForEach(Array(detail.steps.enumerated()), id: \.offset.stepRowID) { index, step in
             StepRow(
                 step: step,
+                standing: detail.standing(of: step),
                 onToggle: { Task { try? await detail.toggleStep(at: index) } },
                 onEdit: { text in Task { try? await detail.editStep(at: index, text: text) } },
                 onMoveUp: { Task { try? await detail.moveStepUp(at: index) } },
                 onMoveDown: { Task { try? await detail.moveStepDown(at: index) } },
                 onDelete: { Task { try? await detail.deleteStep(at: index) } },
-                onPromote: step.done || step.promotedTo != nil ? nil : { promptingStepIndex = index })
+                onPromote: { cardRequest = .promote(stepIndex: index) },
+                onChangeStatus: { cardRequest = .status($0) },
+                onOpen: openHandler(for: step))
         }
         .onMove { offsets, destination in
             Task { try? await detail.moveStep(fromOffsets: offsets, toOffset: destination) }
+        }
+
+        // #76 — the project's actions no step points at, in the same list, same badge.
+        ForEach(detail.looseActions, id: \.id) { action in
+            HStack(spacing: Spacing.m) {
+                ActionRow(action: action)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onOpenAction(action.id) }
+                StepStandingBadge(.action(action)) { cardRequest = .status(action.id) }
+            }
         }
 
         // #61 — typing offers existing actions; picking one links it instead of adding text.
@@ -442,13 +468,15 @@ public struct ProjectDetailView: View {
         Task { await model.report { try await detail.linkStep(to: action.id) } }
     }
 
-    @ViewBuilder
-    private func activeActionsSection(_ detail: ProjectDetailModel) -> some View {
-        ForEach(detail.activeActions, id: \.id) { action in
-            ActionRow(action: action)
-                .contentShape(Rectangle())
-                .onTapGesture { onOpenAction(action.id) }
+    /// A click on the row opens the note the step points at: its action, or a subproject when
+    /// the shell can show one. A plain step has no note — its text stays editable instead.
+    private func openHandler(for step: ProjectStep) -> (() -> Void)? {
+        guard let target = step.promotedTo else { return nil }
+        if model.snapshot.action(target) != nil { return { onOpenAction(target) } }
+        if model.snapshot.project(target) != nil, let onOpenProject {
+            return { onOpenProject(target) }
         }
+        return nil
     }
 
     @ViewBuilder
@@ -484,20 +512,20 @@ private extension Int {
     var logRowID: String { "log-\(self)" }
 }
 
-private struct IdentifiedInt: Identifiable {
-    let value: Int
-    var id: Int { value }
-}
-
-/// One row of the step checklist: check, editable text, reorder, promote (P6).
+/// One row of the step list: check, text, where it stands (#76), reorder, delete (P6).
+/// A step that points at a note shows its text as a link to it (`onOpen`); a plain step's text
+/// is editable.
 private struct StepRow: View {
     let step: ProjectStep
+    let standing: ProjectDetailModel.StepStanding
     let onToggle: () -> Void
     let onEdit: (String) -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
     let onDelete: () -> Void
-    let onPromote: (() -> Void)?
+    let onPromote: () -> Void
+    let onChangeStatus: (NoteID) -> Void
+    let onOpen: (() -> Void)?
 
     /// What the user is typing, only while they edit this row. Otherwise the row shows
     /// `step.text` straight from the model: the Mac `List` reuses row views, and a copy taken
@@ -507,20 +535,26 @@ private struct StepRow: View {
 
     init(
         step: ProjectStep,
+        standing: ProjectDetailModel.StepStanding,
         onToggle: @escaping () -> Void,
         onEdit: @escaping (String) -> Void,
         onMoveUp: @escaping () -> Void,
         onMoveDown: @escaping () -> Void,
         onDelete: @escaping () -> Void,
-        onPromote: (() -> Void)?
+        onPromote: @escaping () -> Void,
+        onChangeStatus: @escaping (NoteID) -> Void,
+        onOpen: (() -> Void)?
     ) {
         self.step = step
+        self.standing = standing
         self.onToggle = onToggle
         self.onEdit = onEdit
         self.onMoveUp = onMoveUp
         self.onMoveDown = onMoveDown
         self.onDelete = onDelete
         self.onPromote = onPromote
+        self.onChangeStatus = onChangeStatus
+        self.onOpen = onOpen
     }
 
     private var text: Binding<String> {
@@ -542,27 +576,38 @@ private struct StepRow: View {
             .buttonStyle(.plain)
             .disabled(step.promotedTo != nil)
 
-            TextField("Step", text: text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(Typo.body)
-                .strikethrough(step.done)
-                .foregroundStyle(step.done ? Color.textSecondary : Color.ink)
-                .focused($isFocused)
-                .onSubmit { commit() }
-                .onChange(of: isFocused) { _, focused in
-                    if !focused { commit() }
-                }
+            if let onOpen {
+                Text(step.text)
+                    .font(Typo.body)
+                    .strikethrough(step.done)
+                    .foregroundStyle(step.done ? Color.textSecondary : Color.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onOpen)
+                    .accessibilityAddTraits(.isButton)
+            } else {
+                TextField("Step", text: text, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(Typo.body)
+                    .strikethrough(step.done)
+                    .foregroundStyle(step.done ? Color.textSecondary : Color.ink)
+                    .focused($isFocused)
+                    .onSubmit { commit() }
+                    .onChange(of: isFocused) { _, focused in
+                        if !focused { commit() }
+                    }
+            }
 
-            if step.promotedTo != nil {
-                Badge(BadgeContent(
-                    text: Copy.promote, symbol: Symbols.promoteStep, step: .neutral,
-                    accessibilityLabel: "Promoted to an action"))
-            } else if let onPromote {
-                Button(action: onPromote) {
-                    Image(systemName: Symbols.promoteStep)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Copy.promote)
+            switch standing {
+            case .promotable:
+                StepStandingBadge(.promotable, action: onPromote)
+            case let .action(action):
+                StepStandingBadge(.action(action)) { onChangeStatus(action.id) }
+            case .project:
+                if let onOpen { StepStandingBadge(standing, action: onOpen) }
+                else { StepStandingBadge(standing, action: nil) }
+            case .settled:
+                EmptyView()
             }
 
             // Reorder: drag via `.onMove` (List's native handle) on every platform, plus `⌥↑↓`
@@ -589,6 +634,64 @@ private struct StepRow: View {
             .foregroundStyle(Color.textTertiary)
             .accessibilityLabel("Delete step")
         }
+    }
+}
+
+/// The badge on the right of a step-list row (#76): `↗ Promote` on an open step, `→ Next` /
+/// `→ Someday` / `→ Waiting` for an action, `→ Project` for a subproject. One style for all,
+/// the neutral `Badge`; a button whenever it has something to open.
+private struct StepStandingBadge: View {
+    let standing: ProjectDetailModel.StepStanding
+    let action: (() -> Void)?
+
+    init(_ standing: ProjectDetailModel.StepStanding, action: (() -> Void)?) {
+        self.standing = standing
+        self.action = action
+    }
+
+    var body: some View {
+        if let content {
+            if let action {
+                Button(action: action) { Badge(content) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(content.accessibilityLabel)
+            } else {
+                Badge(content)
+            }
+        }
+    }
+
+    private var content: BadgeContent? {
+        switch standing {
+        case .promotable:
+            BadgeContent(
+                text: Copy.promote, symbol: Symbols.promoteStep, step: .neutral,
+                accessibilityLabel: Copy.promote)
+        case let .action(action):
+            BadgeContent(
+                text: Copy.status(action.status), symbol: Symbols.stepStatus, step: .neutral,
+                accessibilityLabel: "\(Copy.status(action.status)), change status")
+        case .project:
+            BadgeContent(
+                text: Copy.project, symbol: Symbols.stepStatus, step: .neutral,
+                accessibilityLabel: "Subproject")
+        case .settled:
+            nil
+        }
+    }
+}
+
+/// `→ Next` etc. (#76): the inbox's action card over an existing action, to change its status.
+private struct ChangeStatusSheet: View {
+    private let makeAction: MakeActionModel
+    @Environment(\.dismiss) private var dismiss
+
+    init(model: AppModel, action: Action) {
+        makeAction = MakeActionModel(model: model, changingStatusOf: action)
+    }
+
+    var body: some View {
+        ProjectActionCard(makeAction) { _ in dismiss() }
     }
 }
 

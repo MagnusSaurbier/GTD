@@ -4,6 +4,7 @@ import GTDModel
 import GTDAppCore
 import GTDFixtures
 @testable import FeatureProjects
+import FeatureInbox
 
 @MainActor
 struct ProjectDetailModelTests {
@@ -261,5 +262,56 @@ struct ProjectDetailModelTests {
         let active = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
         #expect(stalled.isStalled == true)
         #expect(active.isStalled == false)
+    }
+
+    // MARK: - One list of steps and actions (#76)
+
+    /// Each step's badge: done → nothing, linked to an open action → its status, open → Promote.
+    @Test func eachStepStandsWhereItsNoteIs() throws {
+        let model = makeModel()
+        let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
+        #expect(detail.standing(of: detail.steps[0]) == .settled)
+        let linked = try #require(detail.steps[1].promotedTo.flatMap { model.snapshot.action($0) })
+        #expect(detail.standing(of: detail.steps[1]) == .action(linked))
+        #expect(detail.standing(of: detail.steps[2]) == .promotable)
+    }
+
+    /// A step that points at another project is a subproject (`→ Project`).
+    @Test func aStepLinkedToAProjectIsASubproject() throws {
+        var snapshot = Fixtures.sampleSnapshot
+        let sub = try #require(snapshot.projects.first { $0.id != Fixtures.daadProject.id })
+        let index = try #require(snapshot.projects.firstIndex { $0.id == Fixtures.daadProject.id })
+        snapshot.projects[index].steps.append(ProjectStep(text: sub.title, promotedTo: sub.id))
+        let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: makeModel(snapshot: snapshot))
+        #expect(detail.standing(of: detail.steps.last!) == .project(sub))
+    }
+
+    /// The Next items that no step links to join the list; linked ones appear only as their step.
+    @Test func looseActionsAreTheActiveActionsNoStepLinks() {
+        let model = makeModel()
+        let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
+        let linked = Set(detail.steps.compactMap(\.promotedTo))
+        #expect(detail.looseActions.allSatisfy { !linked.contains($0.id) })
+        #expect(Set(detail.looseActions.map(\.id)).union(linked.intersection(Set(detail.activeActions.map(\.id))))
+            == Set(detail.activeActions.map(\.id)))
+    }
+
+    /// `→ Next` opens the inbox card over the action; its Someday exit moves it and the step
+    /// then reads `→ Someday`.
+    @Test func theStatusCardChangesWhereTheStepStands() async throws {
+        let model = makeModel()
+        let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
+        let action = try #require(detail.steps[1].promotedTo.flatMap { model.snapshot.action($0) })
+        let card = MakeActionModel(model: model, changingStatusOf: action)
+        #expect(card.sheet == nil)
+        #expect(card.missingFields.isEmpty)
+        #expect(card.draft.why == action.why)
+
+        await card.take(.someday)
+
+        #expect(card.isFiled)
+        let moved = try #require(model.snapshot.action(action.id))
+        #expect(moved.status == .someday)
+        #expect(detail.standing(of: detail.steps[1]) == .action(moved))
     }
 }

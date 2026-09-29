@@ -90,3 +90,8 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 (the picker chip's content, reorder maths, grouping/filtering, step CRUD, status-change demotion, the area change of R-7 and
 its refusal, the area picker's own chip/refusal wording (`AreaPickerContentTests`, T11), and the
 cap-reached → Someday-fallback path on every promotion entry point).
+- #76 (0.40): `ProjectDetailView` shows steps and `looseActions` (active actions no step links)
+  in one `Steps` section. `ProjectDetailModel.standing(of:)` picks each row's right-hand badge
+  (`StepStandingBadge`): `↗ Promote` → `PromoteStepSheet`, `→ <status>` → `ChangeStatusSheet`
+  (`MakeActionModel(changingStatusOf:)`), `→ Project` for a step linked to a project note
+  (opened through `onOpenProject`). A linked row's text opens its note instead of editing.
