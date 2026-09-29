@@ -20,19 +20,20 @@ public final class ProjectsListModel {
 
     public var today: Day { model.today() }
 
-    /// Rows grouped by area, areas in vault order; projects without an area come first
-    /// without a section header (ARCHITECTURE §6).
-    public var sections: [(area: Area?, rows: [Rules.ProjectRow])] {
-        let all = Rules.projectRows(model.snapshot, today: today)
+    /// The filtered rows as a folder tree (#67): area-less projects (`Projects/no_area/…` and
+    /// `Projects/<Name>/`) flat on top, every other project under the folders it sits in,
+    /// alphabetical at every level. Folders without a visible project do not appear.
+    public var tree: ProjectTree<Rules.ProjectRow> {
+        let rows = Rules.projectRows(model.snapshot, today: today)
             .filter { statuses.isEmpty || statuses.contains($0.project.status) }
-        var out: [(Area?, [Rules.ProjectRow])] = []
-        let ungrouped = all.filter { $0.project.area == nil }
-        if !ungrouped.isEmpty { out.append((nil, ungrouped)) }
-        for area in model.snapshot.areas {
-            let rows = all.filter { $0.project.area == area.id }
-            if !rows.isEmpty { out.append((area, rows)) }
-        }
-        return out.map { (area: $0.0, rows: $0.1) }
+        return ProjectTree(
+            rows: rows, layout: model.snapshot.config.layout,
+            id: \.project.id, title: \.project.title)
+    }
+
+    /// The rows `ProjectsListView` draws, given the folders collapsed on this device.
+    public func lines(collapsed: Set<String>) -> [ProjectTree<Rules.ProjectRow>.Line] {
+        tree.lines(collapsed: collapsed, id: \.project.id)
     }
 
     /// Steps that `WhatsNextSheet` offers for one-tap promotion (P5).
@@ -46,7 +47,7 @@ public final class ProjectsListModel {
     }
 
     /// Toggles one status in the list's filter set (E4 "Sections/filters"). Empty means "all" —
-    /// `sections` treats it that way, so clearing the last filter shows every status again.
+    /// `tree` treats it that way, so clearing the last filter shows every status again.
     public func toggleStatus(_ status: ProjectStatus) {
         if statuses.contains(status) {
             statuses.remove(status)
