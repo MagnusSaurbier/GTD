@@ -12,6 +12,7 @@ public struct Chip: View {
     private let state: ChipState
     private let leadingSymbol: String?
     private let signal: SignalStep?
+    private let isKeyHighlighted: Bool
     private let action: () -> Void
 
     @Environment(\.colorSchemeContrast) private var contrast
@@ -21,17 +22,24 @@ public struct Chip: View {
     /// colour @ 18 % / 28 %, ink label, tinted symbol) — e.g. a follow-up date that has passed.
     /// The shape still carries the state (filled = confirmed); the hue only adds the signal, and
     /// `nil` / `.neutral` / any other state draws the plain chip.
+    ///
+    /// `isKeyHighlighted` is the keyboard's *semi-highlight* (Mac inbox walk, #65): a ring around
+    /// the chip that keeps its own fill, so it reads as neither unset nor confirmed, plus a
+    /// preview of what `↩` will do — an unset chip takes a faint wash of the confirmed fill, a
+    /// confirmed chip loses some of its fill.
     public init(
         _ title: String,
         state: ChipState,
         symbol: String? = nil,
         signal: SignalStep? = nil,
+        isKeyHighlighted: Bool = false,
         action: @escaping () -> Void = {}
     ) {
         self.title = title
         self.state = state
         self.leadingSymbol = symbol
         self.signal = signal
+        self.isKeyHighlighted = isKeyHighlighted
         self.action = action
     }
 
@@ -57,6 +65,7 @@ public struct Chip: View {
             .contentShape(Radius.chipShape)
         }
         .buttonStyle(.plain)
+        .keyHighlight(isKeyHighlighted, in: Radius.chipShape)
         .disabled(state == .disabled)
         .sensoryFeedback(.selection, trigger: state)
         .accessibilityAddTraits(state == .confirmed ? [.isSelected] : [])
@@ -91,7 +100,11 @@ public struct Chip: View {
         if let signalTint {
             signalTint.opacity(colorScheme == .dark ? 0.28 : 0.18)
         } else if state == .confirmed {
-            Color.ink
+            // Highlighted: `↩` would clear it — the fill already gives way a little.
+            Color.ink.opacity(isKeyHighlighted ? 0.72 : 1)
+        } else if isKeyHighlighted, state != .disabled {
+            // Highlighted: `↩` would confirm it — a faint wash of the fill it would take.
+            Color.ink.opacity(0.12)
         } else {
             Color.clear
         }
@@ -120,6 +133,37 @@ public struct Chip: View {
         case .confirmed: "confirmed"
         case .disabled: "unavailable"
         }
+    }
+}
+
+/// The keyboard's semi-highlight (#65): a 2 pt `ink` ring **outside** the control's own shape,
+/// so whatever the control draws inside (a chip's fill or none, a bordered button) stays
+/// readable. It springs in slightly larger than its final size; Reduce Motion drops the spring.
+public struct KeyHighlightRing<S: InsettableShape>: ViewModifier {
+    let isOn: Bool
+    let shape: S
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    public func body(content: Content) -> some View {
+        content
+            .overlay {
+                // Drawn in a frame 4 pt larger on every side rather than with `inset(by: -3)`:
+                // a negatively inset `Capsule` keeps its old corner radius and grows flat ends.
+                shape.strokeBorder(Color.ink, lineWidth: 2)
+                    .padding(-4)
+                    .scaleEffect(isOn || reduceMotion ? 1 : 1.08)
+                    .opacity(isOn ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
+            .animation(reduceMotion ? Motion.reduced : Motion.standard, value: isOn)
+            .accessibilityHint(isOn ? Copy.keyHighlightHint : "")
+    }
+}
+
+public extension View {
+    /// See `KeyHighlightRing`.
+    func keyHighlight<S: InsettableShape>(_ isOn: Bool, in shape: S) -> some View {
+        modifier(KeyHighlightRing(isOn: isOn, shape: shape))
     }
 }
 
@@ -161,17 +205,25 @@ public struct ContextChipGroup: View {
     private let contexts: [String]
     @Binding private var selection: [String]
     private let disabled: Set<String>
+    private let highlighted: Int?
 
-    public init(contexts: [String], selection: Binding<[String]>, disabled: Set<String> = []) {
+    /// `highlighted` — the index of the chip carrying the keyboard's semi-highlight, if any.
+    public init(
+        contexts: [String], selection: Binding<[String]>, disabled: Set<String> = [],
+        highlighted: Int? = nil
+    ) {
         self.contexts = contexts
         self._selection = selection
         self.disabled = disabled
+        self.highlighted = highlighted
     }
 
     public var body: some View {
         FlowLayout {
-            ForEach(contexts, id: \.self) { context in
-                Chip(context, state: state(for: context)) { toggle(context) }
+            ForEach(Array(contexts.enumerated()), id: \.element) { index, context in
+                Chip(context, state: state(for: context), isKeyHighlighted: highlighted == index) {
+                    toggle(context)
+                }
             }
         }
     }
@@ -193,15 +245,23 @@ public struct ContextChipGroup: View {
 /// Single-select time-bucket chips (I3). `nil` stays a legal, visible state.
 public struct TimeBucketChipGroup: View {
     @Binding private var selection: TimeBucket?
+    private let highlighted: Int?
 
-    public init(selection: Binding<TimeBucket?>) {
+    /// `highlighted` — the index (in `TimeBucket.allCases`) of the chip carrying the keyboard's
+    /// semi-highlight, if any.
+    public init(selection: Binding<TimeBucket?>, highlighted: Int? = nil) {
         self._selection = selection
+        self.highlighted = highlighted
     }
 
     public var body: some View {
         FlowLayout {
-            ForEach(TimeBucket.allCases, id: \.self) { bucket in
-                Chip(Copy.timeBucket(bucket), state: selection == bucket ? .confirmed : .unset) {
+            ForEach(Array(TimeBucket.allCases.enumerated()), id: \.element) { index, bucket in
+                Chip(
+                    Copy.timeBucket(bucket),
+                    state: selection == bucket ? .confirmed : .unset,
+                    isKeyHighlighted: highlighted == index
+                ) {
                     selection = selection == bucket ? nil : bucket
                 }
             }

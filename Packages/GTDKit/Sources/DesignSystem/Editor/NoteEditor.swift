@@ -381,6 +381,7 @@ public struct NoteEditor: NSViewRepresentable {
     var tone: NoteEditorTone
     var minLines: Int
     var onAdvance: (() -> Void)?
+    var onRetreat: (() -> Void)?
 
     public init(text: Binding<String>, prompt: String = "", font: NoteEditorFont = .body,
                 tone: NoteEditorTone = .ink, minLines: Int = 1) {
@@ -398,6 +399,15 @@ public struct NoteEditor: NSViewRepresentable {
     public func onAdvance(_ action: @escaping () -> Void) -> NoteEditor {
         var copy = self
         copy.onAdvance = action
+        return copy
+    }
+
+    /// What `⇧⌘↩` does once the field has no input line left above the caret: the owner moves
+    /// its SwiftUI focus back — `focus = .why` from `What?`. Without it the Mac field asks AppKit
+    /// for the previous key view and the iPhone field stays where it is.
+    public func onRetreat(_ action: @escaping () -> Void) -> NoteEditor {
+        var copy = self
+        copy.onRetreat = action
         return copy
     }
 
@@ -456,6 +466,7 @@ public struct NoteEditor: NSViewRepresentable {
         view.placeholder = prompt
         view.minLines = minLines
         view.onAdvance = onAdvance
+        view.onRetreat = onRetreat
     }
 
     @MainActor
@@ -507,6 +518,8 @@ public final class NoteTextView: NSTextView {
     var minLines = 1
     /// `⌘↩` with no input line left (see `NoteEditor.onAdvance`).
     var onAdvance: (() -> Void)?
+    /// `⇧⌘↩` with no input line left above (see `NoteEditor.onRetreat`).
+    var onRetreat: (() -> Void)?
     private var isRestyling = false
     private var lastStyle: (text: String, selection: NSRange?)?
 
@@ -569,6 +582,10 @@ public final class NoteTextView: NSTextView {
             moveToNextInputLineOrField()
             return true
         }
+        if isFocused, Self.isCommandReturn(event, shift: true) {
+            moveToPreviousInputLineOrField()
+            return true
+        }
         return super.performKeyEquivalent(with: event)
     }
 
@@ -585,9 +602,23 @@ public final class NoteTextView: NSTextView {
         }
     }
 
-    static func isCommandReturn(_ event: NSEvent) -> Bool {
+    /// `⇧⌘↩` — the counterpart: to the previous input line of this field
+    /// (`ListEditing.previousInputLine`), or, when there is none above, back to the previous field.
+    func moveToPreviousInputLineOrField() {
+        if let target = ListEditing.previousInputLine(text: string, caret: selectedRange().location) {
+            setSelectedRange(NSRange(location: target, length: 0))
+            scrollRangeToVisible(selectedRange())
+        } else if let onRetreat {
+            onRetreat()
+        } else {
+            window?.selectPreviousKeyView(self)
+        }
+    }
+
+    /// `⌘↩`, or with `shift` `⇧⌘↩` — exactly those modifiers, so the one never fires the other.
+    static func isCommandReturn(_ event: NSEvent, shift: Bool = false) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard flags == .command, let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first
+        guard flags == (shift ? [.command, .shift] : .command), let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first
         else { return false }
         return scalar == "\r" || scalar == "\n" || scalar == "\u{3}"
     }
@@ -684,6 +715,7 @@ public struct NoteEditor: UIViewRepresentable {
     var tone: NoteEditorTone
     var minLines: Int
     var onAdvance: (() -> Void)?
+    var onRetreat: (() -> Void)?
 
     public init(text: Binding<String>, prompt: String = "", font: NoteEditorFont = .body,
                 tone: NoteEditorTone = .ink, minLines: Int = 1) {
@@ -701,6 +733,15 @@ public struct NoteEditor: UIViewRepresentable {
     public func onAdvance(_ action: @escaping () -> Void) -> NoteEditor {
         var copy = self
         copy.onAdvance = action
+        return copy
+    }
+
+    /// What `⇧⌘↩` does once the field has no input line left above the caret: the owner moves
+    /// its SwiftUI focus back — `focus = .why` from `What?`. Without it the Mac field asks AppKit
+    /// for the previous key view and the iPhone field stays where it is.
+    public func onRetreat(_ action: @escaping () -> Void) -> NoteEditor {
+        var copy = self
+        copy.onRetreat = action
         return copy
     }
 
@@ -755,6 +796,7 @@ public struct NoteEditor: UIViewRepresentable {
         view.styler = NoteStyler(font: font, tone: tone)
         view.placeholder = prompt
         view.onAdvance = onAdvance
+        view.onRetreat = onRetreat
     }
 
     @MainActor
@@ -827,6 +869,8 @@ public final class NoteTextView: UITextView {
     var placeholder = "" { didSet { if placeholder != oldValue { setNeedsDisplay() } } }
     /// `⌘↩` with no input line left (see `NoteEditor.onAdvance`).
     var onAdvance: (() -> Void)?
+    /// `⇧⌘↩` with no input line left above (see `NoteEditor.onRetreat`).
+    var onRetreat: (() -> Void)?
     private var isRestyling = false
     private var lastStyle: (text: String, selection: NSRange?)?
 
@@ -863,15 +907,18 @@ public final class NoteTextView: UITextView {
 
     public override var keyCommands: [UIKeyCommand]? {
         // Hardware keyboard: Tab / ⇧Tab indent and outdent, ⌘↩ jumps to the next input line
-        // or, with none left, calls `onAdvance` (there is no key-view loop to fall back on).
+        // or, with none left, calls `onAdvance` (there is no key-view loop to fall back on);
+        // ⇧⌘↩ jumps to the previous one or calls `onRetreat`.
         let tab = UIKeyCommand(title: "", action: #selector(listCommand(_:)), input: "\t",
                                modifierFlags: [], propertyList: ListEditCommand.indent.rawValue)
         let backtab = UIKeyCommand(title: "", action: #selector(listCommand(_:)), input: "\t",
                                    modifierFlags: .shift, propertyList: ListEditCommand.outdent.rawValue)
         let next = UIKeyCommand(title: "", action: #selector(nextInputLine(_:)), input: "\r",
                                 modifierFlags: .command)
-        for key in [tab, backtab, next] { key.wantsPriorityOverSystemBehavior = true }
-        return [tab, backtab, next] + ListEditShortcut.table.map { shortcut, command in
+        let previous = UIKeyCommand(title: "", action: #selector(previousInputLine(_:)), input: "\r",
+                                    modifierFlags: [.command, .shift])
+        for key in [tab, backtab, next, previous] { key.wantsPriorityOverSystemBehavior = true }
+        return [tab, backtab, next, previous] + ListEditShortcut.table.map { shortcut, command in
             var flags: UIKeyModifierFlags = []
             if shortcut.command { flags.insert(.command) }
             if shortcut.option { flags.insert(.alternate) }
@@ -887,6 +934,15 @@ public final class NoteTextView: UITextView {
     @objc private func nextInputLine(_ sender: UIKeyCommand) {
         guard let target = ListEditing.nextInputLine(text: text, caret: selectedRange.location) else {
             onAdvance?()
+            return
+        }
+        selectedRange = NSRange(location: target, length: 0)
+        scrollRangeToVisible(selectedRange)
+    }
+
+    @objc private func previousInputLine(_ sender: UIKeyCommand) {
+        guard let target = ListEditing.previousInputLine(text: text, caret: selectedRange.location) else {
+            onRetreat?()
             return
         }
         selectedRange = NSRange(location: target, length: 0)

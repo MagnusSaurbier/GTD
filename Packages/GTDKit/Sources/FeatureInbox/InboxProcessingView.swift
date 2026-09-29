@@ -233,7 +233,7 @@ struct InboxSessionView: View {
                 .foregroundStyle(Color.textSecondary)
             // Capped and scrolling past `SheetMetrics.cardMaxHeight`: a content-sized sheet
             // would otherwise grow with a long note until its buttons leave the window.
-            MacCardScroll(focused: focus) { card }
+            MacCardScroll(focused: focus ?? CardField.anchor(for: session.keyCursor)) { card }
             // Mac also gets a row of stock buttons under the card (STYLEGUIDE §3.6) — the
             // keyboard is the primary path, but every action stays reachable with the mouse.
             actionBar
@@ -258,6 +258,16 @@ struct InboxSessionView: View {
         .focusEffectDisabled()
         .onKeyPress(.leftArrow) { press(.arrowLeft) }
         .onKeyPress(.rightArrow) { press(.arrowRight) }
+        // The chip walk (#65): `Tab`/`⇧Tab` move the semi-highlight, `↩` acts on it, `⌘↩` goes
+        // to the next row (the session decides: with no walk running it is still Done).
+        // `⇧Tab` arrives as a tab with `.shift`, or on some layouts as the back-tab character.
+        .onKeyPress(keys: [.tab, KeyEquivalent("\u{19}")], phases: .down) { keyPress in
+            moveCursor(backward: keyPress.modifiers.contains(.shift)
+                || keyPress.characters == "\u{19}")
+        }
+        .onKeyPress(.return, phases: .down) { keyPress in
+            returnKey(command: keyPress.modifiers.contains(.command))
+        }
         .onKeyPress(characters: Self.keyCharacters, phases: .down) {
             handle($0)
         }
@@ -278,7 +288,8 @@ struct InboxSessionView: View {
             focus: $focus,
             dragTarget: dragTarget,
             translation: translation,
-            shake: shake)
+            shake: shake,
+            onLeaveFields: leaveFieldsAction)
             .background {
                 GeometryReader { proxy in
                     Color.clear
@@ -382,13 +393,22 @@ struct InboxSessionView: View {
         Group {
             switch session.step {
             case .step1: stepOneBar
-            case .actionCard: openedActionBar
+            case .actionCard:
+                #if os(macOS)
+                if session.keyCursor?.row == .outcome {
+                    outcomeRow(highlighted: session.keyHighlight(in: .outcome))
+                } else {
+                    openedActionBar
+                }
+                #else
+                openedActionBar
+                #endif
             case .keepCard: keepNavbar
             }
         }
-        .id(session.step)
+        .id(barIdentity)
         .transition(.opacity)
-        .animation(reduceMotion ? Motion.reduced : Motion.standard, value: session.step)
+        .animation(reduceMotion ? Motion.reduced : Motion.standard, value: barIdentity)
     }
 
     /// Three equal, neutral buttons — none accent-filled, because the app does not know the
@@ -485,6 +505,8 @@ struct InboxSessionView: View {
         case .blurField:
             focus = nil
             hasKeyFocus = true
+        case .clearedCursor:
+            hasKeyFocus = true
         case .collapsed:
             hasKeyFocus = true
         case .quit:
@@ -492,6 +514,70 @@ struct InboxSessionView: View {
         }
     }
 
+    private func moveCursor(backward: Bool) -> KeyPress.Result {
+        guard focus == nil, session.step == .actionCard else { return .ignored }
+        session.moveKeyCursor(by: backward ? -1 : 1)
+        return .handled
+    }
+
+    private func returnKey(command: Bool) -> KeyPress.Result {
+        guard focus == nil else { return .ignored }
+        if command {
+            guard session.step == .actionCard else { return .ignored }
+            perform(.done)
+            return .handled
+        }
+        guard let cursor = session.keyCursor else { return .ignored }
+        if let outcome = cursor.outcome {
+            choose(outcome)
+        } else {
+            Task { await session.pressKeyCursor() }
+        }
+        return .handled
+    }
+
+    /// `⌘↩` past `What?`: the keyboard leaves the fields for the card, and the walk starts on
+    /// the first attribute row.
+    private func leaveFields() {
+        focus = nil
+        session.isFieldFocused = false
+        hasKeyFocus = true
+        session.advanceKeyCursor()
+    }
+
+    /// The outcome row (#65): the five buttons the walk ends on, `Next`/`Someday` flying the
+    /// way their keys do. Shown only while the cursor stands on it.
+    private func outcomeRow(highlighted: Int?) -> some View {
+        HStack(spacing: Spacing.m) {
+            ForEach(Array(CardOutcome.allCases.enumerated()), id: \.element) { index, outcome in
+                Button { choose(outcome) } label: {
+                    VStack(spacing: Spacing.xs) {
+                        // One fixed symbol height, so the five labels sit on one line.
+                        Image(systemName: outcome.symbol).symbolRenderingMode(.hierarchical)
+                            .frame(height: Spacing.l)
+                        Text(outcome.title).lineLimit(1)
+                    }
+                    .font(Typo.chip)
+                    .foregroundStyle(Color.ink)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .keyHighlight(highlighted == index, in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .padding(.bottom, Spacing.s)
+    }
+    #endif
+
+    private func choose(_ outcome: CardOutcome) {
+        switch outcome {
+        case .next: fly(to: .next)
+        case .someday: fly(to: .someday)
+        default: Task { await session.perform(outcome) }
+        }
+    }
+
+    #if os(macOS)
     private func handle(_ keyPress: KeyPress) -> KeyPress.Result {
         guard focus == nil, let character = keyPress.characters.first else { return .ignored }
         // Everything rebindable resolves through `KeyBindings` for the **current step** (R-10).
@@ -506,6 +592,26 @@ struct InboxSessionView: View {
         return .handled
     }
     #endif
+
+    /// Which bar is showing, so a swap between the action bar and the outcome row cross-fades
+    /// like a step change does.
+    private struct BarIdentity: Hashable {
+        let step: InboxStep
+        let isOutcomeRow: Bool
+    }
+
+    private var barIdentity: BarIdentity {
+        BarIdentity(step: session.step, isOutcomeRow: session.keyCursor?.row == .outcome)
+    }
+
+    /// Mac: `⌘↩` past `What?` starts the chip walk. iPhone: the keyboard just goes away.
+    private var leaveFieldsAction: () -> Void {
+        #if os(macOS)
+        { leaveFields() }
+        #else
+        { focus = nil }
+        #endif
+    }
 
     // MARK: Chrome
 

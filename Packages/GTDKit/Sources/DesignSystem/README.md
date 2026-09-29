@@ -167,7 +167,10 @@ shortcuts of the note-body fields (STYLEGUIDE §4.5) as a pure text rewrite on U
 fixed key table `ListEditShortcut.table`, `ListEditing.newline(text:selection:)` (Return
 continues a list), the `indent`/`outdent` commands behind `Tab`/`⇧Tab`, and
 `ListEditing.nextInputLine(text:caret:)` behind `⌘↩` (the next empty or marker-only line past the
-next block of text; `nil` means "move focus on"). Linux-compilable and tested (`ListEditingTests`).
+next block of text; `nil` means "move focus on") and its counterpart
+`ListEditing.previousInputLine(text:caret:)` behind `⇧⌘↩` (the topmost input line between the first
+and second block of text above the caret; `nil` means "move focus back", `NoteEditor.onRetreat`).
+Linux-compilable and tested (`ListEditingTests`).
 
 `Editor/MarkdownRendering.swift` — the live preview of note bodies (STYLEGUIDE §4.4) as pure data:
 `runs(_:selection:)` says which UTF-16 range gets which `MarkdownAttributes` (bold, heading, link,

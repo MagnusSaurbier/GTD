@@ -356,6 +356,7 @@ private struct MakeActionCardBody: View {
             SectionLabel(label, isMissing: isMissing)
             NoteEditor(text: text, prompt: placeholder)
                 .onAdvance { focus = InboxCardView.next(after: field) }
+                .onRetreat { focus = InboxCardView.previous(before: field, showsBody: false) }
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: field)
                 .accessibilityLabel(label)
@@ -379,6 +380,7 @@ private struct MakeActionCardBody: View {
             }
             NoteEditor(text: $model.draft.what, prompt: Copy.whatPlaceholder)
                 .onAdvance { focus = InboxCardView.next(after: .what) }
+                .onRetreat { focus = InboxCardView.previous(before: .what, showsBody: false) }
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: .what)
                 .accessibilityLabel(Copy.what)

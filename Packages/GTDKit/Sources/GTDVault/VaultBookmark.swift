@@ -95,6 +95,17 @@ public final class VaultBookmark: @unchecked Sendable {
         }
     }
 
+    /// Runs `body` with security-scoped access to a folder the user just picked — the location a
+    /// new vault is created in (#60). Creating the vault folder inside it and bookmarking that
+    /// folder (`save(url:)`) both need the location's scope open, so both go inside `body`.
+    /// `false` from the store just means the URL needs no scope (tests, Linux).
+    /// Synchronous on purpose: the scope is held only for the file work, not across an `await`.
+    public func withAccess<T>(to url: URL, _ body: () throws -> T) rethrows -> T {
+        let opened = store.startAccess(url)
+        defer { if opened { store.stopAccess(url) } }
+        return try body()
+    }
+
     /// Resolves the stored bookmark, re-saving it when the system reports it stale.
     public func resolve() throws -> URL {
         guard let data = try? Data(contentsOf: fileURL) else { throw VaultError.noVaultSelected }

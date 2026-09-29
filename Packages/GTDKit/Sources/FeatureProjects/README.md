@@ -35,7 +35,10 @@ Linux-compilable models (no SwiftUI — this is where the logic worth testing li
 - `ProjectDetailModel` — header edits, **area** (`areas`, `area`, `setArea(_:)` — R-7: picking an
   area moves the project's folder, one command, one commit, one undo; `nil` moves it into
   `Projects/no_area/`, and `titleCollision`/`notFound` are thrown for the picker to show), status +
-  demotion count, step add/edit/check/reorder/delete, promote.
+  demotion count, step add/edit/check/reorder/delete, promote, link an existing action (`linkStep`).
+- `StepLinkSuggestions` — what the New step field offers while typing (#61): open actions with no
+  project or this one, not yet a step here; title prefix > word prefix > inside, case- and
+  diacritic-blind, at most `limit`. `↓`/`↑` highlight a row, Return or a tap links it.
 - `WhatsNextModel` — one-tap step promotion, free-text action, "project is done".
 - `ConvertToProjectModel` — seeds a `ProjectDraft` from an action's checkboxes, converts, promotes
   the pre-selected first step.

@@ -41,6 +41,9 @@ struct RootView: View {
         case .onboarding:
             OnboardingView(
                 onVaultPicked: { url in Task { await composition.pickVault(url) } },
+                onCreateVault: { location, name in
+                    await composition.createVault(named: name, in: location)
+                },
                 onFinished: {
                     composition.finishOnboarding()
                     Task { await notifications.requestAuthorizationIfNeeded() }

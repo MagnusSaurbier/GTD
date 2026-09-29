@@ -112,6 +112,16 @@ public final class ProjectDetailModel {
         try await model.send(.updateProject(project))
     }
 
+    /// #61 — existing actions the "New step" field offers for `query`.
+    public func linkSuggestions(for query: String) -> [Action] {
+        StepLinkSuggestions.matches(query, project: projectID, in: model.snapshot)
+    }
+
+    /// #61 — adds a step that points at an existing action and links the action to this project.
+    public func linkStep(to action: NoteID) async throws {
+        try await model.send(.linkStep(project: projectID, action: action))
+    }
+
     public func editStep(at index: Int, text: String) async throws {
         guard var project, project.steps.indices.contains(index) else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

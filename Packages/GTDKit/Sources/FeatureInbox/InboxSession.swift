@@ -54,6 +54,8 @@ public final class InboxSession {
     /// collapse; step 1 → quit. The view owns the focus and the way out, so it acts on this.
     public enum EscapeOutcome: Sendable, Equatable {
         case blurField
+        /// The keyboard cursor was on the card's chips or outcome buttons and is gone now.
+        case clearedCursor
         case collapsed
         case quit
     }
@@ -82,8 +84,17 @@ public final class InboxSession {
     /// The view sets this; `DragResolver` and `KeyMap` are asked through the session.
     public var isFieldFocused: Bool {
         get { card.isFieldFocused }
-        set { card.isFieldFocused = newValue }
+        set {
+            card.isFieldFocused = newValue
+            // A field taking the keyboard (a click, a refusal's focus request) ends the walk.
+            if newValue { keyCursor = nil }
+        }
     }
+
+    /// The keyboard cursor over the action card's chips and outcome buttons (#65), or `nil` when
+    /// the keyboard is in a text field or nobody started the walk. Only `⌘↩` / `Tab` / `↩` move
+    /// it (`advanceKeyCursor()`, `moveKeyCursor(by:)`, `pressKeyCursor()`).
+    public private(set) var keyCursor: CardKeyCursor?
 
     public var sheet: Sheet?
     public private(set) var processed: Int
@@ -366,6 +377,7 @@ public final class InboxSession {
     public func collapse() {
         guard step.isOpened else { return }
         step = .step1
+        keyCursor = nil
         sheet = nil
         card.clearCap()
         refusal = nil
@@ -379,6 +391,10 @@ public final class InboxSession {
         if isFieldFocused {
             isFieldFocused = false
             return .blurField
+        }
+        if keyCursor != nil {
+            keyCursor = nil
+            return .clearedCursor
         }
         if step.isOpened {
             collapse()
@@ -689,6 +705,7 @@ public final class InboxSession {
         card.clearCap()
         draftItemID = restored.id
         step = last.step
+        keyCursor = nil
 
         processed = max(processed - 1, 0)
         counts[last.target] = max((counts[last.target] ?? 1) - 1, 0)
@@ -749,7 +766,12 @@ public final class InboxSession {
             card.draft.timeBucket = card.draft.timeBucket == bucket ? nil : bucket
             return true
         case .done:
-            await take(.done)
+            // `⌘↩` walks the card while the cursor is on it; otherwise it is the 2-minute rule.
+            if keyCursor != nil {
+                advanceKeyCursor()
+            } else {
+                await take(.done)
+            }
             return true
         case .undo:
             await undo()
@@ -795,6 +817,65 @@ public final class InboxSession {
         }
     }
 
+    // MARK: - Keyboard cursor (#65, Mac)
+
+    /// `⌘↩` past the last text field, and `⌘↩` on a row: the next row's first stop (context →
+    /// time → outcome buttons). Starts the walk when there is none. Action card only.
+    public func advanceKeyCursor() {
+        guard step == .actionCard, current != nil else { return }
+        let count = contexts.count
+        keyCursor = keyCursor.map { $0.clamped(contextCount: count).advanced(contextCount: count) }
+            ?? CardKeyCursor.first(contextCount: count)
+    }
+
+    /// `Tab` (`+1`) / `⇧Tab` (`-1`): the next / previous chip or button in the row, wrapping.
+    /// With no cursor yet, `Tab` starts the walk on the first attribute.
+    public func moveKeyCursor(by offset: Int) {
+        guard step == .actionCard, current != nil else { return }
+        let count = contexts.count
+        guard let cursor = keyCursor else {
+            keyCursor = CardKeyCursor.first(contextCount: count)
+            return
+        }
+        keyCursor = cursor.clamped(contextCount: count).moved(by: offset, contextCount: count)
+    }
+
+    /// `↩` on the highlighted stop: toggles a context, selects or clears a time bucket, or
+    /// presses an outcome button — Next / Someday / Waiting / Done through `take(_:)` (so a
+    /// missing field refuses exactly as a swipe would, and moves the cursor to it), Project
+    /// opens the project picker. Returns `false` when there is no cursor.
+    @discardableResult
+    public func pressKeyCursor() async -> Bool {
+        guard step == .actionCard, let cursor = keyCursor?.clamped(contextCount: contexts.count)
+        else { return false }
+        switch cursor.row {
+        case .context:
+            toggleContext(contexts[cursor.index])
+        case .time:
+            guard let bucket = cursor.timeBucket else { return false }
+            card.draft.timeBucket = card.draft.timeBucket == bucket ? nil : bucket
+        case .outcome:
+            guard let outcome = cursor.outcome else { return false }
+            await perform(outcome)
+        }
+        return true
+    }
+
+    /// An outcome button, clicked or pressed with `↩`.
+    public func perform(_ outcome: CardOutcome) async {
+        if let exit = outcome.exit {
+            await take(exit)
+        } else {
+            sheet = .project
+        }
+    }
+
+    /// The highlighted stop of `row`, for the view's chip groups.
+    public func keyHighlight(in row: CardKeyRow) -> Int? {
+        guard let keyCursor, keyCursor.row == row else { return nil }
+        return keyCursor.index
+    }
+
     // MARK: - Legend (STYLEGUIDE §3.6 Mac — "the legend always renders the current bindings")
 
     /// The current step's legend rows, keys first. Built from `KeyBindings`, so a rebind in
@@ -809,6 +890,7 @@ public final class InboxSession {
                 .stepDefer: Copy.deferToReview,
             ])
         case .actionCard:
+            if let keyCursor { return Self.cursorLegend(keyCursor) }
             let directions = keyBindings.legend(for: .actionCard, titles: [
                 .cardSomeday: Copy.someday,
                 .cardNext: Copy.next,
@@ -844,13 +926,29 @@ public final class InboxSession {
         }
     }
 
+    /// While the keyboard walks the chips (#65): the walking keys instead of the filing keys.
+    /// All fixed keys, so there is nothing to look up in `KeyBindings`.
+    static func cursorLegend(_ cursor: CardKeyCursor) -> [KeyBindings.LegendEntry] {
+        let press = cursor.row == .outcome ? InboxCopy.cursorPress : InboxCopy.cursorToggle
+        var rows = [
+            KeyBindings.LegendEntry(key: InboxCopy.cursorMoveKeys, label: InboxCopy.cursorMove),
+            KeyBindings.LegendEntry(key: InboxCopy.returnKey, label: press),
+        ]
+        if cursor.row != .outcome {
+            rows.append(KeyBindings.LegendEntry(
+                key: KeyStroke.commandReturn.display, label: InboxCopy.cursorNextRow))
+        }
+        rows.append(KeyBindings.LegendEntry(key: KeyStroke.escape.display, label: Copy.back))
+        return rows
+    }
+
     /// The legend as STYLEGUIDE §3.6 prints it. The action card's row keeps its two groups: the
     /// commitment axis, wide space, then the rest.
     public var legendString: String {
         func join(_ rows: [KeyBindings.LegendEntry], _ separator: String) -> String {
             rows.map { "\($0.key) \($0.label)" }.joined(separator: separator)
         }
-        guard step == .actionCard else { return join(legend, " · ") }
+        guard step == .actionCard, keyCursor == nil else { return join(legend, " · ") }
         let rows = legend
         return join(Array(rows.prefix(2)), "  ") + "    " + join(Array(rows.dropFirst(2)), " · ")
     }
@@ -888,6 +986,7 @@ public final class InboxSession {
         // Whoever filed a card along the commitment axis has understood the hint.
         if target == .next || target == .someday { dismissSwipeHint() }
         step = .step1
+        keyCursor = nil
         syncDraft()
     }
 
@@ -902,6 +1001,12 @@ public final class InboxSession {
 
     private func present(_ reason: InboxRefusal) {
         if case .capReached = reason { sheet = .cap }
+        // An outcome button pressed from the keyboard walk with something missing: the cursor
+        // goes to the first missing attribute row, or away when a text field is missing first
+        // (the view focuses that one through `focusRequest`).
+        if case let .missing(fields) = reason, keyCursor != nil {
+            keyCursor = CardKeyCursor.forMissing(fields, contextCount: contexts.count)
+        }
         refuse(reason)
     }
 
@@ -917,6 +1022,7 @@ public final class InboxSession {
         draftItemID = current?.id
         refusal = nil
         step = .step1
+        keyCursor = nil
     }
 }
 
