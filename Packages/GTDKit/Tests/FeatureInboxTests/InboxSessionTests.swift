@@ -1246,7 +1246,9 @@ struct InboxSessionTests {
 
     @Test func theLegendReadsAsTheStyleGuideSpellsItPerStep() async {
         let (session, model, _) = InboxTestSupport.makeSession(platform: .mac)
-        #expect(session.legendString == "A Action · K Knowledge / List · X Trash · D Defer to review")
+        // The bar walk is always on at step 1 (#77), so its keys follow the letters.
+        #expect(session.legendString == "A Action · K Knowledge / List · X Trash · D Defer to review"
+                + " · Tab ⇧Tab Move · ↩ Choose")
 
         await session.take(.openAction)
         #expect(session.legendString
@@ -1257,7 +1259,7 @@ struct InboxSessionTests {
         let favourites = Rules.favouriteLists(model.snapshot).map(\.name)
         let expected = (["1 Knowledge"]
             + favourites.enumerated().map { "\($0.offset + 2) \($0.element)" }
-            + ["0 More…", "Esc Back"]).joined(separator: " · ")
+            + ["0 More…", "Tab ⇧Tab Move", "↩ Choose", "Esc Back"]).joined(separator: " · ")
         #expect(session.legendString == expected)
     }
 
