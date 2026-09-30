@@ -413,12 +413,20 @@ public struct ProjectDetailView: View {
             Task { try? await detail.moveStep(fromOffsets: offsets, toOffset: destination) }
         }
 
-        // #76 — the project's actions no step points at, in the same list, same badge.
+        // #76 — the project's actions no step points at (older notes; new ones get a step by
+        // themselves), laid out like a step row, same badge.
         ForEach(detail.looseActions, id: \.id) { action in
             HStack(spacing: Spacing.m) {
-                ActionRow(action: action)
+                Image(systemName: "circle")
+                    .foregroundStyle(Color.textTertiary)
+                    .accessibilityHidden(true)
+                Text(action.title)
+                    .font(Typo.body)
+                    .foregroundStyle(Color.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .onTapGesture { onOpenAction(action.id) }
+                    .accessibilityAddTraits(.isButton)
                 StepStandingBadge(.action(action)) { cardRequest = .status(action.id) }
             }
         }

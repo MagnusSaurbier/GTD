@@ -341,6 +341,10 @@ Unplug the mouse for this one.
       shows the new status), `→ Project` on a step linked to another project (opens it). No lone
       `↗` icon anywhere. Clicking a linked row's text opens its note; a plain step's text stays
       editable.
+- [ ] **New project actions become steps (#76):** give an action a project (new action with
+      the project chip, a filed capture, the action detail's project chip): the project's step
+      list gains `Title → [[Action]]` at the end, and the project note on disk has that line.
+      Moving the action to another project moves its open step along.
 
 ### 3.5 Settings (L2/R-5, N7)
 

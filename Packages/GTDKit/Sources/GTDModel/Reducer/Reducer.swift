@@ -39,6 +39,44 @@ public enum Reducer {
         _ c: GTDCommand,
         env: ReducerEnv
     ) throws(GTDError) -> Reduction {
+        var reduction = try reduceCommand(s, c, env: env)
+        linkProjectSteps(from: s, into: &reduction)
+        return reduction
+    }
+
+    /// #76 — every action in a project is a step of that project's note. Whatever command put
+    /// an action into a project (a new action, a filed capture, a list item, a changed project
+    /// chip) leaves a `- [ ] Title → [[Action]]` line behind in that project, unless a step
+    /// already points at it (`promoteStep`, `linkStep`). An action that moves to another
+    /// project takes its open step along; a ticked step stays behind as history. Actions that
+    /// were already in a project before this command are left as they are — no command writes
+    /// into a project note it had nothing to do with.
+    private static func linkProjectSteps(from old: VaultSnapshot, into reduction: inout Reduction) {
+        var next = reduction.snapshot
+        let backwards = reduction.renames.inverted
+        for action in next.actions {
+            let before = old.action(backwards.resolve(action.id))
+            let oldProject = before?.project.map { reduction.renames.resolve($0) }
+            guard action.project != oldProject else { continue }
+
+            if let oldProject, let index = next.projects.firstIndex(where: { $0.id == oldProject }) {
+                next.projects[index].steps.removeAll { $0.promotedTo == action.id && !$0.done }
+            }
+            guard let projectID = action.project,
+                  let index = next.projects.firstIndex(where: { $0.id == projectID }),
+                  !next.projects[index].steps.contains(where: { $0.promotedTo == action.id })
+            else { continue }
+            next.projects[index].steps.append(ProjectStep(
+                text: action.title, done: action.status == .done, promotedTo: action.id))
+        }
+        reduction.snapshot = next
+    }
+
+    private static func reduceCommand(
+        _ s: VaultSnapshot,
+        _ c: GTDCommand,
+        env: ReducerEnv
+    ) throws(GTDError) -> Reduction {
         switch c {
         case let .renameInboxItem(id, title):
             return try renameInboxItem(s, id: id, title: title)
