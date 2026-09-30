@@ -277,6 +277,14 @@ struct InboxSessionView: View {
         // The net under it: whatever still reaches the sheet must not close it past the ladder.
         .interactiveDismissDisabled()
         .onAppear { hasKeyFocus = true }
+        // A day picker or a sheet the walk opened took the keys; they come back to the card
+        // when it closes, so the walk goes on where it stood (#77).
+        .onChange(of: session.datePicker) { _, open in
+            if open == nil, focus == nil { takeKeyFocus() }
+        }
+        .onChange(of: session.sheet) { _, open in
+            if open == nil, focus == nil { takeKeyFocus() }
+        }
     }
     #endif
 
@@ -518,14 +526,22 @@ struct InboxSessionView: View {
         switch session.escape() {
         case .blurField:
             focus = nil
-            hasKeyFocus = true
+            takeKeyFocus()
         case .clearedCursor:
-            hasKeyFocus = true
+            takeKeyFocus()
         case .collapsed:
-            hasKeyFocus = true
+            takeKeyFocus()
         case .quit:
             onFinished()
         }
+    }
+
+    /// The card area takes key focus back after a field gave it up. On the next turn of the run
+    /// loop: set in the same update as the field's `focus = nil`, SwiftUI drops it again and the
+    /// walking keys land nowhere (seen with the off-screen probe, #77).
+    private func takeKeyFocus() {
+        hasKeyFocus = true
+        DispatchQueue.main.async { hasKeyFocus = true }
     }
 
     private func moveCursor(backward: Bool) -> KeyPress.Result {
@@ -559,7 +575,7 @@ struct InboxSessionView: View {
     private func leaveFields() {
         focus = nil
         session.isFieldFocused = false
-        hasKeyFocus = true
+        takeKeyFocus()
         session.advanceKeyCursor()
     }
 
@@ -641,7 +657,7 @@ struct InboxSessionView: View {
         { cursor in
             focus = nil
             session.isFieldFocused = false
-            hasKeyFocus = true
+            takeKeyFocus()
             session.pointKeyCursor(at: cursor)
         }
         #else
