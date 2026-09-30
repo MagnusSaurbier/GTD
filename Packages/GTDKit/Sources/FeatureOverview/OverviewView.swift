@@ -152,7 +152,7 @@ public struct OverviewView: View {
     @ViewBuilder private var detail: some View {
         switch nav.detail {
         case let .action(id):
-            ActionDetailView(action: id)
+            ActionDetailView(action: id, onOpenProject: { nav.show(project: $0) })
         case let .project(id):
             ProjectDetailView(
                 project: id,

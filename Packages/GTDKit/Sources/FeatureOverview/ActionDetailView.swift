@@ -13,22 +13,31 @@ import GTDFixtures
 public struct ActionDetailView: View {
     private let action: NoteID
     private let onRename: (NoteID) -> Void
+    private let onOpenProject: ((NoteID) -> Void)?
 
     /// `onRename` lets the enclosing shell follow the `NoteID` a rename creates (A1: the file
     /// name is the title). The default keeps the frozen one-argument signature usable.
-    public init(action: NoteID, onRename: @escaping (NoteID) -> Void = { _ in }) {
+    /// `onOpenProject` (#72) shows the "Open project" button beside the Project chip; `nil`
+    /// (the iPhone, which has no project detail — N5) leaves it out.
+    public init(
+        action: NoteID,
+        onRename: @escaping (NoteID) -> Void = { _ in },
+        onOpenProject: ((NoteID) -> Void)? = nil
+    ) {
         self.action = action
         self.onRename = onRename
+        self.onOpenProject = onOpenProject
     }
 
     public var body: some View {
-        ActionDetailEditor(id: action, onRename: onRename)
+        ActionDetailEditor(id: action, onRename: onRename, onOpenProject: onOpenProject)
     }
 }
 
 private struct ActionDetailEditor: View {
     let id: NoteID
     let onRename: (NoteID) -> Void
+    let onOpenProject: ((NoteID) -> Void)?
 
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
@@ -156,8 +165,24 @@ private struct ActionDetailEditor: View {
                 }
 
                 labelled(Copy.project) {
-                    ProjectPicker(selection: Binding(
-                        get: { editor.project }, set: { editor.setProject($0) }))
+                    HStack(spacing: Spacing.s) {
+                        ProjectPicker(selection: Binding(
+                            get: { editor.project }, set: { editor.setProject($0) }))
+                        // Only for a project the vault has: a dangling `project:` link (#53)
+                        // has no detail to open.
+                        if let onOpenProject, let project = editor.project,
+                           model.snapshot.project(project) != nil {
+                            Button {
+                                onOpenProject(project)
+                            } label: {
+                                Image(systemName: NoteFileLinks.openExternallySymbol)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color.textSecondary)
+                            .help(Copy.openProject)
+                            .accessibilityLabel(Copy.openProject)
+                        }
+                    }
                 }
 
                 // The note's whole body as one live-preview markdown document (STYLEGUIDE §4.4):
