@@ -60,11 +60,20 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
 - `CardKeyCursor.swift` — the Mac chip walk of the opened action card (#65): `CardKeyRow`
   (`context` → `time` → `outcome`), `CardOutcome` (`Next · Someday · Waiting · Done · Project`,
   each with its `InboxExit`) and `CardKeyCursor` (`first`, `advanced` = `⌘↩`, `moved(by:)` =
-  `Tab`/`⇧Tab` wrapping in the row, `forMissing` = where a refusal sends it). `InboxSession`
-  stores the one cursor (`keyCursor`) and drives it: `advanceKeyCursor()`, `moveKeyCursor(by:)`,
-  `pressKeyCursor()`, `perform(_: CardOutcome)`; `handle(.done)` walks instead of filing while a
-  cursor exists; `escape()` clears it first (`.clearedCursor`); a focused field, a collapse, a
-  filing and undo end it.
+  `Tab`/`⇧Tab` wrapping in the row, `forMissing` = where a refusal sends it); #77 added the
+  `dates` row (`CardDateStop`: `+ defer` · `+ due` · `+ project`) between time and outcome.
+  `InboxSession` stores the one cursor (`keyCursor`) and drives it: `advanceKeyCursor()`,
+  `moveKeyCursor(by:)`, `pressKeyCursor()`, `perform(_: CardOutcome)`, `pointKeyCursor(at:)` (a
+  click); `↩` on `+ defer`/`+ due` sets `datePicker`, which the view binds the chip's popover to;
+  `handle(.done)` walks instead of filing while a cursor exists; `escape()` clears it first
+  (`.clearedCursor`); a focused field, a collapse, a filing and undo end it. Step 1 and the
+  Knowledge / List card walk their bar instead (#77): `barStops`, the always-present `barCursor`
+  (reset to the first stop on every new card and step), `barHighlight` (`nil` while `Notes` has the
+  keyboard), `pointBar(at:)`; the same `moveKeyCursor`/`pressKeyCursor` drive it.
+- `SheetWalks.swift` — what the walk stands on in each sheet (#77), row by row:
+  `ProjectPickerModel.walkRows(canClear:)` (`ProjectPickStop`), `ListPickStop.walkRows`,
+  `KnowledgePickStop.walkRows` (+ `KnowledgeTree.visible(_:expanded:)`), `DeferReviewStop`. The
+  sheets keep a `DesignSystem.KeyWalk` in view state and press the stop under it.
 - `MakeActionModel.swift` — L4's entry point: the opened action card alone, over a `ListItem`
   (sending `promoteListItem`) or an `Action` (sending `updateAction`; `ActionCardState.previousStatus`
   is set so the card asks exactly what `Reducer.normalize` asks of a note already in a tier).
@@ -160,6 +169,23 @@ to its host (`onLeaveFields`): the view drops field focus, takes key focus back 
 replaced by `outcomeRow` (bordered buttons, `Next`/`Someday` fly like their keys). iOS draws
 none of this. `MakeActionCardView` (L4) has no walk yet.
 
+**#77 — the whole flow.** Step 1's `StepOneBar(highlighted:)` + the `Defer to review` text
+button and the navbar's `KnowledgeListNavbar(highlighted:)` draw `session.barHighlight`; `Tab`
+and `↩` reach the session through the same `.onKeyPress` handlers. The chip groups and the date
+chips report clicks (`onTap`) to `InboxCardView.onPoint`, which the host turns into "blur the
+field, take key focus, `pointKeyCursor(at:)`". **Gotcha:** key focus must be taken back a
+run-loop turn *after* a field lets go (`takeKeyFocus()`): set in the same update as
+`focus = nil`, SwiftUI drops it again and `Tab` lands nowhere (seen in the probe). The same
+happens after the day picker or a sheet closes, so the view re-takes it on
+`session.datePicker`/`session.sheet` becoming `nil`. The sheets (`ProjectChoiceSheet` — the inbox's
+`ProjectSheet` now wraps it —, `ListChoiceSheet`, `KnowledgeSheet`, `DeferToReviewSheet`,
+`CapSheet`, and `DesignSystem.WaitingInfoSheet`) are separate windows, so each applies
+`keyWalkKeys(focus:onMove:onPress:onNextRow:onArrow:)` itself, draws the ring with
+`keyHighlight`, shows `KeyWalkLegendLine`, and scrolls the ringed row into view through a
+`ScrollViewReader` keyed on the stop. Where a sheet's buttons live only in the toolbar
+(`Defer to review`'s `Defer`/`Cancel`, the Knowledge sheet's `Done`) the walk shows them again
+inside the sheet so the ring has something to sit on.
+
 ## Sheets on the Mac (gotcha)
 
 Every `Form` in `InboxSheets.swift` and `MakeActionProjectSheet` ends in
@@ -169,7 +195,7 @@ were unreachable on a real vault) and it draws `TextField("Pick a project", …)
 left column. For the same reason the text fields in these forms pass their placeholder as an
 explicit `prompt:` and are `.labelsHidden()` — in a Mac form the title alone becomes a row label,
 not a placeholder. The search field is the form's first row: it scrolls with the list, and typing
-filters the list back to the top. The sheets have no arrow-key/Return selection; `Esc` and
+filters the list back to the top. The sheets' keyboard walk is described above (#77); `Esc` and
 `Cancel` are the stock sheet behaviour (a nested sheet is its own window, so `onEscapeKey` of the
 session underneath ignores it). `InboxPreviews.swift` has `Project — 40 projects, must scroll`
 and a crowded `Knowledge` preview, because the fixtures have too few projects to overflow.
@@ -230,9 +256,11 @@ geometry is still local (`DragResolver` + the gesture in `InboxProcessingView`) 
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 155 tests, all Linux-compilable.
+`cd Packages/GTDKit && swift test --filter FeatureInboxTests` — 179 tests, all Linux-compilable.
 `CardKeyCursorTests` covers the #65 chip walk: the pure row order and wrapping, and in the session
-`⌘↩` walking vs. Done, `↩` toggling, a refusal moving the cursor, `Esc`, focus and the legend.
+`⌘↩` walking vs. Done, `↩` toggling, a refusal moving the cursor, `Esc`, focus and the legend,
+and (#77) the date row, a click moving the ring, step 1's and the navbar's bar walk.
+`SheetWalksTests` pins each sheet's stop list.
 
 `InboxSessionTests` pins one transition or one refusal at a time: the LIFO queue, every step
 change, every exit of STYLEGUIDE §3.6's three tables, the validation flags and the asterisk

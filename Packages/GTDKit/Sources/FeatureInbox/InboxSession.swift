@@ -92,8 +92,9 @@ public final class InboxSession {
     }
 
     /// The keyboard cursor over the action card's chips and outcome buttons (#65), or `nil` when
-    /// the keyboard is in a text field or nobody started the walk. Only `⌘↩` / `Tab` / `↩` move
-    /// it (`advanceKeyCursor()`, `moveKeyCursor(by:)`, `pressKeyCursor()`).
+    /// the keyboard is in a text field or nobody started the walk. `⌘↩` / `Tab` / `↩` move it
+    /// (`advanceKeyCursor()`, `moveKeyCursor(by:)`, `pressKeyCursor()`), and so does a click on a
+    /// walked chip or button (`pointKeyCursor(at:)`, #77).
     public private(set) var keyCursor: CardKeyCursor?
 
     /// The semi-highlight on step 1's buttons and on the Knowledge / List card's navbar (#77):
