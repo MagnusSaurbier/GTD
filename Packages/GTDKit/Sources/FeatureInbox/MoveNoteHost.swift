@@ -101,47 +101,29 @@ private struct MoveNoteHostModifier: ViewModifier {
 struct ProjectChoiceSheet: View {
     let picker: (String) -> ProjectPickerModel
     let current: NoteID?
+    /// Whether `Clear project` is offered — by default when a project is chosen; the inbox card
+    /// also counts a project it is about to create.
+    var canClear: Bool?
     let onChoose: (NoteID?) -> Void
     let onCreate: (String) -> Void
     let onCancel: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
+    /// The Mac keyboard walk (#77): on the first row the moment the sheet opens; `nil` while the
+    /// search field has the keys.
+    @State private var walk: KeyWalk? = KeyWalk.initial
+    @FocusState private var hasWalkFocus: Bool
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField(InboxCopy.pickProject, text: $search, prompt: Text(InboxCopy.pickProject))
-                        .textFieldStyle(.plain)
-                        .labelsHidden()
-                }
-                if current != nil {
-                    Section {
-                        Button(InboxCopy.clearProject) { choose(nil) }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.gtdAccent)
+            ScrollViewReader { proxy in
+                form
+                    .onChange(of: walk) { _, walk in
+                        guard let stop = walk?.stop(in: rows) else { return }
+                        proxy.scrollTo(stop)
                     }
-                }
-                ForEach(pickerModel.groups) { group in
-                    if let title = group.title {
-                        Section(title) { rows(of: group) }
-                    } else {
-                        Section { rows(of: group) }
-                    }
-                }
-                if let name = pickerModel.createTitle {
-                    Section {
-                        Button {
-                            onCreate(name)
-                            dismiss()
-                        } label: {
-                            Label(InboxCopy.createProject(name), systemImage: "plus")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.gtdAccent)
-                    }
-                }
             }
             .sheetFormStyle()
             .navigationTitle(Copy.project)
@@ -153,12 +135,85 @@ struct ProjectChoiceSheet: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                if walk != nil {
+                    KeyWalkLegendLine(press: Copy.walkChoose, hasNextRow: false)
+                }
+            }
+            .keyWalkKeys(
+                focus: $hasWalkFocus,
+                onMove: { walk = (walk ?? KeyWalk()).moved(by: $0, in: rows.map(\.count)) },
+                onPress: press)
+            // Typing while the walk has the keys searches: the field takes them over.
+            .onKeyPress(characters: .alphanumerics.union(.punctuationCharacters), phases: .down) { key in
+                guard KeyWalk.isAvailable, !isSearchFocused, !key.modifiers.contains(.command)
+                else { return .ignored }
+                search += key.characters
+                isSearchFocused = true
+                return .handled
+            }
+            .onChange(of: isSearchFocused) { _, focused in
+                if focused { walk = nil }
+            }
+            .onChange(of: search) { _, _ in
+                walk = walk.flatMap { _ in KeyWalk.first(in: rows.map(\.count)) }
+            }
         }
     }
 
-    private var pickerModel: ProjectPickerModel { picker(search) }
+    private var form: some View {
+        Form {
+            Section {
+                TextField(InboxCopy.pickProject, text: $search, prompt: Text(InboxCopy.pickProject))
+                    .textFieldStyle(.plain)
+                    .labelsHidden()
+                    .focused($isSearchFocused)
+                    // `↩` in the search field hands the keys to the walk, on the first match.
+                    .onSubmit { handToWalk() }
+            }
+            if showsClear {
+                Section {
+                    Button(InboxCopy.clearProject) { choose(nil) }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.gtdAccent)
+                        .keyHighlight(isHighlighted(.clear), in: Self.rowShape)
+                        .id(ProjectPickStop.clear)
+                }
+            }
+            ForEach(pickerModel.groups) { group in
+                if let title = group.title {
+                    Section(title) { rowViews(of: group) }
+                } else {
+                    Section { rowViews(of: group) }
+                }
+            }
+            if let name = pickerModel.createTitle {
+                Section {
+                    Button {
+                        create(name)
+                    } label: {
+                        Label(InboxCopy.createProject(name), systemImage: "plus")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.gtdAccent)
+                    .keyHighlight(isHighlighted(.create(name)), in: Self.rowShape)
+                    .id(ProjectPickStop.create(name))
+                }
+            }
+        }
+    }
 
-    private func rows(of group: ProjectGroup) -> some View {
+    static let rowShape = RoundedRectangle(cornerRadius: 6)
+
+    private var pickerModel: ProjectPickerModel { picker(search) }
+    private var showsClear: Bool { canClear ?? (current != nil) }
+    private var rows: [[ProjectPickStop]] { pickerModel.walkRows(canClear: showsClear) }
+
+    private func isHighlighted(_ stop: ProjectPickStop) -> Bool {
+        walk?.stop(in: rows) == stop
+    }
+
+    private func rowViews(of group: ProjectGroup) -> some View {
         ForEach(group.projects) { project in
             Button {
                 choose(project.id)
@@ -173,7 +228,31 @@ struct ProjectChoiceSheet: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .keyHighlight(isHighlighted(.project(project.id)), in: Self.rowShape)
+            .id(ProjectPickStop.project(project.id))
         }
+    }
+
+    private func handToWalk() {
+        isSearchFocused = false
+        guard KeyWalk.isAvailable else { return }
+        walk = KeyWalk.first(in: rows.map(\.count)) ?? KeyWalk()
+        hasWalkFocus = true
+    }
+
+    /// `↩` does what a click on the highlighted row does.
+    private func press() {
+        switch walk?.stop(in: rows) {
+        case .clear: choose(nil)
+        case let .project(id): choose(id)
+        case let .create(name): create(name)
+        case nil: walk = KeyWalk.first(in: rows.map(\.count))
+        }
+    }
+
+    private func create(_ name: String) {
+        onCreate(name)
+        dismiss()
     }
 
     private func choose(_ id: NoteID?) {

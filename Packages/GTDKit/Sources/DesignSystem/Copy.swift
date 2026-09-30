@@ -114,6 +114,11 @@ public enum Copy {
     public static let fileTo = "File to"
     /// VoiceOver hint on a control carrying the keyboard semi-highlight (#65).
     public static let keyHighlightHint = "Keyboard highlight: Return acts on it."
+    /// The walking keys' legend words (#65, #77) — `Tab ⇧Tab Move · ↩ Choose · ⌘↩ Next row`.
+    public static let walkMove = "Move"
+    public static let walkSelect = "Select"
+    public static let walkChoose = "Choose"
+    public static let walkNextRow = "Next row"
 
     /// `3 of 14 left`
     public static func counter(remaining: Int, total: Int) -> String {

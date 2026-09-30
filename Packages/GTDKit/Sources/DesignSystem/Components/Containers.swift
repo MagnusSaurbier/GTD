@@ -130,6 +130,12 @@ public struct WaitingInfoSheet: View {
     /// `@FocusState` + a keyboard toolbar Done button (the `ActionDetailView` pattern) plus a
     /// tap-outside-the-field dismissal fix that.
     @FocusState private var isWhoFocused: Bool
+    /// The Mac keyboard walk (#77): follow-up chip → who suggestions → `Set waiting`. It starts
+    /// on the follow-up chip, a click on a chip or the button moves it there, the who field
+    /// ends it and `↩` in the field hands it on to `Set waiting`.
+    @State private var walk: KeyWalk? = KeyWalk.initial
+    @FocusState private var hasWalkFocus: Bool
+    @State private var isPickerOpen = false
 
     public init(
         initial: WaitingInfo? = nil,
@@ -154,33 +160,46 @@ public struct WaitingInfoSheet: View {
                 label: Copy.followUp,
                 value: $followUp,
                 suggestion: WaitingInfo.suggestedFollowUp(from: today),
-                today: today)
+                today: today,
+                isKeyHighlighted: walk?.highlight(inRow: 0) == 0,
+                isPickerPresented: $isPickerOpen,
+                onTap: { point(at: KeyWalk(row: 0)) })
 
             TextField(Copy.whoPlaceholder, text: $who)
                 .textFieldStyle(.plain)
                 .font(Typo.body)
                 .focused($isWhoFocused)
                 .submitLabel(.done)
-                .onSubmit { isWhoFocused = false }
+                .onSubmit {
+                    isWhoFocused = false
+                    point(at: KeyWalk(row: 2))
+                }
 
             if !suggestedWho.isEmpty {
                 FlowLayout {
-                    ForEach(suggestedWho, id: \.self) { name in
-                        Chip(name, state: who == name ? .confirmed : .suggested) { who = name }
+                    ForEach(Array(suggestedWho.enumerated()), id: \.element) { index, name in
+                        Chip(
+                            name, state: who == name ? .confirmed : .suggested,
+                            isKeyHighlighted: walk?.highlight(inRow: 1) == index
+                        ) {
+                            who = name
+                            point(at: KeyWalk(row: 1, index: index))
+                        }
                     }
                 }
             }
 
             HStack {
                 Spacer()
-                Button(Copy.setWaiting) {
-                    guard let followUp else { return }
-                    let trimmedWho = who.trimmingCharacters(in: .whitespaces)
-                    onSave(WaitingInfo(who: trimmedWho.isEmpty ? nil : trimmedWho, followUp: followUp))
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(followUp == nil)
+                Button(Copy.setWaiting) { save() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(followUp == nil)
+                    .keyHighlight(
+                        walk?.highlight(inRow: 2) == 0, in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            if walk != nil {
+                KeyWalkLegendLine(press: Copy.walkChoose, hasNextRow: walk?.row != 2)
             }
         }
         .padding(Spacing.cardPadding)
@@ -191,6 +210,15 @@ public struct WaitingInfoSheet: View {
         // `.scrollDismissesKeyboard` to here).
         .contentShape(Rectangle())
         .onTapGesture { isWhoFocused = false }
+        .keyWalkKeys(
+            focus: $hasWalkFocus,
+            onMove: { offset in walk = (walk ?? KeyWalk()).moved(by: offset, in: walkRows) },
+            onPress: press,
+            onNextRow: { walk = (walk ?? KeyWalk()).advanced(in: walkRows) })
+        .onChange(of: isWhoFocused) { _, focused in
+            // A click into the field ends the walk, as on the inbox card.
+            if focused { walk = nil }
+        }
         #if os(iOS)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -199,6 +227,44 @@ public struct WaitingInfoSheet: View {
             }
         }
         #endif
+    }
+
+    /// Stops per row: the follow-up chip, the who suggestions, `Set waiting`.
+    private var walkRows: [Int] { [1, suggestedWho.count, 1] }
+
+    /// A click (or the field's `↩`) puts the highlight there and hands the keys to the walk.
+    private func point(at stop: KeyWalk) {
+        guard KeyWalk.isAvailable else { return }
+        walk = stop.clamped(in: walkRows)
+        hasWalkFocus = true
+    }
+
+    /// `↩` does what a click on the highlighted stop does.
+    private func press() {
+        guard let stop = walk?.clamped(in: walkRows) else {
+            walk = KeyWalk.first(in: walkRows)
+            return
+        }
+        switch stop.row {
+        case 0:
+            // The chip's own rule: a suggestion is confirmed first, a set date opens the picker.
+            if followUp == nil {
+                followUp = WaitingInfo.suggestedFollowUp(from: today)
+            } else {
+                isPickerOpen = true
+            }
+        case 1:
+            who = suggestedWho[stop.index]
+        default:
+            save()
+        }
+    }
+
+    private func save() {
+        guard let followUp else { return }
+        let trimmedWho = who.trimmingCharacters(in: .whitespaces)
+        onSave(WaitingInfo(who: trimmedWho.isEmpty ? nil : trimmedWho, followUp: followUp))
+        dismiss()
     }
 }
 #endif

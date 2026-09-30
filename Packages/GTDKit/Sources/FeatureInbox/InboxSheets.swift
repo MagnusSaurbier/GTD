@@ -29,13 +29,71 @@ struct KnowledgeSheet: View {
     /// Paths of the folders whose children are shown (#24). Starts empty: the tree opens
     /// collapsed, as the stock outline did.
     @State private var expandedFolders: Set<String> = []
+    /// The Mac keyboard walk (#77): suggestion → folders (`→`/`←` open and close one) →
+    /// projects → `Done`, on the first stop from the start; `nil` while a field has the keys.
+    @State private var walk: KeyWalk? = KeyWalk.initial
+    @FocusState private var hasWalkFocus: Bool
+    @FocusState private var isNotesFocused: Bool
+    @FocusState private var isNewFolderFocused: Bool
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
+                form
+                    .onChange(of: walk) { _, walk in
+                        guard let stop = walk?.stop(in: rows) else { return }
+                        proxy.scrollTo(stop)
+                    }
+            }
+            .sheetFormStyle()
+            .navigationTitle(Copy.knowledge)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(InboxCopy.cancel) { cancel() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    // R-4 — nothing to type: the note is named after the capture text.
+                    // I4b/D36 — `Done` stays disabled until a target is chosen; choosing the
+                    // root `Knowledge` folder (`selection == ""`) still counts as a choice.
+                    Button(Copy.done) { save() }
+                        .disabled(!canSave)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if let walk {
+                    KeyWalkLegendLine(
+                        press: Copy.walkChoose,
+                        hasNextRow: walk.hasNextRow(in: rows.map(\.count)))
+                }
+            }
+            .keyWalkKeys(
+                focus: $hasWalkFocus,
+                onMove: { walk = (walk ?? KeyWalk()).moved(by: $0, in: rows.map(\.count)) },
+                onPress: press,
+                onNextRow: { walk = (walk ?? KeyWalk()).advanced(in: rows.map(\.count)) },
+                onArrow: openOrClose)
+            .onChange(of: isNotesFocused) { _, focused in
+                if focused { walk = nil }
+            }
+            .onChange(of: isNewFolderFocused) { _, focused in
+                if focused { walk = nil }
+            }
+        }
+        .onAppear { folders = session.knowledgeFolders }
+    }
+
+    private var form: some View {
             Form {
-                if let suggested = session.suggestedKnowledgeFolder, selection != suggested {
+                if let suggested = shownSuggestion {
                     Section {
-                        Chip(suggested, state: .suggested) { selection = suggested }
+                        Chip(
+                            suggested, state: .suggested,
+                            isKeyHighlighted: isHighlighted(.suggestion(suggested))
+                        ) {
+                            selection = suggested
+                            point(at: .suggestion(suggested))
+                        }
+                        .id(KnowledgePickStop.suggestion(suggested))
                     }
                 }
 
@@ -43,10 +101,13 @@ struct KnowledgeSheet: View {
                     Button {
                         selection = ""
                         projectTarget = nil
+                        point(at: .folder(""))
                     } label: {
                         folderRow(name: InboxCopy.knowledgeRoot, path: "")
                     }
                     .buttonStyle(.plain)
+                    .keyHighlight(isHighlighted(.folder("")), in: Self.rowShape)
+                    .id(KnowledgePickStop.folder(""))
 
                     // Own tree rows instead of `OutlineGroup`: inside a `Form` on macOS the
                     // stock outline draws a child's label *left* of its parent (where the
@@ -61,17 +122,25 @@ struct KnowledgeSheet: View {
                                 prompt: Text(InboxCopy.newFolderPlaceholder))
                                 .textFieldStyle(.plain)
                                 .labelsHidden()
+                                .focused($isNewFolderFocused)
+                                .onSubmit {
+                                    guard !newFolder.trimmingCharacters(in: .whitespaces).isEmpty
+                                    else { return }
+                                    addFolder()
+                                }
                             Button(Copy.done) { addFolder() }
                                 .disabled(newFolder.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
                     } else {
                         Button {
-                            isAddingFolder = true
+                            startAddingFolder()
                         } label: {
                             Label(InboxCopy.newFolder, systemImage: Symbols.area)
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(Color.gtdAccent)
+                        .keyHighlight(isHighlighted(.newFolder), in: Self.rowShape)
+                        .id(KnowledgePickStop.newFolder)
                     }
                 }
 
@@ -81,6 +150,7 @@ struct KnowledgeSheet: View {
                     ForEach(session.activeProjects) { project in
                         Button {
                             projectTarget = project.id
+                            point(at: .project(project.id))
                         } label: {
                             HStack {
                                 Label(project.title, systemImage: Symbols.projects)
@@ -94,30 +164,109 @@ struct KnowledgeSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .keyHighlight(isHighlighted(.project(project.id)), in: Self.rowShape)
+                        .id(KnowledgePickStop.project(project.id))
                     }
                 }
 
                 Section(InboxCopy.notesLabel) {
                     NoteEditor(text: $notes, prompt: InboxCopy.notesPlaceholder)
+                        // `⌘↩` past the last line hands the keys to the walk, on `Done`.
+                        .onAdvance { point(at: .done) }
+                        .focused($isNotesFocused)
                         .accessibilityLabel(InboxCopy.notesLabel)
                 }
-            }
-            .sheetFormStyle()
-            .navigationTitle(Copy.knowledge)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(InboxCopy.cancel) { cancel() }
+
+                #if os(macOS)
+                // `Done` again inside the sheet, where the walk can draw its ring on it (the
+                // toolbar's own button cannot carry one).
+                if walk != nil {
+                    Section {
+                        HStack {
+                            Spacer(minLength: 0)
+                            Button(Copy.done) { save() }
+                                .buttonStyle(.bordered)
+                                .disabled(!canSave)
+                                .keyHighlight(isHighlighted(.done), in: Self.rowShape)
+                        }
+                        .id(KnowledgePickStop.done)
+                    }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    // R-4 — nothing to type: the note is named after the capture text.
-                    // I4b/D36 — `Done` stays disabled until a target is chosen; choosing the
-                    // root `Knowledge` folder (`selection == ""`) still counts as a choice.
-                    Button(Copy.done) { save() }
-                        .disabled(!KnowledgePickerModel.canSave(selection: selection, projectTarget: projectTarget))
-                }
+                #endif
             }
+    }
+
+    // MARK: Keyboard walk (#77)
+
+    private static let rowShape = RoundedRectangle(cornerRadius: 6)
+
+    private var canSave: Bool {
+        KnowledgePickerModel.canSave(selection: selection, projectTarget: projectTarget)
+    }
+
+    private var shownSuggestion: String? {
+        guard let suggested = session.suggestedKnowledgeFolder, selection != suggested
+        else { return nil }
+        return suggested
+    }
+
+    private var rows: [[KnowledgePickStop]] {
+        KnowledgePickStop.walkRows(
+            suggestion: shownSuggestion,
+            tree: KnowledgeTree.build(folders),
+            expanded: expandedFolders,
+            projects: session.activeProjects.map(\.id),
+            isAddingFolder: isAddingFolder)
+    }
+
+    private func isHighlighted(_ stop: KnowledgePickStop) -> Bool {
+        walk?.stop(in: rows) == stop
+    }
+
+    /// A click (or a field's `↩`/`⌘↩`) puts the highlight on `stop` and the keys on the walk.
+    private func point(at stop: KnowledgePickStop) {
+        guard KeyWalk.isAvailable else { return }
+        isNotesFocused = false
+        isNewFolderFocused = false
+        walk = KeyWalk.position(of: stop, in: rows) ?? KeyWalk.first(in: rows.map(\.count))
+        hasWalkFocus = true
+    }
+
+    /// `↩` does what a click on the highlighted row does.
+    private func press() {
+        switch walk?.stop(in: rows) {
+        case let .suggestion(path):
+            selection = path
+            projectTarget = nil
+            point(at: .folder(path))
+        case let .folder(path):
+            selection = path
+            projectTarget = nil
+        case .newFolder:
+            startAddingFolder()
+        case let .project(id):
+            projectTarget = id
+        case .done:
+            if canSave { save() }
+        case nil:
+            walk = KeyWalk.first(in: rows.map(\.count))
         }
-        .onAppear { folders = session.knowledgeFolders }
+    }
+
+    /// `→` opens, `←` closes the highlighted folder of the tree.
+    private func openOrClose(_ direction: Int) {
+        guard case let .folder(path)? = walk?.stop(in: rows), !path.isEmpty else { return }
+        if direction > 0 {
+            expandedFolders.insert(path)
+        } else {
+            expandedFolders.remove(path)
+        }
+    }
+
+    private func startAddingFolder() {
+        isAddingFolder = true
+        walk = nil
+        isNewFolderFocused = true
     }
 
     /// One row per visible folder, depth-first. Collapsed folders hide their subtree; the set
@@ -128,10 +277,13 @@ struct KnowledgeSheet: View {
             Button {
                 selection = node.path
                 projectTarget = nil
+                point(at: .folder(node.path))
             } label: {
                 folderRow(name: node.name, path: node.path, node: node, depth: depth)
             }
             .buttonStyle(.plain)
+            .keyHighlight(isHighlighted(.folder(node.path)), in: Self.rowShape)
+            .id(KnowledgePickStop.folder(node.path))
 
             if expandedFolders.contains(node.path) {
                 AnyView(folderTreeRows(node.children, depth: depth + 1))
@@ -190,6 +342,9 @@ struct KnowledgeSheet: View {
         selection = parent.isEmpty ? name : parent + "/" + name
         newFolder = ""
         isAddingFolder = false
+        // The new folder shows under its parent, so the walk can stand on it.
+        if !parent.isEmpty { expandedFolders.insert(parent) }
+        if let selection { point(at: .folder(selection)) }
     }
 
     private func save() {
@@ -213,96 +368,17 @@ struct KnowledgeSheet: View {
 /// capture into a project" path here any more (D33).
 struct ProjectSheet: View {
     @Bindable var session: InboxSession
-    @Environment(\.dismiss) private var dismiss
 
-    @State private var search = ""
-
+    /// `ProjectChoiceSheet` is the one picker (search, `Clear`, the tree, `Create project`, the
+    /// keyboard walk); the card only says what a choice does.
     var body: some View {
-        NavigationStack {
-            Form {
-                // An explicit prompt and a hidden label: a Mac form otherwise draws the title as
-                // a leading label and leaves the field itself empty.
-                Section {
-                    TextField(InboxCopy.pickProject, text: $search, prompt: Text(InboxCopy.pickProject))
-                        .textFieldStyle(.plain)
-                        .labelsHidden()
-                }
-                if session.draft.project != nil || session.draft.newProjectTitle != nil {
-                    Section {
-                        Button(InboxCopy.clearProject) { choose(nil) }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.gtdAccent)
-                    }
-                }
-                // Ungrouped projects come first and carry no section header (ARCHITECTURE §6).
-                ForEach(groups) { group in
-                    if let title = group.title {
-                        Section(title) { rows(of: group) }
-                    } else {
-                        Section { rows(of: group) }
-                    }
-                }
-                if let name = creatableName {
-                    Section {
-                        Button {
-                            session.createProject(named: name)
-                            dismiss()
-                        } label: {
-                            Label(InboxCopy.createProject(name), systemImage: "plus")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.gtdAccent)
-                    }
-                }
-            }
-            .sheetFormStyle()
-            .navigationTitle(Copy.project)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(InboxCopy.cancel) { cancel() }
-                }
-            }
-        }
-    }
-
-    /// The whole sheet is `ProjectPicker.model(_:search:)` — the filtered tree (area-less first,
-    /// no header) and whether the create row is offered. The view decides neither (T08).
-    private var model: ProjectPickerModel { session.projectPicker(search: search) }
-
-    private var groups: [ProjectGroup] { model.groups }
-
-    /// `Create project "<text>"` — offered only when nothing matches exactly (STYLEGUIDE §3.6).
-    private var creatableName: String? { model.createTitle }
-
-    private func rows(of group: ProjectGroup) -> some View {
-        ForEach(group.projects) { project in
-            Button {
-                choose(project.id)
-            } label: {
-                HStack {
-                    Text(project.title)
-                        .font(Typo.body)
-                        .foregroundStyle(Color.ink)
-                    Spacer(minLength: 0)
-                    if session.draft.project == project.id {
-                        Image(systemName: Symbols.done)
-                            .foregroundStyle(Color.gtdAccent)
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func choose(_ id: NoteID?) {
-        session.chooseProject(id)
-        dismiss()
-    }
-
-    private func cancel() {
-        dismiss()
-        session.cancelSheet()
+        ProjectChoiceSheet(
+            picker: { session.projectPicker(search: $0) },
+            current: session.draft.project,
+            canClear: session.draft.project != nil || session.draft.newProjectTitle != nil,
+            onChoose: { session.chooseProject($0) },
+            onCreate: { session.createProject(named: $0) },
+            onCancel: { session.cancelSheet() })
     }
 }
 
@@ -319,6 +395,10 @@ struct DeferToReviewSheet: View {
     /// keyboard it covered Cancel/Defer entirely. `@FocusState` + a keyboard toolbar Done button
     /// (the `ActionDetailView` pattern) plus interactive scroll dismissal fix that.
     @FocusState private var isReasonFocused: Bool
+    /// The Mac keyboard walk (#77) over `Defer` · `Cancel`. The sheet opens in the reason field
+    /// (there is nothing to defer without one); `↩` there hands the keys to the walk on `Defer`.
+    @State private var walk: KeyWalk?
+    @FocusState private var hasWalkFocus: Bool
 
     var body: some View {
         NavigationStack {
@@ -331,9 +411,37 @@ struct DeferToReviewSheet: View {
                         .labelsHidden()
                         .font(Typo.body)
                         .focused($isReasonFocused)
+                        .onSubmit { point(at: .deferIt) }
                 }
+                #if os(macOS)
+                // The two buttons again, in the sheet itself, so the walk has something to
+                // draw on (the toolbar's own buttons cannot carry the ring).
+                if walk != nil {
+                    Section {
+                        HStack(spacing: Spacing.m) {
+                            Spacer(minLength: 0)
+                            Button(InboxCopy.cancel) { cancel() }
+                                .keyHighlight(isHighlighted(.cancel), in: Self.buttonShape)
+                            Button(Copy.deferLabel) { point(at: .deferIt); save() }
+                                .disabled(!canSave)
+                                .keyHighlight(isHighlighted(.deferIt), in: Self.buttonShape)
+                        }
+                        .buttonStyle(.bordered)
+                    } footer: {
+                        KeyWalkLegendLine(press: Copy.walkChoose, hasNextRow: false)
+                    }
+                }
+                #endif
             }
             .sheetFormStyle()
+            .keyWalkKeys(
+                focus: $hasWalkFocus,
+                onMove: { walk = (walk ?? KeyWalk()).moved(by: $0, in: Self.rowCounts) },
+                onPress: press)
+            .onAppear { isReasonFocused = true }
+            .onChange(of: isReasonFocused) { _, focused in
+                if focused { walk = nil }
+            }
             #if os(iOS)
             .scrollDismissesKeyboard(.interactively)
             #endif
@@ -344,7 +452,7 @@ struct DeferToReviewSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(Copy.deferLabel) { save() }
-                        .disabled(reason.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(!canSave)
                 }
                 #if os(iOS)
                 ToolbarItemGroup(placement: .keyboard) {
@@ -353,6 +461,34 @@ struct DeferToReviewSheet: View {
                 }
                 #endif
             }
+        }
+    }
+
+    private static let buttonShape = RoundedRectangle(cornerRadius: 6)
+    private static let rowCounts = DeferReviewStop.walkRows.map(\.count)
+
+    private var canSave: Bool { !reason.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    private func isHighlighted(_ stop: DeferReviewStop) -> Bool {
+        walk?.stop(in: DeferReviewStop.walkRows) == stop
+    }
+
+    private func point(at stop: DeferReviewStop) {
+        guard KeyWalk.isAvailable else { return }
+        isReasonFocused = false
+        walk = KeyWalk.position(of: stop, in: DeferReviewStop.walkRows)
+        hasWalkFocus = true
+    }
+
+    /// `↩` presses the highlighted button. `Defer` without a reason goes back to the field.
+    private func press() {
+        switch walk?.stop(in: DeferReviewStop.walkRows) {
+        case .deferIt:
+            if canSave { save() } else { isReasonFocused = true }
+        case .cancel:
+            cancel()
+        case nil:
+            break
         }
     }
 
@@ -375,6 +511,9 @@ struct DeferToReviewSheet: View {
 struct CapSheet: View {
     @Bindable var session: InboxSession
     @Environment(\.dismiss) private var dismiss
+    /// The Mac keyboard walk (#77) over the `Demote` buttons, on the first one from the start.
+    @State private var walk: KeyWalk? = KeyWalk.initial
+    @FocusState private var hasWalkFocus: Bool
 
     var body: some View {
         NavigationStack {
@@ -384,7 +523,7 @@ struct CapSheet: View {
                         .font(Typo.meta)
                         .foregroundStyle(Color.textSecondary)
                 }
-                ForEach(session.capCandidates) { action in
+                ForEach(Array(session.capCandidates.enumerated()), id: \.element.id) { index, action in
                     HStack {
                         ActionRow(
                             action: action,
@@ -392,9 +531,24 @@ struct CapSheet: View {
                         Spacer(minLength: Spacing.s)
                         Button(Copy.demote) { demote(action.id) }
                             .buttonStyle(.bordered)
+                            .keyHighlight(
+                                walk?.highlight(inRow: 0) == index,
+                                in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                if walk != nil, !session.capCandidates.isEmpty {
+                    KeyWalkLegendLine(press: Copy.walkChoose, hasNextRow: false)
+                }
+            }
+            .keyWalkKeys(
+                focus: $hasWalkFocus,
+                onMove: { walk = (walk ?? KeyWalk()).moved(by: $0, in: rowCounts) },
+                onPress: {
+                    guard let index = walk?.clamped(in: rowCounts)?.index else { return }
+                    demote(session.capCandidates[index].id)
+                })
             .scrollingSheetFrame()
             .navigationTitle(Copy.capSheetTitle)
             .toolbar {
@@ -404,6 +558,8 @@ struct CapSheet: View {
             }
         }
     }
+
+    private var rowCounts: [Int] { [session.capCandidates.count] }
 
     private func demote(_ id: NoteID) {
         dismiss()
@@ -457,6 +613,10 @@ struct ListChoiceSheet: View {
     @State private var newListName = ""
     @State private var isAddingList = false
     @FocusState private var isNameFocused: Bool
+    /// The Mac keyboard walk (#77): on the first list the moment the sheet opens, `nil` while
+    /// the new list's name field has the keys.
+    @State private var walk: KeyWalk? = KeyWalk.initial
+    @FocusState private var hasWalkFocus: Bool
 
     var body: some View {
         NavigationStack {
@@ -469,23 +629,43 @@ struct ListChoiceSheet: View {
                     } actions: {
                         Button(InboxCopy.newList) { startAdding() }
                             .tint(Color.gtdAccent)
+                            .keyHighlight(isHighlighted(.newList), in: Self.rowShape)
                     }
                 } else {
-                    List {
-                        ForEach(lists) { list in
-                            Button {
-                                dismiss()
-                                onChoose(list.name)
-                            } label: {
-                                Label(list.name, systemImage: Symbols.list(named: list.name, icons: listIcons))
-                                    .font(Typo.body)
-                                    .foregroundStyle(Color.ink)
+                    ScrollViewReader { proxy in
+                        List {
+                            ForEach(lists) { list in
+                                Button {
+                                    choose(list.name)
+                                } label: {
+                                    Label(list.name, systemImage: Symbols.list(named: list.name, icons: listIcons))
+                                        .font(Typo.body)
+                                        .foregroundStyle(Color.ink)
+                                }
+                                .buttonStyle(.plain)
+                                .keyHighlight(isHighlighted(.list(list.name)), in: Self.rowShape)
+                                .id(ListPickStop.list(list.name))
                             }
-                            .buttonStyle(.plain)
+                            newListRow
                         }
-                        newListRow
+                        .onChange(of: walk) { _, walk in
+                            guard let stop = walk?.stop(in: rows) else { return }
+                            proxy.scrollTo(stop)
+                        }
                     }
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if walk != nil {
+                    KeyWalkLegendLine(press: Copy.walkChoose, hasNextRow: false)
+                }
+            }
+            .keyWalkKeys(
+                focus: $hasWalkFocus,
+                onMove: { walk = (walk ?? KeyWalk()).moved(by: $0, in: rows.map(\.count)) },
+                onPress: press)
+            .onChange(of: isNameFocused) { _, focused in
+                if focused { walk = nil }
             }
             .scrollingSheetFrame()
             .navigationTitle(Copy.lists)
@@ -525,12 +705,39 @@ struct ListChoiceSheet: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.gtdAccent)
+            .keyHighlight(isHighlighted(.newList), in: Self.rowShape)
+            .id(ListPickStop.newList)
         }
+    }
+
+    static let rowShape = RoundedRectangle(cornerRadius: 6)
+
+    private var rows: [[ListPickStop]] {
+        ListPickStop.walkRows(lists: lists.map(\.name), isAddingList: isAddingList)
+    }
+
+    private func isHighlighted(_ stop: ListPickStop) -> Bool {
+        walk?.stop(in: rows) == stop
+    }
+
+    /// `↩` does what a click on the highlighted row does.
+    private func press() {
+        switch walk?.stop(in: rows) {
+        case let .list(name): choose(name)
+        case .newList: startAdding()
+        case nil: walk = KeyWalk.first(in: rows.map(\.count))
+        }
+    }
+
+    private func choose(_ name: String) {
+        dismiss()
+        onChoose(name)
     }
 
     private func startAdding() {
         isAddingList = true
         isNameFocused = true
+        walk = nil
     }
 
     /// The owner closes the sheet once the note has moved; a refused name keeps it open.
