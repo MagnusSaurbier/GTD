@@ -10,12 +10,17 @@ public struct StepOneBar: View {
     private let onAction: () -> Void
     private let onKnowledgeOrList: () -> Void
     private let onTrash: () -> Void
+    private let highlighted: Int?
 
+    /// `highlighted` — the button (0 Action, 1 Knowledge / List, 2 Trash) carrying the Mac
+    /// keyboard walk's semi-highlight (#77), if any.
     public init(
+        highlighted: Int? = nil,
         onAction: @escaping () -> Void,
         onKnowledgeOrList: @escaping () -> Void,
         onTrash: @escaping () -> Void
     ) {
+        self.highlighted = highlighted
         self.onAction = onAction
         self.onKnowledgeOrList = onKnowledgeOrList
         self.onTrash = onTrash
@@ -30,12 +35,16 @@ public struct StepOneBar: View {
     }
 
     @ViewBuilder private var buttons: some View {
-        target(Copy.actionKind, symbol: Symbols.actionKind, action: onAction)
-        target(Copy.knowledgeOrList, symbol: Symbols.knowledgeOrListKind, action: onKnowledgeOrList)
-        target(Copy.trash, symbol: Symbols.trash, action: onTrash)
+        target(Copy.actionKind, symbol: Symbols.actionKind, index: 0, action: onAction)
+        target(
+            Copy.knowledgeOrList, symbol: Symbols.knowledgeOrListKind, index: 1,
+            action: onKnowledgeOrList)
+        target(Copy.trash, symbol: Symbols.trash, index: 2, action: onTrash)
     }
 
-    @ViewBuilder private func target(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+    @ViewBuilder private func target(
+        _ title: String, symbol: String, index: Int, action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             VStack(spacing: Spacing.xs) {
                 Image(systemName: symbol).symbolRenderingMode(.hierarchical)
@@ -50,6 +59,7 @@ public struct StepOneBar: View {
         }
         #if os(macOS)
         .buttonStyle(.bordered)
+        .keyHighlight(highlighted == index, in: RoundedRectangle(cornerRadius: 10))
         #else
         .buttonStyle(.plain)
         #endif
@@ -124,10 +134,13 @@ public struct KnowledgeListNavbar: View {
     private let onKnowledge: () -> Void
     private let onList: (String) -> Void
     private let onMore: () -> Void
+    private let highlighted: Int?
 
+    /// `highlighted` — the slot carrying the Mac keyboard walk's semi-highlight (#77), if any.
     public init(
         favourites: [String],
         platform: NavbarPlatform,
+        highlighted: Int? = nil,
         onKnowledge: @escaping () -> Void,
         onList: @escaping (String) -> Void,
         onMore: @escaping () -> Void
@@ -136,11 +149,12 @@ public struct KnowledgeListNavbar: View {
         self.onKnowledge = onKnowledge
         self.onList = onList
         self.onMore = onMore
+        self.highlighted = highlighted
     }
 
     public var body: some View {
         GlassActionBar {
-            ForEach(slots) { slot in
+            ForEach(Array(slots.enumerated()), id: \.element.id) { index, slot in
                 Button(action: { tap(slot) }) {
                     VStack(spacing: Spacing.xs) {
                         Image(systemName: symbol(for: slot)).symbolRenderingMode(.hierarchical)
@@ -150,6 +164,7 @@ public struct KnowledgeListNavbar: View {
                     .foregroundStyle(Color.ink)
                 }
                 .buttonStyle(.plain)
+                .keyHighlight(highlighted == index, in: RoundedRectangle(cornerRadius: 10))
                 .accessibilityLabel(label(for: slot))
             }
         }

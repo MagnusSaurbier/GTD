@@ -96,6 +96,15 @@ public final class InboxSession {
     /// it (`advanceKeyCursor()`, `moveKeyCursor(by:)`, `pressKeyCursor()`).
     public private(set) var keyCursor: CardKeyCursor?
 
+    /// The semi-highlight on step 1's buttons and on the Knowledge / List card's navbar (#77):
+    /// an index into `barStops`. Unlike the action card's walk it is always there — `Action`
+    /// (or `Knowledge`) is highlighted the moment a card shows, so `↩` right away opens it.
+    public private(set) var barCursor: Int = 0
+
+    /// The date chip whose day picker the walk opened with `↩` (#77). The view binds the chip's
+    /// popover to it; closing the popover sets it back to `nil`.
+    public var datePicker: CardDateStop?
+
     public var sheet: Sheet?
     public private(set) var processed: Int
     public private(set) var refusal: Refused?
@@ -363,6 +372,7 @@ public final class InboxSession {
     /// is whatever the card already carries — reopening after a collapse shows it again.
     private func open(_ target: InboxStep) {
         step = target
+        barCursor = 0
         refusal = nil
         // The one-time hint belongs to the swipes, which only the action card has.
         if target == .actionCard, hintPending {
@@ -378,6 +388,8 @@ public final class InboxSession {
         guard step.isOpened else { return }
         step = .step1
         keyCursor = nil
+        barCursor = 0
+        datePicker = nil
         sheet = nil
         card.clearCap()
         refusal = nil
@@ -706,6 +718,8 @@ public final class InboxSession {
         draftItemID = restored.id
         step = last.step
         keyCursor = nil
+        barCursor = 0
+        datePicker = nil
 
         processed = max(processed - 1, 0)
         counts[last.target] = max((counts[last.target] ?? 1) - 1, 0)
@@ -819,8 +833,43 @@ public final class InboxSession {
 
     // MARK: - Keyboard cursor (#65, Mac)
 
+    /// The buttons the bar walk of step 1 and of the Knowledge / List card stands on, in the
+    /// order they are drawn (#77): `Action · Knowledge / List · Trash · Defer to review`, and
+    /// `Knowledge`, the favourite lists, `More…`. Empty on the action card.
+    public var barStops: [InboxExit] {
+        switch step {
+        case .step1: exits(of: .step1)
+        case .keepCard: exits(of: .keepCard).filter { $0 != .collapse }
+        case .actionCard: []
+        }
+    }
+
+    /// The highlighted bar button, or `nil` when there is no bar walk here or a text field has
+    /// the keyboard (the Knowledge / List card's `Notes`).
+    public var barHighlight: Int? {
+        let stops = barStops
+        guard !stops.isEmpty, !isFieldFocused, current != nil else { return nil }
+        return KeyWalk(index: barCursor).clamped(in: [stops.count])?.index
+    }
+
+    /// A click on a bar button (#77): the highlight goes there first, so it is where the mouse
+    /// left it should the button not move the card on (a refused exit, a cancelled sheet).
+    public func pointBar(at exit: InboxExit) {
+        guard let index = barStops.firstIndex(of: exit) else { return }
+        barCursor = index
+    }
+
+    /// A click on a walkable chip or outcome button of the action card (#77): the highlight
+    /// moves there, starting the walk when none runs, so `Tab`/`↩`/`⌘↩` go on from it.
+    public func pointKeyCursor(at cursor: CardKeyCursor) {
+        guard step == .actionCard, current != nil else { return }
+        card.isFieldFocused = false
+        keyCursor = cursor.clamped(contextCount: contexts.count)
+    }
+
     /// `⌘↩` past the last text field, and `⌘↩` on a row: the next row's first stop (context →
-    /// time → outcome buttons). Starts the walk when there is none. Action card only.
+    /// time → dates → outcome buttons). Starts the walk when there is none. Action card only —
+    /// step 1 and the Knowledge / List card walk one row, where `⌘↩` has nowhere to go.
     public func advanceKeyCursor() {
         guard step == .actionCard, current != nil else { return }
         let count = contexts.count
@@ -831,6 +880,12 @@ public final class InboxSession {
     /// `Tab` (`+1`) / `⇧Tab` (`-1`): the next / previous chip or button in the row, wrapping.
     /// With no cursor yet, `Tab` starts the walk on the first attribute.
     public func moveKeyCursor(by offset: Int) {
+        let stops = barStops
+        if !stops.isEmpty {
+            guard current != nil, !isFieldFocused else { return }
+            barCursor = KeyWalk(index: barCursor).moved(by: offset, in: [stops.count]).index
+            return
+        }
         guard step == .actionCard, current != nil else { return }
         let count = contexts.count
         guard let cursor = keyCursor else {
@@ -846,6 +901,10 @@ public final class InboxSession {
     /// opens the project picker. Returns `false` when there is no cursor.
     @discardableResult
     public func pressKeyCursor() async -> Bool {
+        if let index = barHighlight {
+            await take(barStops[index])
+            return true
+        }
         guard step == .actionCard, let cursor = keyCursor?.clamped(contextCount: contexts.count)
         else { return false }
         switch cursor.row {
@@ -854,6 +913,13 @@ public final class InboxSession {
         case .time:
             guard let bucket = cursor.timeBucket else { return false }
             card.draft.timeBucket = card.draft.timeBucket == bucket ? nil : bucket
+        case .dates:
+            switch cursor.dateStop {
+            case .deferDate: datePicker = .deferDate
+            case .due: datePicker = .due
+            case .project: sheet = .project
+            case nil: return false
+            }
         case .outcome:
             guard let outcome = cursor.outcome else { return false }
             await perform(outcome)
@@ -883,12 +949,13 @@ public final class InboxSession {
     public var legend: [KeyBindings.LegendEntry] {
         switch step {
         case .step1:
+            // The bar walk is always on here (#77), so its keys follow the letter keys.
             return keyBindings.legend(for: .inboxStep1, titles: [
                 .stepAction: Copy.actionKind,
                 .stepKnowledge: Copy.knowledgeOrList,
                 .stepTrash: Copy.trash,
                 .stepDefer: Copy.deferToReview,
-            ])
+            ]) + barWalkLegend
         case .actionCard:
             if let keyCursor { return Self.cursorLegend(keyCursor) }
             let directions = keyBindings.legend(for: .actionCard, titles: [
@@ -920,16 +987,27 @@ public final class InboxSession {
                 titles[KeyCommand.knowledgeListFavouriteSlots[slot.keyIndex - 2]] = name
             }
             let rows = keyBindings.legend(for: .knowledgeListCard, titles: titles)
-            return rows + [
+            return rows + barWalkLegend + [
                 KeyBindings.LegendEntry(key: KeyStroke.escape.display, label: Copy.back),
             ]
         }
     }
 
+    /// `Tab ⇧Tab Move · ↩ Choose` for the bar walk — only while it is there to use (not while
+    /// `Notes` has the keyboard). One row, so no `⌘↩ Next row`.
+    private var barWalkLegend: [KeyBindings.LegendEntry] {
+        guard barHighlight != nil else { return [] }
+        return [
+            KeyBindings.LegendEntry(key: InboxCopy.cursorMoveKeys, label: InboxCopy.cursorMove),
+            KeyBindings.LegendEntry(key: InboxCopy.returnKey, label: InboxCopy.cursorPress),
+        ]
+    }
+
     /// While the keyboard walks the chips (#65): the walking keys instead of the filing keys.
     /// All fixed keys, so there is nothing to look up in `KeyBindings`.
     static func cursorLegend(_ cursor: CardKeyCursor) -> [KeyBindings.LegendEntry] {
-        let press = cursor.row == .outcome ? InboxCopy.cursorPress : InboxCopy.cursorToggle
+        let press = cursor.row == .context || cursor.row == .time
+            ? InboxCopy.cursorToggle : InboxCopy.cursorPress
         var rows = [
             KeyBindings.LegendEntry(key: InboxCopy.cursorMoveKeys, label: InboxCopy.cursorMove),
             KeyBindings.LegendEntry(key: InboxCopy.returnKey, label: press),
@@ -987,6 +1065,8 @@ public final class InboxSession {
         if target == .next || target == .someday { dismissSwipeHint() }
         step = .step1
         keyCursor = nil
+        barCursor = 0
+        datePicker = nil
         syncDraft()
     }
 
@@ -1023,6 +1103,8 @@ public final class InboxSession {
         refusal = nil
         step = .step1
         keyCursor = nil
+        barCursor = 0
+        datePicker = nil
     }
 }
 
