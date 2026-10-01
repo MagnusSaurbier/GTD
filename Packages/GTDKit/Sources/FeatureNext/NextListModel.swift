@@ -207,6 +207,25 @@ public final class NextListModel {
     /// A2 — show the inline checklist once there is more than one checkbox to tick off.
     public func showsChecklist(_ action: Action) -> Bool { action.checkboxes.count >= 2 }
 
+    /// One row of the inline checklist: a checkbox (with its `toggleCheckbox` index and nesting
+    /// depth), or the `…` that stands for the steps the preview leaves out.
+    public enum ChecklistRow: Hashable, Sendable {
+        case step(index: Int, checkbox: Checkbox, depth: Int)
+        case more
+    }
+
+    /// The inline checklist is a preview, never more than three rows: up to three steps are
+    /// shown as they are; more become the first two and `…` (the rest live in the detail).
+    public func checklistPreview(_ action: Action) -> [ChecklistRow] {
+        let steps = Checkbox.scanNested(action.what).enumerated().map { index, entry in
+            ChecklistRow.step(index: index, checkbox: entry.checkbox, depth: entry.depth)
+        }
+        guard steps.count > Self.checklistPreviewLimit else { return steps }
+        return Array(steps.prefix(Self.checklistPreviewLimit - 1)) + [.more]
+    }
+
+    static let checklistPreviewLimit = 3
+
     /// True once every checkbox is ticked — the row then offers to complete the action,
     /// never completes it automatically (§1 "no lying UI").
     public func allChecked(_ action: Action) -> Bool {
