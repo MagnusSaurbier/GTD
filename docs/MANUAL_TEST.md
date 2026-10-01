@@ -210,6 +210,17 @@ Unplug the mouse for this one.
       `Next`. `↩` on `Next` with a context or time missing puts the ring back on that row; with
       everything filled it files the card. `Esc` first removes the ring, then collapses the card.
       A long card scrolls the ringed row into view.
+- [ ] The whole-flow walk (#77, build 0.42): step 1 shows the ring on `Action` at once;
+      `Tab` ×3 reaches `Defer to review`, `Tab` again wraps to `Action`, `⇧Tab` goes back;
+      `↩` presses the ringed button; `A`/`K`/`X`/`D` still work and the legend ends in
+      `Tab ⇧Tab Move · ↩ Choose`. On the action card `⌘↩` from the time row lands on `+ defer`,
+      `↩` opens its day picker (closing it leaves the ring there), `Tab` → `+ due`, `+ project`,
+      `↩` on `+ project` opens the picker with the ring on the first row. **Click `≤30`** while
+      typing in `What?`: it is selected, the ring sits on it and `Tab` goes on to `≤60`. On the
+      Knowledge / List card the ring starts on `Knowledge`; `Tab` walks the favourites and
+      `More…`. In the sheets (`More…`, Knowledge, project picker, `Defer to review`, `Next is
+      full`, Waiting) `Tab`/`⇧Tab`/`↩` walk and press, `Esc` cancels, and each shows its own
+      legend line; in the Knowledge sheet `→`/`←` open and close the ringed folder.
 - [ ] With no field focused: `1…8` toggle contexts and `⇧1…⇧4` pick a time bucket.
 - [ ] `⌘Z` undoes the last filing from anywhere on the screen.
 - [ ] Filing with a key animates the card out **in that key's direction**.
@@ -338,7 +349,7 @@ Unplug the mouse for this one.
 - [ ] **Turn into project (#74):** `Done` with a step selected creates the project, then opens
       the card over that step; with no step selected the sheet just closes.
 
-- [ ] **One step list (#76, 0.40):** the project detail has no separate `Next` section: steps and
+- [ ] **One step list (#76, 0.44):** the project detail has no separate `Next` section: steps and
       the project's active actions share the `Steps` list. On the right of each row: `↗ Promote`
       on an open step (opens the action card), `→ Next` / `→ Someday` / `→ Waiting` on a step
       that is an action and on a loose action (opens the card to change the status; the row then

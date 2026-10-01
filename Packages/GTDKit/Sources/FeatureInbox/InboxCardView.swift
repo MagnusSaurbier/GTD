@@ -18,6 +18,8 @@ enum CardField: Hashable {
     /// long card scrolls the highlighted row into view the way it does a focused field.
     case contextChips
     case timeChips
+    /// The `+ defer` · `+ due` · `+ project` row (#77).
+    case dateChips
 
     /// The anchor of the row the keyboard cursor stands on. The outcome row sits under the card,
     /// outside the scroll view, so it needs none.
@@ -25,6 +27,7 @@ enum CardField: Hashable {
         switch cursor?.row {
         case .context: .contextChips
         case .time: .timeChips
+        case .dates: .dateChips
         case .outcome, nil: nil
         }
     }
@@ -46,6 +49,8 @@ struct InboxCardView: View {
     /// `⌘↩` past the last text field (`What?`): the host hands the keyboard to the card and
     /// starts the chip walk (#65).
     var onLeaveFields: () -> Void = {}
+    /// A click on a walkable chip (#77): the host drops field focus and moves the walk there.
+    var onPoint: (CardKeyCursor) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.listIcons) private var listIcons
@@ -213,7 +218,7 @@ struct InboxCardView: View {
         switch field {
         case .what: .why
         case .why: showsBody ? .body : .text
-        case .text, .body, .notes, .contextChips, .timeChips: field
+        case .text, .body, .notes, .contextChips, .timeChips, .dateChips: field
         }
     }
 
@@ -284,7 +289,8 @@ struct InboxCardView: View {
                     font: Typo.meta, foreground: .textSecondary)
                 ContextChipGroup(
                     contexts: session.contexts, selection: $session.draft.contexts,
-                    highlighted: session.keyHighlight(in: .context))
+                    highlighted: session.keyHighlight(in: .context),
+                    onTap: { onPoint(CardKeyCursor(row: .context, index: $0)) })
             }
             .id(CardField.contextChips)
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -293,27 +299,55 @@ struct InboxCardView: View {
                     font: Typo.meta, foreground: .textSecondary)
                 TimeBucketChipGroup(
                     selection: $session.draft.timeBucket,
-                    highlighted: session.keyHighlight(in: .time))
+                    highlighted: session.keyHighlight(in: .time),
+                    onTap: { onPoint(CardKeyCursor(row: .time, index: $0)) })
             }
             .id(CardField.timeChips)
             FlowLayout {
                 DateValueChip(
                     label: Copy.deferLabel,
                     value: $session.draft.deferDate,
-                    today: session.today)
+                    today: session.today,
+                    isKeyHighlighted: session.keyCursor?.dateStop == .deferDate,
+                    isPickerPresented: datePickerBinding(.deferDate),
+                    onTap: { onPoint(Self.cursor(on: .deferDate)) })
                 DateValueChip(
                     label: Copy.due,
                     value: $session.draft.due,
-                    today: session.today)
+                    today: session.today,
+                    isKeyHighlighted: session.keyCursor?.dateStop == .due,
+                    isPickerPresented: datePickerBinding(.due),
+                    onTap: { onPoint(Self.cursor(on: .due)) })
                 Chip(
                     projectChipTitle,
                     state: isProjectChosen ? .confirmed : .unset,
-                    symbol: isProjectChosen ? nil : "plus"
+                    symbol: isProjectChosen ? nil : "plus",
+                    isKeyHighlighted: session.keyCursor?.dateStop == .project
                 ) {
+                    onPoint(Self.cursor(on: .project))
                     session.sheet = .project
                 }
             }
+            .id(CardField.dateChips)
         }
+    }
+
+    private static func cursor(on stop: CardDateStop) -> CardKeyCursor {
+        CardKeyCursor(row: .dates, index: CardDateStop.allCases.firstIndex(of: stop) ?? 0)
+    }
+
+    /// The day picker of `stop`, open while the session says so — `↩` on the chip sets it,
+    /// closing the popover clears it (#77).
+    private func datePickerBinding(_ stop: CardDateStop) -> Binding<Bool> {
+        Binding(
+            get: { session.datePicker == stop },
+            set: { isOpen in
+                if isOpen {
+                    session.datePicker = stop
+                } else if session.datePicker == stop {
+                    session.datePicker = nil
+                }
+            })
     }
 
     /// Unset: the `plus` symbol is the "+", so the title is the bare, lowercase label (no
@@ -331,6 +365,8 @@ struct InboxCardView: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             SectionLabel(InboxCopy.notesLabel)
             NoteEditor(text: $session.draft.notes, prompt: InboxCopy.notesPlaceholder)
+                // `⌘↩` past the last input line hands the keys back to the navbar walk (#77).
+                .onAdvance { onLeaveFields() }
                 .fixedSize(horizontal: false, vertical: true)
                 .focused($focus, equals: .notes)
                 .accessibilityLabel(InboxCopy.notesLabel)

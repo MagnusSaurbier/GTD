@@ -14,11 +14,14 @@ struct CardKeyCursorTests {
 
     // MARK: - The pure walk
 
-    @Test func theWalkGoesContextTimeOutcomeAndStopsThere() {
+    @Test func theWalkGoesContextTimeDatesOutcomeAndStopsThere() {
         var cursor = CardKeyCursor.first(contextCount: 3)
         #expect(cursor == CardKeyCursor(row: .context, index: 0))
         cursor = cursor.advanced(contextCount: 3)
         #expect(cursor == CardKeyCursor(row: .time, index: 0))
+        cursor = cursor.advanced(contextCount: 3)
+        #expect(cursor == CardKeyCursor(row: .dates, index: 0), "#77: the date row after time")
+        #expect(cursor.dateStop == .deferDate)
         cursor = cursor.advanced(contextCount: 3)
         #expect(cursor == CardKeyCursor(row: .outcome, index: 0))
         #expect(cursor.outcome == .next)
@@ -42,6 +45,14 @@ struct CardKeyCursorTests {
         let outcome = CardKeyCursor(row: .outcome, index: 4)
         #expect(outcome.outcome == .project)
         #expect(outcome.moved(by: 1, contextCount: 3).outcome == .next)
+    }
+
+    @Test func theDateRowReadsDeferDueProjectAndWraps() {
+        #expect(CardDateStop.allCases == [.deferDate, .due, .project])
+        let last = CardKeyCursor(row: .dates, index: 2)
+        #expect(last.dateStop == .project)
+        #expect(last.moved(by: 1, contextCount: 3).dateStop == .deferDate)
+        #expect(CardKeyCursor(row: .time).dateStop == nil)
     }
 
     @Test func theOutcomeRowReadsNextSomedayWaitingDoneProject() {
@@ -81,6 +92,8 @@ struct CardKeyCursorTests {
         // While the walk runs, `⌘↩` is "next row", never the 2-minute rule.
         #expect(await session.handle(character: "\r", command: true))
         #expect(session.keyCursor?.row == .time)
+        #expect(await session.handle(character: "\r", command: true))
+        #expect(session.keyCursor?.row == .dates)
         #expect(await session.handle(character: "\r", command: true))
         #expect(session.keyCursor?.row == .outcome)
         #expect(await session.handle(character: "\r", command: true))
@@ -125,6 +138,7 @@ struct CardKeyCursorTests {
         session.advanceKeyCursor()
         session.advanceKeyCursor()
         session.advanceKeyCursor()
+        session.advanceKeyCursor()
         #expect(session.keyCursor?.outcome == .next)
 
         await session.pressKeyCursor()
@@ -135,6 +149,7 @@ struct CardKeyCursorTests {
         session.advanceKeyCursor()
         await session.pressKeyCursor()                 // and the first time bucket
         session.advanceKeyCursor()
+        session.advanceKeyCursor()                     // over the date row
         #expect(session.keyCursor?.outcome == .next)
         await session.pressKeyCursor()
         #expect(model.snapshot.actions.count == actionsBefore + 1)
@@ -144,6 +159,7 @@ struct CardKeyCursorTests {
 
     @Test func aMissingTextFieldTakesTheCursorAwayAndAsksForFocus() async {
         let (session, _, _) = await InboxTestSupport.openedActionCard()
+        session.advanceKeyCursor()
         session.advanceKeyCursor()
         session.advanceKeyCursor()
         session.advanceKeyCursor()
@@ -181,12 +197,12 @@ struct CardKeyCursorTests {
         #expect(session.keyCursor != nil)
     }
 
-    @Test func thereIsNoWalkOutsideTheActionCard() async {
+    @Test func theChipWalkStaysOnTheActionCard() async {
         let (session, _, _) = InboxTestSupport.makeSession()
         session.advanceKeyCursor()
         session.moveKeyCursor(by: 1)
-        #expect(session.keyCursor == nil)
-        #expect(await session.pressKeyCursor() == false)
+        #expect(session.keyCursor == nil, "step 1 walks its bar, not the chips")
+        #expect(session.barHighlight == 1)
     }
 
     @Test func theLegendShowsTheWalkingKeysWhileWalking() async {
@@ -194,10 +210,148 @@ struct CardKeyCursorTests {
         let filing = session.legendString
         session.advanceKeyCursor()
         #expect(session.legendString == "Tab ⇧Tab Move · ↩ Select · ⌘↩ Next row · Esc Back")
-        session.advanceKeyCursor()
+        session.advanceKeyCursor()                     // time
+        session.advanceKeyCursor()                     // dates
+        #expect(session.legendString == "Tab ⇧Tab Move · ↩ Choose · ⌘↩ Next row · Esc Back",
+                "the date row opens pickers: Choose, not Select")
         session.advanceKeyCursor()
         #expect(session.legendString == "Tab ⇧Tab Move · ↩ Choose · Esc Back")
         _ = session.escape()
         #expect(session.legendString == filing)
+    }
+
+    // MARK: - The date row (#77)
+
+    @Test func returnOnTheDateRowOpensTheChipsPicker() async {
+        let (session, _, _) = await InboxTestSupport.openedActionCard()
+        session.pointKeyCursor(at: CardKeyCursor(row: .dates, index: 0))
+        #expect(await session.pressKeyCursor())
+        #expect(session.datePicker == .deferDate)
+        session.datePicker = nil
+        session.moveKeyCursor(by: 1)
+        #expect(await session.pressKeyCursor())
+        #expect(session.datePicker == .due)
+        session.moveKeyCursor(by: 1)
+        #expect(await session.pressKeyCursor())
+        #expect(session.sheet == .project, "+ project opens the picker, as a click does")
+        #expect(session.draft.deferDate == nil, "opening a picker sets nothing")
+    }
+
+    // MARK: - A click moves the highlight (#77)
+
+    @Test func aClickedChipCarriesTheWalkFromThere() async {
+        let (session, _, _) = await InboxTestSupport.openedActionCard()
+        session.isFieldFocused = true                  // typing in `What?`
+        // The view calls this when the mouse clicks `≤30`.
+        session.pointKeyCursor(at: CardKeyCursor(row: .time, index: 1))
+        #expect(!session.isFieldFocused, "the click takes the keys away from the field")
+        #expect(session.keyCursor == CardKeyCursor(row: .time, index: 1))
+        session.moveKeyCursor(by: 1)
+        #expect(await session.pressKeyCursor())
+        #expect(session.draft.timeBucket == .upTo60, "Tab then ↩ go on from the clicked chip")
+        session.advanceKeyCursor()
+        #expect(session.keyCursor?.row == .dates)
+    }
+
+    @Test func aClickedBarButtonTakesTheHighlight() async {
+        let (session, _, _) = InboxTestSupport.makeSession()
+        session.pointBar(at: .trash)
+        #expect(session.barHighlight == 2)
+        await session.take(.openKeep)
+        session.pointBar(at: .more)
+        #expect(session.barHighlight == session.barStops.count - 1)
+    }
+
+    // MARK: - Step 1 (#77)
+
+    @Test func stepOneStartsOnActionAndReturnOpensIt() async {
+        let (session, _, _) = InboxTestSupport.makeSession()
+        #expect(session.barStops == [.openAction, .openKeep, .trash, .deferToReview])
+        #expect(session.barHighlight == 0, "Action is preselected")
+        #expect(await session.pressKeyCursor())
+        #expect(session.step == .actionCard)
+        #expect(session.barHighlight == nil, "the action card has no bar walk")
+    }
+
+    @Test func tabWalksStepOneAndWraps() async {
+        let (session, model, _) = InboxTestSupport.makeSession()
+        let item = try! #require(session.current)
+        session.moveKeyCursor(by: 1)
+        #expect(session.barHighlight == 1)
+        session.moveKeyCursor(by: 1)
+        #expect(session.barHighlight == 2)
+        session.moveKeyCursor(by: 1)
+        #expect(session.barHighlight == 3)
+        session.moveKeyCursor(by: 1)
+        #expect(session.barHighlight == 0, "Tab past Defer to review wraps to Action")
+        session.moveKeyCursor(by: -1)
+        #expect(session.barHighlight == 3, "⇧Tab from Action wraps to Defer to review")
+        #expect(await session.pressKeyCursor())
+        #expect(session.sheet == .deferToReview)
+        session.cancelSheet()
+
+        session.moveKeyCursor(by: -1)                  // Trash
+        #expect(await session.pressKeyCursor())
+        #expect(model.snapshot.inboxItem(item.id) == nil)
+        #expect(session.barHighlight == 0, "the next card starts on Action again")
+    }
+
+    @Test func theLetterKeysStillWorkBesideTheWalk() async {
+        let (session, _, _) = InboxTestSupport.makeSession()
+        session.moveKeyCursor(by: 2)
+        #expect(await session.handle(character: "k"))
+        #expect(session.step == .keepCard)
+        #expect(session.barHighlight == 0, "a new step starts on its first button")
+    }
+
+    @Test func escapeOnStepOneStillQuits() async {
+        let (session, _, _) = InboxTestSupport.makeSession()
+        session.moveKeyCursor(by: 1)
+        #expect(session.escape() == .quit)
+    }
+
+    @Test func aCollapsedCardComesBackOnAction() async {
+        let (session, _, _) = InboxTestSupport.makeSession()
+        await session.take(.openKeep)
+        session.moveKeyCursor(by: 1)
+        #expect(session.escape() == .collapsed)
+        #expect(session.barHighlight == 0)
+    }
+
+    // MARK: - The Knowledge / List card (#77)
+
+    @Test func theNavbarWalkStartsOnKnowledgeAndFilesIntoAList() async {
+        let (session, model, _) = InboxTestSupport.makeSession()
+        let item = try! #require(session.current)
+        await session.take(.openKeep)
+        let first = try! #require(Rules.favouriteLists(model.snapshot).first)
+        #expect(session.barStops.first == .knowledge)
+        #expect(session.barStops.last == .more)
+        #expect(session.barHighlight == 0)
+        #expect(await session.pressKeyCursor())
+        #expect(session.sheet == .knowledge)
+        session.cancelSheet()
+
+        session.moveKeyCursor(by: -1)
+        #expect(await session.pressKeyCursor())
+        #expect(session.sheet == .more, "⇧Tab from Knowledge wraps to More…")
+        session.cancelSheet()
+
+        session.moveKeyCursor(by: 2)                   // More… → Knowledge → the first list
+        #expect(session.barStops[session.barHighlight ?? 0] == .list(first.name))
+        #expect(await session.pressKeyCursor())
+        #expect(model.snapshot.inboxItem(item.id) == nil)
+    }
+
+    @Test func theNotesFieldHidesTheNavbarHighlight() async {
+        let (session, _, _) = InboxTestSupport.makeSession()
+        await session.take(.openKeep)
+        session.isFieldFocused = true
+        #expect(session.barHighlight == nil)
+        session.moveKeyCursor(by: 1)
+        #expect(!(await session.pressKeyCursor()), "keys typed into Notes never press a slot")
+        #expect(!session.legendString.contains("Tab"))
+        session.isFieldFocused = false                  // `⌘↩` past Notes, or Esc
+        #expect(session.barHighlight == 0)
     }
 }

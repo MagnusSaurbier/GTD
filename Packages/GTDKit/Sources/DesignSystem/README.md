@@ -157,7 +157,17 @@ holds none of them. Adding is normal, renaming is a cross-target change.
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter DesignSystemTests` — 84 tests.
+`cd Packages/GTDKit && swift test --filter DesignSystemTests` — 137 tests.
+
+`Interaction/KeyWalk.swift` — the keyboard walk every walked screen shares (#65, #77), pure and
+Linux-tested (`KeyWalkTests`): `KeyWalk` (`first(in:)`, `moved(by:in:)` = `Tab`/`⇧Tab` wrapping,
+`advanced(in:)` = `⌘↩`, `clamped(in:)`, `stop(in:)`, `position(of:in:)`, `isAvailable`/`initial`
+— the Mac walks, iOS draws nothing) and `KeyWalkLegend`. `Interaction/KeyWalkKeys.swift` — the Mac
+key handling for a screen that walks itself (`keyWalkKeys(focus:onMove:onPress:onNextRow:onArrow:)`,
+a no-op on iOS) and `KeyWalkLegendLine`. The ring itself is `keyHighlight(_:in:)` in `Chip.swift`;
+`StepOneBar`/`KnowledgeListNavbar` take `highlighted:`, `ContextChipGroup`/`TimeBucketChipGroup`
+an `onTap`, `DateValueChip` `isKeyHighlighted:`/`isPickerPresented:`/`onTap:`, and
+`WaitingInfoSheet` walks follow-up chip → who suggestions → `Set waiting`.
 
 `Interaction/KeyBindingsEnvironment.swift` — `EnvironmentValues.keyBindings` (R-10): the shell sets it from
 `DeviceSettings.keyBindings`; the inbox card, `MakeActionSheet` and the review deck read it.

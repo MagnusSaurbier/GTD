@@ -114,6 +114,11 @@ public enum Copy {
     public static let fileTo = "File to"
     /// VoiceOver hint on a control carrying the keyboard semi-highlight (#65).
     public static let keyHighlightHint = "Keyboard highlight: Return acts on it."
+    /// The walking keys' legend words (#65, #77) — `Tab ⇧Tab Move · ↩ Choose · ⌘↩ Next row`.
+    public static let walkMove = "Move"
+    public static let walkSelect = "Select"
+    public static let walkChoose = "Choose"
+    public static let walkNextRow = "Next row"
 
     /// `3 of 14 left`
     public static func counter(remaining: Int, total: Int) -> String {
@@ -229,6 +234,8 @@ public enum Copy {
     public static let reviewComplete = "Review complete"
     /// `9 of 11 steps`
     public static func stepsSummary(done: Int, total: Int) -> String { "\(done) of \(total) steps" }
+    /// VoiceOver hint on the `…` that ends a Next row's checklist preview.
+    public static let moreSteps = "Opens the action to see every step"
     /// `14 processed · 6 min` — the inbox-zero moment's stats line (STYLEGUIDE §5.1).
     public static func processedSummary(processed: Int, minutes: Int) -> String {
         "\(processed) processed · \(minutes) min"

@@ -81,4 +81,13 @@ struct DayTests {
             Checkbox(text: "three", done: false),
         ])
     }
+
+    @Test func checkboxScanNestedDepths() {
+        // The user's "Read paper" note: tab-indented sub-steps under two parents.
+        let what = "- [ ] Put paper into NotebookLM\n- [ ] ask for\n\t- [ ] Task at hand\n\t- [ ] contribution\n"
+            + "- [ ] Read paper\n  - [ ] two spaces\n      - [ ] deeper\n  - [x] back to one\nprose\n- [ ] top"
+        let nested = Checkbox.scanNested(what)
+        #expect(nested.map(\.depth) == [0, 0, 1, 1, 0, 1, 2, 1, 0])
+        #expect(nested.map(\.checkbox) == Checkbox.scan(what), "same order and count as scan — the toggle index")
+    }
 }

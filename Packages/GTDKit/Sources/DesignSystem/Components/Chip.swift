@@ -206,16 +206,19 @@ public struct ContextChipGroup: View {
     @Binding private var selection: [String]
     private let disabled: Set<String>
     private let highlighted: Int?
+    private let onTap: ((Int) -> Void)?
 
     /// `highlighted` — the index of the chip carrying the keyboard's semi-highlight, if any.
+    /// `onTap` — told the index of a chip the mouse toggled, so the walk can move there (#77).
     public init(
         contexts: [String], selection: Binding<[String]>, disabled: Set<String> = [],
-        highlighted: Int? = nil
+        highlighted: Int? = nil, onTap: ((Int) -> Void)? = nil
     ) {
         self.contexts = contexts
         self._selection = selection
         self.disabled = disabled
         self.highlighted = highlighted
+        self.onTap = onTap
     }
 
     public var body: some View {
@@ -223,6 +226,7 @@ public struct ContextChipGroup: View {
             ForEach(Array(contexts.enumerated()), id: \.element) { index, context in
                 Chip(context, state: state(for: context), isKeyHighlighted: highlighted == index) {
                     toggle(context)
+                    onTap?(index)
                 }
             }
         }
@@ -246,12 +250,16 @@ public struct ContextChipGroup: View {
 public struct TimeBucketChipGroup: View {
     @Binding private var selection: TimeBucket?
     private let highlighted: Int?
+    private let onTap: ((Int) -> Void)?
 
     /// `highlighted` — the index (in `TimeBucket.allCases`) of the chip carrying the keyboard's
-    /// semi-highlight, if any.
-    public init(selection: Binding<TimeBucket?>, highlighted: Int? = nil) {
+    /// semi-highlight, if any. `onTap` — told the index of a chip the mouse clicked (#77).
+    public init(
+        selection: Binding<TimeBucket?>, highlighted: Int? = nil, onTap: ((Int) -> Void)? = nil
+    ) {
         self._selection = selection
         self.highlighted = highlighted
+        self.onTap = onTap
     }
 
     public var body: some View {
@@ -263,6 +271,7 @@ public struct TimeBucketChipGroup: View {
                     isKeyHighlighted: highlighted == index
                 ) {
                     selection = selection == bucket ? nil : bucket
+                    onTap?(index)
                 }
             }
         }
@@ -279,8 +288,11 @@ public struct DateValueChip: View {
     private let today: Day
     private let signal: SignalStep?
     private let signalSymbol: String?
+    private let isKeyHighlighted: Bool
+    private let presentation: Binding<Bool>?
+    private let onTap: (() -> Void)?
 
-    @State private var isPresented = false
+    @State private var ownPresentation = false
 
     /// `signal` (+ optional `signalSymbol`) tints the confirmed date — see `Chip.init`. The caller
     /// takes the step from `Rules.signals`; this component never decides that a date is late.
@@ -290,7 +302,10 @@ public struct DateValueChip: View {
         suggestion: Day? = nil,
         today: Day = Day.today(),
         signal: SignalStep? = nil,
-        signalSymbol: String? = nil
+        signalSymbol: String? = nil,
+        isKeyHighlighted: Bool = false,
+        isPickerPresented: Binding<Bool>? = nil,
+        onTap: (() -> Void)? = nil
     ) {
         self.label = label
         self._value = value
@@ -298,20 +313,33 @@ public struct DateValueChip: View {
         self.today = today
         self.signal = signal
         self.signalSymbol = signalSymbol
+        self.isKeyHighlighted = isKeyHighlighted
+        self.presentation = isPickerPresented
+        self.onTap = onTap
+    }
+
+    /// The picker's presentation: the owner's binding when it passed one — so the keyboard walk
+    /// can open it with `↩` (#77) — else the chip's own state.
+    private var isPresented: Binding<Bool> {
+        presentation ?? $ownPresentation
     }
 
     public var body: some View {
-        Chip(title, state: state, symbol: symbol, signal: signal) {
+        Chip(
+            title, state: state, symbol: symbol, signal: signal,
+            isKeyHighlighted: isKeyHighlighted
+        ) {
+            onTap?()
             // STYLEGUIDE §3.1: suggested → confirmed on tap (the +7 d follow-up etc. is never
             // silently written); a **second** tap, once it is `.confirmed`, opens the picker to
             // change it. Only `.unset`/`.confirmed` open the picker directly.
             if state == .suggested, let suggestion {
                 value = suggestion
             } else {
-                isPresented = true
+                isPresented.wrappedValue = true
             }
         }
-        .popover(isPresented: $isPresented) { picker }
+        .popover(isPresented: isPresented) { picker }
     }
 
     private var symbol: String? {
@@ -344,14 +372,14 @@ public struct DateValueChip: View {
             // a day closes it too. Swipe-down still works (T15 defect 4b).
             HStack {
                 Spacer(minLength: 0)
-                Button(Copy.done) { isPresented = false }
+                Button(Copy.done) { isPresented.wrappedValue = false }
             }
             .padding(.horizontal, Spacing.l)
             .padding(.top, Spacing.m)
             #endif
             DayPicker(selection: value, today: today) { day in
                 value = day
-                isPresented = false
+                isPresented.wrappedValue = false
             }
             .padding(Spacing.l)
         }

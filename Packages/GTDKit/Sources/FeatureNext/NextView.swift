@@ -465,25 +465,43 @@ private struct NextListContent: View {
     }
 
     /// A2 — inline checkboxes once an action has more than one; ticking the last one offers
-    /// to complete the action instead of doing it automatically (§1 "no lying UI").
+    /// to complete the action instead of doing it automatically (§1 "no lying UI"). Nested
+    /// sub-steps keep their indent; past three rows the preview ends in `…`, which opens the
+    /// action like the row does.
     @ViewBuilder private func checklist(for action: Action) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            ForEach(Array(action.checkboxes.enumerated()), id: \.offset) { index, checkbox in
-                Button {
-                    run { try await list.toggleCheckbox(action, index: index) }
-                } label: {
-                    HStack(spacing: Spacing.s) {
-                        Image(systemName: checkbox.done ? Symbols.checkboxOn : Symbols.checkboxOff)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(checkbox.done ? Color.ink : Color.textSecondary)
-                        Text(checkbox.text)
-                            .font(Typo.meta)
-                            .foregroundStyle(checkbox.done ? Color.textSecondary : Color.ink)
-                            .strikethrough(checkbox.done)
+            ForEach(list.checklistPreview(action), id: \.self) { row in
+                switch row {
+                case let .step(index, checkbox, depth):
+                    Button {
+                        run { try await list.toggleCheckbox(action, index: index) }
+                    } label: {
+                        HStack(spacing: Spacing.s) {
+                            Image(systemName: checkbox.done ? Symbols.checkboxOn : Symbols.checkboxOff)
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(checkbox.done ? Color.ink : Color.textSecondary)
+                            Text(checkbox.text)
+                                .font(Typo.meta)
+                                .foregroundStyle(checkbox.done ? Color.textSecondary : Color.ink)
+                                .strikethrough(checkbox.done)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .padding(.leading, CGFloat(depth) * Spacing.xl)
+                    .accessibilityAddTraits(checkbox.done ? [.isSelected] : [])
+                case .more:
+                    Button {
+                        selectedID = action.id
+                        onOpen(action.id)
+                    } label: {
+                        Text(verbatim: "…")
+                            .font(Typo.meta)
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(action.title)
+                    .accessibilityHint(Copy.moreSteps)
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(checkbox.done ? [.isSelected] : [])
             }
             if list.allChecked(action) {
                 Button {

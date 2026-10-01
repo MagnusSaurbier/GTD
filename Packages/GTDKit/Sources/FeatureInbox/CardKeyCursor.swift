@@ -2,8 +2,9 @@ import Foundation
 import GTDModel
 import DesignSystem
 
-// The keyboard cursor of the opened action card (issue #65): after the text fields, `⌘↩` walks
-// the card's selectable attributes row by row and ends on a row of outcome buttons. Inside a row
+// The keyboard cursor of the opened action card (issue #65, the date row #77): after the text
+// fields, `⌘↩` walks the card's selectable attributes row by row — contexts, time, then the
+// `+ defer` · `+ due` · `+ project` row — and ends on a row of outcome buttons. Inside a row
 // `Tab` / `⇧Tab` move a *semi-highlight* between the chips, `↩` toggles (or presses) the
 // highlighted one. Pure and Foundation-only, so the whole walk is unit-tested on Linux;
 // `InboxSession` owns the one stored cursor and the views only draw it.
@@ -14,8 +15,18 @@ public enum CardKeyRow: String, Sendable, CaseIterable, Hashable {
     case context
     /// The time-bucket chips (single-select).
     case time
+    /// `+ defer` · `+ due` · `+ project` — `↩` opens the chip's picker (#77).
+    case dates
     /// The outcome buttons — only visible while the cursor stands on them.
     case outcome
+}
+
+/// The three chips of the date row, in the order the card draws them (#77).
+public enum CardDateStop: String, Sendable, CaseIterable, Hashable {
+    case deferDate
+    case due
+    /// Opens the project picker, like the outcome row's `Project`.
+    case project
 }
 
 /// The five buttons of the outcome row, in the order the ticket names them.
@@ -75,6 +86,7 @@ public struct CardKeyCursor: Sendable, Equatable, Hashable {
         switch row {
         case .context: contextCount
         case .time: TimeBucket.allCases.count
+        case .dates: CardDateStop.allCases.count
         case .outcome: CardOutcome.allCases.count
         }
     }
@@ -130,6 +142,12 @@ public struct CardKeyCursor: Sendable, Equatable, Hashable {
     public var outcome: CardOutcome? {
         guard row == .outcome, CardOutcome.allCases.indices.contains(index) else { return nil }
         return CardOutcome.allCases[index]
+    }
+
+    /// The date-row chip under the cursor, if it stands on the date row.
+    public var dateStop: CardDateStop? {
+        guard row == .dates, CardDateStop.allCases.indices.contains(index) else { return nil }
+        return CardDateStop.allCases[index]
     }
 
     /// The time bucket under the cursor, if it stands on the time row.

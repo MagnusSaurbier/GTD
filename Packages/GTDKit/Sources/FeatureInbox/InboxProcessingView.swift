@@ -277,6 +277,14 @@ struct InboxSessionView: View {
         // The net under it: whatever still reaches the sheet must not close it past the ladder.
         .interactiveDismissDisabled()
         .onAppear { hasKeyFocus = true }
+        // A day picker or a sheet the walk opened took the keys; they come back to the card
+        // when it closes, so the walk goes on where it stood (#77).
+        .onChange(of: session.datePicker) { _, open in
+            if open == nil, focus == nil { takeKeyFocus() }
+        }
+        .onChange(of: session.sheet) { _, open in
+            if open == nil, focus == nil { takeKeyFocus() }
+        }
     }
     #endif
 
@@ -289,7 +297,8 @@ struct InboxSessionView: View {
             dragTarget: dragTarget,
             translation: translation,
             shake: shake,
-            onLeaveFields: leaveFieldsAction)
+            onLeaveFields: leaveFieldsAction,
+            onPoint: pointAction)
             .background {
                 GeometryReader { proxy in
                     Color.clear
@@ -416,12 +425,18 @@ struct InboxSessionView: View {
     /// and bar on iPhone, beside the three buttons on Mac (STYLEGUIDE §3.6).
     private var stepOneBar: some View {
         #if os(macOS)
+        // The bar walk (#77): `Action` is highlighted as soon as the card shows; `Tab`/`⇧Tab`
+        // move over the four, `↩` presses. A click moves the highlight first.
         HStack(spacing: Spacing.m) {
             StepOneBar(
-                onAction: { Task { await session.take(.openAction) } },
-                onKnowledgeOrList: { Task { await session.take(.openKeep) } },
-                onTrash: { Task { await session.take(.trash) } })
+                highlighted: session.barHighlight,
+                onAction: { click(.openAction) },
+                onKnowledgeOrList: { click(.openKeep) },
+                onTrash: { click(.trash) })
             deferToReviewButton
+                .keyHighlight(
+                    session.barHighlight == session.barStops.firstIndex(of: .deferToReview),
+                    in: RoundedRectangle(cornerRadius: 6))
         }
         #else
         VStack(spacing: Spacing.s) {
@@ -435,8 +450,14 @@ struct InboxSessionView: View {
         #endif
     }
 
+    /// A bar button clicked: the highlight moves there, then the exit is taken.
+    private func click(_ exit: InboxExit) {
+        session.pointBar(at: exit)
+        Task { await session.take(exit) }
+    }
+
     private var deferToReviewButton: some View {
-        Button(Copy.deferToReview) { Task { await session.take(.deferToReview) } }
+        Button(Copy.deferToReview) { click(.deferToReview) }
             .buttonStyle(.plain)
             .font(Typo.meta)
             .foregroundStyle(Color.textSecondary)
@@ -462,9 +483,10 @@ struct InboxSessionView: View {
         KnowledgeListNavbar(
             favourites: session.favouriteListNames,
             platform: session.platform,
-            onKnowledge: { Task { await session.take(.knowledge) } },
-            onList: { name in Task { await session.take(.list(name)) } },
-            onMore: { Task { await session.take(.more) } })
+            highlighted: barHighlightOnMac,
+            onKnowledge: { click(.knowledge) },
+            onList: { name in click(.list(name)) },
+            onMore: { click(.more) })
             .padding(.bottom, Spacing.s)
     }
 
@@ -504,18 +526,26 @@ struct InboxSessionView: View {
         switch session.escape() {
         case .blurField:
             focus = nil
-            hasKeyFocus = true
+            takeKeyFocus()
         case .clearedCursor:
-            hasKeyFocus = true
+            takeKeyFocus()
         case .collapsed:
-            hasKeyFocus = true
+            takeKeyFocus()
         case .quit:
             onFinished()
         }
     }
 
+    /// The card area takes key focus back after a field gave it up. On the next turn of the run
+    /// loop: set in the same update as the field's `focus = nil`, SwiftUI drops it again and the
+    /// walking keys land nowhere (seen with the off-screen probe, #77).
+    private func takeKeyFocus() {
+        hasKeyFocus = true
+        DispatchQueue.main.async { hasKeyFocus = true }
+    }
+
     private func moveCursor(backward: Bool) -> KeyPress.Result {
-        guard focus == nil, session.step == .actionCard else { return .ignored }
+        guard focus == nil else { return .ignored }
         session.moveKeyCursor(by: backward ? -1 : 1)
         return .handled
     }
@@ -525,6 +555,10 @@ struct InboxSessionView: View {
         if command {
             guard session.step == .actionCard else { return .ignored }
             perform(.done)
+            return .handled
+        }
+        if session.barHighlight != nil {
+            Task { await session.pressKeyCursor() }
             return .handled
         }
         guard let cursor = session.keyCursor else { return .ignored }
@@ -541,7 +575,7 @@ struct InboxSessionView: View {
     private func leaveFields() {
         focus = nil
         session.isFieldFocused = false
-        hasKeyFocus = true
+        takeKeyFocus()
         session.advanceKeyCursor()
     }
 
@@ -550,7 +584,10 @@ struct InboxSessionView: View {
     private func outcomeRow(highlighted: Int?) -> some View {
         HStack(spacing: Spacing.m) {
             ForEach(Array(CardOutcome.allCases.enumerated()), id: \.element) { index, outcome in
-                Button { choose(outcome) } label: {
+                Button {
+                    session.pointKeyCursor(at: CardKeyCursor(row: .outcome, index: index))
+                    choose(outcome)
+                } label: {
                     VStack(spacing: Spacing.xs) {
                         // One fixed symbol height, so the five labels sit on one line.
                         Image(systemName: outcome.symbol).symbolRenderingMode(.hierarchical)
@@ -602,6 +639,30 @@ struct InboxSessionView: View {
 
     private var barIdentity: BarIdentity {
         BarIdentity(step: session.step, isOutcomeRow: session.keyCursor?.row == .outcome)
+    }
+
+    /// The bar walk's highlight — Mac only; the iPhone draws no walk.
+    private var barHighlightOnMac: Int? {
+        #if os(macOS)
+        session.barHighlight
+        #else
+        nil
+        #endif
+    }
+
+    /// Mac: a click on a walkable chip drops field focus and moves the walk there (#77), so the
+    /// keys go on from the chip. iPhone: nothing — there is no walk.
+    private var pointAction: (CardKeyCursor) -> Void {
+        #if os(macOS)
+        { cursor in
+            focus = nil
+            session.isFieldFocused = false
+            takeKeyFocus()
+            session.pointKeyCursor(at: cursor)
+        }
+        #else
+        { _ in }
+        #endif
     }
 
     /// Mac: `⌘↩` past `What?` starts the chip walk. iPhone: the keyboard just goes away.

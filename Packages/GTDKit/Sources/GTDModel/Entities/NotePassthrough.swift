@@ -54,23 +54,50 @@ extension Checkbox {
     /// (nesting, `→ [[Action]]` suffixes, tabs) is `GTDMarkdown.CheckboxList` — `GTDModel` has no
     /// codec, so this is the most an entity may do with its own body text.
     public static func scan(_ markdown: String) -> [Checkbox] {
-        markdown.split(separator: "\n", omittingEmptySubsequences: false).compactMap { rawLine in
-            var line = Substring(rawLine)
-            while let f = line.first, f == " " || f == "\t" { line = line.dropFirst() }
-            guard let bullet = line.first, bullet == "-" || bullet == "*" else { return nil }
-            line = line.dropFirst()
-            guard line.first == " " else { return nil }
-            line = line.drop(while: { $0 == " " })
-            guard line.first == "[" else { return nil }
-            let markIndex = line.index(after: line.startIndex)
-            guard markIndex < line.endIndex else { return nil }
-            let mark = line[markIndex]
-            let closeIndex = line.index(after: markIndex)
-            guard closeIndex < line.endIndex, line[closeIndex] == "]" else { return nil }
-            guard mark == " " || mark == "x" || mark == "X" else { return nil }
-            let rest = line[line.index(after: closeIndex)...]
-                .trimmingCharacters(in: .whitespaces)
-            return Checkbox(text: rest, done: mark != " ")
+        scanNested(markdown).map(\.checkbox)
+    }
+
+    /// `scan` plus each checkbox's nesting depth (0 = top level), computed from the visual
+    /// indent the way `GTDMarkdown.CheckboxList.parse` does (a tab counts as four columns).
+    /// Same order and count as `scan`, so an index here is a `toggleCheckbox` index.
+    public static func scanNested(_ markdown: String) -> [(checkbox: Checkbox, depth: Int)] {
+        var result: [(checkbox: Checkbox, depth: Int)] = []
+        var widths: [Int] = []          // indent width per depth level
+        for rawLine in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
+            guard let checkbox = parseLine(rawLine) else { continue }
+            var width = 0
+            for character in rawLine {
+                if character == " " { width += 1 }
+                else if character == "\t" { width += 4 - (width % 4) }
+                else { break }
+            }
+            while let last = widths.last, width < last { widths.removeLast() }
+            if let last = widths.last {
+                if width > last { widths.append(width) }
+            } else {
+                widths.append(width)
+            }
+            result.append((checkbox, max(0, widths.count - 1)))
         }
+        return result
+    }
+
+    private static func parseLine(_ rawLine: Substring) -> Checkbox? {
+        var line = rawLine
+        while let f = line.first, f == " " || f == "\t" { line = line.dropFirst() }
+        guard let bullet = line.first, bullet == "-" || bullet == "*" else { return nil }
+        line = line.dropFirst()
+        guard line.first == " " else { return nil }
+        line = line.drop(while: { $0 == " " })
+        guard line.first == "[" else { return nil }
+        let markIndex = line.index(after: line.startIndex)
+        guard markIndex < line.endIndex else { return nil }
+        let mark = line[markIndex]
+        let closeIndex = line.index(after: markIndex)
+        guard closeIndex < line.endIndex, line[closeIndex] == "]" else { return nil }
+        guard mark == " " || mark == "x" || mark == "X" else { return nil }
+        let rest = line[line.index(after: closeIndex)...]
+            .trimmingCharacters(in: .whitespaces)
+        return Checkbox(text: rest, done: mark != " ")
     }
 }
