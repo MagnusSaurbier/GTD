@@ -154,7 +154,10 @@ public struct OverviewView: View {
         case let .action(id):
             ActionDetailView(action: id, onOpenProject: { nav.show(project: $0) })
         case let .project(id):
-            ProjectDetailView(project: id, onOpenAction: { nav.open(action: $0) })
+            ProjectDetailView(
+                project: id,
+                onOpenAction: { nav.open(action: $0) },
+                onOpenProject: { nav.show(project: $0) })
         case let .listItem(id):
             ListItemEditorView(item: id)
         case nil:

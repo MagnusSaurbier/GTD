@@ -349,6 +349,18 @@ Unplug the mouse for this one.
 - [ ] **Turn into project (#74):** `Done` with a step selected creates the project, then opens
       the card over that step; with no step selected the sheet just closes.
 
+- [ ] **One step list (#76, 0.44):** the project detail has no separate `Next` section: steps and
+      the project's active actions share the `Steps` list. On the right of each row: `↗ Promote`
+      on an open step (opens the action card), `→ Next` / `→ Someday` / `→ Waiting` on a step
+      that is an action and on a loose action (opens the card to change the status; the row then
+      shows the new status), `→ Project` on a step linked to another project (opens it). No lone
+      `↗` icon anywhere. Clicking a linked row's text opens its note; a plain step's text stays
+      editable.
+- [ ] **New project actions become steps (#76):** give an action a project (new action with
+      the project chip, a filed capture, the action detail's project chip): the project's step
+      list gains `Title → [[Action]]` at the end, and the project note on disk has that line.
+      Moving the action to another project moves its open step along.
+
 ### 3.5 Settings (L2/R-5, N7)
 
 - [ ] **Mac, `⌘,`: the Settings window scrolls.** At its default size (520×560) scroll from

@@ -38,6 +38,8 @@ public enum Symbols {
     public static let weeklyReview = "checklist"
     public static let journaling = "pencil.and.scribble"
     public static let promoteStep = "arrow.up.right.circle"
+    /// A project step that already is an action (or a subproject): `→ Next` etc. on its row (#76).
+    public static let stepStatus = "arrow.right.circle"
     /// The "New step" field's suggestion rows: an existing action that would become the step (#61).
     public static let linkStep = "link"
 

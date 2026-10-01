@@ -462,3 +462,65 @@ struct ReducerProjectTests {
         #expect(result.prompts == [.whatsNext(project: erasmus.id)])
     }
 }
+
+/// #76 — every action added to a project becomes a linked step of that project's note.
+struct ReducerProjectStepLinkTests {
+    private let env = TestVault.env()
+
+    private func vaultWithTwoProjects() throws -> (VaultSnapshot, Project, Project) {
+        var vault = TestVault.snapshot()
+        vault = try Reducer.reduce(vault, .createProject(ProjectDraft(title: "Umzug")), env: env).snapshot
+        vault = try Reducer.reduce(vault, .createProject(ProjectDraft(title: "Steuer")), env: env).snapshot
+        let umzug = try #require(vault.projects.first { $0.title == "Umzug" })
+        let steuer = try #require(vault.projects.first { $0.title == "Steuer" })
+        return (vault, umzug, steuer)
+    }
+
+    @Test func aNewActionInAProjectIsAppendedAsALinkedStep() throws {
+        let (vault, umzug, _) = try vaultWithTwoProjects()
+        let result = try Reducer.reduce(
+            vault, .createAction(ActionDraft(title: "Kartons kaufen", status: .someday, project: umzug.id, what: "Do it")),
+            env: env)
+        let action = try #require(result.snapshot.actions.first { $0.title == "Kartons kaufen" })
+        let steps = try #require(result.snapshot.project(umzug.id)?.steps)
+        #expect(steps.last == ProjectStep(text: "Kartons kaufen", promotedTo: action.id))
+        #expect(steps.filter { $0.promotedTo == action.id }.count == 1)
+    }
+
+    @Test func promotingAStepDoesNotAddASecondOne() throws {
+        var (vault, umzug, _) = try vaultWithTwoProjects()
+        let index = try #require(vault.projects.firstIndex { $0.id == umzug.id })
+        vault.projects[index].steps = [ProjectStep(text: "Kartons kaufen")]
+        let result = try Reducer.reduce(
+            vault, .promoteStep(project: umzug.id, stepIndex: 0, ActionDraft(title: "", status: .someday)),
+            env: env)
+        #expect(result.snapshot.project(umzug.id)?.steps.count == 1)
+    }
+
+    @Test func changingTheProjectMovesTheOpenStep() throws {
+        var (vault, umzug, steuer) = try vaultWithTwoProjects()
+        vault = try Reducer.reduce(
+            vault, .createAction(ActionDraft(title: "Belege sammeln", status: .someday, project: umzug.id, what: "Do it")),
+            env: env).snapshot
+        var action = try #require(vault.actions.first { $0.title == "Belege sammeln" })
+        action.project = steuer.id
+        let result = try Reducer.reduce(vault, .updateAction(action), env: env)
+        #expect(result.snapshot.project(umzug.id)?.steps.contains { $0.promotedTo == action.id } == false)
+        #expect(result.snapshot.project(steuer.id)?.steps.contains { $0.promotedTo == action.id } == true)
+    }
+
+    /// An unrelated command never writes into a project note: an action that was in the project
+    /// without a step before stays without one.
+    @Test func anUnrelatedEditLeavesALegacyActionAlone() throws {
+        var (vault, umzug, _) = try vaultWithTwoProjects()
+        vault = try Reducer.reduce(
+            vault, .createAction(ActionDraft(title: "Alt", status: .someday, project: umzug.id, what: "Do it")),
+            env: env).snapshot
+        let index = try #require(vault.projects.firstIndex { $0.id == umzug.id })
+        vault.projects[index].steps = []
+        var action = try #require(vault.actions.first { $0.title == "Alt" })
+        action.why = "Changed"
+        let result = try Reducer.reduce(vault, .updateAction(action), env: env)
+        #expect(result.snapshot.project(umzug.id)?.steps.isEmpty == true)
+    }
+}

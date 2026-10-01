@@ -187,6 +187,22 @@ struct VaultBackendScenarioTests {
         #expect(text.contains("- [x] Read three candidate papers → [[Actions/Read candidate thesis papers]]"))
     }
 
+    /// #76 — a new action in a project is written into the project note as a linked step.
+    @Test func aNewActionInAProjectIsWrittenAsAStepOfItsNote() async throws {
+        let vault = try TestVault.onDisk()
+        defer { vault.cleanUp() }
+        try await vault.backend.start()
+        let start = await vault.backend.currentSnapshot()
+        let projectPath = "Projects/Karriereplanung/Masterarbeit/Masterarbeit.md"
+        let project = try #require(start.projects.first { $0.id.path == projectPath })
+
+        _ = try await vault.backend.perform(.createAction(ActionDraft(
+            title: "Email Prof. Klein", status: .someday, project: project.id, what: "Ask about topics")))
+
+        let text = try #require(try vault.text(projectPath))
+        #expect(text.contains("- [ ] Email Prof. Klein → [[Actions/Email Prof. Klein]]"))
+    }
+
     // MARK: - Rename (A1) and wikilink upkeep
 
     @Test func renamingAnActionMovesTheFileAndFixesTheLinkInOneTransaction() async throws {

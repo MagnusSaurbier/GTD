@@ -133,6 +133,20 @@ public final class MakeActionModel {
         if target == .waiting { sheet = .waiting }
     }
 
+    /// #76 — the card over an existing action, opened from its status badge in a project's step
+    /// list to change where it stands. It opens with the action's own values, nothing marked
+    /// and no sub-sheet up; the exits file it like a drop would (`updateAction`).
+    public init(
+        model: AppModel,
+        changingStatusOf action: Action,
+        bindings: KeyBindings = .defaults
+    ) {
+        self.model = model
+        self.source = .action(action)
+        self.keyBindings = bindings
+        self.card = ActionCardState(draft: InboxDraft(action: action), previousStatus: action.status)
+    }
+
     /// P6 — the card over a project step. It opens with the step's line as the title and as
     /// `What?` (the step *is* the next physical action — the reducer uses the same default), and
     /// with the project on the project chip; everything else is asked for like any capture.
