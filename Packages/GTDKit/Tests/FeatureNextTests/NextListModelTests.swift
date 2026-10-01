@@ -360,6 +360,25 @@ struct NextListModelTests {
         #expect(!list.allChecked(withChecklist))
     }
 
+    @Test func checklistPreviewKeepsNestingAndCapsAtThreeRows() throws {
+        let list = NextListModel(model: makeModel(), mode: .full, store: InMemoryNextFilterStore())
+        var action = try #require(list.items.first { $0.title == "Write DAAD motivation letter" })
+
+        action.what = "- [ ] one\n\t- [x] sub\n- [ ] two"
+        #expect(list.checklistPreview(action) == [
+            .step(index: 0, checkbox: Checkbox(text: "one"), depth: 0),
+            .step(index: 1, checkbox: Checkbox(text: "sub", done: true), depth: 1),
+            .step(index: 2, checkbox: Checkbox(text: "two"), depth: 0),
+        ])
+
+        action.what = "- [ ] one\n\t- [ ] sub\n- [ ] two\n- [ ] three"
+        #expect(list.checklistPreview(action) == [
+            .step(index: 0, checkbox: Checkbox(text: "one"), depth: 0),
+            .step(index: 1, checkbox: Checkbox(text: "sub"), depth: 1),
+            .more,
+        ])
+    }
+
     @Test func tickingEveryCheckboxOffersCompletionWithoutCompletingAutomatically() async throws {
         let model = makeModel()
         let list = NextListModel(model: model, mode: .full, store: InMemoryNextFilterStore())
