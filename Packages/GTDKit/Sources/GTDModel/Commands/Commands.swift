@@ -220,8 +220,9 @@ public enum GTDError: Error, Sendable, Equatable {
     /// I4/D12/R-3 — a **new** transition into a tier that demands more than the note carries:
     /// Next needs `Why?`, `What?`, at least one context and a time estimate; Someday needs
     /// `What?`; Waiting needs `What?` and a follow-up date. Done, lists, Knowledge and Trash
-    /// need nothing, and a note **already** in a tier is never judged again — the vault stays
-    /// repairable. Carries every missing field, in `RequiredField` order.
+    /// need nothing, and a note **already** in a tier is never judged again (a waiting note
+    /// without a follow-up date included) — the vault stays repairable. Carries every missing
+    /// field, in `RequiredField` order.
     case missingFields([RequiredField])
     case notFound(NoteID)
     case titleCollision(String)
@@ -264,8 +265,11 @@ extension RequiredField {
             if previous == nil, blank(what) { missing.append(.what) }
         case .waiting:
             if previous == nil, blank(what) { missing.append(.what) }
-            // W1 — the follow-up date is the commitment, and it is required of every note.
-            if followUpDate == nil { missing.append(.followUpDate) }
+            // W1 — the follow-up date is the commitment, asked of every note *entering* waiting.
+            // A note already waiting without one (M2 imports every legacy waiting item that
+            // way) stays editable: refusing its context or time edit lost the edit and left the
+            // gap in place, whereas the row's follow-up chip is how the gap gets filled.
+            if previous != .waiting, followUpDate == nil { missing.append(.followUpDate) }
         case .done, .legacyTrashed:
             // A5/I4 — "I just did it" asks for nothing, and the legacy closed state is not
             // user-settable at all (R-1).
