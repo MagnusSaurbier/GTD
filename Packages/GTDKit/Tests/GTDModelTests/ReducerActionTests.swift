@@ -275,6 +275,35 @@ struct ReducerActionTests {
                 == .titleCollision("Motivation letter"))
     }
 
+    /// #95 — all actions share `Actions/`: a taken name gets the first five letters of the
+    /// project in front, then `_2`, `_3`, …; without a project it goes straight to the suffix.
+    /// The title is the file name, so a later edit keeps it.
+    @Test func aTakenNameGetsTheProjectPrefixThenASuffix() throws {
+        let project = TestVault.project("Karriereplanung")
+        var vault = TestVault.snapshot(actions: [TestVault.action("Letter")], projects: [project])
+        var draft = ActionDraft(title: "Letter")
+        draft.status = .someday
+        draft.what = "Write it"
+        draft.project = project.id
+        var names: [String] = []
+        for _ in 0..<3 {
+            let result = try Reducer.reduce(vault, .createAction(draft), env: env)
+            vault = result.snapshot
+            names.append(vault.actions.last!.title)
+        }
+        #expect(names == ["Karri - Letter", "Karri - Letter_2", "Karri - Letter_3"])
+        #expect(vault.actions.last!.id.path == "Actions/Karri - Letter_3.md")
+
+        draft.project = nil
+        let loose = try Reducer.reduce(vault, .createAction(draft), env: env)
+        #expect(loose.snapshot.actions.last!.title == "Letter_2")
+
+        var edited = loose.snapshot.actions.last!
+        edited.why = "changed"
+        let after = try Reducer.reduce(loose.snapshot, .updateAction(edited), env: env)
+        #expect(after.extraOps.isEmpty, "the named-apart note is not renamed back")
+    }
+
     @Test func editingAnActionKeepsItsCaptureDateAndRefreshesModified() throws {
         let original = TestVault.action("Letter", created: -30, modified: -30)
         var edited = original

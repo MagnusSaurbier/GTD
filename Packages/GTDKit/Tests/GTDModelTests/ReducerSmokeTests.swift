@@ -65,11 +65,12 @@ struct ReducerSmokeTests {
         #expect(after == 0)
     }
 
-    @Test func titleCollisionIsReported() {
+    /// #95 — a taken name is named apart, never overwritten.
+    @Test func aTakenTitleIsNamedApart() throws {
         let existing = Fixtures.actions[0].title
-        #expect(throws: GTDError.titleCollision(existing)) {
-            try Reducer.reduce(snapshot, .createAction(ActionDraft(title: existing)), env: env)
-        }
+        let result = try Reducer.reduce(snapshot, .createAction(ActionDraft(title: existing, status: .someday, what: "Something")), env: env)
+        #expect(result.snapshot.actions.count == snapshot.actions.count + 1)
+        #expect(result.snapshot.action(Fixtures.actions[0].id) == snapshot.action(Fixtures.actions[0].id))
     }
 
     @Test func archiveMovesOldDoneActionsOutOfTheSnapshot() throws {

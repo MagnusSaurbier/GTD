@@ -418,14 +418,16 @@ struct ReducerListTests {
             == nil)
     }
 
-    @Test func promotingOntoAnExistingActionTitleIsRefused() {
+    /// #95 — a taken action name is named apart, not refused.
+    @Test func promotingOntoAnExistingActionTitleNamesItApart() throws {
         let item = TestVault.listItem("Read", "Sapiens")
         let clash = TestVault.action("Read Sapiens", .next)
-        #expect(TestVault.error(
+        let result = try Reducer.reduce(
             vault(items: [item], actions: [clash]),
             .promoteListItem(item.id, ActionDraft(
-                title: "Read Sapiens", status: .someday, what: "Read it")))
-            == .titleCollision("Read Sapiens"))
+                title: "Read Sapiens", status: .someday, what: "Read it")),
+            env: TestVault.env())
+        #expect(result.snapshot.actions.map(\.title).sorted() == ["Read Sapiens", "Read Sapiens_2"])
     }
 
     @Test func promotingAnUnknownItemIsRefused() {
