@@ -295,6 +295,39 @@ struct ActionEditModelTests {
         #expect(model.snapshot.action(editor.id)?.status == .someday)
     }
 
+    // MARK: - Begin action (#87)
+
+    /// "Begin action" is offered for every open action that is not in progress yet, and
+    /// writes `in-progress`.
+    @Test func beginStartsANextAction() async {
+        let (model, editor) = make(fixture(status: .next))
+        #expect(editor.canBegin)
+        editor.begin()
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(editor.id)?.status == .inProgress)
+        #expect(!editor.canBegin)
+    }
+
+    @Test func beginIsOfferedFromAgentAndReviewToo() {
+        #expect(make(fixture(status: .agent)).1.canBegin)
+        #expect(make(fixture(status: .review)).1.canBegin)
+        #expect(make(fixture(status: .someday)).1.canBegin)
+        #expect(!make(fixture(status: .inProgress)).1.canBegin)
+    }
+
+    /// Beginning a Someday note enters Next's tier: a gap is refused and named, nothing moves.
+    @Test func beginningAnIncompleteSomedayNoteIsRefusedWithItsGaps() async {
+        let (model, editor) = make(fixture(status: .someday))
+        editor.begin()
+        await editor.waitForPendingSave()
+        guard case .missingFields(let fields)? = editor.lastError as? GTDError else {
+            Issue.record("expected missingFields, got \(String(describing: editor.lastError))")
+            return
+        }
+        #expect(fields == [.timeEstimate])
+        #expect(model.snapshot.action(editor.id)?.status == .someday)
+    }
+
     /// W1 — waiting is only ever written together with who and a follow-up date.
     @Test func waitingIsWrittenWithWhoAndFollowUp() async throws {
         let (model, editor) = make(fixture())

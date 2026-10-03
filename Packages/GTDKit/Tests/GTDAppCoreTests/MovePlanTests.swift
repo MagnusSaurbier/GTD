@@ -109,4 +109,48 @@ struct MovePlanTests {
     @Test func droppingOnTheOwnProjectDoesNothing() {
         #expect(plan(action(.next, project: project), .project(project)) == .alreadyThere)
     }
+
+    // MARK: In progress board (#87)
+
+    /// "Begin action" on a Next item starts it at once: it already holds its slot and fields.
+    @Test func aNextItemBeginsAtOnce() {
+        let item = action(.next)
+        #expect(plan(item, .inProgress) == .perform(.setStatus(item.id, .inProgress, waiting: nil)))
+    }
+
+    /// From outside Next, beginning enters Next's tier: the card asks what Next asks.
+    @Test func anIncompleteSomedayItemOpensTheCardForInProgress() {
+        let item = action(.someday, what: "x")
+        #expect(plan(item, .inProgress)
+            == .card(status: .inProgress, missing: [.why, .context, .timeEstimate]))
+    }
+
+    /// Agent and Review hold no cap slot and ask for nothing — handing over is never blocked.
+    @Test func agentAndReviewNeedNothing() {
+        let item = action(.someday)
+        #expect(plan(item, .agent) == .perform(.setStatus(item.id, .agent, waiting: nil)))
+        #expect(plan(item, .review) == .perform(.setStatus(item.id, .review, waiting: nil)))
+        let started = action(.inProgress)
+        #expect(plan(started, .review) == .perform(.setStatus(started.id, .review, waiting: nil)))
+    }
+
+    /// Back from Review to In progress re-enters Next: the same question as any promotion.
+    @Test func reviewBackToInProgressAsksWhatNextAsks() {
+        let item = action(.review, why: "w", what: "x", contexts: ["mac"], time: 10)
+        #expect(plan(item, .inProgress) == .perform(.setStatus(item.id, .inProgress, waiting: nil)))
+        #expect(plan(action(.review), .inProgress)
+            == .card(status: .inProgress, missing: [.why, .what, .context, .timeEstimate]))
+    }
+
+    @Test func droppingOnTheOwnColumnDoesNothing() {
+        #expect(plan(action(.inProgress), .inProgress) == .alreadyThere)
+        #expect(plan(action(.agent), .agent) == .alreadyThere)
+        #expect(plan(action(.review), .review) == .alreadyThere)
+    }
+
+    /// An agent's card dropped on Next is a promotion (Agent holds no slot), not "already there".
+    @Test func anAgentItemDroppedOnNextIsPromoted() {
+        let item = action(.agent, why: "w", what: "x", contexts: ["mac"], time: 10)
+        #expect(plan(item, .next) == .perform(.setStatus(item.id, .next, waiting: nil)))
+    }
 }

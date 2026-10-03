@@ -27,6 +27,9 @@ struct ReducerActionTests {
         CapCase(occupied: 15, cap: 15, status: .someday, refused: false),
         CapCase(occupied: 15, cap: 15, status: .done, refused: false),
         CapCase(occupied: 15, cap: 15, status: .waiting, refused: false),
+        // #87 — handed to an agent / waiting for review: no cap slot.
+        CapCase(occupied: 15, cap: 15, status: .agent, refused: false),
+        CapCase(occupied: 15, cap: 15, status: .review, refused: false),
         CapCase(occupied: 0, cap: 1, status: .next, refused: false),
         CapCase(occupied: 1, cap: 1, status: .next, refused: true),
     ])
@@ -47,6 +50,34 @@ struct ReducerActionTests {
         let id = TestVault.actionID("Next 0")
         let result = try Reducer.reduce(vault, .setStatus(id, .someday, waiting: nil), env: env)
         #expect(Rules.countsTowardCap(result.snapshot, today: env.today) == 16)
+    }
+
+    /// #87 — a Next item handed to an agent frees its slot; taking it back (review → in
+    /// progress) needs one again, and at the cap that is refused like any promotion.
+    @Test func handingToAnAgentFreesTheSlotAndTakingItBackNeedsOne() throws {
+        var vault = TestVault.nextOccupied(15)
+        // A complete note, so the refusal at the end is about the cap and nothing else (R-3).
+        vault.actions[0] = TestVault.action(
+            "Next 0", .next, contexts: ["mac"], timeEstimate: 10, why: "It matters.", what: "Do it.")
+        let id = TestVault.actionID("Next 0")
+        let handed = try Reducer.reduce(vault, .setStatus(id, .agent, waiting: nil), env: env)
+        #expect(Rules.countsTowardCap(handed.snapshot, today: env.today) == 14)
+        let review = try Reducer.reduce(handed.snapshot, .setStatus(id, .review, waiting: nil), env: env)
+        #expect(review.snapshot.action(id)?.status == .review)
+        let filled = try Reducer.reduce(review.snapshot, .createAction(ActionDraft(
+            title: "Fifteenth", status: .next, contexts: ["mac"], timeEstimate: 10,
+            why: "The last slot.", what: "Do it.")), env: env)
+        #expect(TestVault.error(filled.snapshot, .setStatus(id, .inProgress, waiting: nil), env: env)
+            == .nextCapReached(cap: 15))
+    }
+
+    /// #87 — handing a bare Someday note to an agent asks for nothing (like demoting).
+    @Test func aBareSomedayNoteCanBeHandedToAnAgent() throws {
+        var vault = TestVault.nextOccupied(0)
+        vault.actions.append(TestVault.action("Idee", .someday))
+        let id = TestVault.actionID("Idee")
+        let result = try Reducer.reduce(vault, .setStatus(id, .agent, waiting: nil), env: env)
+        #expect(result.snapshot.action(id)?.status == .agent)
     }
 
     @Test func promotingFromSomedayAtTheCapIsRefused() {

@@ -14,14 +14,29 @@ public enum ActionStatus: String, Sendable, CaseIterable, Codable, Hashable {
     case next
     case someday
     case inProgress = "in-progress"
+    /// #87 — handed to an agent (an AI coding agent works on it). On the In progress board,
+    /// never in Next, and it does **not** hold a cap slot: the person is not doing it.
+    case agent
+    /// #87 — the work waits for the person's input or review (an agent asked for it). On the
+    /// In progress board, not in Next, and no cap slot until the person takes it back.
+    case review
     case waiting
     case done
     case legacyTrashed = "trash"
 
     /// The statuses a user can choose (A3). `legacyTrashed` is read-only and stays out (R-1).
-    public static var allCases: [ActionStatus] { [.next, .someday, .inProgress, .waiting, .done] }
+    public static var allCases: [ActionStatus] {
+        [.next, .someday, .inProgress, .agent, .review, .waiting, .done]
+    }
 
-    /// `next` and `in-progress` occupy a slot under the hard cap (ARCHITECTURE §6).
+    /// #87 — the statuses of the In progress board, one column each, in column order.
+    public static let boardStatuses: [ActionStatus] = [.inProgress, .agent, .review]
+
+    /// True for the statuses the In progress board shows.
+    public var isOnBoard: Bool { ActionStatus.boardStatuses.contains(self) }
+
+    /// `next` and `in-progress` occupy a slot under the hard cap (ARCHITECTURE §6); `agent` and
+    /// `review` do not (#87).
     /// A *hidden* (future-deferred) one does not — see `Rules.countsTowardCap(_:today:)` (R-2).
     public var countsTowardCap: Bool { self == .next || self == .inProgress }
 

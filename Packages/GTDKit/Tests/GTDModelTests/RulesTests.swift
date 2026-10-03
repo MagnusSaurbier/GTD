@@ -84,6 +84,7 @@ struct RulesTests {
         #expect(counts.waiting == 3)
         #expect(counts.deferred == 2)
         #expect(counts.projects == 4)
+        #expect(counts.inProgress == 4)   // 2 in progress, 1 agent, 1 review (#87)
         // E3 — every count matches the list its row opens.
         #expect(counts.next == Rules.nextList(snapshot, today: today).count)
         #expect(counts.waiting == Rules.waitingList(snapshot, today: today).count)
@@ -91,6 +92,57 @@ struct RulesTests {
         #expect(counts.deferred == Rules.deferredList(snapshot, today: today).count)
         #expect(counts.someday + counts.deferred
                 == snapshot.actions.count { $0.status == .someday })
+    }
+
+    // MARK: In progress board (#87)
+
+    @Test func boardColumnsHoldTheirStatusOnly() {
+        let inProgress = Rules.boardColumn(snapshot, status: .inProgress, today: today)
+        #expect(inProgress.count == 2)
+        #expect(inProgress.allSatisfy { $0.status == .inProgress })
+        #expect(Rules.boardColumn(snapshot, status: .agent, today: today).map(\.title)
+            == ["Draft the thesis LaTeX template"])
+        #expect(Rules.boardColumn(snapshot, status: .review, today: today).map(\.title)
+            == ["Check the DAAD budget table"])
+    }
+
+    /// Agent and Review are not Next: not in the list, no cap slot (the sample sits at cap − 1).
+    @Test func agentAndReviewStayOutOfNextAndTheCap() {
+        #expect(Rules.nextList(snapshot, today: today).allSatisfy { !($0.status == .agent || $0.status == .review) })
+        #expect(Rules.countsTowardCap(snapshot, today: today) == snapshot.config.nextCap - 1)
+    }
+
+    @Test func boardFiltersByContextAndProject() {
+        let errands = Rules.boardColumn(snapshot, status: .inProgress, contexts: ["errands"], today: today)
+        #expect(errands.map(\.title) == ["Fix the bike light"])
+        let daad = Fixtures.daadProject.id
+        let daadOnly = ActionStatus.boardStatuses.flatMap {
+            Rules.boardColumn(snapshot, status: $0, project: daad, today: today)
+        }
+        #expect(daadOnly.map(\.title) == ["Write DAAD motivation letter", "Check the DAAD budget table"])
+        // Context and project together narrow further; a context nobody carries empties it.
+        #expect(Rules.boardColumn(
+            snapshot, status: .inProgress, contexts: ["errands"], project: daad, today: today).isEmpty)
+    }
+
+    /// The board orders like Next: nearest due first, then the oldest capture.
+    @Test func boardColumnOrderIsTotal() {
+        let column = Rules.boardColumn(snapshot, status: .inProgress, today: today)
+        #expect(column.map(\.title) == ["Write DAAD motivation letter", "Fix the bike light"])
+    }
+
+    /// A deferred card is hidden from the board until its day, as from every list (D1).
+    @Test func aDeferredCardIsHiddenFromTheBoard() throws {
+        var s = snapshot
+        let index = try #require(s.actions.firstIndex { $0.status == .agent })
+        s.actions[index].deferDate = today.adding(days: 3)
+        #expect(Rules.boardColumn(s, status: .agent, today: today).isEmpty)
+        #expect(Rules.sidebarCounts(s, today: today).inProgress == 3)
+    }
+
+    @Test func boardProjectsAreTheOnesTheCardsName() {
+        let projects = Rules.boardProjects(snapshot, today: today)
+        #expect(Set(projects) == [Fixtures.daadProject.id, Fixtures.thesisProject.id])
     }
 
     @Test func capSignalOnlyAppearsAtTheCap() {

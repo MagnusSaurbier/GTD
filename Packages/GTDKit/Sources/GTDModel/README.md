@@ -110,7 +110,7 @@ Compiles and tests on Linux.
 ## Gotchas
 
 - `countsTowardCap(_:today:)` counts the `next` + `in-progress` actions that are **visible
-  today**: a hidden (future-deferred) one is not a commitment for today (R-2). It therefore needs
+  today** (`agent` and `review`, the In progress board's other columns, never count — #87): a hidden (future-deferred) one is not a commitment for today (R-2). It therefore needs
   a `Day`, as do `isAtCap` and `capSignal`. `nextList` is never truncated to the cap — an
   over-cap vault must stay repairable.
 - `Rules.isUndoable` is the single definition of N6: both backends call it, and the labels live
