@@ -212,6 +212,9 @@ public final class ReviewSession {
             guard await send(.renameInboxItem(item.id, title: title)) else { return }
         }
         guard await send(.fileInbox(id, decision)) else { return }
+        // #94 — filed: the card's kept draft and its follow-up sheet's are done with.
+        model.inputDrafts.clear(InputDraftKey.reviewDeferred(item.id))
+        model.inputDrafts.clear(InputDraftKey.waiting(InputDraftKey.reviewDeferred(item.id)))
         let fix = systemFix.trimmingCharacters(in: .whitespacesAndNewlines)
         mutate { state in
             if !fix.isEmpty {
@@ -222,6 +225,28 @@ public final class ReviewSession {
             state.changes.deferredHandled += 1
         }
     }
+
+    // MARK: - Sweep: deferred card drafts (#94)
+
+    /// The card for `item` as it was left the last time — `Esc`, leaving the review, ⌘Q, a
+    /// crash — or `nil` when nothing was typed on it.
+    public func keptDeferredCard(for item: InboxItem) -> DeferredCardDraft? {
+        model.inputDrafts.value(DeferredCardDraft.self, for: InputDraftKey.reviewDeferred(item.id))
+    }
+
+    /// Keeps what the card for `item` holds; a card nobody changed keeps nothing. The card has
+    /// no `Cancel`, so only filing clears it (`fileDeferred`).
+    public func keepDeferredCard(_ card: DeferredCardDraft, for item: InboxItem) {
+        let key = InputDraftKey.reviewDeferred(item.id)
+        model.inputDrafts.keep(card == DeferredCardDraft(opening: item) ? nil : card, for: key)
+    }
+
+    /// Where the card's follow-up sheet keeps its `who` and date.
+    public func deferredWaitingDraftKey(for item: InboxItem) -> String {
+        InputDraftKey.waiting(InputDraftKey.reviewDeferred(item.id))
+    }
+
+    public var inputDrafts: InputDrafts { model.inputDrafts }
 
     // MARK: - Sweep: waiting (§10.1.3)
 

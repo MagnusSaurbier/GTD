@@ -108,6 +108,14 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
   `Defer to review` writes the same before deferring. A list filing clears stored chips first
   (`persistEdits(clearingProgress:)`). The Knowledge sheet edits `draft.notes` itself, so
   `Cancel` there keeps them.
+- **Sub-sheets and "Make action" keep a draft (#94).** The follow-up sheet (`waitingDraftKey`),
+  `Defer to review` (`deferReasonDraftKey`), `New list…` (`InputDraftKey.newListInPicker`, also
+  from a drop) and Knowledge's `New folder` keep their text in `InputDrafts` and reopen with it;
+  their `Cancel` clears it, a successful filing / list creation clears it in the session or
+  `MoveCoordinator`. `MakeActionModel` over a list item, a project step (keyed by its text) or a
+  "What's next?" line keeps its whole `InboxDraft` (`draftKey`; `InboxDraft` is `Codable`) on
+  every change and restores it in `init`; filing clears it. Over an existing action there is no
+  draft — #85's `keptEdits` writes the action.
 - Nothing is pre-filled and no suggestion is ever persisted: the last-used knowledge folder and
   the +7 d follow-up are **suggested** until the user taps them (§1, STYLEGUIDE §3.1). The
   suggestion travels as its own field of `KnowledgePickerModel`, never as a chosen folder.

@@ -40,6 +40,12 @@ Linux-compilable models (no SwiftUI — this is where the logic worth testing li
   project or this one, not yet a step here; title prefix > word prefix > inside, case- and
   diacritic-blind, at most `limit`. `↓`/`↑` highlight a row, Return or a tap links it.
 - `WhatsNextModel` — one-tap step promotion, free-text action, "project is done".
+- `ProjectDrafts.swift` (#94) — `NewProjectDraft` and `ConvertToProjectDraft`, what the
+  new-project and "Turn into project" sheets keep in `InputDrafts` (neither has a `Cancel`; `Done`
+  clears once the project exists). "What's next?"'s line (`InputDraftKey.whatsNext`) and the
+  detail's `New step` (`InputDraftKey.newStep`, per project — the Mac detail view is reused across
+  projects) keep theirs through `keepsDraft`; a refused step add keeps the text and reaches the
+  alert. A step row being edited commits on disappear too.
 - `ConvertToProjectModel` — seeds a `ProjectDraft` from an action's checkboxes, converts, promotes
   the pre-selected first step.
 - `StepReorder` — pure index maths for drag + `⌥↑↓` reorder (`move(from:to:)`,

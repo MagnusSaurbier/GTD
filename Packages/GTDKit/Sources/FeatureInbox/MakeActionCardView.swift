@@ -281,7 +281,9 @@ public struct MakeActionCardView: View {
     @ViewBuilder private func sheetContent(_ sheet: InboxSession.Sheet) -> some View {
         switch sheet {
         case .waiting:
-            WaitingInfoSheet(today: model.today) { info in
+            WaitingInfoSheet(
+                today: model.today, drafts: model.inputDrafts, draftKey: model.waitingDraftKey
+            ) { info in
                 Task { await model.confirmWaiting(info) }
             }
         case .project:
