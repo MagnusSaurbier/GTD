@@ -769,8 +769,9 @@ public enum NoteCodec {
     /// Frontmatter key order used when the codec has to *insert* a key (REQUIREMENTS §5).
     /// Existing keys never move.
     public enum Keys {
+        /// `created` first, as every capture has it; the card's keys (#85) after it.
         public static let inbox = [
-            "contexts", "timeEstimate", "project", "defer", "due", "created", "reviewReason",
+            "created", "reviewReason", "contexts", "timeEstimate", "project", "defer", "due",
         ]
         public static let action = [
             "status", "contexts", "timeEstimate", "project", "defer", "due",

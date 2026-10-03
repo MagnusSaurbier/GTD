@@ -17,6 +17,23 @@ struct UnsavedTextTests {
 
     // MARK: Restore
 
+    /// #85 — a half-processed inbox card restores its body; a typed title alone is copy-only.
+    @Test func anInboxCardRestoresItsBody() throws {
+        let item = try #require(Fixtures.sampleSnapshot.inbox.first)
+        let snapshot = Fixtures.sampleSnapshot
+        #expect(entry(.inbox, path: item.id.path, text: "# Why?\nx").restoreCommand(in: snapshot)
+                == .editInboxBody(item.id, "# Why?\nx"))
+        #expect(entry(.inbox, path: item.id.path, title: "new", text: nil).restoreCommand(in: snapshot) == nil)
+        #expect(entry(.inbox, path: "Inbox/gone.md").restoreCommand(in: snapshot) == nil)
+    }
+
+    /// #85 — a one-field sheet left without its buttons still sends what was typed.
+    @Test func aDismissedSheetKeepsTypedTextUnlessSettled() {
+        #expect(DismissedInput.keeps("buy milk", settled: false))
+        #expect(!DismissedInput.keeps("buy milk", settled: true), "Cancel or the main button settled it")
+        #expect(!DismissedInput.keeps("  \n", settled: false), "nothing typed")
+    }
+
     /// Only the unsaved fields change; the rest of the action stays as the vault has it.
     @Test func anActionGetsItsTypedBodyAndKeepsTheRest() throws {
         let action = try #require(Fixtures.sampleSnapshot.actions.first)
