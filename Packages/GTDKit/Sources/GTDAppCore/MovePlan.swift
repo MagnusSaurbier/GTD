@@ -18,6 +18,12 @@ public enum MoveDestination: Hashable, Sendable {
     case lists
     /// One list by name: the action becomes an item of it (`moveActionToList`).
     case list(String)
+    /// #87 — the In progress sidebar row / tab, and the board's first column.
+    case inProgress
+    /// #87 — the board's Agent column.
+    case agent
+    /// #87 — the board's Review column.
+    case review
 }
 
 /// What a drop (or a `Move to…` choice) has to do, decided without SwiftUI so the rules are
@@ -72,6 +78,17 @@ public enum MovePlan: Equatable, Sendable {
             return .pickList
         case let .list(name):
             return .perform(.moveActionToList(action.id, list: name))
+        case .inProgress:
+            // "Begin action" (#87): from Next it is the A3 start; from anywhere else it enters
+            // Next's tier, so the card asks what Next asks and the reducer checks the cap.
+            guard action.status != .inProgress else { return .alreadyThere }
+            return move(action, to: .inProgress)
+        case .agent:
+            guard action.status != .agent else { return .alreadyThere }
+            return move(action, to: .agent)
+        case .review:
+            guard action.status != .review else { return .alreadyThere }
+            return move(action, to: .review)
         }
     }
 

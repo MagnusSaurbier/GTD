@@ -127,6 +127,18 @@ private struct ActionDetailEditor: View {
                     errorBanner(editor)
                 }
 
+                // #87 — the easily visible way to start: status → in progress.
+                if editor.canBegin {
+                    Button {
+                        editor.begin()
+                    } label: {
+                        Label(Copy.beginAction, systemImage: Symbols.beginAction)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(Color.gtdAccent)
+                }
+
                 labelled(OverviewCopy.status) {
                     FlowLayout {
                         ForEach(statusChoices, id: \.self) { choice in
@@ -326,7 +338,7 @@ private struct ActionDetailEditor: View {
 
     /// `waiting` is reached through `WaitingInfoSheet` (W1), never by tapping a chip.
     private var statusChoices: [ActionStatus] {
-        [.next, .inProgress, .someday, .waiting]
+        [.next, .inProgress, .agent, .review, .someday, .waiting]
     }
 
     /// Names already used elsewhere, offered as dashed suggestions in the waiting sheet.

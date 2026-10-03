@@ -8,6 +8,8 @@ import DesignSystem
 public enum SidebarItem: Hashable, Sendable, CaseIterable {
     case inbox
     case next
+    /// #87 — the In progress board: in progress | agent | review.
+    case inProgress
     case someday
     case waiting
     case lists
@@ -16,10 +18,10 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     case review
     case routines
 
-    /// The counted sections, in the order of STYLEGUIDE §4.1 — they form the first sidebar group
-    /// and own `⌘1…⌘7`.
+    /// The counted sections, in the order of STYLEGUIDE §4.1 (In progress right under Next,
+    /// #87) — they form the first sidebar group and own `⌘1…⌘n`.
     public static let counted: [SidebarItem] = [
-        .inbox, .next, .someday, .waiting, .lists, .projects, .deferred,
+        .inbox, .next, .inProgress, .someday, .waiting, .lists, .projects, .deferred,
     ]
 
     /// The second sidebar group: the two guided flows.
@@ -29,6 +31,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: Copy.inbox
         case .next: Copy.next
+        case .inProgress: Copy.inProgress
         case .someday: Copy.someday
         case .waiting: Copy.waiting
         case .lists: Copy.lists
@@ -43,6 +46,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: Symbols.inbox
         case .next: Symbols.next
+        case .inProgress: Symbols.inProgress
         case .someday: Symbols.someday
         case .waiting: Symbols.waiting
         case .lists: Symbols.listBullet
@@ -53,7 +57,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         }
     }
 
-    /// `⌘1…⌘7` — the counted sections only (STYLEGUIDE §4.5).
+    /// `⌘1…⌘n` — the counted sections only (STYLEGUIDE §4.5).
     public var shortcutNumber: Int? {
         SidebarItem.counted.firstIndex(of: self).map { $0 + 1 }
     }
@@ -79,6 +83,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     public var moveDestination: MoveDestination? {
         switch self {
         case .next: .next
+        case .inProgress: .inProgress
         case .someday: .someday
         case .waiting: .waiting
         case .deferred: .deferred
@@ -112,6 +117,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     public var emptyDetailBody: String? {
         switch self {
         case .next, .someday, .waiting, .deferred: OverviewMacCopy.pickAnAction
+        case .inProgress: OverviewMacCopy.pickAnAction
         case .lists: OverviewMacCopy.pickAnItem
         case .projects: OverviewMacCopy.pickAProject
         case .inbox: OverviewMacCopy.inboxIsProcessed
@@ -124,6 +130,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: counts.inbox
         case .next: counts.next
+        case .inProgress: counts.inProgress
         case .someday: counts.someday
         case .waiting: counts.waiting
         case .lists: counts.lists

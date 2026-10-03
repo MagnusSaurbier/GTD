@@ -181,6 +181,20 @@ public final class ActionEditModel: AppModel.HeldEdits {
     public func setDue(_ value: Day?) { edit(.due, immediate: true) { $0.due = value } }
 
     /// Status changes other than `waiting` (W1 needs who + follow-up, see `setWaiting`).
+    /// #87 — the detail's "Begin action" button is offered for every open action that is not
+    /// already in progress (Next, Someday, Waiting, Agent, Review alike).
+    public var canBegin: Bool {
+        guard let draft, !isClosed else { return false }
+        return draft.status != .inProgress
+    }
+
+    /// #87 — "Begin action": status → `in-progress`. The reducer asks what entering Next asks
+    /// (R-3) and checks the cap; a refusal lands in `lastError` like any status chip's.
+    public func begin() {
+        guard canBegin else { return }
+        setStatus(.inProgress)
+    }
+
     public func setStatus(_ value: ActionStatus) {
         edit(.status, immediate: true) { action in
             action.status = value

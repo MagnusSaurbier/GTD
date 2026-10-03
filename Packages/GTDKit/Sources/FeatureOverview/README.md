@@ -33,7 +33,12 @@ action editor no other feature target owns.
   (one section per list) and the detail column is `FeatureLists.ListItemEditorView` for
   `OverviewDetail.listItem(_:)`, wired the same way `.action`/`.project` already are (`onOpen` →
   `navigation.open(listItem:)`, `OverviewNavigation.apply` follows a rename through
-  `NavigationRemap`). `⌘1…7` now covers all seven counted sections in STYLEGUIDE §4.1 order.
+  `NavigationRemap`). `⌘1…n` covers every counted section in STYLEGUIDE §4.1 order.
+- `SidebarItem.inProgress` (#87) — the In progress board (`FeatureNext.InProgressBoardView`) right
+  under Next; a drop on it begins the action (`MoveDestination.inProgress`), and the list column
+  starts wider for it (`OverviewLayout.listIdealWidth(for:)`). `ActionDetailView` shows a
+  prominent **Begin action** button (`ActionEditModel.canBegin`/`begin()`, → `in-progress`) above
+  the status chips, which now include Agent and Review.
 - Drag-to-category (E3, 2026-09-24): `OverviewView` applies `FeatureInbox.moveNoteHost()` to
   the window, so every row of Next / Someday / Waiting / Deferred is draggable and the sidebar's
   Next · Someday · Waiting · Lists · Projects · Deferred rows (`SidebarItem.moveDestination`) and
@@ -95,7 +100,7 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureOverviewTests` — 59 tests.
+`cd Packages/GTDKit && swift test --filter FeatureOverviewTests` — 74 tests.
 The SwiftUI files (`OverviewView`, `ActionListView`, `ActionDetailView`, `OverviewCommands`,
 `OverviewCalendarStrip`) are
 compiled only on a Mac — see the task's Result for what to check there.

@@ -65,7 +65,7 @@ public final class OverviewNavigation {
     /// Selecting a section from the sidebar (or the menu bar).
     public func select(_ item: SidebarItem) { selection = item }
 
-    /// `⌘1…⌘7`. Returns false when no section carries that number.
+    /// `⌘1…⌘n`. Returns false when no section carries that number.
     @discardableResult
     public func select(shortcutNumber: Int) -> Bool {
         guard let item = SidebarItem(shortcutNumber: shortcutNumber) else { return false }
