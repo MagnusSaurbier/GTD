@@ -44,7 +44,8 @@ Linux-compilable models (no SwiftUI — this is where the logic worth testing li
 - `SomedaySuggestions` (#84) — what What's next? lists under its New action field: the project's
   Someday actions, all of them while the field is empty, then only those whose title holds every
   typed word (any order; `What?`-only matches last). `↓`/`↑` + Return or a tap opens the action
-  card over that note, so `→` moves it into Next instead of writing a new action.
+  card over that note, so `→` moves it into Next instead of writing a new action. The list's
+  height is fixed (`SheetMetrics.inlineRowsMaxHeight`) so the sheet does not jump while filtering.
 - `ConvertToProjectModel` — seeds a `ProjectDraft` from an action's checkboxes, converts, promotes
   the pre-selected first step.
 - `StepReorder` — pure index maths for drag + `⌥↑↓` reorder (`move(from:to:)`,
@@ -95,7 +96,7 @@ above is plain Foundation + `GTDModel`/`GTDAppCore` and is covered by `swift tes
 (the picker chip's content, reorder maths, grouping/filtering, step CRUD, status-change demotion, the area change of R-7 and
 its refusal, the area picker's own chip/refusal wording (`AreaPickerContentTests`, T11), and the
 cap-reached → Someday-fallback path on every promotion entry point).
-- #76 (0.44): `ProjectDetailView` shows steps and `looseActions` (active actions no step links)
+- #76 (0.44): `ProjectDetailView` shows steps and `looseActions` (open actions no step links — since #84 every open status, Someday/Waiting/deferred included, after the Next ones)
   in one `Steps` section. `ProjectDetailModel.standing(of:)` picks each row's right-hand badge
   (`StepStandingBadge`): `↗ Promote` → `PromoteStepSheet`, `→ <status>` → `ChangeStatusSheet`
   (`MakeActionModel(changingStatusOf:)`), `→ Project` for a step linked to a project note

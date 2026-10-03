@@ -871,15 +871,21 @@ public struct WhatsNextSheet: View {
                     .disabled(freeText.trimmingCharacters(in: .whitespaces).isEmpty)
             }
 
-            if !someday.isEmpty {
+            // The list keeps the height of a full, scrolling one whatever the filter leaves, so
+            // the sheet does not jump while the user types.
+            if next.hasSomedayPile {
                 Text(Copy.someday).font(Typo.meta).foregroundStyle(Color.textSecondary)
-                OverflowScroll {
-                    ForEach(Array(someday.enumerated()), id: \.element.id) { index, action in
-                        SomedaySuggestionRow(action: action, isHighlighted: index == highlightedSomeday) {
-                            open(action)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        ForEach(Array(someday.enumerated()), id: \.element.id) { index, action in
+                            SomedaySuggestionRow(action: action, isHighlighted: index == highlightedSomeday) {
+                                open(action)
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(height: SheetMetrics.inlineRowsMaxHeight)
             }
 
             if next.isStalled {
@@ -895,6 +901,9 @@ public struct WhatsNextSheet: View {
             }
         }
         .padding(Spacing.cardPadding)
+        #if os(macOS)
+        .frame(width: next.hasSomedayPile ? SheetMetrics.idealWidth : nil)
+        #endif
         .task { if whatsNextModel == nil { whatsNextModel = next } }
     }
 

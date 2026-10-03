@@ -44,6 +44,10 @@ public final class WhatsNextModel {
         SomedaySuggestions.matches(query, project: projectID, in: model.snapshot)
     }
 
+    /// Whether the project has any Someday action at all — the sheet keeps the list's room
+    /// while a typed filter matches none of them.
+    public var hasSomedayPile: Bool { !somedaySuggestions(for: "").isEmpty }
+
     /// True once this project has no open action left — "nothing yet" leaves it this way,
     /// and the sheet says so (STYLEGUIDE `stalledProjectBody`).
     public var isStalled: Bool {
