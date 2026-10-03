@@ -28,7 +28,7 @@ import Foundation
 /// | C3/R-4 an inbox note's title is its file name; renaming it is a move; filing keeps it | `renameInboxItem`, `fileInbox` |
 /// | R-4 a body that is only the Why/What template skeleton is carried over as empty | `fileInbox`, `CaptureText.isEmptyBody` |
 /// | I4a/R-8 the project chip, including the project it creates | `makeAction`, `resolveProject` |
-/// | R-2 a Next item may be deferred; it just does not occupy a slot while hidden | `Rules` |
+/// | R-2/#86 deferring is waiting: a `defer` date becomes a who-less follow-up date | `normalize`, `Rules.isBackInNext` |
 /// | P3 only active projects put actions into Next; leaving `active` demotes | `normalize`, `updateProject` |
 /// | P4/P5 completion logs, ticks the step and asks "what's next?" | `settle` |
 /// | R5 one routine-log entry per step per day per device | `logRoutineStep` |
@@ -404,6 +404,9 @@ public enum Reducer {
 
         var updated = previous
         updated.status = status
+        // #86 — picking a tier is the answer to "when": a legacy defer date does not turn the
+        // choice into waiting behind the user's back.
+        if status != .waiting { updated.deferDate = nil }
         try normalize(&updated, previous: previous, waiting: waiting, in: s, env: env)
 
         var next = s
@@ -1193,6 +1196,8 @@ public enum Reducer {
 
     /// Everything that must be true of an action after any command touched it.
     ///
+    /// - #86 deferring is waiting: an open action never keeps a `defer` date; it becomes a
+    ///   who-less waiting item following up on that day (`Action.foldingDeferIntoWaiting`).
     /// - W1/D39 `waiting` needs a **follow-up date**; who is optional. Leaving `waiting` clears both.
     /// - I4/D12/R-3 a *new* transition into a tier brings what that tier requires
     ///   (`RequiredField.missing`), and a note already in its tier is never judged again.
@@ -1218,6 +1223,16 @@ public enum Reducer {
         }
 
         if let estimate = action.timeEstimate, estimate <= 0 { action.timeEstimate = nil }
+
+        // #86 — a defer date is a who-less follow-up date. A command that asks for another
+        // tier *and* a defer date (the inbox card's defer chip, "defer" in Next) files the
+        // item as waiting; one that asks for waiting keeps the who and date it brings.
+        var waiting = waiting
+        if action.deferDate != nil, !action.status.isClosed {
+            let wasWaiting = action.status == .waiting
+            action = action.foldingDeferIntoWaiting()
+            if !wasWaiting { waiting = nil }    // the folded who-less date is the info
+        }
 
         if action.status == .waiting {
             // W1/D39 — the date is the commitment; who is optional, and an empty who writes no
@@ -1251,9 +1266,11 @@ public enum Reducer {
         // R-3 — validation before leaving (STYLEGUIDE §3.6). It runs after the rules about the
         // *world* (a project must be active) and before the cap is counted, so a card that is
         // missing a field hears about the field rather than about the cap it never reached.
+        // #86 — a deferral that is back in Next is judged as a Next item: starting it or
+        // filing it into Next again asks for nothing new.
         let missing = RequiredField.missing(
             status: action.status,
-            previous: previous?.status,
+            previous: previous.map { Rules.effectiveStatus($0, today: env.today) },
             why: action.why,
             what: action.what,
             contexts: action.contexts,
@@ -1261,10 +1278,9 @@ public enum Reducer {
             followUpDate: action.followUpDate)
         guard missing.isEmpty else { throw .missingFields(missing) }
 
-        // R-2 — a Next item may carry a future `defer`. It is hidden until its date and does not
-        // occupy a slot while hidden (`Rules.countsTowardCap(_:today:)`); on its date it comes
-        // back into Next with the `back` badge, and an over-cap Next is shown, never repaired
-        // behind the user's back. The 2026-09-19 refusal is gone.
+        // R-2/#86 — a deferral holds no Next slot while it waits (`Rules.countsTowardCap`); on
+        // its date it comes back into Next with the `back` badge, and an over-cap Next is
+        // shown, never repaired behind the user's back.
 
         if action.status.isClosed {
             if action.completedDate == nil { action.completedDate = env.now }

@@ -109,7 +109,9 @@ public final class ActionEditModel: AppModel.HeldEdits {
     public var contexts: [String] { draft?.contexts ?? [] }
     public var timeBucket: TimeBucket? { draft?.timeBucket }
     public var project: NoteID? { draft?.project }
-    public var deferDate: Day? { draft?.deferDate }
+    /// The Defer chip (#86): deferring is waiting with no who, so the chip shows a deferral's
+    /// follow-up date and nothing for any other item.
+    public var deferDate: Day? { draft.flatMap { $0.isWhoLessWaiting ? $0.followUpDate : nil } }
     public var due: Day? { draft?.due }
     public var waiting: WaitingInfo? { draft?.waiting }
 
@@ -177,7 +179,17 @@ public final class ActionEditModel: AppModel.HeldEdits {
     }
 
     public func setProject(_ value: NoteID?) { edit(.project, immediate: true) { $0.project = value } }
-    public func setDeferDate(_ value: Day?) { edit(.deferDate, immediate: true) { $0.deferDate = value } }
+    /// #86 — a date moves the item to Waiting with that follow-up date (a waiting item keeps
+    /// its who); clearing a deferral's date brings it back to Next ("un-defer now"), which the
+    /// reducer may refuse for missing Next fields like any other move into Next.
+    public func setDeferDate(_ value: Day?) {
+        guard let draft else { return }
+        if let value {
+            setWaiting(WaitingInfo(who: draft.status == .waiting ? draft.waitingFor : nil, followUp: value))
+        } else if draft.isWhoLessWaiting {
+            setStatus(.next)
+        }
+    }
     public func setDue(_ value: Day?) { edit(.due, immediate: true) { $0.due = value } }
 
     /// Status changes other than `waiting` (W1 needs who + follow-up, see `setWaiting`).

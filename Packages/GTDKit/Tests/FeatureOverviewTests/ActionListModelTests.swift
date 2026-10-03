@@ -131,9 +131,12 @@ struct ActionListModelTests {
 
     // MARK: - Against the live snapshot
 
-    @Test func listShowsOnlyItsStatusAndHidesDeferredItems() {
+    @Test func listShowsOnlyItsStatusAndNotDeferrals() {
         var snapshot = Fixtures.sampleSnapshot
-        snapshot.actions.append(action("Deferred someday item", deferDate: Fixtures.day(4)))
+        var deferral = action("Deferred someday item")
+        deferral.status = .waiting
+        deferral.followUpDate = Fixtures.day(4)
+        snapshot.actions.append(deferral)
         snapshot.actions.append(action("Plain someday item"))
         let list = ActionListModel(model: makeModel(snapshot), status: .someday)
 

@@ -45,6 +45,12 @@ and then patched the same way.
   `.someday`, `trash` as `ActionStatus.legacyTrashed`. Because the encoder patches only lines
   whose *decoded* value changed, such a file keeps its own word on disk until the status really
   changes. `ActionStatus.acceptedRawValues` is what the error message lists.
+- **A legacy `defer:` reads as waiting** (#86): `decodeAction` folds an open note's defer date
+  into `status: waiting` + that follow-up date with no who (`Action.foldingDeferIntoWaiting`;
+  a waiting note keeps its own who and date). `encode` patches against that folded reading, so
+  an untouched note keeps every byte; once anything changed it also writes the folded lines for
+  real against `decodeStoredAction` (the file as written): `status: waiting`, `followUpDate:`,
+  and no `defer:`. Closed notes keep their `defer:` as written.
 - `CheckboxList.parseLine` accepts exactly what `GTDModel.Checkbox.scan` accepts (`-`/`*`, a
   space, `[ ]`/`[x]`/`[X]`) — the reducer indexes checkboxes with the model's scanner.
 - Refused rather than guessed (each throws `.unreadable` with path + reason): unknown or missing

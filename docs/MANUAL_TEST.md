@@ -273,9 +273,10 @@ Unplug the mouse for this one.
 
 ### 3.1 Someday, everywhere (A3)
 
-- [ ] The Mac sidebar reads **Inbox · Next · Someday · Waiting · Lists · Projects · Deferred**,
-      then Review and Routines, with live counts. There is **no Backlog and no Maybe row**.
-- [ ] `⌘1…⌘7` move through those seven sections in that order.
+- [ ] The Mac sidebar reads **Inbox · Next · Someday · Waiting · Lists · Projects**,
+      then Review and Routines, with live counts. There is **no Backlog, no Maybe and no
+      Deferred row** (#86: deferrals are in Waiting).
+- [ ] `⌘1…⌘6` move through those six sections in that order.
 - [ ] The word "Backlog" and the word "Maybe" appear **nowhere** in the app.
 - [ ] The Someday list's empty state names Someday, not Backlog.
 - [ ] Leading swipe on a Next row offers `Someday`; `⌘⇧N` / `⌘⇧S` move the selected action to
@@ -283,13 +284,19 @@ Unplug the mouse for this one.
 - [ ] `⌘⇧N` on an action missing required fields: the **shell's alert** names them
       (`Still missing: Why?, Context, Time`). That is the known v1 behaviour, not a bug.
 
-### 3.2 R-2 — a deferred Next item coming back into a full Next
+### 3.2 R-2/#86 — a deferral coming back into a full Next
 
-- [ ] Give a Next item a `defer` date in the future. It disappears from Next **and the cap count
-      drops by one** (a hidden item holds no slot).
-- [ ] Fill Next back up to 15. Now set that item's defer date to today (or wait for it): it
-      returns to Next with a `back` badge, the cap signal reads `16/15`, and **nothing has been
-      demoted automatically**.
+- [ ] Right-click a Next row → `Defer`, pick a future date. It leaves Next, **the cap count drops
+      by one**, and it is listed in **Waiting** with that follow-up date and no who.
+- [ ] In the inbox, open a card, set the `+ defer` chip and file it to Next: it lands in
+      **Waiting** (follow-up = the defer date, no who), not in Next.
+- [ ] Fill Next back up to 15. Now set the deferral's follow-up date to today (or wait for it):
+      it leaves Waiting and is back in Next with a `back` badge, the cap signal reads `16/15`,
+      and **nothing has been demoted automatically**. A waiting item **with** a who whose date
+      arrives is a `Chase:` row instead, and stays in Waiting.
+- [ ] A vault note written before #86 with `status: next` + `defer: <future date>` shows in
+      Waiting; its file is unchanged until you edit the item, then it reads `status: waiting` +
+      `followUpDate:` and the `defer:` line is gone.
 - [ ] The `Next is full` sheet appears **once per foreground** until you demote something. Put
       the app in the background and bring it back: it asks again. Demote one: it stops asking.
 
@@ -392,8 +399,8 @@ Unplug the mouse for this one.
 
 ### 3.7 Drag a row onto a category (E3, 2026-09-24)
 
-Mac, on fixtures. Every row in Next, Someday, Waiting and Deferred can be dragged; the sidebar
-sections Next · Someday · Waiting · Lists · Projects · Deferred and the rows of the Projects
+Mac, on fixtures. Every row in Next, Someday and Waiting can be dragged; the sidebar
+sections Next · Someday · Waiting · Lists · Projects and the rows of the Projects
 list take the drop. Inbox, Review and Routines never highlight and never take a drop.
 
 - [ ] Drag a Next row onto **Someday**: the section lights up light blue (`dropTargetWash`) while the row hovers,
@@ -407,8 +414,6 @@ list take the drop. Inbox, Review and Routines never highlight and never take a 
 - [ ] Drag any row onto **Waiting**: the card opens **with the follow-up sheet already up**.
       Confirm a date → the row is in Waiting with that date; `Cancel` on the sheet shows the
       card behind it, `Close` leaves the note where it was.
-- [ ] Drag a row onto **Deferred**: a small `Defer` sheet with the date chip. `Done` with a
-      future date → the row is in Deferred; `Cancel` → unchanged.
 - [ ] Drag a row onto **Projects**: the project picker (search, `Create project "…"`). Pick one
       → the row's meta line names it. Drag it onto Projects again and pick another: the first
       is replaced (an action names one project).
@@ -421,13 +426,13 @@ list take the drop. Inbox, Review and Routines never highlight and never take a 
       text as notes; the toast says `Added to <list>` and `⌘Z` brings the action back.
       `New list…` with a blank name shows the refusal and moves nothing; a real name creates
       the list and moves the row into it.
-- [ ] Drop a row on the section it is already in (Next row on Next, a deferred row on
-      Deferred): no highlight, nothing happens, no toast.
+- [ ] Drop a row on the section it is already in (Next row on Next, a waiting row on
+      Waiting): no highlight, nothing happens, no toast.
 - [ ] Right-click any row: the context menu ends with **Move to ▸** Next / Someday / Waiting /
-      Deferred / Project… / List…, the current section's entry disabled; each does exactly what the
+      Project… / List…, the current section's entry disabled; each does exactly what the
       drop does. VoiceOver reaches the menu; nobody needs the gesture.
-- [ ] iPhone, Next tab: long-press a row → **Move to ▸** works the same (the card, the defer
-      sheet and the picker are sheets over the tab). There is no sidebar on the iPhone, so
+- [ ] iPhone, Next tab: long-press a row → **Move to ▸** works the same (the card and the
+      pickers are sheets over the tab). There is no sidebar on the iPhone, so
       there is nothing to drop on there; that is by design, not a gap.
 
 ### 3.6 The weekly review deck (§10.2)
@@ -560,7 +565,7 @@ Do these with `-useFixtures`, so nothing can be written while you sweep.
       `<step>, <n> percent complete` and then spells the week out —
       `done Mon, Tue; skipped Wed; nothing logged Thu, Fri, Sat, Sun`. Check "nothing logged" is
       never read as "skipped": they mean different things.
-- [ ] **Every swipe action has a non-swipe twin.** On each list (Next, chase, Waiting, Deferred,
+- [ ] **Every swipe action has a non-swipe twin.** On each list (Next, chase, Waiting,
       a list's items), open the context menu and confirm it offers everything the swipe does.
 - [ ] **Routine runner:** `Done` and `Skip` are available as VoiceOver actions on the step card.
 
