@@ -43,18 +43,20 @@ public enum MovePlan: Equatable, Sendable {
     public static func plan(
         action: Action, to destination: MoveDestination, snapshot: VaultSnapshot, today: Day
     ) -> MovePlan {
+        // #86 — a deferral that is back sits in Next, so it is judged as a Next item.
+        let status = Rules.effectiveStatus(action, today: today)
         switch destination {
         case .next:
             // `in-progress` is a Next item that has been started (A3): dropping it on Next
             // changes nothing.
-            guard !action.status.countsTowardCap else { return .alreadyThere }
-            return move(action, to: .next)
+            guard !status.countsTowardCap else { return .alreadyThere }
+            return move(action, from: status, to: .next)
         case .someday:
-            guard action.status != .someday else { return .alreadyThere }
-            return move(action, to: .someday)
+            guard status != .someday else { return .alreadyThere }
+            return move(action, from: status, to: .someday)
         case .waiting:
-            guard action.status != .waiting else { return .alreadyThere }
-            return move(action, to: .waiting)
+            guard status != .waiting else { return .alreadyThere }
+            return move(action, from: status, to: .waiting)
         case .projects:
             return .pickProject
         case let .project(id):
@@ -77,10 +79,12 @@ public enum MovePlan: Equatable, Sendable {
         plan(action: action, to: destination, snapshot: snapshot, today: today) != .alreadyThere
     }
 
-    private static func move(_ action: Action, to status: ActionStatus) -> MovePlan {
+    private static func move(
+        _ action: Action, from previous: ActionStatus, to status: ActionStatus
+    ) -> MovePlan {
         let missing = RequiredField.missing(
             status: status,
-            previous: action.status,
+            previous: previous,
             why: action.why,
             what: action.what,
             contexts: action.contexts,

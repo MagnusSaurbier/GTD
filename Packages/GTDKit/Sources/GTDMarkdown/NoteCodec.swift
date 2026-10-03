@@ -185,9 +185,14 @@ public enum NoteCodec {
         }
 
         // #86 — the note still holds a legacy `defer:` that `decodeAction` folded into waiting.
-        // Untouched, it keeps every byte; once anything else changed, the lines the fold
-        // stood in for are written out for real, against what the file actually says.
-        if let stored, doc.text != stored,
+        // Untouched, it keeps every byte; once anything changed — a line, or one of the folded
+        // fields, whose patch above may have been a no-op against the folded reference — the
+        // lines the fold stood in for are written out for real, against what the file says.
+        let foldedFieldsChanged = reference.map {
+            $0.status != action.status || $0.waitingFor != action.waitingFor
+                || $0.followUpDate != action.followUpDate || $0.deferDate != action.deferDate
+        } ?? false
+        if let stored, doc.text != stored || foldedFieldsChanged,
            let written = try? decodeStoredAction(id: action.id, text: stored, timeZone: timeZone),
            written.deferDate != nil {
             if written.status != action.status {

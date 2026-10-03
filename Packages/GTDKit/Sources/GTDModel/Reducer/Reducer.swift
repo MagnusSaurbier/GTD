@@ -404,6 +404,9 @@ public enum Reducer {
 
         var updated = previous
         updated.status = status
+        // #86 — picking a tier is the answer to "when": a legacy defer date does not turn the
+        // choice into waiting behind the user's back.
+        if status != .waiting { updated.deferDate = nil }
         try normalize(&updated, previous: previous, waiting: waiting, in: s, env: env)
 
         var next = s

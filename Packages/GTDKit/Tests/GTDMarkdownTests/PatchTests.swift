@@ -225,6 +225,66 @@ struct PatchTests {
             == text.replacingOccurrences(of: "status: trash", with: "status: someday"))
     }
 
+    // MARK: - #86: a legacy `defer:` is read as waiting
+
+    static let legacyDeferred = "---\nstatus: next\ncontexts: [mac]\ndefer: 2026-10-10\n---\n# Why?\nx\n\n# What?\ny\n"
+
+    /// A deferred note from before #86 reads as a who-less waiting item following up on the
+    /// defer date, and writing it back unchanged changes nothing on disk.
+    @Test func aLegacyDeferredFileReadsAsWaitingAndIsNotRewrittenByReading() throws {
+        let id = NoteID(path: "Actions/Später.md")
+        let action = try NoteCodec.decodeAction(id: id, text: PatchTests.legacyDeferred)
+        #expect(action.status == .waiting)
+        #expect(action.waitingFor == nil)
+        #expect(action.followUpDate == Day(year: 2026, month: 10, day: 10))
+        #expect(action.deferDate == nil)
+        #expect(NoteCodec.encode(action) == PatchTests.legacyDeferred)     // byte for byte
+    }
+
+    /// Once the user changes the note, the lines the fold stood in for are written for real:
+    /// `status: waiting`, `followUpDate:` in schema order, and no `defer:`.
+    @Test func editingALegacyDeferredFileWritesItAsWaiting() throws {
+        let id = NoteID(path: "Actions/Später.md")
+        var action = try NoteCodec.decodeAction(id: id, text: PatchTests.legacyDeferred)
+        action.contexts = ["home"]
+        let encoded = NoteCodec.encode(action)
+        #expect(encoded == "---\nstatus: waiting\ncontexts: [home]\nfollowUpDate: 2026-10-10\n---\n# Why?\nx\n\n# What?\ny\n")
+        let reread = try NoteCodec.decodeAction(id: id, text: encoded)
+        #expect(reread.status == .waiting)
+        #expect(reread.followUpDate == Day(year: 2026, month: 10, day: 10))
+    }
+
+    /// Moving it to a tier drops the defer date; the status line says the tier.
+    @Test func promotingALegacyDeferredFileDropsTheDeferLine() throws {
+        let id = NoteID(path: "Actions/Später.md")
+        var action = try NoteCodec.decodeAction(id: id, text: PatchTests.legacyDeferred)
+        action.status = .someday
+        action.followUpDate = nil
+        let encoded = NoteCodec.encode(action)
+        #expect(encoded == "---\nstatus: someday\ncontexts: [mac]\n---\n# Why?\nx\n\n# What?\ny\n")
+    }
+
+    /// Clearing the folded follow-up date is a change too, even though the patch against the
+    /// folded note has no line to remove: the edit must not be lost on the next read.
+    @Test func clearingTheFoldedFollowUpDateSurvivesTheWrite() throws {
+        let id = NoteID(path: "Actions/Später.md")
+        var action = try NoteCodec.decodeAction(id: id, text: PatchTests.legacyDeferred)
+        action.followUpDate = nil
+        let reread = try NoteCodec.decodeAction(id: id, text: NoteCodec.encode(action))
+        #expect(reread.followUpDate == nil)
+        #expect(reread.status == .waiting)
+    }
+
+    /// Closed notes keep their `defer:` as written: they are on no list, nothing is folded.
+    @Test func aClosedNoteKeepsItsDeferDate() throws {
+        let id = NoteID(path: "Actions/Erledigt.md")
+        let text = "---\nstatus: done\ndefer: 2026-10-10\n---\n# What?\ny\n"
+        let action = try NoteCodec.decodeAction(id: id, text: text)
+        #expect(action.status == .done)
+        #expect(action.deferDate == Day(year: 2026, month: 10, day: 10))
+        #expect(NoteCodec.encode(action) == text)
+    }
+
     // MARK: - Routines
 
     @Test func changingARoutineTimeLeavesTheStepsAlone() throws {

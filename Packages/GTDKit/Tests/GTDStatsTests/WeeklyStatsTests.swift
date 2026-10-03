@@ -129,15 +129,21 @@ struct WeeklyStatsTests {
         #expect(stats.medianNextAgeDays == 10)
     }
 
-    @Test func deferredNextItemsAreExcludedLikeEverywhereElse() {
+    /// #86 — a deferral (a who-less waiting item) is not in Next until its date; once it is
+    /// back it counts like any Next item.
+    @Test func deferralsCountAsNextOnlyOnceTheyAreBack() {
         let week = ISOWeek(year: 2026, week: 38)
+        func deferral(_ title: String, until day: Day) -> Action {
+            Action(id: NoteID(path: "Actions/\(title).md"), title: title, status: .waiting,
+                   followUpDate: day, created: Self.date(2026, 9, 1))
+        }
         var snapshot = VaultSnapshot.empty
         snapshot.actions = [
-            Self.action("Hidden by defer", created: Self.date(2026, 9, 1),
-                        deferDate: Day(year: 2026, month: 12, day: 1)),
+            deferral("Still waiting", until: Day(year: 2026, month: 12, day: 1)),
+            deferral("Back", until: Day(year: 2026, month: 9, day: 2)),
         ]
         let stats = WeeklyStats.compute(snapshot: snapshot, week: week, calendar: Self.calendar)
-        #expect(stats.oldestNext.isEmpty)
+        #expect(stats.oldestNext == [NoteID(path: "Actions/Back.md")])
     }
 
     // MARK: Untouched > 30 days
