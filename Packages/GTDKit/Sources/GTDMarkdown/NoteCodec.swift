@@ -66,6 +66,12 @@ public enum NoteCodec {
             body: RawText.text(doc.bodyLines),
             created: created,
             reviewReason: doc.scalar("reviewReason"),
+            // #85 — a card closed half-way keeps its chips under the action keys.
+            contexts: doc.list("contexts") ?? [],
+            timeEstimate: doc.int("timeEstimate").flatMap { $0 > 0 ? $0 : nil },
+            project: noteID(doc.scalar("project")),
+            deferDate: doc.day("defer"),
+            due: doc.day("due"),
             passthrough: passthrough(text))
     }
 
@@ -80,6 +86,13 @@ public enum NoteCodec {
             doc.setValue("created", YAMLScalar.timestamp(item.created, timeZone: timeZone), canonicalOrder: order)
         }
         setOptionalText("reviewReason", item.reviewReason, reference?.reviewReason, &doc, order)
+        setCardFields(
+            contexts: item.contexts, timeEstimate: item.timeEstimate, project: item.project,
+            deferDate: item.deferDate, due: item.due,
+            reference: reference.map {
+                ($0.contexts, $0.timeEstimate, $0.project, $0.deferDate, $0.due)
+            },
+            &doc, order)
         if reference?.body != item.body {
             doc.setBody(RawText.block(item.body, terminator: doc.terminator))
         }
@@ -137,27 +150,13 @@ public enum NoteCodec {
         if reference?.status != action.status {
             doc.setValue("status", action.status.rawValue, canonicalOrder: order)
         }
-        if (reference?.contexts ?? []) != action.contexts {
-            if action.contexts.isEmpty { doc.removeValue("contexts") }
-            else { doc.setValue("contexts", YAMLScalar.flowList(action.contexts), canonicalOrder: order) }
-        }
-        if reference?.timeEstimate != action.timeEstimate {
-            // Never write `timeEstimate: 0` — undecided means the key is gone (§1).
-            if let minutes = action.timeEstimate, minutes > 0 {
-                doc.setValue("timeEstimate", String(minutes), canonicalOrder: order)
-            } else {
-                doc.removeValue("timeEstimate")
-            }
-        }
-        if reference?.project != action.project {
-            if let project = action.project {
-                doc.setValue("project", Wikilink.frontmatterValue(project), canonicalOrder: order)
-            } else {
-                doc.removeValue("project")
-            }
-        }
-        setOptionalDay("defer", action.deferDate, reference?.deferDate, &doc, order)
-        setOptionalDay("due", action.due, reference?.due, &doc, order)
+        setCardFields(
+            contexts: action.contexts, timeEstimate: action.timeEstimate, project: action.project,
+            deferDate: action.deferDate, due: action.due,
+            reference: reference.map {
+                ($0.contexts, $0.timeEstimate, $0.project, $0.deferDate, $0.due)
+            },
+            &doc, order)
         setOptionalText("waitingFor", action.waitingFor, reference?.waitingFor, &doc, order)
         setOptionalDay("followUpDate", action.followUpDate, reference?.followUpDate, &doc, order)
         setOptionalDate("created", action.created, reference?.created, &doc, order, timeZone)
@@ -702,6 +701,36 @@ public enum NoteCodec {
     }
 
     // Free-text fields are always quoted: they routinely contain `:`, `#` and leading dashes.
+    /// The five keys an action card decides, shared by actions and (#85) a half-processed
+    /// inbox note. Each line is touched only when its value changed; an empty value removes the
+    /// key, and `timeEstimate: 0` is never written (§1).
+    private static func setCardFields(
+        contexts: [String], timeEstimate: Int?, project: NoteID?, deferDate: Day?, due: Day?,
+        reference: (contexts: [String], timeEstimate: Int?, project: NoteID?, deferDate: Day?, due: Day?)?,
+        _ doc: inout FrontmatterDocument, _ order: [String]
+    ) {
+        if (reference?.contexts ?? []) != contexts {
+            if contexts.isEmpty { doc.removeValue("contexts") }
+            else { doc.setValue("contexts", YAMLScalar.flowList(contexts), canonicalOrder: order) }
+        }
+        if reference?.timeEstimate != timeEstimate {
+            if let minutes = timeEstimate, minutes > 0 {
+                doc.setValue("timeEstimate", String(minutes), canonicalOrder: order)
+            } else {
+                doc.removeValue("timeEstimate")
+            }
+        }
+        if reference?.project != project {
+            if let project {
+                doc.setValue("project", Wikilink.frontmatterValue(project), canonicalOrder: order)
+            } else {
+                doc.removeValue("project")
+            }
+        }
+        setOptionalDay("defer", deferDate, reference?.deferDate, &doc, order)
+        setOptionalDay("due", due, reference?.due, &doc, order)
+    }
+
     private static func setOptionalText(
         _ key: String, _ value: String?, _ reference: String?,
         _ doc: inout FrontmatterDocument, _ order: [String]
@@ -740,7 +769,9 @@ public enum NoteCodec {
     /// Frontmatter key order used when the codec has to *insert* a key (REQUIREMENTS §5).
     /// Existing keys never move.
     public enum Keys {
-        public static let inbox = ["created", "reviewReason"]
+        public static let inbox = [
+            "contexts", "timeEstimate", "project", "defer", "due", "created", "reviewReason",
+        ]
         public static let action = [
             "status", "contexts", "timeEstimate", "project", "defer", "due",
             "waitingFor", "followUpDate", "created", "completedDate", "reviewReason",

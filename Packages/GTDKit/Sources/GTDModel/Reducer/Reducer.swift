@@ -84,6 +84,9 @@ public enum Reducer {
         case let .editInboxBody(id, body):
             return try editInboxBody(s, id: id, body: body)
 
+        case let .saveInboxProgress(id, progress):
+            return try saveInboxProgress(s, id: id, progress: progress)
+
         case let .fileInbox(id, decision):
             return try fileInbox(s, id: id, decision: decision, env: env)
 
@@ -224,6 +227,23 @@ public enum Reducer {
         return Reduction(snapshot: next)
     }
 
+    /// #85 — what a half-processed card had when it was closed. Nothing is validated: this is a
+    /// draft, kept so it is not lost, and filing the card later asks for everything a filing
+    /// asks for. A time estimate of `0` or less is "undecided" (§1), never stored.
+    private static func saveInboxProgress(
+        _ s: VaultSnapshot, id: NoteID, progress: InboxProgress
+    ) throws(GTDError) -> Reduction {
+        guard let index = s.inbox.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
+        var next = s
+        next.inbox[index].body = progress.body
+        next.inbox[index].contexts = progress.contexts
+        next.inbox[index].timeEstimate = progress.timeEstimate.flatMap { $0 > 0 ? $0 : nil }
+        next.inbox[index].project = progress.project
+        next.inbox[index].deferDate = progress.deferDate
+        next.inbox[index].due = progress.due
+        return Reduction(snapshot: next)
+    }
+
     /// I5 — the escape hatch. The app asks *why* the item does not fit; the reason travels into
     /// the weekly review so the gap can be fixed. Such items leave the processing queue.
     private static func deferInboxToReview(
@@ -266,10 +286,21 @@ public enum Reducer {
         case let .action(draft):
             var filed = draft
             filed.title = title
-            filed.preamble = CaptureText.filedBody(body: item.body, notes: "")
+            // #85 — a card closed half-way kept its `Why?`/`What?` in the inbox body. They are
+            // the action's sections now, not text above them; a field the draft leaves empty
+            // takes the stored one, so nothing typed into the note is lost by filing it.
+            let stored = InboxBody.read(item.body)
+            filed.preamble = CaptureText.filedBody(body: stored.lead, notes: "")
+            if filed.why.isEmpty { filed.why = stored.why }
+            if filed.what.isEmpty { filed.what = stored.what }
             // I4a/R-8 — the `+ project` chip may name a project that does not exist yet;
             // `makeAction` creates it, so filing the card stays one command and one commit.
-            let action = try makeAction(from: filed, in: &next, env: env, created: item.created)
+            var action = try makeAction(from: filed, in: &next, env: env, created: item.created)
+            if InboxBody.hasSections(item.body) {
+                // Sections of the user's own around `Why?`/`What?` come along as written.
+                action.body = InboxBody(lead: action.preamble, why: action.why, what: action.what)
+                    .written(over: item.body)
+            }
             next.actions.append(action)
             extraOps.append(.move(from: item.id.path, to: action.id.path))
             renames.record(item.id, as: action.id)

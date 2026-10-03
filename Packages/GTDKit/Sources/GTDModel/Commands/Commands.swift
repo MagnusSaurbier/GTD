@@ -137,6 +137,9 @@ public enum GTDCommand: Sendable, Equatable {
     case renameInboxItem(NoteID, title: String)
     /// Replaces an inbox note's body (everything below the frontmatter). The title is not in it.
     case editInboxBody(NoteID, String)
+    /// #85 — a half-processed card was closed: its body (lead + `Why?`/`What?`, `InboxBody`)
+    /// and its chips are kept in the inbox note, which **stays in the inbox**, unprocessed.
+    case saveInboxProgress(NoteID, InboxProgress)
     case fileInbox(NoteID, InboxDecision)
     case deferInboxToReview(NoteID, reason: String)
     case createAction(ActionDraft)
