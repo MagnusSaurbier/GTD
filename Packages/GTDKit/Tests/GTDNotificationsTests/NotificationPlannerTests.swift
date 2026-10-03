@@ -162,6 +162,16 @@ struct NotificationPlannerTests {
         ])
     }
 
+    /// #86 — a deferred Someday item comes back on its defer date ("Back today").
+    @Test func aDeferredSomedayItemIsADeferReturn() {
+        let today = Day(year: 2026, month: 6, day: 15)
+        let now = Support.instant(today, 6, 0, calendar: utc)
+        var later = Support.action("Irgendwann", status: .someday)
+        later.deferDate = today.adding(days: 3)
+        let planned = NotificationPlanner.plan(snapshot: VaultSnapshot(actions: [later]), now: now, calendar: utc)
+        #expect(planned.map(\.id) == ["deferReturn:Actions/Irgendwann.md:\(today.adding(days: 3).iso)"])
+    }
+
     // MARK: - Collapse rule
 
     @Test func threeSameMorningItemsCollapseIntoOneSummary() {

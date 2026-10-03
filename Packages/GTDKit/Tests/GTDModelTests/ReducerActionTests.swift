@@ -157,9 +157,8 @@ struct ReducerActionTests {
         #expect(Rules.returnedFromDeferBadge(for: stored, today: onTheDay) != nil)
     }
 
-    /// #86 — the inbox card's defer chip: whatever tier the card was filed to, a defer date
-    /// files it as a deferral.
-    @Test(arguments: [ActionStatus.next, .someday])
+    /// #86 — the inbox card's defer chip on a card filed to Next files it as a deferral.
+    @Test(arguments: [ActionStatus.next, .inProgress])
     func aNewActionWithADeferDateLandsInWaiting(status: ActionStatus) throws {
         let result = try Reducer.reduce(TestVault.snapshot(), .createAction(ActionDraft(
             title: "Später", status: status, contexts: ["mac"], timeEstimate: 10,
@@ -168,6 +167,37 @@ struct ReducerActionTests {
         #expect(stored.status == .waiting)
         #expect(stored.waiting == WaitingInfo(followUp: TestVault.day(3)))
         #expect(stored.deferDate == nil)
+    }
+
+    /// #86 (user decision) — Someday keeps its tier: a card filed to Someday with the defer
+    /// chip stays `someday` + `defer`, hidden until the date, then back in Someday.
+    @Test func aDeferredSomedayItemKeepsItsTierAndComesBackToSomeday() throws {
+        let result = try Reducer.reduce(TestVault.snapshot(), .createAction(ActionDraft(
+            title: "Später", status: .someday, deferDate: TestVault.day(3), what: "Later.")), env: env)
+        let stored = try #require(result.snapshot.actions.first)
+        #expect(stored.status == .someday)
+        #expect(stored.deferDate == TestVault.day(3))
+        #expect(stored.followUpDate == nil)
+        #expect(Rules.sidebarCounts(result.snapshot, today: env.today).someday == 0)
+        #expect(Rules.waitingList(result.snapshot, today: env.today).isEmpty)
+        #expect(Rules.sidebarCounts(result.snapshot, today: TestVault.day(3)).someday == 1)
+        #expect(Rules.countsTowardCap(result.snapshot, today: TestVault.day(3)) == 0)
+
+        // Editing it keeps tier and date; moving it to another tier drops the date.
+        var edited = stored
+        edited.why = "Still later."
+        let kept = try Reducer.reduce(result.snapshot, .updateAction(edited), env: env)
+        #expect(kept.snapshot.action(stored.id)?.status == .someday)
+        #expect(kept.snapshot.action(stored.id)?.deferDate == TestVault.day(3))
+        var refiled = stored
+        refiled.status = .waiting
+        refiled.followUpDate = TestVault.day(9)
+        let moved = try Reducer.reduce(result.snapshot, .updateAction(refiled), env: env)
+        #expect(moved.snapshot.action(stored.id)?.deferDate == nil)
+        #expect(moved.snapshot.action(stored.id)?.followUpDate == TestVault.day(9))
+        let demoted = try Reducer.reduce(result.snapshot, .setStatus(stored.id, .waiting,
+            waiting: WaitingInfo(followUp: TestVault.day(9))), env: env)
+        #expect(demoted.snapshot.action(stored.id)?.deferDate == nil)
     }
 
     /// A waiting item keeps the who and date its own sheet gave it; a defer date fills in only

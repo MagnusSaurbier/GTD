@@ -57,7 +57,7 @@ struct RulesTests {
         #expect(chase.count == 1)
         #expect(chase.first?.waitingFor == "Prof. Weber")
         let waiting = Rules.waitingList(snapshot, today: today)
-        #expect(waiting.count == 5)       // 3 with a who, 2 deferrals (#86)
+        #expect(waiting.count == 4)       // 3 with a who, 1 deferral to Next (#86)
         // W2 — sorted by staleness: the longest-overdue follow-up first.
         #expect(waiting.map { $0.followUpDate! } == waiting.map { $0.followUpDate! }.sorted())
         #expect(Rules.waitingSince(waiting[0], today: today, calendar: Fixtures.calendar) == 28)
@@ -72,7 +72,7 @@ struct RulesTests {
     /// and holding no cap slot until their date.
     @Test func deferralsWaitInWaiting() {
         let deferrals = Rules.waitingList(snapshot, today: today).filter(\.isWhoLessWaiting)
-        #expect(deferrals.count == 2)
+        #expect(deferrals.count == 1)
         let next = Rules.nextList(snapshot, today: today).map(\.id)
         #expect(deferrals.allSatisfy { !next.contains($0.id) })
         #expect(deferrals.allSatisfy { !Rules.isBackInNext($0, today: today) })
@@ -82,14 +82,14 @@ struct RulesTests {
         let counts = Rules.sidebarCounts(snapshot, today: today)
         #expect(counts.inbox == 5)
         #expect(counts.next == 14)
-        #expect(counts.someday == 6)
-        #expect(counts.waiting == 5)      // 2 of them deferrals (#86)
+        #expect(counts.someday == 6)      // 7 in the tier, 1 of them hidden until its defer date
+        #expect(counts.waiting == 4)      // 1 of them a deferral to Next (#86)
         #expect(counts.projects == 4)
         // E3 — every count matches the list its row opens.
         #expect(counts.next == Rules.nextList(snapshot, today: today).count)
         #expect(counts.waiting == Rules.waitingList(snapshot, today: today).count)
         #expect(counts.inbox == Rules.inboxQueue(snapshot).count)
-        #expect(counts.someday == snapshot.actions.count { $0.status == .someday })
+        #expect(counts.someday + 1 == snapshot.actions.count { $0.status == .someday })
     }
 
     @Test func capSignalOnlyAppearsAtTheCap() {
@@ -383,6 +383,22 @@ struct SignalRuleTests {
         let counts = Rules.sidebarCounts(vault, today: today)
         #expect(counts.next == (back ? 1 : 0))
         #expect(counts.waiting == (back ? 0 : 1))
+    }
+
+    /// #86 (user decision) — a deferred Someday item keeps its tier: hidden from every list
+    /// until its date, then back in Someday with the `back` badge — never in Waiting or Next.
+    @Test(arguments: [(-1, true, false), (0, true, true), (1, false, false)])
+    func deferredSomedayReturnsToSomeday(offset: Int, visible: Bool, badge: Bool) {
+        let action = TestVault.action("Später", .someday, deferDate: TestVault.day(offset), modified: 0)
+        let vault = TestVault.snapshot(actions: [action])
+        #expect(action.foldingDeferIntoWaiting() == action)
+        #expect(Rules.isVisible(action, today: today) == visible)
+        #expect(Rules.sidebarCounts(vault, today: today).someday == (visible ? 1 : 0))
+        #expect(Rules.waitingList(vault, today: today).isEmpty)
+        #expect(Rules.nextList(vault, today: today).isEmpty)
+        #expect((Rules.returnedFromDeferBadge(for: action, today: today, calendar: calendar) != nil) == badge)
+        #expect(Rules.timeline(vault, from: TestVault.day(-5), to: TestVault.day(5))
+                    .map(\.kind) == [.deferred])
     }
 
     /// #86 — a blank who is no who: such an item is a deferral.

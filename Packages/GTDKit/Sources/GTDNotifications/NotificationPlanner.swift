@@ -74,7 +74,7 @@ public struct DeviceNotificationSettings: Sendable, Equatable, Codable {
 ///
 /// Kinds planned, one call covers all of them (D1, D2, R3, W2):
 /// - `deferReturn` — morning of a deferral's date, once: a who-less waiting item comes back
-///   into Next on its follow-up date (#86).
+///   into Next on its follow-up date, a deferred Someday item into Someday on its defer date (#86).
 /// - `dueApproaching` — morning of `due - 1 day` **and** morning of `due` (two notifications).
 /// - `followUp` — morning of `Action.followUpDate`, for waiting items **with** a who.
 /// - `routineStart` — a daily-repeating trigger at `Routine.time`; with `Routine.day` set, a
@@ -109,8 +109,8 @@ public enum NotificationPlanner {
         for action in snapshot.actions {
             guard !action.status.isClosed else { continue }   // A5: done and legacy trash (R-1)
 
-            if settings.enabledKinds.contains(.deferReturn), action.isWhoLessWaiting,
-               let returns = action.followUpDate,
+            if settings.enabledKinds.contains(.deferReturn),
+               let returns = action.deferDate ?? (action.isWhoLessWaiting ? action.followUpDate : nil),
                let notification = itemNotification(
                    action, day: returns, kind: .deferReturn,
                    title: "Back today", body: "\(action.title) is back.",

@@ -23,7 +23,8 @@ already back in Next, `Rules.isBackInNext`):
   is confirmed (STYLEGUIDE §1).
 - `timeline(days:)`, `overduePile`, `signalStep(for:policy:)` — calendar-strip columns and the
   marker tint (STYLEGUIDE §3.10: coloured only where §2.2 defines a signal; a deferral's
-  follow-up marker is never tinted — its only signal, `back`, is a neutral badge). `followUpSignal(for:)` — the `chase` signal's step, which tints the row's
+  follow-up marker and a Someday item's `deferred` marker are never tinted — their only signal,
+  `back`, is a neutral badge). `followUpSignal(for:)` — the `chase` signal's step, which tints the row's
   follow-up date chip once the date has passed. `badges(for:)`, `recentWho` (deduped, capped at 5, for
   `WaitingInfoSheet(suggestedWho:)`).
 - `metaParts(for:)` (T11, W1/D39) — the row's meta line as parts: `who` first when present, then

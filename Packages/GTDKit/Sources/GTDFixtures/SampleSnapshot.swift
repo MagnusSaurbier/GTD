@@ -233,15 +233,15 @@ public enum Fixtures {
                why: "A reason to finally use the ESP32 in the drawer.",
                what: "Sensor, case, a tiny dashboard."),
 
-        // deferred (2) — waiting with no who (#86): back in Next on their follow-up date
+        // deferred (2, #86) — one deferral to Next (waiting with no who, back in Next on its
+        // follow-up date) and one Someday item hidden until its defer date, then back in Someday
         action("Write the tenant profile", .waiting,
                contexts: ["mac"], estimate: 30,
                waiting: WaitingInfo(followUp: day(9)), created: -13, modified: -13,
                why: "Landlords ask for it before a viewing.",
                what: "One page: who I am, what I earn, references."),
-        action("Plan the semester timetable", .waiting,
-               contexts: ["mac"], estimate: 60,
-               waiting: WaitingInfo(followUp: day(20)), created: -18, modified: -18,
+        action("Plan the semester timetable", .someday,
+               contexts: ["mac"], estimate: 60, deferDate: day(20), created: -18, modified: -18,
                why: "Registration opens in October.",
                what: "Check overlaps between the two seminars."),
 

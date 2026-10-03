@@ -1,8 +1,8 @@
 ---
-status: waiting
+status: someday
 contexts: [mac]
 timeEstimate: 60
-followUpDate: 2026-10-09
+defer: 2026-10-09
 created: 2026-09-01T09:30:00+02:00
 ---
 # Why?

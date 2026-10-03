@@ -9,11 +9,16 @@ import Foundation
 ///   changes the item.
 /// - A waiting item **with** a who stays in Waiting and turns into a `chase` item, as before (W2).
 ///
-/// A `defer:` line is legacy. `GTDMarkdown` reads it tolerantly through
-/// `foldingDeferIntoWaiting()` (like `backlog`/`maybe` for `someday`, R-1) and rewrites it as
-/// `status: waiting` + `followUpDate:` only when the user changes that note; the reducer folds
-/// any `deferDate` a command still sets (the inbox card's defer chip, "defer" in Next) the same
-/// way, so no open action ever leaves the reducer carrying one.
+/// **Someday keeps its tier** (user decision on #86): a Someday item with a `defer` date stays
+/// `status: someday` + `defer:` — hidden from every list until that date (`Rules.isVisible`),
+/// then back in Someday with the `back` badge. It is the only open action that carries a
+/// `defer` date.
+///
+/// For every other open status a `defer:` line is legacy. `GTDMarkdown` reads it tolerantly
+/// through `foldingDeferIntoWaiting()` (like `backlog`/`maybe` for `someday`, R-1) and rewrites
+/// it as `status: waiting` + `followUpDate:` only when the user changes that note; the reducer
+/// folds any `deferDate` a command sets on a non-Someday action (the inbox card's defer chip on
+/// Next, "defer" in Next) the same way.
 extension Action {
 
     /// A waiting item without a who — the shape a deferral takes (#86). Blank counts as none.
@@ -24,13 +29,14 @@ extension Action {
 
     /// The same action with a legacy `defer` date folded into the waiting fields (#86).
     ///
-    /// Closed actions and actions without a `defer` date are returned unchanged. A waiting
+    /// Closed and Someday actions, and actions without a `defer` date, are returned unchanged
+    /// (a deferred Someday item keeps its tier and comes back to Someday). A waiting
     /// action keeps its who and follow-up date (the defer date fills in only a missing
     /// follow-up date); any other open status becomes who-less `waiting` following up on the
     /// defer date — including a defer date already in the past, which reads as an item that is
     /// back in Next, exactly where the old defer date had put it.
     public func foldingDeferIntoWaiting() -> Action {
-        guard let deferDate, !status.isClosed else { return self }
+        guard let deferDate, !status.isClosed, status != .someday else { return self }
         var folded = self
         folded.deferDate = nil
         if status == .waiting {

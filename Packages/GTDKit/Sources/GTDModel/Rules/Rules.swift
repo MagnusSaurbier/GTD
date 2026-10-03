@@ -35,14 +35,16 @@ public enum Rules {
 
     // MARK: - Visibility
 
-    /// A5 — every open action is on some list. Nothing is hidden by a date any more: a
-    /// deferral is a who-less waiting item, listed in Waiting until its follow-up date (#86,
-    /// `DeferIsWaiting.swift`). `today` stays in the signature so callers need not change.
+    /// A5/D1 — open actions are listed, except a deferred Someday item before its date: it is
+    /// hidden from every list until then and comes back to Someday (#86). Every other deferral
+    /// is a who-less waiting item, listed in Waiting (`DeferIsWaiting.swift`).
     public static func isVisible(_ action: Action, today: Day) -> Bool {
-        !action.status.isClosed
+        guard !action.status.isClosed else { return false }        // A5
+        if let deferDate = action.deferDate, deferDate > today { return false }
+        return true
     }
 
-    /// Everything a list may show today: the open actions (A5).
+    /// Everything a list may show today: open actions not hidden by a defer date (A5, D1).
     public static func visibleActions(_ s: VaultSnapshot, today: Day) -> [Action] {
         s.actions.filter { isVisible($0, today: today) }
     }
@@ -438,6 +440,12 @@ public enum Rules {
             }
         }
 
+        // D1/#86 — a deferred Someday item came back to Someday today.
+        if let deferDate = action.deferDate, !action.status.isClosed,
+           deferDate <= today, today.days(since: deferDate) < policy.returnedFromDeferDays {
+            out.append(Signal(kind: .returnedFromDefer, step: .neutral))
+        }
+
         // "Untouched" = file modification date (ARCHITECTURE §5); a status change rewrites the file.
         if let modified = action.modified, !action.status.isClosed {
             let days = today.days(since: Day(modified, calendar: calendar))
@@ -542,8 +550,10 @@ public enum Rules {
 
     // MARK: - Timeline (D3)
 
-    /// A deferral's date is its follow-up date (#86), so there is no separate defer marker.
+    /// A deferral to Next is a who-less follow-up (#86); `deferred` marks the day a deferred
+    /// Someday item comes back.
     public enum TimelineKind: Sendable, Equatable, Hashable, CaseIterable {
+        case deferred
         case due
         case followUp
     }
@@ -563,8 +573,8 @@ public enum Rules {
         }
     }
 
-    /// Due and follow-up dates of all open actions in `from...to` (D3; a deferral's date is its
-    /// follow-up date, #86).
+    /// Defer, due and follow-up dates of all open actions in `from...to` (D3; a deferral to
+    /// Next shows as its follow-up date, a deferred Someday item as its defer date, #86).
     public static func timeline(_ s: VaultSnapshot, from: Day, to: Day) -> [TimelineEntry] {
         guard from <= to else { return [] }
         var out: [TimelineEntry] = []
@@ -573,6 +583,7 @@ public enum Rules {
                 guard let day, day >= from, day <= to else { return }
                 out.append(TimelineEntry(day: day, action: action.id, title: action.title, kind: kind))
             }
+            add(action.deferDate, .deferred)
             add(action.due, .due)
             if action.status == .waiting { add(action.followUpDate, .followUp) }
         }
@@ -586,8 +597,9 @@ public enum Rules {
 
     private static func kindRank(_ kind: TimelineKind) -> Int {
         switch kind {
-        case .due: 0
-        case .followUp: 1
+        case .deferred: 0
+        case .due: 1
+        case .followUp: 2
         }
     }
 

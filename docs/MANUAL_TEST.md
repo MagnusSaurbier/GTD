@@ -290,11 +290,17 @@ Unplug the mouse for this one.
       by one**, and it is listed in **Waiting** with that follow-up date and no who.
 - [ ] In the inbox, open a card, set the `+ defer` chip and file it to Next: it lands in
       **Waiting** (follow-up = the defer date, no who), not in Next.
+- [ ] Same with a card filed to **Someday**: it is in **no list** (not Someday, not Waiting)
+      until the defer date, and the calendar strip shows its `deferred` marker on that day. Set
+      its date to today: it is back in **Someday** with a `back` badge, never in Next. Its file
+      says `status: someday` + `defer:` throughout. The detail's Defer chip on a Someday item
+      changes that date and keeps it Someday.
 - [ ] Fill Next back up to 15. Now set the deferral's follow-up date to today (or wait for it):
       it leaves Waiting and is back in Next with a `back` badge, the cap signal reads `16/15`,
       and **nothing has been demoted automatically**. A waiting item **with** a who whose date
       arrives is a `Chase:` row instead, and stays in Waiting.
-- [ ] A vault note written before #86 with `status: next` + `defer: <future date>` shows in
+- [ ] A vault note written before #86 with `status: someday` + `defer:` behaves like the
+      Someday case above and is never rewritten. One with `status: next` + `defer: <future date>` shows in
       Waiting; its file is unchanged until you edit the item, then it reads `status: waiting` +
       `followUpDate:` and the `defer:` line is gone.
 - [ ] The `Next is full` sheet appears **once per foreground** until you demote something. Put

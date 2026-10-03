@@ -7,8 +7,9 @@ Local notification planning and scheduling (D2, R3, W2, D1). Public types: `Noti
 ## How it works
 
 - `NotificationPlanner.plan(snapshot:now:calendar:settings:)` is pure: `VaultSnapshot` in,
-  `[PlannedNotification]` out. Plans `deferReturn` (morning of a deferral's follow-up date — a
-  waiting item with no who comes back to Next then, #86), `dueApproaching`
+  `[PlannedNotification]` out. Plans `deferReturn` (morning of a deferral's date — a waiting item
+  with no who comes back to Next on its follow-up date, a Someday item to Someday on its `defer`
+  date, #86), `dueApproaching`
   (morning of `due - 1` **and** morning of `due`), `followUp` (morning of `followUpDate`, only
   for waiting items with a who), `routineStart` (daily-repeating, at the routine's own `time`, not
   the morning time; a routine with a `day` repeats weekly on that weekday instead —

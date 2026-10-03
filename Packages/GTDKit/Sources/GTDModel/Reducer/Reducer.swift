@@ -404,8 +404,8 @@ public enum Reducer {
 
         var updated = previous
         updated.status = status
-        // #86 — picking a tier is the answer to "when": a legacy defer date does not turn the
-        // choice into waiting behind the user's back.
+        // #86 — picking a tier is the answer to "when": a defer date does not turn the choice
+        // into waiting behind the user's back, nor keep it hidden.
         if status != .waiting { updated.deferDate = nil }
         try normalize(&updated, previous: previous, waiting: waiting, in: s, env: env)
 
@@ -1224,10 +1224,17 @@ public enum Reducer {
 
         if let estimate = action.timeEstimate, estimate <= 0 { action.timeEstimate = nil }
 
-        // #86 — a defer date is a who-less follow-up date. A command that asks for another
-        // tier *and* a defer date (the inbox card's defer chip, "defer" in Next) files the
-        // item as waiting; one that asks for waiting keeps the who and date it brings.
+        // #86 — a defer date is a who-less follow-up date. A command that asks for Next (or
+        // in-progress) *and* a defer date (the inbox card's defer chip, "defer" in Next) files
+        // the item as waiting; one that asks for waiting keeps the who and date it brings.
+        // Someday keeps its tier and its defer date: hidden until then, back in Someday.
         var waiting = waiting
+        // A deferred Someday item that leaves Someday with its date untouched (the detail's
+        // status picker) is being re-filed, not deferred again: the date goes.
+        if let previous, previous.status == .someday, action.status != .someday,
+           action.deferDate != nil, action.deferDate == previous.deferDate {
+            action.deferDate = nil
+        }
         if action.deferDate != nil, !action.status.isClosed {
             let wasWaiting = action.status == .waiting
             action = action.foldingDeferIntoWaiting()

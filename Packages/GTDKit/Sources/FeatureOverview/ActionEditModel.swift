@@ -109,9 +109,13 @@ public final class ActionEditModel: AppModel.HeldEdits {
     public var contexts: [String] { draft?.contexts ?? [] }
     public var timeBucket: TimeBucket? { draft?.timeBucket }
     public var project: NoteID? { draft?.project }
-    /// The Defer chip (#86): deferring is waiting with no who, so the chip shows a deferral's
-    /// follow-up date and nothing for any other item.
-    public var deferDate: Day? { draft.flatMap { $0.isWhoLessWaiting ? $0.followUpDate : nil } }
+    /// The Defer chip (#86): a Someday item's own defer date; otherwise deferring is waiting
+    /// with no who, so the chip shows a deferral's follow-up date and nothing for other items.
+    public var deferDate: Day? {
+        guard let draft else { return nil }
+        if draft.status == .someday { return draft.deferDate }
+        return draft.isWhoLessWaiting ? draft.followUpDate : nil
+    }
     public var due: Day? { draft?.due }
     public var waiting: WaitingInfo? { draft?.waiting }
 
@@ -179,12 +183,16 @@ public final class ActionEditModel: AppModel.HeldEdits {
     }
 
     public func setProject(_ value: NoteID?) { edit(.project, immediate: true) { $0.project = value } }
-    /// #86 — a date moves the item to Waiting with that follow-up date (a waiting item keeps
-    /// its who); clearing a deferral's date brings it back to Next ("un-defer now"), which the
-    /// reducer may refuse for missing Next fields like any other move into Next.
+    /// #86 — on a Someday item the date is its own `defer` (it stays Someday). Anywhere else a
+    /// date moves the item to Waiting with that follow-up date (a waiting item keeps its who);
+    /// clearing a deferral's date brings it back to Next ("un-defer now"), which the reducer may
+    /// refuse for missing Next fields like any other move into Next.
     public func setDeferDate(_ value: Day?) {
         guard let draft else { return }
-        if let value {
+        if draft.status == .someday {
+            // A Someday item keeps its tier: hidden until the date, then back in Someday.
+            edit(.deferDate, immediate: true) { $0.deferDate = value }
+        } else if let value {
             setWaiting(WaitingInfo(who: draft.status == .waiting ? draft.waitingFor : nil, followUp: value))
         } else if draft.isWhoLessWaiting {
             setStatus(.next)

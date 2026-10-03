@@ -94,7 +94,7 @@ public final class WaitingListModel {
         }
     }
 
-    /// Due and follow-up dates already in the past — piled on the left edge of the strip
+    /// Defer, due and follow-up dates already in the past — piled on the left edge of the strip
     /// instead of being lost off the front of the 14-day window (D3).
     public var overduePile: [Rules.TimelineEntry] {
         Rules.timeline(model.snapshot, from: today.adding(days: -365), to: today.adding(days: -1))
@@ -117,6 +117,8 @@ public final class WaitingListModel {
             if isWhoLessFollowUp(entry) { return nil }
             if delta <= 0 { return .attention }
             if delta <= policy.followUpSoonDays { return .aging }
+            return nil
+        case .deferred:
             return nil
         }
     }

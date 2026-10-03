@@ -275,6 +275,24 @@ struct PatchTests {
         #expect(reread.status == .waiting)
     }
 
+    /// #86 (user decision) — a Someday note keeps its tier and its `defer:`: it reads as
+    /// written, an edit changes only the edited line, and the defer date survives the round trip.
+    @Test func aDeferredSomedayFileKeepsItsTierAndDate() throws {
+        let id = NoteID(path: "Actions/Irgendwann.md")
+        let text = "---\nstatus: someday\ncontexts: [mac]\ndefer: 2026-10-10\n---\n# What?\ny\n"
+        var action = try NoteCodec.decodeAction(id: id, text: text)
+        #expect(action.status == .someday)
+        #expect(action.deferDate == Day(year: 2026, month: 10, day: 10))
+        #expect(action.followUpDate == nil)
+        #expect(NoteCodec.encode(action) == text)
+        action.contexts = ["home"]
+        let encoded = NoteCodec.encode(action)
+        #expect(encoded == text.replacingOccurrences(of: "contexts: [mac]", with: "contexts: [home]"))
+        let reread = try NoteCodec.decodeAction(id: id, text: encoded)
+        #expect(reread.status == .someday)
+        #expect(reread.deferDate == Day(year: 2026, month: 10, day: 10))
+    }
+
     /// Closed notes keep their `defer:` as written: they are on no list, nothing is folded.
     @Test func aClosedNoteKeepsItsDeferDate() throws {
         let id = NoteID(path: "Actions/Erledigt.md")

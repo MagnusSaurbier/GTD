@@ -74,12 +74,14 @@ Compiles and tests on Linux.
   the folder in `Reduction.renames`. Promoted-step links point at actions and stay put. A taken
   destination is `.titleCollision`; a changed **title** is still `.invalid`.
 - Only active projects put actions into Next; leaving `active` demotes them to Someday.
-- **Deferring is waiting** (#86, `Rules/DeferIsWaiting.swift`). A deferral is a waiting item with
+- **Deferring is waiting — except Someday** (#86, `Rules/DeferIsWaiting.swift`). A Someday item
+  with a `defer` date keeps it: hidden from every list until then, back in Someday with the `back`
+  badge; leaving Someday with the date untouched drops it. Any other deferral is a waiting item with
   a follow-up date and **no who**: it is listed in Waiting and holds no cap slot until that date;
   then it is back in Next by itself (`Rules.isBackInNext`) with the `back` badge, even if that
   puts Next over the cap (R-2) — its file keeps `status: waiting` until the user changes it. A
   waiting item with a who never comes back by itself; it becomes a `chase`. `normalize` folds
-  any `deferDate` a command sets into that shape (`Action.foldingDeferIntoWaiting`; picking a
+  any `deferDate` a command sets on a non-Someday action into that shape (`Action.foldingDeferIntoWaiting`; picking a
   tier with `setStatus` drops it instead), and the reducer judges a deferral that is back as a
   Next item (`Rules.effectiveStatus`). Nothing is demoted automatically.
 - **Trash is not a status** (I4c). `trashAction` removes the note from the snapshot and names no
