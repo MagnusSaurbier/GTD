@@ -63,6 +63,13 @@ Compiles and tests on Linux.
   `Action.preamble` or the head of a Knowledge/list note's body — unless it is only the empty
   Why/What template skeleton, which counts as empty (`CaptureText.isEmptyBody`, the one place
   that knows the skeleton).
+- **A card closed half-way stays an inbox note (#85).** `saveInboxProgress` keeps the card's
+  body and chips in the note (`InboxProgress`; `InboxItem.contexts`/`timeEstimate`/`project`/
+  `deferDate`/`due`, under the action keys). `InboxBody` is the card's view of the body: the
+  capture text (`lead`) and `# Why?`/`# What?` sections, the empty skeleton excepted;
+  `written(over:)` rewrites only the pieces that changed. An action filing takes those sections
+  over (an empty draft field falls back to the stored one) instead of putting them under the
+  preamble, and keeps any other section of the note.
 - **The project chip is a draft field (R-8).** `ActionDraft.newProjectTitle` creates the project
   it links, area-less and in the same command; naming an existing one as well is `.invalid`.
   There is no inbox Project *target* any more.
