@@ -86,16 +86,24 @@ of the same fact.
 
 ## 4. Smaller things worth knowing
 
-- **Leaving an input dialog keeps what was typed (#85), with gaps.** Covered and unit-tested:
-  the inbox card (kept in its inbox note on Close/`Esc`/swipe-away/review/⌘Q/crash journal,
-  `Defer to review`), the Knowledge sheet's notes, the "Make action" card over an existing action,
-  quick capture and a list's `+` (sent unless `Cancel` was pressed). **Not covered:** the "Make
-  action" card over a list item, a project step or a "What's next?" line (those notes have no
-  place for action fields), the waiting sheet's `who`, the `Defer to review` reason, `New list…`,
-  the new-project and convert-to-project sheets, the project's `New step` field, the review's
-  deferred-item card, Settings name fields and every search field. None of it has been seen on
-  screen; `docs/MANUAL_TEST.md` §1 has the check. On step 1 a card closed half-way shows only its
-  capture text — its `Why?`/`What?` reappear when the action card opens.
+- **Leaving an input dialog keeps what was typed (#85, #94).** Covered and unit-tested: the inbox
+  card (kept in its inbox note on Close/`Esc`/swipe-away/review/⌘Q/crash journal, `Defer to
+  review`), the Knowledge sheet's notes, the "Make action" card over an existing action, quick
+  capture and a list's `+` (sent unless `Cancel` was pressed) — #85; and as a **draft that the
+  same dialog restores when it opens again** (`InputDrafts`, device-local, never the vault) — #94:
+  the follow-up sheet (`who`/date, every caller), the `Defer to review` reason, `New list…`, the
+  Knowledge sheet's `New folder`, the "Make action" card over a list item / project step /
+  "What's next?" line, the new-project and "Turn into project" sheets, "What's next?"'s line, the
+  project's `New step`, the review's deferred-item card and its `System fix`, Settings' add/rename
+  name fields, onboarding's new-vault name. A draft comes back only in its own dialog, for the same
+  note: nothing announces it elsewhere, and a draft whose note was renamed or filed by another
+  route stays in `input-drafts.json` unseen (never pruned). **Not covered, deliberately:** every
+  search field, including the project picker's search that doubles as `Create project "<text>"`;
+  the conflict sheet (cannot be dismissed — Done writes the merge, "Keep the vault's version" is
+  its Cancel; only ⌘Q/a crash while it is open loses the merge text); date-only sheets (defer
+  date) hold no typed text. None of it has been seen on screen; `docs/MANUAL_TEST.md` §1.6 has the
+  checks. On step 1 a card closed half-way shows only its capture text — its `Why?`/`What?`
+  reappear when the action card opens.
 
 - **Lists are complete end to end (§5a), but only their Mac sidebar row has been seen running.**
   The domain (folder layout, item note, classifier, the eight commands, the `Rules` queries), the
