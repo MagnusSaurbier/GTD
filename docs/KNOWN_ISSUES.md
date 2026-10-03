@@ -171,6 +171,11 @@ of the same fact.
   whole text, so it always writes the full text as the body (the card then shows it under the
   title) and fails instead of adding ` 2` when the name is taken. None of it has been seen on a
   device yet.
+- **Dating a capture by its birth time (#89) has not run on a real iCloud vault.** On APFS the
+  birth time is read and settable (`CaptureDateTests`); whether a file captured on the iPhone
+  arrives on the Mac with its original birth time (or with the download moment, where only the
+  earlier modification time saves the order) is unverified. The first app write stamps
+  `created:`, so the question only matters for captures not yet touched by the app.
 - **The staleness thresholds (14 d / 30 d / inbox 7 d / due 3 d / follow-up 2 d) are first
   guesses.** STYLEGUIDE §10 says to tune them after two real weekly reviews, with real data.
 

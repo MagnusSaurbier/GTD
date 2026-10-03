@@ -9,6 +9,9 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
     private struct Node {
         var text: String
         var modified: Date
+        /// Birth time. A write replaces the file (like the atomic save of the real ones), so it
+        /// resets this to the write's instant; a move keeps it.
+        var created: Date?
         var isDownloaded: Bool
     }
 
@@ -51,6 +54,16 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
         files[VaultPath.normalize(path)]?.isDownloaded = false
     }
 
+    /// Sets a file's birth and modification time, as a file written by another program —
+    /// a Shortcut, Obsidian, a sync — would have them. `created: nil` models a file system
+    /// that reports no birth time.
+    public func setDates(of path: String, created: Date?, modified: Date) {
+        lock.lock(); defer { lock.unlock() }
+        let key = VaultPath.normalize(path)
+        files[key]?.created = created
+        files[key]?.modified = modified
+    }
+
     /// Paths `requestDownload` was called for, in order.
     public var requestedDownloads: [String] {
         lock.lock(); defer { lock.unlock() }
@@ -75,7 +88,7 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         return files.map { path, node in
             VaultFileInfo(path: path, size: node.text.utf8.count, modified: node.modified,
-                          isDownloaded: node.isDownloaded)
+                          created: node.created, isDownloaded: node.isDownloaded)
         }.sorted { $0.path < $1.path }
     }
 
@@ -102,7 +115,7 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
         let key = VaultPath.normalize(path)
         guard let node = files[key] else { return nil }
         return VaultFileInfo(path: key, size: node.text.utf8.count, modified: node.modified,
-                             isDownloaded: node.isDownloaded)
+                             created: node.created, isDownloaded: node.isDownloaded)
     }
 
     public func exists(_ path: String) -> Bool {
@@ -217,8 +230,8 @@ public final class InMemoryFileSystem: VaultFileSystem, @unchecked Sendable {
 
     private func store(_ text: String, at key: String) {
         clockTick += 1
-        files[key] = Node(text: text, modified: baseDate.addingTimeInterval(clockTick),
-                          isDownloaded: true)
+        let now = baseDate.addingTimeInterval(clockTick)
+        files[key] = Node(text: text, modified: now, created: now, isDownloaded: true)
         var parts = key.split(separator: "/").map(String.init)
         parts.removeLast()
         while !parts.isEmpty {

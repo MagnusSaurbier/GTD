@@ -24,6 +24,8 @@ The only module that touches the file system.
   including an evicted file's `.<name>.icloud` placeholder — gets ` 2`, ` 3`, …; an empty capture
   throws `InboxWriter.CaptureRefusal.empty`. Note that `VaultClassifier.conflictCopies` reports
   such a ` 2` next to its original as a possible iCloud conflict copy (a deliberate false positive).
+- `VaultFileInfo` — path, size, `modified`, `created` (birth time, `nil` where unknown; not in the
+  fingerprint), `isDownloaded`, `captureDate` (#89).
 - `VaultFileSystem` + `PlainFileSystem` / `InMemoryFileSystem` (`moveFolder(_:to:)`,
   `createFolder(_:)` and
   `folderExists(_:)` alongside the file operations; `listEntries()` returns a
@@ -100,10 +102,15 @@ watch: it coordinates the *directory* with `.forMoving` and then announces the m
   event costs at most one extra scan; a refresh that found nothing publishes nothing.
 - `commit` re-indexes through the same targeted path with the paths of its own ops (folder ops
   walk), so a write no longer costs a walk of the vault either.
-- **A file in `Inbox/` without `created`** — typed in Obsidian, written by a script — is a
-  capture dated by the file's modification date (`NoteCodec.decodeInboxItem(fileDate:)`), not a
-  `VaultIssue`. The file is not touched; a `created` that is present but unreadable still is an
-  issue.
+- **A file in `Inbox/` without `created`** — a capture Shortcut that writes only the text,
+  a note typed in Obsidian, a script — is a capture dated by the file's **birth time**
+  (`VaultFileInfo.created`, `captureDate` = the earlier of birth and modification time, the
+  modification time where the file system reports no birth time; `NoteCodec.decodeInboxItem(fileDate:)`),
+  not a `VaultIssue` (#89). Reading never touches the file; the app's first write of the note for
+  an item action stamps that date as `created:` — it must be then, because every app save is atomic
+  (temp file + rename), which gives the file a new birth time. A `created` that is present but
+  unreadable still is an issue. `InMemoryFileSystem` models this: a write resets the birth time,
+  a move keeps it, `setDates(of:created:modified:)` sets both for a test.
 - The index cache key is `size + mtime`. A second-granularity file system can hide a same-size
   edit within one second; the watcher's next poll picks it up.
 - `Projects/X/X.md` is an area or a project depending on its `kind:` key — `Frontmatter.scalar`
