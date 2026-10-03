@@ -39,7 +39,12 @@ Linux-compilable models (no SwiftUI — this is where the logic worth testing li
 - `StepLinkSuggestions` — what the New step field offers while typing (#61): open actions with no
   project or this one, not yet a step here; title prefix > word prefix > inside, case- and
   diacritic-blind, at most `limit`. `↓`/`↑` highlight a row, Return or a tap links it.
-- `WhatsNextModel` — one-tap step promotion, free-text action, "project is done".
+- `WhatsNextModel` — one-tap step promotion, free-text action, "project is done", and the project's
+  Someday pile (`somedaySuggestions(for:)`).
+- `SomedaySuggestions` (#84) — what What's next? lists under its New action field: the project's
+  Someday actions, all of them while the field is empty, then only those whose title holds every
+  typed word (any order; `What?`-only matches last). `↓`/`↑` + Return or a tap opens the action
+  card over that note, so `→` moves it into Next instead of writing a new action.
 - `ConvertToProjectModel` — seeds a `ProjectDraft` from an action's checkboxes, converts, promotes
   the pre-selected first step.
 - `StepReorder` — pure index maths for drag + `⌥↑↓` reorder (`move(from:to:)`,

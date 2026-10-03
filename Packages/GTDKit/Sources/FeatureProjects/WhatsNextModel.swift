@@ -38,6 +38,12 @@ public final class WhatsNextModel {
             .map { OpenStep(stepIndex: $0.offset, step: $0.element) }
     }
 
+    /// #84 — the project's Someday actions, narrowed by what is typed into New action
+    /// (`SomedaySuggestions`). Picking one opens the action card over that note.
+    public func somedaySuggestions(for query: String) -> [Action] {
+        SomedaySuggestions.matches(query, project: projectID, in: model.snapshot)
+    }
+
     /// True once this project has no open action left — "nothing yet" leaves it this way,
     /// and the sheet says so (STYLEGUIDE `stalledProjectBody`).
     public var isStalled: Bool {
