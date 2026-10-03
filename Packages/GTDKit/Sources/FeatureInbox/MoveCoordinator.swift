@@ -125,6 +125,8 @@ public final class MoveCoordinator {
             return false
         }
         newListRefusal = nil
+        // #94 — the list exists: the picker's `New list…` draft is done with.
+        model.inputDrafts.clear(InputDraftKey.newListInPicker)
         let created = model.snapshot.list(named: VaultLayout.sanitize(name))?.name
             ?? VaultLayout.sanitize(name)
         await chooseList(action, named: created)

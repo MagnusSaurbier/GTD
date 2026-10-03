@@ -43,9 +43,16 @@ public struct WaitingView: View {
             WaitingInfoSheet(
                 initial: list.waitingInfo(for: action),
                 suggestedWho: list.recentWho,
-                today: list.today
+                today: list.today,
+                drafts: model.inputDrafts,
+                draftKey: InputDraftKey.waiting(action.id)
             ) { info in
-                Task { await model.perform(.setStatus(action.id, .waiting, waiting: info)) }
+                Task {
+                    // #94 — the sheet's draft goes once the change went through.
+                    if await model.perform(.setStatus(action.id, .waiting, waiting: info)) {
+                        model.inputDrafts.clear(InputDraftKey.waiting(action.id))
+                    }
+                }
             }
         }
     }

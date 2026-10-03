@@ -12,7 +12,7 @@ import DesignSystem
 
 /// What the user has decided about the card in front of them. Nothing here is written to the
 /// vault until the card is filed, and nothing is pre-filled (§1 "no lying defaults").
-public struct InboxDraft: Sendable, Equatable {
+public struct InboxDraft: Sendable, Equatable, Codable {
     /// The note's title, editable in place. For an inbox card it is the **file name** (C3): a
     /// changed title renames `Inbox/<title>.md` before the card is filed. For L4's "Make action"
     /// it is the list item's title.

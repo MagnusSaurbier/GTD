@@ -667,6 +667,8 @@ public final class InboxSession {
             return false
         }
         newListRefusal = nil
+        // #94 — the list exists: the picker's `New list…` draft is done with.
+        model.inputDrafts.clear(InputDraftKey.newListInPicker)
         // The reducer sanitises the name; file into the list it actually made.
         let created = model.snapshot.list(named: VaultLayout.sanitize(name))?.name
             ?? VaultLayout.sanitize(name)
@@ -685,8 +687,23 @@ public final class InboxSession {
             refuse(.notAvailable(.waiting, in: step))
             return
         }
+        let key = waitingDraftKey
+        let filedBefore = processed
         await fileAction(status: .waiting, waiting: info, as: .waiting)
+        // #94 — the follow-up sheet's draft is done with once the card is filed.
+        if processed > filedBefore, let key { model.inputDrafts.clear(key) }
     }
+
+    // MARK: - Sub-sheet drafts (#94)
+
+    /// Where the follow-up sheet keeps the current card's `who` and date while it is open.
+    public var waitingDraftKey: String? { current.map { InputDraftKey.waiting($0.id) } }
+
+    /// Where `Defer to review` keeps the current card's reason while it is open.
+    public var deferReasonDraftKey: String? { current.map { InputDraftKey.deferReason($0.id) } }
+
+    /// The drafts store the sheets keep their fields in.
+    public var inputDrafts: InputDrafts { model.inputDrafts }
 
     /// I4a/R-8 — the `+ project` chip.
     public func chooseProject(_ id: NoteID?) { card.draft.chooseProject(id) }
@@ -722,6 +739,8 @@ public final class InboxSession {
             // kept in it, so the review (or the next session) opens it as it was left.
             let deferredID = try await writeProgress() ?? item.id
             try await model.send(.deferInboxToReview(deferredID, reason: trimmed))
+            // #94 — the reason is in the note now; the sheet's draft is done with.
+            model.inputDrafts.clear(InputDraftKey.deferReason(item.id))
             finish(item: item.renamed(to: deferredID), card: filedCard, step: .step1, target: .deferToReview,
                    toastLabel: CardTarget.deferToReview.undoToastLabel())
         } catch let error as GTDError {
