@@ -11,7 +11,6 @@ public enum MoveDestination: Hashable, Sendable {
     case next
     case someday
     case waiting
-    case deferred
     case projects
     case project(NoteID)
     /// The Lists *section* — the person picks the list (the inbox's own list picker).
@@ -35,8 +34,6 @@ public enum MovePlan: Equatable, Sendable {
     /// The target tier needs fields the note does not have: open the action card, aimed at
     /// `status`, with `missing` marked (R-3, STYLEGUIDE §3.6).
     case card(status: ActionStatus, missing: [RequiredField])
-    /// Deferred is not a status but a date (R-2): ask for one.
-    case deferDate
     /// The Projects *section*: ask which project.
     case pickProject
     /// The Lists *section*: ask which list — the same picker as the inbox's `More…` sheet.
@@ -58,9 +55,6 @@ public enum MovePlan: Equatable, Sendable {
         case .waiting:
             guard action.status != .waiting else { return .alreadyThere }
             return move(action, to: .waiting)
-        case .deferred:
-            if let deferDate = action.deferDate, deferDate > today { return .alreadyThere }
-            return .deferDate
         case .projects:
             return .pickProject
         case let .project(id):

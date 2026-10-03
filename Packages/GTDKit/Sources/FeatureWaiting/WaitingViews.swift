@@ -200,107 +200,6 @@ private struct WaitingRow: View {
     }
 }
 
-/// Deferred items grouped by return date (D1): this week, then later. Actions: un-defer now,
-/// change date. **Owned by T23.**
-///
-/// Selection behaves exactly as in `WaitingView` (M2). The screen is titled "Deferred", the name
-/// the sidebar and the empty detail column use — `Copy.deferLabel` ("Defer") is the date chip's
-/// field label, and naming the screen with it made the window title disagree with the sidebar.
-public struct DeferredView: View {
-    private let selection: NoteID?
-    private let onOpen: (NoteID) -> Void
-    @Environment(AppModel.self) private var model
-
-    public init(selection: NoteID? = nil, onOpen: @escaping (NoteID) -> Void) {
-        self.selection = selection
-        self.onOpen = onOpen
-    }
-
-    public var body: some View {
-        let list = WaitingListModel(model: model)
-        Group {
-            if list.deferredThisWeek.isEmpty && list.deferredLater.isEmpty {
-                ContentUnavailableView(WaitingCopy.deferredTitle, systemImage: Symbols.deferred)
-            } else {
-                SelectableList(selection: selection, onOpen: onOpen) {
-                    if !list.deferredThisWeek.isEmpty {
-                        Section("This week") {
-                            ForEach(list.deferredThisWeek) {
-                                DeferredRow(action: $0, list: list, onOpen: onOpen).tag($0.id)
-                            }
-                        }
-                    }
-                    if !list.deferredLater.isEmpty {
-                        Section("Later") {
-                            ForEach(list.deferredLater) {
-                                DeferredRow(action: $0, list: list, onOpen: onOpen).tag($0.id)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle(WaitingCopy.deferredTitle)
-    }
-}
-
-private struct DeferredRow: View {
-    let action: Action
-    let list: WaitingListModel
-    let onOpen: (NoteID) -> Void
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Spacing.m) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(action.title)
-                    .font(Typo.body)
-                    .foregroundStyle(Color.ink)
-                    .lineLimit(2)
-                badgeRow
-            }
-            Spacer(minLength: Spacing.s)
-            DateValueChip(label: Copy.deferLabel, value: deferBinding, today: list.today)
-        }
-        .padding(.vertical, Spacing.rowVertical)
-        .contentShape(Rectangle())
-        .draggableNote(action.id)
-        .onTapGesture { onOpen(action.id) }
-        .swipeActions(edge: .trailing) {
-            Button {
-                Task { await model.perform(.updateAction(list.unDeferred(action))) }
-            } label: {
-                Label("Un-defer now", systemImage: Symbols.deferred)
-            }
-        }
-        .contextMenu {
-            Button {
-                Task { await model.perform(.updateAction(list.unDeferred(action))) }
-            } label: {
-                Label("Un-defer now", systemImage: Symbols.deferred)
-            }
-            MoveToMenu(id: action.id)
-        }
-    }
-
-    @ViewBuilder private var badgeRow: some View {
-        let badges = list.badges(for: action)
-        if !badges.isEmpty {
-            HStack(spacing: Spacing.xs) {
-                ForEach(Array(badges.enumerated()), id: \.offset) { Badge($0.element) }
-            }
-        }
-    }
-
-    private var deferBinding: Binding<Day?> {
-        Binding(
-            get: { action.deferDate },
-            set: { newValue in
-                Task { await model.perform(.updateAction(list.redeferred(action, to: newValue))) }
-            })
-    }
-}
-
 /// The Mac calendar strip (D3): a 14-day strip anchored on today, up to 3 markers per day
 /// distinguished by symbol, a signal colour only where STYLEGUIDE §2.2 defines one, an accent
 /// underline on today, and overdue items piled on the leading edge. **Owned by T23.**
@@ -388,7 +287,6 @@ public struct CalendarStrip: View {
 
     private func symbol(_ kind: Rules.TimelineKind) -> String {
         switch kind {
-        case .deferred: Symbols.deferred
         case .due: Symbols.due
         case .followUp: Symbols.waiting
         }
@@ -420,26 +318,6 @@ public struct CalendarStrip: View {
 #Preview("Waiting — empty") {
     NavigationStack {
         WaitingView(onOpen: { _ in })
-    }
-    .environment(AppModel(
-        backend: InMemoryBackend(snapshot: .empty),
-        snapshot: .empty,
-        today: { Fixtures.today }))
-}
-
-#Preview("Deferred") {
-    NavigationStack {
-        DeferredView(onOpen: { _ in })
-    }
-    .environment(AppModel(
-        backend: InMemoryBackend(snapshot: Fixtures.sampleSnapshot),
-        snapshot: Fixtures.sampleSnapshot,
-        today: { Fixtures.today }))
-}
-
-#Preview("Deferred — empty") {
-    NavigationStack {
-        DeferredView(onOpen: { _ in })
     }
     .environment(AppModel(
         backend: InMemoryBackend(snapshot: .empty),

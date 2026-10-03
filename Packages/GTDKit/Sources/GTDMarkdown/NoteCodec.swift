@@ -88,7 +88,18 @@ public enum NoteCodec {
 
     // MARK: - Action
 
+    /// #86 — a legacy `defer:` line is read as what deferring means now: a who-less waiting
+    /// item following up on that day (`Action.foldingDeferIntoWaiting`). Like R-1's status
+    /// spellings, the file keeps its own lines until the user changes the note; `encode` then
+    /// rewrites them as `status: waiting` + `followUpDate:` and drops `defer:`.
     public static func decodeAction(
+        id: NoteID, text: String, timeZone: TimeZone = .current
+    ) throws -> Action {
+        try decodeStoredAction(id: id, text: text, timeZone: timeZone).foldingDeferIntoWaiting()
+    }
+
+    /// The frontmatter exactly as written, legacy `defer:` included — what `encode` patches.
+    static func decodeStoredAction(
         id: NoteID, text: String, timeZone: TimeZone = .current
     ) throws -> Action {
         let doc = try FrontmatterDocument(text: text, path: id.path)
@@ -171,6 +182,20 @@ public enum NoteCodec {
         // L4) the reducer has already put the item's notes at the top of `action.body`.
         if RawText.text(doc.bodyLines) != action.body {
             doc.setBody(RawText.block(action.body, terminator: doc.terminator))
+        }
+
+        // #86 — the note still holds a legacy `defer:` that `decodeAction` folded into waiting.
+        // Untouched, it keeps every byte; once anything else changed, the lines the fold
+        // stood in for are written out for real, against what the file actually says.
+        if let stored, doc.text != stored,
+           let written = try? decodeStoredAction(id: action.id, text: stored, timeZone: timeZone),
+           written.deferDate != nil {
+            if written.status != action.status {
+                doc.setValue("status", action.status.rawValue, canonicalOrder: order)
+            }
+            setOptionalDay("defer", action.deferDate, written.deferDate, &doc, order)
+            setOptionalText("waitingFor", action.waitingFor, written.waitingFor, &doc, order)
+            setOptionalDay("followUpDate", action.followUpDate, written.followUpDate, &doc, order)
         }
         return doc.text
     }

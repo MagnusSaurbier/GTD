@@ -106,7 +106,6 @@ struct OverviewCalendarStrip: View {
 
     private func symbol(_ kind: Rules.TimelineKind) -> String {
         switch kind {
-        case .deferred: Symbols.deferred
         case .due: Symbols.due
         case .followUp: Symbols.waiting
         }

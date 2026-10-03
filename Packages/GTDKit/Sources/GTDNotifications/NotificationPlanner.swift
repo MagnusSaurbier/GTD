@@ -73,9 +73,10 @@ public struct DeviceNotificationSettings: Sendable, Equatable, Codable {
 /// requests (routines first, then soonest first; same-morning items collapse into a summary).
 ///
 /// Kinds planned, one call covers all of them (D1, D2, R3, W2):
-/// - `deferReturn` — morning of `Action.deferDate`, once.
+/// - `deferReturn` — morning of a deferral's date, once: a who-less waiting item comes back
+///   into Next on its follow-up date (#86).
 /// - `dueApproaching` — morning of `due - 1 day` **and** morning of `due` (two notifications).
-/// - `followUp` — morning of `Action.followUpDate`, for `status == .waiting` only.
+/// - `followUp` — morning of `Action.followUpDate`, for waiting items **with** a who.
 /// - `routineStart` — a daily-repeating trigger at `Routine.time`; with `Routine.day` set, a
 ///   weekly-repeating one on that weekday instead (first fire date = its next occurrence).
 ///
@@ -108,9 +109,10 @@ public enum NotificationPlanner {
         for action in snapshot.actions {
             guard !action.status.isClosed else { continue }   // A5: done and legacy trash (R-1)
 
-            if settings.enabledKinds.contains(.deferReturn), let deferDate = action.deferDate,
+            if settings.enabledKinds.contains(.deferReturn), action.isWhoLessWaiting,
+               let returns = action.followUpDate,
                let notification = itemNotification(
-                   action, day: deferDate, kind: .deferReturn,
+                   action, day: returns, kind: .deferReturn,
                    title: "Back today", body: "\(action.title) is back.",
                    settings: settings, now: now, calendar: calendar) {
                 candidates.append(notification)
@@ -132,7 +134,7 @@ public enum NotificationPlanner {
             }
 
             if settings.enabledKinds.contains(.followUp), action.status == .waiting,
-               let followUp = action.followUpDate {
+               !action.isWhoLessWaiting, let followUp = action.followUpDate {
                 let who = action.waitingFor.map { " with \($0)" } ?? ""
                 if let notification = itemNotification(
                     action, day: followUp, kind: .followUp,

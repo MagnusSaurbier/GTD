@@ -4,8 +4,8 @@ import GTDModel
 import GTDAppCore
 import DesignSystem
 
-/// Waiting-for, deferred items and the calendar-strip data (W2, D1, D3). Plain and
-/// unit-testable — **no SwiftUI**. Owned by T23.
+/// Waiting-for (deferred items included — a deferral is a who-less waiting item, #86) and the
+/// calendar-strip data (W2, D1, D3). Plain and unit-testable — **no SwiftUI**. Owned by T23.
 @MainActor
 @Observable
 public final class WaitingListModel {
@@ -19,17 +19,6 @@ public final class WaitingListModel {
 
     /// Sorted by staleness: the longest-overdue follow-up first (W2).
     public var waiting: [Action] { Rules.waitingList(model.snapshot, today: today) }
-
-    /// Deferred items grouped by return date: this week, then later (D1).
-    public var deferredThisWeek: [Action] {
-        Rules.deferredList(model.snapshot, today: today)
-            .filter { ($0.deferDate?.days(since: today) ?? .max) <= 7 }
-    }
-
-    public var deferredLater: [Action] {
-        Rules.deferredList(model.snapshot, today: today)
-            .filter { ($0.deferDate?.days(since: today) ?? .max) > 7 }
-    }
 
     /// Days since the item was last touched — the "waiting since N days" column. Uses the file
     /// modification date (ARCHITECTURE §5's definition of "untouched": a status change rewrites
@@ -95,20 +84,6 @@ public final class WaitingListModel {
         return WaitingInfo(who: (who?.isEmpty ?? true) ? nil : who, followUp: date)
     }
 
-    /// The action with its `deferDate` cleared — "un-defer now" (D1).
-    public func unDeferred(_ action: Action) -> Action {
-        var copy = action
-        copy.deferDate = nil
-        return copy
-    }
-
-    /// The action with a new `deferDate` — "change date" (D1).
-    public func redeferred(_ action: Action, to date: Day?) -> Action {
-        var copy = action
-        copy.deferDate = date
-        return copy
-    }
-
     /// Markers for the Mac calendar strip (D3), grouped per day, `today` first.
     public func timeline(days: Int) -> [(day: Day, entries: [Rules.TimelineEntry])] {
         let to = today.adding(days: days - 1)
@@ -119,7 +94,7 @@ public final class WaitingListModel {
         }
     }
 
-    /// Defer, due and follow-up dates already in the past — piled on the left edge of the strip
+    /// Due and follow-up dates already in the past — piled on the left edge of the strip
     /// instead of being lost off the front of the 14-day window (D3).
     public var overduePile: [Rules.TimelineEntry] {
         Rules.timeline(model.snapshot, from: today.adding(days: -365), to: today.adding(days: -1))
@@ -127,9 +102,9 @@ public final class WaitingListModel {
 
     /// The signal step a calendar-strip marker should be tinted with, or `nil` for a plain,
     /// untinted symbol. Per STYLEGUIDE §3.10, a marker "takes a signal colour only when §2.2
-    /// says so": `due` and follow-up markers use the same thresholds as their row badges;
-    /// `deferred` markers are never tinted (the only defer-related signal, `back`, is itself a
-    /// neutral badge, not a colour).
+    /// says so": `due` and follow-up markers use the same thresholds as their row badges. A
+    /// deferral's marker (a who-less follow-up, #86) is never tinted: the only signal it gets,
+    /// `back`, is itself a neutral badge, not a colour.
     public func signalStep(for entry: Rules.TimelineEntry, policy: StalenessPolicy = .default) -> SignalStep? {
         let delta = entry.day.days(since: today)
         switch entry.kind {
@@ -139,12 +114,15 @@ public final class WaitingListModel {
             if delta <= policy.dueSoonDays { return .aging }
             return nil
         case .followUp:
+            if isWhoLessFollowUp(entry) { return nil }
             if delta <= 0 { return .attention }
             if delta <= policy.followUpSoonDays { return .aging }
             return nil
-        case .deferred:
-            return nil
         }
+    }
+
+    private func isWhoLessFollowUp(_ entry: Rules.TimelineEntry) -> Bool {
+        model.snapshot.action(entry.action)?.isWhoLessWaiting ?? false
     }
 
     /// "Recent who" values offered as suggestions in `WaitingInfoSheet`, most recently seen
