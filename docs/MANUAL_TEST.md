@@ -179,6 +179,15 @@ You need a full Next list: demote or complete until the Next sidebar count reads
       Knowledge / List card (`K`, click into `Notes`, `Esc` `Esc` `Esc`).
 - [ ] **Mac:** with a nested sheet open (`P` project, `W` waiting, `0` More…), `Esc` closes only
       that sheet; the card under it stays opened.
+- [ ] **Closing keeps the card (#85).** Open a card as an action, type `Why?`/`What?`, pick a
+      context and a time chip, change the title, then `Close` (or `Esc` until it closes, or swipe
+      the sheet away on iPhone). In Obsidian the inbox note now has the new name, `contexts:` /
+      `timeEstimate:` in its frontmatter and `# Why?` / `# What?` sections; it is still in
+      `Inbox/`. Reopen inbox processing: the card opens with all of it filled in. File it to
+      Next: the action has each heading once. Same with ⌘Q instead of `Close`.
+- [ ] Type notes in the Knowledge sheet, `Cancel`, `Close`: the notes are in the inbox note.
+- [ ] Quick capture / a list's `+`: type, then swipe the sheet away (or `Esc`) — the capture /
+      item exists. Type, then `Cancel` — nothing is written.
 - [ ] Capture something new mid-session (`⌘N`): it queues **behind** a card you have already
       opened, and jumps to the front only if the current card is an untouched step-1 card.
 - [ ] Process the queue to zero: the reward moment appears with `n processed · m min` and a

@@ -23,7 +23,6 @@ struct KnowledgeSheet: View {
     @State private var selection: String?
     /// I4b — an active project's folder, chosen instead of a `Knowledge/` folder.
     @State private var projectTarget: NoteID?
-    @State private var notes: String = ""
     @State private var newFolder: String = ""
     @State private var isAddingFolder = false
     /// Paths of the folders whose children are shown (#24). Starts empty: the tree opens
@@ -170,7 +169,9 @@ struct KnowledgeSheet: View {
                 }
 
                 Section(InboxCopy.notesLabel) {
-                    NoteEditor(text: $notes, prompt: InboxCopy.notesPlaceholder)
+                    // The card's own notes panel (#85): what is typed here survives `Cancel`
+                    // and is kept with the card when the session closes.
+                    NoteEditor(text: $session.draft.notes, prompt: InboxCopy.notesPlaceholder)
                         // `⌘↩` past the last line hands the keys to the walk, on `Done`.
                         .onAdvance { point(at: .done) }
                         .focused($isNotesFocused)
@@ -350,9 +351,8 @@ struct KnowledgeSheet: View {
     private func save() {
         let target: KnowledgeTarget = projectTarget.map(KnowledgeTarget.project)
             ?? .folder(selection ?? "")
-        let body = notes
         dismiss()
-        Task { await session.confirmKnowledge(target: target, notes: body) }
+        Task { await session.confirmKnowledge(target: target) }
     }
 
     private func cancel() {

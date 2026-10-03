@@ -16,22 +16,48 @@ public struct InboxItem: Identifiable, Sendable, Equatable {
     public var created: Date
     /// Non-nil ⇒ deferred to the weekly review (I5); such items leave the processing queue.
     public var reviewReason: String?
+    /// #85 — what a half-processed card had decided when it was closed (`saveInboxProgress`),
+    /// under the keys an action note uses. Empty for every capture nobody started on; filing
+    /// the card is what turns them into the action's own fields.
+    public var contexts: [String]
+    /// Minutes, like `Action.timeEstimate`. `nil` when undecided.
+    public var timeEstimate: Int?
+    public var project: NoteID?
+    public var deferDate: Day?
+    public var due: Day?
     public var passthrough: NotePassthrough
 
     /// The file name without `.md` — what every list, card and label shows for this item.
     public var title: String { id.title }
+
+    /// #85 — the card's choices this note carries, as one value.
+    public var progress: InboxProgress {
+        InboxProgress(
+            body: body, contexts: contexts, timeEstimate: timeEstimate, project: project,
+            deferDate: deferDate, due: due)
+    }
 
     public init(
         id: NoteID,
         body: String,
         created: Date,
         reviewReason: String? = nil,
+        contexts: [String] = [],
+        timeEstimate: Int? = nil,
+        project: NoteID? = nil,
+        deferDate: Day? = nil,
+        due: Day? = nil,
         passthrough: NotePassthrough = .empty
     ) {
         self.id = id
         self.body = body
         self.created = created
         self.reviewReason = reviewReason
+        self.contexts = contexts
+        self.timeEstimate = timeEstimate
+        self.project = project
+        self.deferDate = deferDate
+        self.due = due
         self.passthrough = passthrough
     }
 }
