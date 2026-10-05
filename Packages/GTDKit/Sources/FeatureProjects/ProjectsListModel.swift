@@ -11,6 +11,9 @@ import DesignSystem
 public final class ProjectsListModel {
     /// Which statuses the list shows; empty = all.
     public var statuses: Set<ProjectStatus> = [.active]
+    /// The Mac shell's ⌘F text (#98): narrows the rows by project title after the status chips,
+    /// case-insensitively. `""` = no filter.
+    public var query: String = ""
 
     private let model: AppModel
 
@@ -26,14 +29,29 @@ public final class ProjectsListModel {
     public var tree: ProjectTree<Rules.ProjectRow> {
         let rows = Rules.projectRows(model.snapshot, today: today)
             .filter { statuses.isEmpty || statuses.contains($0.project.status) }
+            .filter { Self.matches($0.project.title, query: query) }
         return ProjectTree(
             rows: rows, layout: model.snapshot.config.layout,
             id: \.project.id, title: \.project.title)
     }
 
-    /// The rows `ProjectsListView` draws, given the folders collapsed on this device.
+    /// The rows `ProjectsListView` draws, given the folders collapsed on this device. While a
+    /// query is typed every folder is open, so a match inside a folded folder still shows.
     public func lines(collapsed: Set<String>) -> [ProjectTree<Rules.ProjectRow>.Line] {
-        tree.lines(collapsed: collapsed, id: \.project.id)
+        tree.lines(collapsed: isFiltered ? [] : collapsed, id: \.project.id)
+    }
+
+    /// Whether a ⌘F query narrows the list — an empty list then says "No match", not "no projects".
+    public var isFiltered: Bool { !Self.needle(query).isEmpty }
+
+    /// Same rule as `ActionListModel.filter`: trimmed, case-insensitive substring of the title.
+    static func matches(_ title: String, query: String) -> Bool {
+        let needle = needle(query)
+        return needle.isEmpty || title.lowercased().contains(needle)
+    }
+
+    private static func needle(_ query: String) -> String {
+        query.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
     /// Steps that `WhatsNextSheet` offers for one-tap promotion (P5).

@@ -32,6 +32,7 @@ public struct ProjectsListView: View {
     private let onOpenProject: (NoteID) -> Void
     private let onOpenAction: (NoteID) -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.searchQuery) private var query
     @State private var listModel: ProjectsListModel?
     @State private var isPresentingNewProject = false
     /// Folders of the tree the user folded on this device (#67) — `ProjectTreePath.encode`'s
@@ -51,7 +52,12 @@ public struct ProjectsListView: View {
     public var body: some View {
         let list = listModel ?? ProjectsListModel(model: model)
         Group {
-            if list.tree.isEmpty {
+            if list.tree.isEmpty, list.isFiltered {
+                ContentUnavailableView(
+                    ProjectsCopy.emptyFilterTitle,
+                    systemImage: Symbols.filter,
+                    description: Text(ProjectsCopy.emptyFilterBody))
+            } else if list.tree.isEmpty {
                 ContentUnavailableView(Copy.projects, systemImage: Symbols.projects)
             } else {
                 selectableList {
@@ -96,7 +102,13 @@ public struct ProjectsListView: View {
         .sheet(isPresented: $isPresentingNewProject) {
             NewProjectSheet(listModel: list)
         }
-        .task { if listModel == nil { listModel = list } }
+        .task {
+            list.query = query
+            if listModel == nil { listModel = list }
+        }
+        .onChange(of: query) { _, newValue in
+            listModel?.query = newValue
+        }
     }
 
     private var collapsedFolders: Set<String> { ProjectTreePath.decode(collapsedFoldersStorage) }

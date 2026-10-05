@@ -5,26 +5,6 @@ import GTDAppCore
 import DesignSystem
 import GTDFixtures
 
-/// The ⌘F filter text of the enclosing window, so the shell's filter bar reaches the list it
-/// filters. `""` when the list is used outside the Mac shell.
-private struct OverviewQueryKey: EnvironmentKey {
-    static let defaultValue = ""
-}
-
-extension EnvironmentValues {
-    var overviewQuery: String {
-        get { self[OverviewQueryKey.self] }
-        set { self[OverviewQueryKey.self] = newValue }
-    }
-}
-
-extension View {
-    /// Hands the window's ⌘F filter text to the lists below it.
-    func overviewQuery(_ query: String) -> some View {
-        environment(\.overviewQuery, query)
-    }
-}
-
 /// Someday — the tier list no feature target owns (E3).
 ///
 /// Grouped by area / project; context and time are **filters** (chips), never groupings.
@@ -38,7 +18,7 @@ public struct ActionListView: View {
     private let onOpen: (NoteID) -> Void
 
     @Environment(AppModel.self) private var model
-    @Environment(\.overviewQuery) private var query
+    @Environment(\.searchQuery) private var query
     @State private var list: ActionListModel?
 
     public init(

@@ -244,7 +244,7 @@ private struct ContentColumn: View {
                 Divider()
             }
             list
-                .overviewQuery(navigation.query)
+                .searchQuery(navigation.query)
             if navigation.selection.showsCalendarStrip {
                 Divider()
                 calendarDock
