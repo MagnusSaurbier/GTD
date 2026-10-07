@@ -74,6 +74,12 @@ public struct MakeActionCardView: View {
             .onChange(of: model.isFiled) { _, filed in
                 if filed { onFinished() }
             }
+            // #85 — a card over an existing action keeps what was typed when it is closed
+            // without filing (Close, `Esc`, the sheet swiped away).
+            .onDisappear {
+                let model = model
+                Task { await model.keepEdits() }
+            }
             .sensoryFeedback(.error, trigger: model.shakeTrigger)
             .sensoryFeedback(.impact(weight: .medium), trigger: dragTarget)
             #if os(macOS)

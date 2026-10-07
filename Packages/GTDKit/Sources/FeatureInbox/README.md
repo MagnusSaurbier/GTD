@@ -79,7 +79,9 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
   (sending `promoteListItem`) or an `Action` (sending `updateAction`; `ActionCardState.previousStatus`
   is set so the card asks exactly what `Reducer.normalize` asks of a note already in a tier).
   Same draft, same validation, same cap flow; exits → Next / ← Someday / Waiting / Done;
-  `cancel()` leaves the note as it was. There is no step 1 under it, so `Esc` blurs then
+  `cancel()` leaves the note as it was — except that over an existing action the fields typed
+  are kept on close (`keptEdits`/`keepEdits()`, #85: status and the waiting pair stay, only the
+  move is cancelled; `MakeActionCardView` calls it on disappear). There is no step 1 under it, so `Esc` blurs then
   cancels, and `undo` belongs to the list, not to the card.
 - `MoveCoordinator.swift` — a drop or `Move to…` → `MovePlan` → perform at once, or hold the
   `dialogue` (`card` / `deferDate` / `pickProject`) until it confirms or is cancelled.
@@ -97,7 +99,16 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
   (`InboxRefusal.notAvailable`) rather than quietly doing it — that is what keeps **Trash and
   `Defer to review` reachable from step 1 only** (I4c, I5).
 - **Collapsing keeps the draft.** It survives until the card is filed or the session ends; a
-  fresh card always starts at step 1 with an empty draft.
+  fresh card always starts at step 1 with the draft its note holds — empty for a new capture.
+- **Leaving the session keeps the card (#85).** `saveProgress()` writes the current card into
+  its inbox note (`saveInboxProgress`: `InboxDraft.progress(over:)` — body with `Why?`/`What?`,
+  chips, the notes panel joined to the capture text — then the title as a rename) and leaves it
+  in the inbox; `InboxDraft(item:)` reads it all back. `InboxProcessingView` calls it on
+  disappear (Close, `Esc`, swipe-away, the review moving on), `AppModel.flushHeldEdits` on ⌘Q /
+  backgrounding (the session is a `HeldEdits`; `unsavedText` feeds the crash journal), and
+  `Defer to review` writes the same before deferring. A list filing clears stored chips first
+  (`persistEdits(clearingProgress:)`). The Knowledge sheet edits `draft.notes` itself, so
+  `Cancel` there keeps them.
 - Nothing is pre-filled and no suggestion is ever persisted: the last-used knowledge folder and
   the +7 d follow-up are **suggested** until the user taps them (§1, STYLEGUIDE §3.1). The
   suggestion travels as its own field of `KnowledgePickerModel`, never as a chosen folder.

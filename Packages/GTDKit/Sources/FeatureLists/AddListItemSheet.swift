@@ -13,6 +13,8 @@ struct AddListItemSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
+    /// `Cancel` pressed or the item sent: going away then sends nothing more (#85).
+    @State private var isSettled = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -28,7 +30,10 @@ struct AddListItemSheet: View {
                 .submitLabel(.done)
                 .onSubmit(add)
             HStack {
-                Button(Copy.cancel) { dismiss() }
+                Button(Copy.cancel) {
+                    isSettled = true
+                    dismiss()
+                }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.textSecondary)
                 Spacer()
@@ -47,13 +52,24 @@ struct AddListItemSheet: View {
         .presentationDragIndicator(.visible)
         #endif
         .onAppear { focused = true }
+        // #85 — swiped away or `Esc` with a title typed: the item is added all the same.
+        .onDisappear {
+            guard DismissedInput.keeps(title, settled: isSettled) else { return }
+            let lists = ListsModel(model: model)
+            let title = title
+            let list = list
+            Task { await lists.add(title, to: list) }
+        }
     }
 
     private func add() {
         guard ListsModel.canAdd(title) else { return }
         let lists = ListsModel(model: model)
         Task {
-            if await lists.add(title, to: list) { dismiss() }
+            if await lists.add(title, to: list) {
+                isSettled = true
+                dismiss()
+            }
         }
     }
 }

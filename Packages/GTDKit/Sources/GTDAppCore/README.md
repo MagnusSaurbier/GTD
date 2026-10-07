@@ -95,6 +95,10 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   reports its `unsavedText` (typed title/body only) and calls `heldEditsChanged()`; the model
   forwards it to `unsavedJournal` (`UnsavedTextJournal`, #56), the crash-safe copy the shell
   hands every model. `restoreUnsaved` / `discardUnsaved` settle what an earlier run left.
+  Kinds: `.action`, `.listItem`, and `.inbox` (#85, the inbox session: restores the body with
+  `editInboxBody`; a typed title alone is copy-only).
+- **`DismissedInput.keeps(_:settled:)`** (#85) — a one-field sheet (quick capture, a list's `+`)
+  left without its buttons still sends what was typed; only `Cancel` discards.
 - `snapshots()` is synchronous on purpose, so an actor backend must implement it `nonisolated`.
   `SnapshotHub` does the fan-out under an `NSLock` — the one justified `@unchecked Sendable`
   in this target. Its first element is always the current snapshot.

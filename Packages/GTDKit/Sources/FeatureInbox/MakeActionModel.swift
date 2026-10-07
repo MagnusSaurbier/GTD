@@ -285,6 +285,44 @@ public final class MakeActionModel {
         card.clearFlags()
     }
 
+    // MARK: - Closing keeps the edits (#85)
+
+    /// What closing the card without filing writes, or `nil` when it writes nothing.
+    ///
+    /// Over an existing action (a drop, `Move to…`, a step's status badge) the fields typed or
+    /// chosen are kept in the action — title, `Why?`/`What?`, chips, dates, an existing project —
+    /// and only the move is cancelled: status and the waiting pair stay the note's own. Built
+    /// on the action **as the vault has it now**, so a field changed elsewhere meanwhile and
+    /// not touched on the card is not reverted. A project the picker was about to create is not
+    /// created. The other sources have nowhere to keep action fields — a list item carries only
+    /// its notes (L1), a step only its line, "What's next?" nothing yet — so they keep nothing.
+    public var keptEdits: Action? {
+        guard !isFiled, case let .action(original) = source,
+              let current = model.snapshot.action(original.id) else { return nil }
+        let start = InboxDraft(action: original)
+        var edited = current
+        func take<V: Equatable>(_ path: WritableKeyPath<InboxDraft, V>, into apply: (V) -> Void) {
+            if draft[keyPath: path] != start[keyPath: path] { apply(draft[keyPath: path]) }
+        }
+        take(\.title) { edited.title = $0 }
+        take(\.body) { edited.preamble = $0 }
+        take(\.why) { edited.why = $0 }
+        take(\.what) { edited.what = $0 }
+        take(\.contexts) { edited.contexts = $0 }
+        take(\.timeBucket) { edited.timeEstimate = $0?.minutes }
+        take(\.deferDate) { edited.deferDate = $0 }
+        take(\.due) { edited.due = $0 }
+        if draft.newProjectTitle == nil { take(\.project) { edited.project = $0 } }
+        return edited == current ? nil : edited
+    }
+
+    /// #85 — writes `keptEdits` (`updateAction`). A refusal reaches the shell's alert. Harmless
+    /// to call twice: the second call finds nothing left to write.
+    public func keepEdits() async {
+        guard let edited = keptEdits else { return }
+        await model.perform(.updateAction(edited))
+    }
+
     // MARK: - Keys
 
     @discardableResult
