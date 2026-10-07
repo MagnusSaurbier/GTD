@@ -136,4 +136,43 @@ struct ProjectsListModelTests {
             try await list.createProject(ProjectDraft(title: Fixtures.flatProject.title))
         }
     }
+
+    // MARK: - ⌘F query (#98)
+
+    @Test func queryNarrowsRowsByTitleCaseInsensitively() {
+        let list = ProjectsListModel(model: makeModel())
+        list.statuses = []
+        list.query = "  daA "
+        #expect(list.isFiltered)
+        #expect(visibleRows(list).map(\.project.id) == [Fixtures.daadProject.id])
+    }
+
+    @Test func queryShowsMatchesInsideCollapsedFolders() {
+        let list = ProjectsListModel(model: makeModel())
+        list.statuses = []
+        let folder = Fixtures.daadProject.id.folder.split(separator: "/").dropLast().joined(separator: "/")
+        list.query = "DAAD"
+        let ids = list.lines(collapsed: [folder]).compactMap {
+            if case let .project(_, id, _) = $0 { id } else { nil }
+        }
+        #expect(ids == [Fixtures.daadProject.id])
+    }
+
+    @Test func queryKeepsTheStatusChips() {
+        let list = ProjectsListModel(model: makeModel())
+        list.statuses = [.done]
+        list.query = Fixtures.flatProject.title
+        #expect(Fixtures.flatProject.status == .active)
+        #expect(list.tree.isEmpty)
+    }
+
+    @Test func clearingTheQueryRestoresTheList() {
+        let list = ProjectsListModel(model: makeModel())
+        let before = visibleRows(list).map(\.project.id)
+        list.query = "zzz no such project"
+        #expect(visibleRows(list).isEmpty)
+        list.query = ""
+        #expect(!list.isFiltered)
+        #expect(visibleRows(list).map(\.project.id) == before)
+    }
 }

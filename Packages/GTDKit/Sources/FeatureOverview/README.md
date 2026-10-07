@@ -85,8 +85,8 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 
 ## Gotchas
 
-- `⌘F` filters only lists this target renders (`ActionListView`, via `\.overviewQuery`). The
-  other features' lists ignore it until they read that environment value.
+- `⌘F` reaches the lists through `DesignSystem`'s `\.searchQuery`. `ActionListView` and
+  `FeatureProjects.ProjectsListView` read it; Next and Waiting still ignore it (#5).
 - `OverviewNavigation.isCaptureRequested` is a request to the app shell: capture writes through
   `GTDVault`, which feature targets must not import.
 - "Open in Obsidian" and "Copy path" (the note's absolute file path, via

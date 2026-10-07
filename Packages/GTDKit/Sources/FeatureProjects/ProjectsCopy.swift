@@ -4,6 +4,11 @@ import Foundation
 /// own refusals. Same pattern as `FeatureOverview.OverviewCopy` / `FeatureWaiting.WaitingCopy`:
 /// feature code never inlines a user-facing string.
 enum ProjectsCopy {
+    /// The ⌘F filter matched no project (#98) — the same words as the other lists' filtered-empty
+    /// state (`FeatureOverview.OverviewCopy`).
+    static let emptyFilterTitle = "No match"
+    static let emptyFilterBody = "Nothing here fits this filter."
+
     /// R-7's area picker (P6, STYLEGUIDE): clears `ProjectDetailModel.setArea` to `nil`. Not a
     /// "No area" option inside the picker's list — a distinct action, reached only when the
     /// project currently has an area.
