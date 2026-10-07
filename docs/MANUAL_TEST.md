@@ -179,6 +179,26 @@ You need a full Next list: demote or complete until the Next sidebar count reads
       Knowledge / List card (`K`, click into `Notes`, `Esc` `Esc` `Esc`).
 - [ ] **Mac:** with a nested sheet open (`P` project, `W` waiting, `0` More…), `Esc` closes only
       that sheet; the card under it stays opened.
+- [ ] **Closing keeps the card (#85).** Open a card as an action, type `Why?`/`What?`, pick a
+      context and a time chip, change the title, then `Close` (or `Esc` until it closes, or swipe
+      the sheet away on iPhone). In Obsidian the inbox note now has the new name, `contexts:` /
+      `timeEstimate:` in its frontmatter and `# Why?` / `# What?` sections; it is still in
+      `Inbox/`. Reopen inbox processing: the card opens with all of it filled in. File it to
+      Next: the action has each heading once. Same with ⌘Q instead of `Close`.
+- [ ] Type notes in the Knowledge sheet, `Cancel`, `Close`: the notes are in the inbox note.
+- [ ] Quick capture / a list's `+`: type, then swipe the sheet away (or `Esc`) — the capture /
+      item exists. Type, then `Cancel` — nothing is written.
+- [ ] **Dialogs keep a draft (#94, build 0.51).** For each, type something, leave without the main
+      button (`Esc`, swipe down, click outside; once with ⌘Q and relaunch), reopen the same dialog
+      for the same note — the text is back — then press `Cancel` where there is one and reopen:
+      empty. The inbox card's `Waiting` sheet (`who` + date), `Defer to review` reason, `More…` ›
+      `New list…`, Knowledge › `New folder`; "Make action" on a list item; `↗ Promote` on a project
+      step; "What's next?" (the line, and the card it opens); the `+` new-project sheet;
+      "Turn into project"; the project's `New step` (switch to another project and back on the
+      Mac: each keeps its own); the review's deferred card + `System fix`; Settings `Add a
+      context`, `Add a list`, a list rename (close Settings, rename the same list again);
+      onboarding's new-vault name. Filing / creating clears the draft: the dialog opens empty next
+      time. Nothing appears in the vault until the main button is pressed.
 - [ ] Capture something new mid-session (`⌘N`): it queues **behind** a card you have already
       opened, and jumps to the front only if the current card is an untouched step-1 card.
 - [ ] Process the queue to zero: the reward moment appears with `n processed · m min` and a

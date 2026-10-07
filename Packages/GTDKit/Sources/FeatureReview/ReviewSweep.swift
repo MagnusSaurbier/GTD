@@ -10,6 +10,24 @@ import FeatureInbox
 
 // MARK: - Deferred inbox items (§10.1.2, I5)
 
+/// #94 — the review's card over a deferred item while it is open: the card's draft and the
+/// `System fix` line. Kept in `InputDrafts` (not in the inbox note) and given back when the same
+/// item comes up again; filing it clears it.
+public struct DeferredCardDraft: Codable, Sendable, Equatable {
+    public var draft: InboxDraft
+    public var systemFix: String
+
+    public init(draft: InboxDraft, systemFix: String = "") {
+        self.draft = draft
+        self.systemFix = systemFix
+    }
+
+    /// What the card shows for `item` before anything is typed.
+    public init(opening item: InboxItem) {
+        self.init(draft: InboxDraft(item: item))
+    }
+}
+
 /// Filing a deferred item reuses the inbox card's vocabulary: the same eight targets
 /// (`FeatureInbox.CardTarget`) and the same draft (`InboxSession.Draft`), so the review never
 /// invents a second way to clarify an item.

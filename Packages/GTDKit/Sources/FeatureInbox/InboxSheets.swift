@@ -23,7 +23,6 @@ struct KnowledgeSheet: View {
     @State private var selection: String?
     /// I4b — an active project's folder, chosen instead of a `Knowledge/` folder.
     @State private var projectTarget: NoteID?
-    @State private var notes: String = ""
     @State private var newFolder: String = ""
     @State private var isAddingFolder = false
     /// Paths of the folders whose children are shown (#24). Starts empty: the tree opens
@@ -79,7 +78,12 @@ struct KnowledgeSheet: View {
                 if focused { walk = nil }
             }
         }
-        .onAppear { folders = session.knowledgeFolders }
+        // #94 — a folder name typed and left (anything but `Cancel`) comes back in its field.
+        .keepsDraft($newFolder, key: InputDraftKey.newKnowledgeFolder, in: session.inputDrafts)
+        .onAppear {
+            folders = session.knowledgeFolders
+            if session.inputDrafts.hasDraft(for: InputDraftKey.newKnowledgeFolder) { isAddingFolder = true }
+        }
     }
 
     private var form: some View {
@@ -170,7 +174,9 @@ struct KnowledgeSheet: View {
                 }
 
                 Section(InboxCopy.notesLabel) {
-                    NoteEditor(text: $notes, prompt: InboxCopy.notesPlaceholder)
+                    // The card's own notes panel (#85): what is typed here survives `Cancel`
+                    // and is kept with the card when the session closes.
+                    NoteEditor(text: $session.draft.notes, prompt: InboxCopy.notesPlaceholder)
                         // `⌘↩` past the last line hands the keys to the walk, on `Done`.
                         .onAdvance { point(at: .done) }
                         .focused($isNotesFocused)
@@ -350,12 +356,13 @@ struct KnowledgeSheet: View {
     private func save() {
         let target: KnowledgeTarget = projectTarget.map(KnowledgeTarget.project)
             ?? .folder(selection ?? "")
-        let body = notes
         dismiss()
-        Task { await session.confirmKnowledge(target: target, notes: body) }
+        Task { await session.confirmKnowledge(target: target) }
     }
 
     private func cancel() {
+        // The one deliberate discard (#94).
+        session.inputDrafts.clear(InputDraftKey.newKnowledgeFolder)
         dismiss()
         session.cancelSheet()
     }
@@ -442,6 +449,8 @@ struct DeferToReviewSheet: View {
             .onChange(of: isReasonFocused) { _, focused in
                 if focused { walk = nil }
             }
+            // #94 — the reason survives every way out but `Cancel`; deferring clears it.
+            .keepsDraft($reason, key: session.deferReasonDraftKey, in: session.inputDrafts)
             #if os(iOS)
             .scrollDismissesKeyboard(.interactively)
             #endif
@@ -499,6 +508,8 @@ struct DeferToReviewSheet: View {
     }
 
     private func cancel() {
+        // The one deliberate discard (#94).
+        if let key = session.deferReasonDraftKey { session.inputDrafts.clear(key) }
         dismiss()
         session.cancelSheet()
     }
@@ -589,7 +600,8 @@ struct MoreListsSheet: View {
             onChoose: { name in Task { await session.take(.list(name)) } },
             onCreate: { name in Task { await session.createListAndFile(name: name) } },
             onNameChanged: { session.clearNewListRefusal() },
-            onCancel: { session.cancelSheet() })
+            onCancel: { session.cancelSheet() },
+            drafts: session.inputDrafts)
     }
 }
 
@@ -608,6 +620,9 @@ struct ListChoiceSheet: View {
     let onCreate: (String) -> Void
     let onNameChanged: () -> Void
     let onCancel: () -> Void
+    /// #94 — where `New list…` keeps a typed name: every way out but `Cancel` keeps it, and
+    /// the picker opens with it again. The owner clears it once the list exists.
+    var drafts: InputDrafts? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var newListName = ""
@@ -668,10 +683,20 @@ struct ListChoiceSheet: View {
                 if focused { walk = nil }
             }
             .scrollingSheetFrame()
+            .keepsDraft($newListName, key: InputDraftKey.newListInPicker, in: drafts)
+            .onAppear {
+                // A name kept from last time opens the field it was typed in.
+                if drafts?.hasDraft(for: InputDraftKey.newListInPicker) == true {
+                    isAddingList = true
+                    walk = nil
+                }
+            }
             .navigationTitle(Copy.lists)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(InboxCopy.cancel) {
+                        // The one deliberate discard (#94).
+                        drafts?.clear(InputDraftKey.newListInPicker)
                         dismiss()
                         onCancel()
                     }

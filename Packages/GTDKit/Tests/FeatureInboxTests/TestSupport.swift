@@ -18,6 +18,14 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
     private var renames: RenameMap = .empty
     private var continuations: [UUID: AsyncStream<SnapshotUpdate>.Continuation] = [:]
     private let env: ReducerEnv
+    private var log: [GTDCommand] = []
+
+    /// Every command that reached the backend, refused or not, in order.
+    var commands: [GTDCommand] {
+        lock.lock()
+        defer { lock.unlock() }
+        return log
+    }
 
     init(snapshot: VaultSnapshot, env: ReducerEnv = Fixtures.reducerEnv(deviceID: "test")) {
         self.snapshot = snapshot
@@ -83,6 +91,7 @@ final class TestBackend: GTDBackend, @unchecked Sendable {
 
     private func apply(_ command: GTDCommand) throws -> [AppPrompt] {
         lock.lock()
+        log.append(command)
         let previous = snapshot
         let reduction: Reduction
         do {

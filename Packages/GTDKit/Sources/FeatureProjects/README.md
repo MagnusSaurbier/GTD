@@ -46,6 +46,12 @@ Linux-compilable models (no SwiftUI — this is where the logic worth testing li
   typed word (any order; `What?`-only matches last). `↓`/`↑` + Return or a tap opens the action
   card over that note, so `→` moves it into Next instead of writing a new action. The list's
   height is fixed (`SheetMetrics.inlineRowsMaxHeight`) so the sheet does not jump while filtering.
+- `ProjectDrafts.swift` (#94) — `NewProjectDraft` and `ConvertToProjectDraft`, what the
+  new-project and "Turn into project" sheets keep in `InputDrafts` (neither has a `Cancel`; `Done`
+  clears once the project exists). "What's next?"'s line (`InputDraftKey.whatsNext`) and the
+  detail's `New step` (`InputDraftKey.newStep`, per project — the Mac detail view is reused across
+  projects) keep theirs through `keepsDraft`; a refused step add keeps the text and reaches the
+  alert. A step row being edited commits on disappear too.
 - `ConvertToProjectModel` — seeds a `ProjectDraft` from an action's checkboxes, converts, promotes
   the pre-selected first step.
 - `StepReorder` — pure index maths for drag + `⌥↑↓` reorder (`move(from:to:)`,

@@ -50,6 +50,9 @@ final class AppComposition {
     /// The crash-safe copy of text the editors hold (#56), one per run and handed to every
     /// model. Fixture runs keep their own file, so they never offer the real vault's text.
     let unsavedJournal: UnsavedTextJournal
+    /// What open dialogs hold that has no place in the vault yet (#94), one per run, handed to
+    /// every model like the journal. Fixture runs keep their own file.
+    let inputDrafts: InputDrafts
 
     private let bookmark: VaultBookmark
     private let settingsStore: DeviceSettingsStore
@@ -69,6 +72,9 @@ final class AppComposition {
         let journalStore = FileUnsavedTextStore.standard(
             fileName: useFixtures ? "unsaved-text-fixtures.json" : "unsaved-text.json")
         unsavedJournal = UnsavedTextJournal(store: journalStore ?? InMemoryUnsavedTextStore())
+        let draftStore = FileInputDraftStore.standard(
+            fileName: useFixtures ? "input-drafts-fixtures.json" : "input-drafts.json")
+        inputDrafts = InputDrafts(store: draftStore ?? InMemoryInputDraftStore())
         if useFixtures {
             let snapshot = Fixtures.sampleSnapshot
             model = AppModel(
@@ -83,6 +89,7 @@ final class AppComposition {
             phase = .loading
         }
         model.unsavedJournal = unsavedJournal
+        model.inputDrafts = inputDrafts
     }
 
     // MARK: - Launch
@@ -153,6 +160,7 @@ final class AppComposition {
         deviceSettings.vaultDisplayName = nil
         model = AppModel(backend: InMemoryBackend(snapshot: .empty), snapshot: .empty)
         model.unsavedJournal = unsavedJournal
+        model.inputDrafts = inputDrafts
         phase = .onboarding
     }
 
@@ -179,6 +187,7 @@ final class AppComposition {
         model.stop()
         model = AppModel(backend: backend)
         model.unsavedJournal = unsavedJournal
+        model.inputDrafts = inputDrafts
     }
 
     private func teardown() async {

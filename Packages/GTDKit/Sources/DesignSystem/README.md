@@ -51,8 +51,15 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   `View.itemCardPeek(hasNext:)`, `UndoToast`,
   `SectionLabel(_:isMissing:font:foreground:)` — a field/chip-group label with the required-field
   asterisk (§3.6: leading `asterisk` in `signalAttention`, VoiceOver says "required"),
-  `WaitingInfoSheet(initial:suggestedWho:today:onSave:)` — follow-up date **required** (+7 d is a
+  `WaitingInfoSheet(initial:suggestedWho:today:drafts:draftKey:onSave:)` — follow-up date **required** (+7 d is a
   suggested chip until confirmed), who optional, `Set waiting` disabled until a date is confirmed.
+  With `drafts` + `draftKey` (#94) the typed `who` and chosen date survive every way out (it has
+  no `Cancel`) and come back when it reopens for the same key; the caller clears on success.
+- `View.keepsDraft(_:key:in:isEmpty:whenNone:)` (`Interaction/DraftKeeping.swift`, #94) — keeps a
+  field's value in `InputDrafts` under `key` while it changes and restores it whenever `key`
+  becomes current (appear, or another note handed to the same view); `whenNone` resets a reused
+  field for a key without a draft. Changes are only kept under the key the field shows, so a key
+  switch never writes one note's text under another's.
 - `ConflictSheet(conflict:onDone:onKeepVault:)` — the stale-write conflict (N3, ARCHITECTURE §6
   2026-09-25): "On this device" and "In the vault now" read-only side by side (stacked when
   narrow), under them the merged title and text to edit, opened on `WriteConflict.suggestion`;
