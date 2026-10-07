@@ -441,6 +441,27 @@ list take the drop. Inbox, Review and Routines never highlight and never take a 
       pickers are sheets over the tab). There is no sidebar on the iPhone, so
       there is nothing to drop on there; that is by design, not a gap.
 
+### 3.8 The In progress board (#87)
+
+Run with `-useFixtures`: the sample vault has two cards in progress, one with Agent and one in
+Review.
+
+- [ ] Mac: the sidebar shows **In progress** right under Next, count 4. Selecting it shows three
+      columns side by side (In progress · Agent · Review) — widen the list column if they stack.
+- [ ] The context chips and the **Project** menu narrow every column; `Clear filters` lifts both.
+- [ ] Drag a card from Agent onto Review: it moves; the drop lights the column. Right-click a card
+      → **Move to column ▸** does the same; **Move to ▸** has In progress · Agent · Review too.
+- [ ] Drag a Next row onto the sidebar's **In progress** row: it becomes in progress. Drop a
+      Someday row missing fields there: the action card opens; filing it via Next makes it
+      *in progress* (not just next).
+- [ ] Open any Next / Someday / Waiting action: the blue **Begin action** button sits above the
+      status chips and moves it to In progress; it is gone once the action is in progress. On a
+      Someday note missing fields it shows the inline "missing" banner, nothing moves.
+- [ ] Moving a Next item to Agent frees a slot (Next count drops by one); Review → In progress at
+      the cap is refused with the cap message.
+- [ ] iPhone: a fifth tab **In progress** after Next; one list with a section per column; tap opens
+      the detail, long-press → Move to column.
+
 ### 3.6 The weekly review deck (§10.2)
 
 - [ ] The deck is **Next → Someday → on-hold & someday projects**. There is no Backlog phase and

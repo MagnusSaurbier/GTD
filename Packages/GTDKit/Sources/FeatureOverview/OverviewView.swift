@@ -56,7 +56,8 @@ public struct OverviewView: View {
                 } content: {
                     ContentColumn(navigation: nav)
                         .navigationSplitViewColumnWidth(
-                            min: OverviewLayout.listMinWidth, ideal: OverviewLayout.listIdealWidth)
+                            min: OverviewLayout.listMinWidth,
+                            ideal: OverviewLayout.listIdealWidth(for: nav.selection))
                 } detail: {
                     detail
                         .navigationSplitViewColumnWidth(
@@ -271,6 +272,10 @@ private struct ContentColumn: View {
         case .next:
             NextView(
                 mode: .full, selection: navigation.openAction,
+                onOpen: { navigation.open(action: $0) })
+        case .inProgress:
+            InProgressBoardView(
+                selection: navigation.openAction,
                 onOpen: { navigation.open(action: $0) })
         case .someday:
             ActionListView(

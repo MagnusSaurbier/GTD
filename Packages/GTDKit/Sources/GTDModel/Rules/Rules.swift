@@ -134,6 +134,38 @@ public enum Rules {
         return lhs.id.path < rhs.id.path
     }
 
+    // MARK: - In progress board (#87)
+
+    /// One column of the In progress board: the visible actions in `status` (one of
+    /// `ActionStatus.boardStatuses`), filtered by context (E1: at least one of the chosen ones)
+    /// and by project (`nil` = every project, and actions without one). Hidden (deferred)
+    /// actions stay hidden, as in every list (D1). Ordered like Next: nearest `due`, then the
+    /// oldest capture, then the path — total, so the board never reshuffles.
+    public static func boardColumn(
+        _ s: VaultSnapshot,
+        status: ActionStatus,
+        contexts: [String] = [],
+        project: NoteID? = nil,
+        today: Day
+    ) -> [Action] {
+        visibleActions(s, today: today)
+            .filter { $0.status == status }
+            .filter { matches($0, contexts: contexts) }
+            .filter { project == nil || $0.project == project }
+            .sorted(by: nextIsOrdered)
+    }
+
+    /// The projects the board's project filter offers: every project that one of the board's
+    /// visible actions names, by title then path. A dangling link (#53) is offered too — under
+    /// its file name — so such a card can still be filtered to.
+    public static func boardProjects(_ s: VaultSnapshot, today: Day) -> [NoteID] {
+        let ids = Set(visibleActions(s, today: today)
+            .filter { $0.status.isOnBoard }
+            .compactMap(\.project))
+        func title(_ id: NoteID) -> String { s.project(id)?.title ?? id.title }
+        return ids.sorted { (title($0), $0.path) < (title($1), $1.path) }
+    }
+
     // MARK: - Waiting
 
     /// Waiting items whose follow-up date has arrived — shown above Next as "chase" (W2).
@@ -370,6 +402,8 @@ public enum Rules {
         /// Open items across every list — one sidebar row for all lists (E3, §5a).
         public var lists: Int
         public var projects: Int
+        /// #87 — every card on the In progress board (in progress + agent + review).
+        public var inProgress: Int
 
         public init(
             inbox: Int,
@@ -377,7 +411,8 @@ public enum Rules {
             someday: Int,
             waiting: Int,
             lists: Int,
-            projects: Int
+            projects: Int,
+            inProgress: Int = 0
         ) {
             self.inbox = inbox
             self.next = next
@@ -385,6 +420,7 @@ public enum Rules {
             self.waiting = waiting
             self.lists = lists
             self.projects = projects
+            self.inProgress = inProgress
         }
     }
 
@@ -397,7 +433,8 @@ public enum Rules {
             someday: visible.count { $0.status == .someday },
             waiting: visible.count { $0.status == .waiting && !isBackInNext($0, today: today) },
             lists: openListItemCount(s),
-            projects: s.projects.count { $0.status == .active })
+            projects: s.projects.count { $0.status == .active },
+            inProgress: visible.count { $0.status.isOnBoard })
     }
 
     // MARK: - Signals (STYLEGUIDE §2.2)

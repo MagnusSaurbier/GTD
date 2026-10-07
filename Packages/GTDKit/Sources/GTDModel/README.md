@@ -117,7 +117,8 @@ Compiles and tests on Linux.
 ## Gotchas
 
 - `countsTowardCap(_:today:)` counts the `next` + `in-progress` actions plus the deferrals that
-  are back **today** (#86, R-2). It therefore needs a `Day`, as do `isAtCap` and `capSignal`. `nextList` is never truncated to the cap — an
+  are back **today** (#86, R-2); `agent` and `review`, the In progress board's other columns, never
+  count (#87). It therefore needs a `Day`, as do `isAtCap` and `capSignal`. `nextList` is never truncated to the cap — an
   over-cap vault must stay repairable.
 - `Rules.isUndoable` is the single definition of N6: both backends call it, and the labels live
   in `GTDAppCore/UndoLabel`.

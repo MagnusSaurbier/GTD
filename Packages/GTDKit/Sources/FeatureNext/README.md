@@ -13,6 +13,13 @@ overdue follow-ups (E1, E2, W2).
     needs the app shell, since `FeatureNext` must not import `FeatureInbox`. `nil` hides the
     quick-add button/`⌘N`.
 - `NextViewMode { full, onTheGo }`.
+- `InProgressBoardView(selection:onOpen:)` (#87) — the In progress board: In progress · Agent ·
+  Review side by side when the width allows, else one list with a section per column; context
+  chips + a Project menu filter every column (screen state, not persisted). Cards are draggable
+  onto another column or a sidebar section; the card menu has `Move to column` and `Move to…`.
+  Moves go through the host's `moveNote` handler (`MovePlan`), so the host must apply
+  `FeatureInbox.moveNoteHost()` (the Mac window and the iPhone tab do). Logic:
+  `InProgressBoardModel` (Linux-compilable, `FeatureNextTests/InProgressBoardModelTests`).
 - Linux-compilable: `NextListModel` (filtering, sections, cap, empty states, row commands),
   `NextFilterStore` (+ `UserDefaultsNextFilterStore`, `InMemoryNextFilterStore`).
 
@@ -104,4 +111,4 @@ not compile on Linux; build them on a Mac (`scripts/check.sh --app`).
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureNextTests` — 32 tests.
+`cd Packages/GTDKit && swift test --filter FeatureNextTests` — 45 tests.

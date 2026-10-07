@@ -34,7 +34,26 @@ struct DecodeTests {
     /// The hidden legacy state must never reach a status picker (R-1).
     @Test func theLegacyTrashStateIsNotInAllCases() {
         #expect(!ActionStatus.allCases.contains(.legacyTrashed))
-        #expect(ActionStatus.allCases == [.next, .someday, .inProgress, .waiting, .done])
+        #expect(ActionStatus.allCases
+            == [.next, .someday, .inProgress, .agent, .review, .waiting, .done])
+    }
+
+    /// #87 — `agent` and `review` are statuses a `status:` line can carry, and they survive the
+    /// round trip word for word.
+    @Test func agentAndReviewAreReadAndWritten() throws {
+        for word in ["agent", "review"] {
+            let text = "---\nstatus: \(word)\n---\n# Why?\nx\n"
+            let action = try NoteCodec.decodeAction(id: actionID, text: text)
+            #expect(action.status.rawValue == word)
+            #expect(action.status.isOnBoard)
+            #expect(!action.status.countsTowardCap)
+            #expect(NoteCodec.encode(action) == text)
+        }
+        // A status change patches only the status line.
+        let next = "---\nstatus: next\n---\n# Why?\nx\n"
+        var action = try NoteCodec.decodeAction(id: actionID, text: next)
+        action.status = .review
+        #expect(NoteCodec.encode(action) == "---\nstatus: review\n---\n# Why?\nx\n")
     }
 
 

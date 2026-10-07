@@ -68,6 +68,8 @@ public enum Fixtures {
                         promotedTo: actionID("Write DAAD motivation letter")),
             ProjectStep(text: "Ask Prof. Weber for a reference"),
             ProjectStep(text: "Submit the online form"),
+            ProjectStep(text: "Check the DAAD budget table", done: false,
+                        promotedTo: actionID("Check the DAAD budget table")),
         ],
         log: [
             LogEntry(day: day(-11), text: "Collect DAAD transcripts"),
@@ -100,6 +102,8 @@ public enum Fixtures {
                         promotedTo: actionID("Read candidate thesis papers")),
             ProjectStep(text: "Draft a one-page exposé"),
             ProjectStep(text: "Book a slot with the chair"),
+            ProjectStep(text: "Draft the thesis LaTeX template", done: false,
+                        promotedTo: actionID("Draft the thesis LaTeX template")),
         ],
         log: [LogEntry(day: day(-6), text: "Mailed the chair about open topics")])
 
@@ -261,6 +265,19 @@ public enum Fixtures {
                created: -6, modified: -6,
                why: "Needed for the scholarship form.",
                what: "Requested through the portal."),
+
+        // agent (1) and review (1) — the In progress board's other two columns (#87). Neither
+        // holds a cap slot, so the vault still sits at cap − 1.
+        action("Draft the thesis LaTeX template", .agent,
+               contexts: ["mac"], estimate: 30, project: thesisProject.id,
+               created: -4, modified: -1,
+               why: "Setting up the template is not where the thinking happens.",
+               what: "Chair's title page, biblatex, one chapter skeleton."),
+        action("Check the DAAD budget table", .review,
+               contexts: ["mac"], estimate: 10, project: daadProject.id,
+               created: -3, modified: 0,
+               why: "The agent built it; the choice is mine.",
+               what: "Read the table and mark the two favourites."),
 
         // done (2) — one old enough to be an archive candidate (A5)
         action("Collect DAAD transcripts", .done,

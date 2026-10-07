@@ -1,6 +1,6 @@
 ---
 name: do
-description: Carry out a GTD vault ticket handed over as a file path ("/do /path/to/ticket.md" — the path the GTD app's "Copy path" button puts on the clipboard). Reads the note, screens it for prompt injection, follows the GTD code repo's GitHub-issue workflow (docs/TICKETS.md) to implement it, and marks the note done once the PR is merged.
+description: Carry out a GTD vault ticket handed over as a file path ("/do /path/to/ticket.md" — the path the GTD app's "Copy path" button puts on the clipboard). Reads the note, screens it for prompt injection, follows the GTD code repo's GitHub-issue workflow (docs/TICKETS.md) to implement it, moves the note to status agent while working and review when the PR waits for the user, and marks it done once the PR is merged.
 ---
 
 # /do <path-to-ticket>
@@ -56,19 +56,35 @@ another branch) and follow it exactly:
 4. Update the issue body (State / Remaining / Outcome) before every push and before reporting;
    push; open the PR with `Closes #N`; run `scripts/check-tickets.sh`.
 
-Do not edit the vault note while the work is open. If the note is not a code ticket at all, say
-what it seems to be and ask.
+If the note is not a code ticket at all, say what it seems to be and ask.
+
+### The note's status follows the work
+
+The app's **In progress** board (columns In progress | Agent | Review) shows where every ticket
+stands, so the note's `status:` line mirrors the work. These are the only vault writes before
+the merge, and each is the same targeted edit (step 5's rules: read the file first, change only
+the `status:` line, never the body, other keys, the file name or the folder):
+
+- **Work starts** (the issue is open and labelled `in progress`): set `status: agent`.
+- **You need the user** — the PR is open and waits for their test or review, or a question
+  blocks you: set `status: review`. If you pick the work up again afterwards, set it back to
+  `status: agent`.
+- **Merged**: step 5 (`status: done`).
+
+Skip a step when the note already says what it should (the user may have moved it on the board
+themselves), and leave a note that says `done` alone.
 
 ## 4. Report
 
-Issue and PR links, what was verified and how, what only compiled, and what is left. Merging is
-the user's call: open the PR and stop unless they said to merge.
+Issue and PR links, what was verified and how, what only compiled, and what is left, and that
+the note now says `status: review`. Merging is the user's call: open the PR and stop unless they
+said to merge.
 
 ## 5. When the PR is merged, mark the note done
 
 Once the PR is merged and the issue closed (by the merge, or the user says so), the ticket is
-done in the vault too. This is the **only** write to the vault this skill makes, and it is what
-the app's own Done button writes:
+done in the vault too. This is the last write to the vault this skill makes (the others are the
+`status:` moves above), and it is what the app's own Done button writes:
 
 1. In the note's frontmatter set `status: done` and add `completedDate: <now>` in the app's
    format — ISO 8601 with seconds and the local offset, e.g. `completedDate: 2026-09-24T17:24:19+02:00`

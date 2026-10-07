@@ -181,6 +181,10 @@ public struct MoveToMenu: View {
         (.waiting, Copy.waiting, Symbols.waiting),
         (.projects, Copy.projectEllipsis, Symbols.projects),
         (.lists, Copy.listEllipsis, Symbols.listBullet),
+        // #87 — the In progress board's columns; the In progress row/tab is the drop twin.
+        (.inProgress, Copy.inProgress, Symbols.inProgress),
+        (.agent, Copy.agent, Symbols.agent),
+        (.review, Copy.review, Symbols.review),
     ]
 }
 #endif

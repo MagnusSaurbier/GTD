@@ -13,26 +13,27 @@ struct SidebarRoutingTests {
         #expect(SidebarItem.allCases.allSatisfy { !$0.title.isEmpty && !$0.symbol.isEmpty })
     }
 
-    /// STYLEGUIDE §4.1: Inbox · Next · Someday · Waiting · Lists · Projects, then Review and
-    /// Routines. There is no Deferred section: deferrals are listed under Waiting (#86).
+    /// STYLEGUIDE §4.1: Inbox · Next · In progress (#87) · Someday · Waiting · Lists · Projects,
+    /// then Review and Routines. There is no Deferred section: deferrals are listed under Waiting (#86).
     @Test func countedSectionsAreTheOnesOfTheStyleGuide() {
         #expect(SidebarItem.counted == [
-            .inbox, .next, .someday, .waiting, .lists, .projects,
+            .inbox, .next, .inProgress, .someday, .waiting, .lists, .projects,
         ])
         #expect(SidebarItem.flows == [.review, .routines])
         #expect(Set(SidebarItem.counted).union(SidebarItem.flows) == Set(SidebarItem.allCases))
     }
 
-    /// `⌘1…⌘6` (STYLEGUIDE §4.5) — and the mapping round-trips.
+    /// `⌘1…⌘n` (STYLEGUIDE §4.5) — and the mapping round-trips.
     @Test func shortcutNumbersCoverTheCountedSections() {
-        #expect(SidebarItem.counted.compactMap(\.shortcutNumber) == Array(1...6))
+        let n = SidebarItem.counted.count
+        #expect(SidebarItem.counted.compactMap(\.shortcutNumber) == Array(1...n))
         #expect(SidebarItem.review.shortcutNumber == nil)
         #expect(SidebarItem.routines.shortcutNumber == nil)
-        for number in 1...6 {
+        for number in 1...n {
             #expect(SidebarItem(shortcutNumber: number)?.shortcutNumber == number)
         }
         #expect(SidebarItem(shortcutNumber: 0) == nil)
-        #expect(SidebarItem(shortcutNumber: 7) == nil)
+        #expect(SidebarItem(shortcutNumber: n + 1) == nil)
     }
 
     @Test func everyCountedSectionReadsItsCountAndTheOthersDoNot() {
@@ -43,6 +44,19 @@ struct SidebarRoutingTests {
         #expect(SidebarItem.review.count(counts) == nil)
         #expect(SidebarItem.routines.count(counts) == nil)
         #expect(SidebarItem.next.count(counts) == counts.next)
+        #expect(SidebarItem.inProgress.count(counts) == counts.inProgress)
+    }
+
+    /// #87 — the In progress row takes a dropped row (→ in progress), has a detail column for
+    /// the card it opens, no calendar strip, and a wider list column for its three columns.
+    @Test func theInProgressRowIsTheBoard() {
+        #expect(SidebarItem.inProgress.moveDestination == .inProgress)
+        #expect(SidebarItem.inProgress.title == "In progress")
+        #expect(!SidebarItem.inProgress.spansDetailColumn)
+        #expect(!SidebarItem.inProgress.showsCalendarStrip)
+        #expect(SidebarItem.inProgress.emptyDetailBody != nil)
+        #expect(OverviewLayout.listIdealWidth(for: .inProgress) > OverviewLayout.listIdealWidth)
+        #expect(OverviewLayout.listIdealWidth(for: .next) == OverviewLayout.listIdealWidth)
     }
 
     /// A3 merged the two old "not now" tiers, so Someday is the only generic status list left.

@@ -64,6 +64,15 @@ is strict and `scripts/check-tickets.sh` (part of `scripts/check.sh`) enforces t
 every agent session (`.claude/settings.json`) and inside `scripts/check.sh`. Without `gh` or
 without network it prints `SKIPPED` and the rule still applies.
 
+## Tickets that came from a vault note
+
+A ticket the user wrote as an action note in their vault (handed over with `/do <path>`,
+`.claude/skills/do/SKILL.md`) has a second, user-facing state: the note's `status:` line, which
+the app's **In progress** board shows as In progress | Agent | Review. The agent keeps it in step
+with the issue — `status: agent` when the issue goes `in progress`, `status: review` when the PR
+(or a question) waits for the user, `status: done` after the merge — as a targeted edit of that
+one line, never anything else in the note. The app itself never writes these moves.
+
 ## Body template
 
 Copy this verbatim — the checker looks for the bold field names and the headings.

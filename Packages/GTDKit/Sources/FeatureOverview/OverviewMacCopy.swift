@@ -35,6 +35,13 @@ public enum OverviewLayout {
     /// Below this the list rows hyphenate titles and squeeze their badges.
     public static let listMinWidth: CGFloat = 380
     public static let listIdealWidth: CGFloat = 460
+    /// #87 — the In progress board puts three columns side by side; below this it stacks them.
+    public static let boardIdealWidth: CGFloat = 720
+
+    /// The list column's ideal width for `section` — wider for the board.
+    public static func listIdealWidth(for section: SidebarItem) -> CGFloat {
+        section == .inProgress ? boardIdealWidth : listIdealWidth
+    }
 
     public static let detailMinWidth: CGFloat = 320
     public static let detailIdealWidth: CGFloat = 380

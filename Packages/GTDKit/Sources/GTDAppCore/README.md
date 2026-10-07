@@ -45,7 +45,7 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   three already depend on.
 - `MoveDestination` / `MovePlan` — drag-to-category (E3). `MovePlan.plan(action:to:snapshot:today:)`
   says what a row dropped on `.next`/`.someday`/`.waiting`/`.projects`/`.project(id)`/
-  `.lists`/`.list(name)` needs: `.alreadyThere`, `.perform(command)` (nothing missing),
+  `.lists`/`.list(name)`/`.inProgress`/`.agent`/`.review` (the In progress board, #87) needs: `.alreadyThere`, `.perform(command)` (nothing missing),
   `.card(status:missing:)` (the action card with those fields marked — `RequiredField.missing`
   with the action's `previous` status as it behaves today — a deferral that is back counts as
   Next, `Rules.effectiveStatus`, #86), `.pickProject`, `.pickList`;

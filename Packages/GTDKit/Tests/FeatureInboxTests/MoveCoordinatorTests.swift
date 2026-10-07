@@ -98,6 +98,37 @@ struct MoveCoordinatorTests {
         #expect(moved?.timeEstimate == TimeBucket.upTo30.minutes)
     }
 
+    /// #87 — a Someday item dropped on In progress (or begun) opens the same card; its Next
+    /// exit then *starts* the action — status `in-progress`, not merely `next`.
+    @Test func filingTheCardOpenedByInProgressStartsTheAction() async {
+        let (mover, app) = make()
+        let item = action(app, status: .someday) { $0.timeEstimate == nil }
+        await mover.move(item.id, to: .inProgress)
+        guard case let .card(card)? = mover.dialogue else { Issue.record("no card"); return }
+        #expect(card.nextExitStatus == .inProgress)
+
+        card.draft.why = "Because."
+        if card.draft.what.isEmpty { card.draft.what = "Do it." }
+        card.draft.contexts = [app.snapshot.config.contexts.first!]
+        card.draft.timeBucket = .upTo30
+        await card.take(.next)
+
+        #expect(card.isFiled, "\(String(describing: card.refusal))")
+        #expect(app.snapshot.action(item.id)?.status == .inProgress)
+    }
+
+    /// #87 — a Next item moves straight to In progress, Agent and Review: no dialogue.
+    @Test func aNextItemMovesAcrossTheBoardAtOnce() async {
+        let (mover, app) = make()
+        let item = action(app, status: .next)
+        for destination in [MoveDestination.inProgress, .agent, .review] {
+            #expect(mover.accepts(item.id, destination))
+            await mover.move(item.id, to: destination)
+            #expect(mover.dialogue == nil)
+        }
+        #expect(app.snapshot.action(item.id)?.status == .review)
+    }
+
     /// Cancelling the card leaves the note exactly where it was.
     @Test func cancellingTheCardLeavesTheNoteAlone() async {
         let (mover, app) = make()
