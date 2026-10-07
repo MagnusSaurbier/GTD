@@ -79,15 +79,25 @@ struct SweepDeferredStep: View {
         .onChange(of: session.currentDeferredItem?.id) { _, _ in
             load(session.currentDeferredItem)
         }
+        .onChange(of: draft) { _, _ in keep() }
+        .onChange(of: systemFix) { _, _ in keep() }
         .sheet(item: $picker) { pickerSheet($0) }
     }
 
     private func load(_ item: InboxItem?) {
         guard loadedItem != item?.id else { return }
         loadedItem = item?.id
-        draft = item.map(InboxSession.Draft.init(item:)) ?? InboxSession.Draft()
-        systemFix = ""
+        // #94 — the card comes back as it was left, when it was left with something typed.
+        let card = item.map { session.keptDeferredCard(for: $0) ?? DeferredCardDraft(opening: $0) }
+        draft = card?.draft ?? InboxSession.Draft()
+        systemFix = card?.systemFix ?? ""
         knowledgeFolder = nil
+    }
+
+    /// Keeps the card while it is typed on (#94); `load` must have shown this item first.
+    private func keep() {
+        guard let item = session.currentDeferredItem, loadedItem == item.id else { return }
+        session.keepDeferredCard(DeferredCardDraft(draft: draft, systemFix: systemFix), for: item)
     }
 
     private func card(for item: InboxItem) -> some View {
@@ -219,7 +229,11 @@ struct SweepDeferredStep: View {
     @ViewBuilder private func pickerSheet(_ picker: Picker) -> some View {
         switch picker {
         case .waiting:
-            WaitingInfoSheet(today: session.today) { info in
+            WaitingInfoSheet(
+                today: session.today,
+                drafts: session.inputDrafts,
+                draftKey: session.currentDeferredItem.map(session.deferredWaitingDraftKey(for:))
+            ) { info in
                 self.picker = nil
                 guard let item = session.currentDeferredItem,
                       let decision = DeferredSweep.decision(

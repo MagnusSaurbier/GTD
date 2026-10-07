@@ -10,9 +10,9 @@ import FeatureRoutines
 import FeatureSettings
 import FeatureLists
 
-/// The iPhone (N5, E2, STYLEGUIDE §4.2): four tabs, in order — **Inbox** (count +
+/// The iPhone (N5, E2, STYLEGUIDE §4.2): five tabs, in order — **Inbox** (count +
 /// `Process inbox`), **Next** (on-the-go; the tab the app opens on, E1 — `AppRouter.tab` starts
-/// at `.next`), **Lists** (L5: lists with counts → items → item editor), **Routines**. No full
+/// at `.next`), **In progress** (the board, #87), **Lists** (L5: lists with counts → items → item editor), **Routines**. No full
 /// task overview, no settings tab: the settings gear and quick capture sit on every tab's root
 /// screen (`tabToolbar`), and inbox processing and routines run full-screen.
 struct PhoneShell: View {
@@ -30,6 +30,10 @@ struct PhoneShell: View {
             nextTab
                 .tabItem { Label(Copy.next, systemImage: Symbols.next) }
                 .tag(AppTab.next)
+
+            inProgressTab
+                .tabItem { Label(Copy.inProgress, systemImage: Symbols.inProgress) }
+                .tag(AppTab.inProgress)
 
             listsTab
                 .tabItem { Label(Copy.lists, systemImage: Symbols.listBullet) }
@@ -78,7 +82,7 @@ struct PhoneShell: View {
 
     private var nextTab: some View {
         // No sidebar to drop a row on here; the rows' `Move to…` menu is the drag's twin, and
-        // the dialogue a move needs (the action card, a defer date, the project picker) is
+        // the dialogue a move needs (the action card, the project or list picker) is
         // presented over this tab (`FeatureInbox.moveNoteHost`).
         NavigationStack(path: $router.nextPath) {
             NextView(
@@ -96,6 +100,25 @@ struct PhoneShell: View {
                         .navigationBarTitleDisplayMode(.inline)
                         // P7 — the detail's own bottom bar (Done / Trash) takes the tab bar's
                         // place, so nothing floats over the last row of the form.
+                        .toolbar(.hidden, for: .tabBar)
+                }
+        }
+        .moveNoteHost()
+    }
+
+    // MARK: - In progress (#87)
+
+    /// The board as one list with a section per column; cards move between columns through
+    /// their menu (`Move to column`), and the dialogue a move needs is presented over this tab.
+    private var inProgressTab: some View {
+        NavigationStack(path: $router.inProgressPath) {
+            InProgressBoardView(onOpen: { router.inProgressPath.append($0) })
+                .tabToolbar(router)
+                .navigationDestination(for: NoteID.self) { id in
+                    // Same as the Next tab's pushed detail.
+                    ActionDetailView(action: id)
+                        .navigationTitle("")
+                        .navigationBarTitleDisplayMode(.inline)
                         .toolbar(.hidden, for: .tabBar)
                 }
         }

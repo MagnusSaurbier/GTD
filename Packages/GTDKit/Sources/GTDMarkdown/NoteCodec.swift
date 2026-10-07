@@ -46,9 +46,10 @@ public enum NoteCodec {
     ///
     /// `fileDate` is for a capture the app did not write — a note typed in Obsidian, a script's
     /// `echo > Inbox/x.md`: it has no `created`, and the honest answer to "when was this
-    /// captured?" is then the file's own date. A `created` that is present but unreadable is
-    /// still an error; the fallback never papers over a broken value. The file is not touched:
-    /// `created` is written the first time the app has a reason to write the note.
+    /// captured?" is then the file's own date — `GTDVault` passes its birth time (#89). A
+    /// `created` that is present but unreadable is still an error; the fallback never papers over
+    /// a broken value. The file is not touched: `created` is written the first time the app has a
+    /// reason to write the note (`encode` stamps it, since the source text has none).
     public static func decodeInboxItem(
         id: NoteID, text: String, timeZone: TimeZone = .current, fileDate: Date? = nil
     ) throws -> InboxItem {
@@ -66,6 +67,12 @@ public enum NoteCodec {
             body: RawText.text(doc.bodyLines),
             created: created,
             reviewReason: doc.scalar("reviewReason"),
+            // #85 — a card closed half-way keeps its chips under the action keys.
+            contexts: doc.list("contexts") ?? [],
+            timeEstimate: doc.int("timeEstimate").flatMap { $0 > 0 ? $0 : nil },
+            project: noteID(doc.scalar("project")),
+            deferDate: doc.day("defer"),
+            due: doc.day("due"),
             passthrough: passthrough(text))
     }
 
@@ -80,6 +87,13 @@ public enum NoteCodec {
             doc.setValue("created", YAMLScalar.timestamp(item.created, timeZone: timeZone), canonicalOrder: order)
         }
         setOptionalText("reviewReason", item.reviewReason, reference?.reviewReason, &doc, order)
+        setCardFields(
+            contexts: item.contexts, timeEstimate: item.timeEstimate, project: item.project,
+            deferDate: item.deferDate, due: item.due,
+            reference: reference.map {
+                ($0.contexts, $0.timeEstimate, $0.project, $0.deferDate, $0.due)
+            },
+            &doc, order)
         if reference?.body != item.body {
             doc.setBody(RawText.block(item.body, terminator: doc.terminator))
         }
@@ -88,7 +102,18 @@ public enum NoteCodec {
 
     // MARK: - Action
 
+    /// #86 — a legacy `defer:` line is read as what deferring means now: a who-less waiting
+    /// item following up on that day (`Action.foldingDeferIntoWaiting`). Like R-1's status
+    /// spellings, the file keeps its own lines until the user changes the note; `encode` then
+    /// rewrites them as `status: waiting` + `followUpDate:` and drops `defer:`.
     public static func decodeAction(
+        id: NoteID, text: String, timeZone: TimeZone = .current
+    ) throws -> Action {
+        try decodeStoredAction(id: id, text: text, timeZone: timeZone).foldingDeferIntoWaiting()
+    }
+
+    /// The frontmatter exactly as written, legacy `defer:` included — what `encode` patches.
+    static func decodeStoredAction(
         id: NoteID, text: String, timeZone: TimeZone = .current
     ) throws -> Action {
         let doc = try FrontmatterDocument(text: text, path: id.path)
@@ -137,27 +162,13 @@ public enum NoteCodec {
         if reference?.status != action.status {
             doc.setValue("status", action.status.rawValue, canonicalOrder: order)
         }
-        if (reference?.contexts ?? []) != action.contexts {
-            if action.contexts.isEmpty { doc.removeValue("contexts") }
-            else { doc.setValue("contexts", YAMLScalar.flowList(action.contexts), canonicalOrder: order) }
-        }
-        if reference?.timeEstimate != action.timeEstimate {
-            // Never write `timeEstimate: 0` — undecided means the key is gone (§1).
-            if let minutes = action.timeEstimate, minutes > 0 {
-                doc.setValue("timeEstimate", String(minutes), canonicalOrder: order)
-            } else {
-                doc.removeValue("timeEstimate")
-            }
-        }
-        if reference?.project != action.project {
-            if let project = action.project {
-                doc.setValue("project", Wikilink.frontmatterValue(project), canonicalOrder: order)
-            } else {
-                doc.removeValue("project")
-            }
-        }
-        setOptionalDay("defer", action.deferDate, reference?.deferDate, &doc, order)
-        setOptionalDay("due", action.due, reference?.due, &doc, order)
+        setCardFields(
+            contexts: action.contexts, timeEstimate: action.timeEstimate, project: action.project,
+            deferDate: action.deferDate, due: action.due,
+            reference: reference.map {
+                ($0.contexts, $0.timeEstimate, $0.project, $0.deferDate, $0.due)
+            },
+            &doc, order)
         setOptionalText("waitingFor", action.waitingFor, reference?.waitingFor, &doc, order)
         setOptionalDay("followUpDate", action.followUpDate, reference?.followUpDate, &doc, order)
         setOptionalDate("created", action.created, reference?.created, &doc, order, timeZone)
@@ -171,6 +182,25 @@ public enum NoteCodec {
         // L4) the reducer has already put the item's notes at the top of `action.body`.
         if RawText.text(doc.bodyLines) != action.body {
             doc.setBody(RawText.block(action.body, terminator: doc.terminator))
+        }
+
+        // #86 — the note still holds a legacy `defer:` that `decodeAction` folded into waiting.
+        // Untouched, it keeps every byte; once anything changed — a line, or one of the folded
+        // fields, whose patch above may have been a no-op against the folded reference — the
+        // lines the fold stood in for are written out for real, against what the file says.
+        let foldedFieldsChanged = reference.map {
+            $0.status != action.status || $0.waitingFor != action.waitingFor
+                || $0.followUpDate != action.followUpDate || $0.deferDate != action.deferDate
+        } ?? false
+        if let stored, doc.text != stored || foldedFieldsChanged,
+           let written = try? decodeStoredAction(id: action.id, text: stored, timeZone: timeZone),
+           written.deferDate != nil {
+            if written.status != action.status {
+                doc.setValue("status", action.status.rawValue, canonicalOrder: order)
+            }
+            setOptionalDay("defer", action.deferDate, written.deferDate, &doc, order)
+            setOptionalText("waitingFor", action.waitingFor, written.waitingFor, &doc, order)
+            setOptionalDay("followUpDate", action.followUpDate, written.followUpDate, &doc, order)
         }
         return doc.text
     }
@@ -702,6 +732,36 @@ public enum NoteCodec {
     }
 
     // Free-text fields are always quoted: they routinely contain `:`, `#` and leading dashes.
+    /// The five keys an action card decides, shared by actions and (#85) a half-processed
+    /// inbox note. Each line is touched only when its value changed; an empty value removes the
+    /// key, and `timeEstimate: 0` is never written (§1).
+    private static func setCardFields(
+        contexts: [String], timeEstimate: Int?, project: NoteID?, deferDate: Day?, due: Day?,
+        reference: (contexts: [String], timeEstimate: Int?, project: NoteID?, deferDate: Day?, due: Day?)?,
+        _ doc: inout FrontmatterDocument, _ order: [String]
+    ) {
+        if (reference?.contexts ?? []) != contexts {
+            if contexts.isEmpty { doc.removeValue("contexts") }
+            else { doc.setValue("contexts", YAMLScalar.flowList(contexts), canonicalOrder: order) }
+        }
+        if reference?.timeEstimate != timeEstimate {
+            if let minutes = timeEstimate, minutes > 0 {
+                doc.setValue("timeEstimate", String(minutes), canonicalOrder: order)
+            } else {
+                doc.removeValue("timeEstimate")
+            }
+        }
+        if reference?.project != project {
+            if let project {
+                doc.setValue("project", Wikilink.frontmatterValue(project), canonicalOrder: order)
+            } else {
+                doc.removeValue("project")
+            }
+        }
+        setOptionalDay("defer", deferDate, reference?.deferDate, &doc, order)
+        setOptionalDay("due", due, reference?.due, &doc, order)
+    }
+
     private static func setOptionalText(
         _ key: String, _ value: String?, _ reference: String?,
         _ doc: inout FrontmatterDocument, _ order: [String]
@@ -740,7 +800,10 @@ public enum NoteCodec {
     /// Frontmatter key order used when the codec has to *insert* a key (REQUIREMENTS §5).
     /// Existing keys never move.
     public enum Keys {
-        public static let inbox = ["created", "reviewReason"]
+        /// `created` first, as every capture has it; the card's keys (#85) after it.
+        public static let inbox = [
+            "created", "reviewReason", "contexts", "timeEstimate", "project", "defer", "due",
+        ]
         public static let action = [
             "status", "contexts", "timeEstimate", "project", "defer", "due",
             "waitingFor", "followUpDate", "created", "completedDate", "reviewReason",

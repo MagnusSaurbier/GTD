@@ -22,7 +22,8 @@ public enum SignalKind: Sendable, Equatable, Hashable {
     case dueSoon(Day)
     case dueToday
     case overdue(days: Int)
-    /// Defer date reached in the last 24 h — the item just came back.
+    /// A deferral (a who-less waiting item, #86) whose date arrived in the last 24 h — the item
+    /// just came back into Next.
     case returnedFromDefer
     /// Active project with zero open actions.
     case stalled
@@ -56,7 +57,7 @@ public struct StalenessPolicy: Sendable, Equatable {
     public var followUpSoonDays: Int
     /// `due` this close ⇒ `aging`.
     public var dueSoonDays: Int
-    /// A resurfaced deferred item shows the `back` badge for this many days.
+    /// A deferral back in Next shows the `back` badge for this many days (#86).
     public var returnedFromDeferDays: Int
     /// Done actions older than this are archive candidates (A5).
     public var archiveAfterDays: Int

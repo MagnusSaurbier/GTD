@@ -63,6 +63,13 @@ Compiles and tests on Linux.
   `Action.preamble` or the head of a Knowledge/list note's body — unless it is only the empty
   Why/What template skeleton, which counts as empty (`CaptureText.isEmptyBody`, the one place
   that knows the skeleton).
+- **A card closed half-way stays an inbox note (#85).** `saveInboxProgress` keeps the card's
+  body and chips in the note (`InboxProgress`; `InboxItem.contexts`/`timeEstimate`/`project`/
+  `deferDate`/`due`, under the action keys). `InboxBody` is the card's view of the body: the
+  capture text (`lead`) and `# Why?`/`# What?` sections, the empty skeleton excepted;
+  `written(over:)` rewrites only the pieces that changed. An action filing takes those sections
+  over (an empty draft field falls back to the stored one) instead of putting them under the
+  preamble, and keeps any other section of the note.
 - **The project chip is a draft field (R-8).** `ActionDraft.newProjectTitle` creates the project
   it links, area-less and in the same command; naming an existing one as well is `.invalid`.
   There is no inbox Project *target* any more.
@@ -74,9 +81,16 @@ Compiles and tests on Linux.
   the folder in `Reduction.renames`. Promoted-step links point at actions and stay put. A taken
   destination is `.titleCollision`; a changed **title** is still `.invalid`.
 - Only active projects put actions into Next; leaving `active` demotes them to Someday.
-- **A Next item may carry a future `defer`** (R-2). It is hidden until its date and holds no cap
-  slot while hidden; on its date it returns with the `back` badge, even if that puts Next over
-  the cap. Nothing is demoted automatically.
+- **Deferring is waiting — except Someday** (#86, `Rules/DeferIsWaiting.swift`). A Someday item
+  with a `defer` date keeps it: hidden from every list until then, back in Someday with the `back`
+  badge; leaving Someday with the date untouched drops it. Any other deferral is a waiting item with
+  a follow-up date and **no who**: it is listed in Waiting and holds no cap slot until that date;
+  then it is back in Next by itself (`Rules.isBackInNext`) with the `back` badge, even if that
+  puts Next over the cap (R-2) — its file keeps `status: waiting` until the user changes it. A
+  waiting item with a who never comes back by itself; it becomes a `chase`. `normalize` folds
+  any `deferDate` a command sets on a non-Someday action into that shape (`Action.foldingDeferIntoWaiting`; picking a
+  tier with `setStatus` drops it instead), and the reducer judges a deferral that is back as a
+  Next item (`Rules.effectiveStatus`). Nothing is demoted automatically.
 - **Trash is not a status** (I4c). `trashAction` removes the note from the snapshot and names no
   path, so the diff emits `.delete`, which `GTDVault` performs as a move into `GTD/Trash/`.
   `VaultFileOp` has no hard delete and never will: its four cases are `put`, `move`,
@@ -109,9 +123,9 @@ Compiles and tests on Linux.
 
 ## Gotchas
 
-- `countsTowardCap(_:today:)` counts the `next` + `in-progress` actions that are **visible
-  today**: a hidden (future-deferred) one is not a commitment for today (R-2). It therefore needs
-  a `Day`, as do `isAtCap` and `capSignal`. `nextList` is never truncated to the cap — an
+- `countsTowardCap(_:today:)` counts the `next` + `in-progress` actions plus the deferrals that
+  are back **today** (#86, R-2); `agent` and `review`, the In progress board's other columns, never
+  count (#87). It therefore needs a `Day`, as do `isAtCap` and `capSignal`. `nextList` is never truncated to the cap — an
   over-cap vault must stay repairable.
 - `Rules.isUndoable` is the single definition of N6: both backends call it, and the labels live
   in `GTDAppCore/UndoLabel`.
@@ -132,3 +146,9 @@ Everything here is domain code: no `import SwiftUI`, no I/O, no markdown. A chan
 to the reducer is a change to what the app *means* — read `docs/CONTRIBUTING-AGENTS.md` first.
 `swift test --filter GTDModelTests` — 223 tests. `TestVault` builds tiny snapshots for the rule tables,
 `GTDFixtures.sampleSnapshot` is used where a rule needs a whole system.
+
+## Action names (#95)
+
+A new action whose `Actions/<title>.md` is taken is named apart by `Reducer.freeActionID`:
+`<first 5 letters of the project> - <title>`, then `_2`, `_3`, …; its title is that name. A rename onto
+a taken name is still `.titleCollision`.

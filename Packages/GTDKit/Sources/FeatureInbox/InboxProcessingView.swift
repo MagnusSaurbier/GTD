@@ -42,6 +42,12 @@ public struct InboxProcessingView: View {
         .onChange(of: model.snapshot.inbox.map(\.id)) { _, _ in
             session?.refresh()
         }
+        // #85 — however the session is left (Close, `Esc`, a swiped-away sheet, the review
+        // moving on), the half-processed card is written into its inbox note and stays there.
+        .onDisappear {
+            guard let session else { return }
+            Task { await session.saveProgress() }
+        }
     }
 }
 
@@ -708,7 +714,9 @@ struct InboxSessionView: View {
         case .project:
             ProjectSheet(session: session)
         case .waiting:
-            WaitingInfoSheet(today: session.today) { info in
+            WaitingInfoSheet(
+                today: session.today, drafts: session.inputDrafts, draftKey: session.waitingDraftKey
+            ) { info in
                 Task { await session.confirmWaiting(info) }
             }
         case .deferToReview:

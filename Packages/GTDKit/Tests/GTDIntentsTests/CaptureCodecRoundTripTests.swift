@@ -43,9 +43,29 @@ struct CaptureCodecRoundTripTests {
         #expect(NoteCodec.encode(item) == text)
     }
 
-    /// Pins `Shortcuts/README.md`'s literal capture template (Deliverable A — the pure Shortcut
-    /// recipe, which never runs through `InboxWriter`) to the same codec.
+    /// Pins `Shortcuts/README.md`'s capture template (Deliverable A — the pure Shortcut recipe,
+    /// which never runs through `InboxWriter`) to the same codec. Since #89 the template is the
+    /// text alone: the date comes from the file, and the first app write stamps it.
     @Test func theShortcutRecipesTemplateDecodesCleanly() throws {
+        let text = "buy running shoes\n"
+        let born = Fixtures.date(Fixtures.today, 8, 12, 4)
+
+        let item = try NoteCodec.decodeInboxItem(
+            id: NoteID(path: "Inbox/buy running shoes.md"), text: text, fileDate: born)
+        #expect(item.body == "buy running shoes")
+        #expect(item.created == born)
+        #expect(item.reviewReason == nil)
+
+        let written = NoteCodec.encode(item)
+        #expect(written.hasPrefix("---\ncreated: "), "the first write stamps the file's date")
+        let reread = try NoteCodec.decodeInboxItem(id: item.id, text: written)
+        #expect(reread.created == born)
+        #expect(reread.body == "buy running shoes")
+    }
+
+    /// The optional explicit `created:` of the recipe, as the documented custom format
+    /// `yyyy-MM-dd'T'HH:mm:ssxxx` renders it — and it beats the file's date.
+    @Test func theRecipesOptionalCreatedLineDecodesAndWins() throws {
         let text = """
         ---
         created: 2026-09-19T08:12:04+02:00
@@ -53,8 +73,11 @@ struct CaptureCodecRoundTripTests {
         buy running shoes
         """ + "\n"
 
-        let item = try NoteCodec.decodeInboxItem(id: NoteID(path: "Inbox/2026-09-19 081204.md"), text: text)
+        let item = try NoteCodec.decodeInboxItem(
+            id: NoteID(path: "Inbox/buy running shoes.md"), text: text,
+            fileDate: Date(timeIntervalSince1970: 0))
         #expect(item.body == "buy running shoes")
+        #expect(item.created == Date(timeIntervalSince1970: 1_789_798_324))
         #expect(item.reviewReason == nil)
     }
 

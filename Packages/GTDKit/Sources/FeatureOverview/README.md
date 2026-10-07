@@ -15,9 +15,9 @@ action editor no other feature target owns.
   window, because it focuses the filter field.
 - `ActionListView(status:selection:onOpen:)` — Someday, grouped by area/project. On
   macOS a selectable `List`: click or arrow keys call `onOpen`, `selection` is the highlighted row.
-  Waiting, Deferred (`FeatureWaiting`) and Projects (`FeatureProjects`) take the same
-  `selection:` and behave identically (M2); `OverviewView` passes `navigation.openAction` to the
-  first two and `navigation.openProject` to Projects.
+  Waiting (`FeatureWaiting`, deferrals included — #86) and Projects (`FeatureProjects`) take the same
+  `selection:` and behave identically (M2); `OverviewView` passes `navigation.openAction` to Waiting
+  and `navigation.openProject` to Projects.
 - `OverviewLayout` — column and window minimum sizes; `App/MacShell.swift` sizes the window from it.
 - `ActionDetailView(action:onRename:)` — the autosaving note editor (also the iPhone detail).
   Autosave means: chips and pickers save at once; typed text is held until blur, close or
@@ -33,10 +33,15 @@ action editor no other feature target owns.
   (one section per list) and the detail column is `FeatureLists.ListItemEditorView` for
   `OverviewDetail.listItem(_:)`, wired the same way `.action`/`.project` already are (`onOpen` →
   `navigation.open(listItem:)`, `OverviewNavigation.apply` follows a rename through
-  `NavigationRemap`). `⌘1…7` now covers all seven counted sections in STYLEGUIDE §4.1 order.
+  `NavigationRemap`). `⌘1…n` covers every counted section in STYLEGUIDE §4.1 order (there is no Deferred section since #86).
+- `SidebarItem.inProgress` (#87) — the In progress board (`FeatureNext.InProgressBoardView`) right
+  under Next; a drop on it begins the action (`MoveDestination.inProgress`), and the list column
+  starts wider for it (`OverviewLayout.listIdealWidth(for:)`). `ActionDetailView` shows a
+  prominent **Begin action** button (`ActionEditModel.canBegin`/`begin()`, → `in-progress`) above
+  the status chips, which now include Agent and Review.
 - Drag-to-category (E3, 2026-09-24): `OverviewView` applies `FeatureInbox.moveNoteHost()` to
-  the window, so every row of Next / Someday / Waiting / Deferred is draggable and the sidebar's
-  Next · Someday · Waiting · Lists · Projects · Deferred rows (`SidebarItem.moveDestination`) and
+  the window, so every row of Next / Someday / Waiting is draggable and the sidebar's
+  Next · Someday · Waiting · Lists · Projects rows (`SidebarItem.moveDestination`) and
   the project rows take the drop (Lists opens the inbox's list picker; the action becomes an item
   of the chosen list); `ActionListView`'s context menu carries the `Move to…` twin.
 - `SidebarItem`, `OverviewNavigation`, `OverviewDetail`, `ActionListModel`, `ActionGroup`,
@@ -71,7 +76,7 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 - Lists group **by area / project**; context and time are filter chips. Actions without a project
   come first, without a header.
 - The shell holds no GTD semantics: every section routes to the feature that owns it.
-- The calendar strip is docked only under Next, Waiting and Deferred
+- The calendar strip is docked only under Next and Waiting
   (`SidebarItem.showsCalendarStrip`). The docked strip is `OverviewCalendarStrip` — the data and
   signal thresholds of `FeatureWaiting.WaitingListModel`, laid out for a narrow column
   (content-sized, horizontally scrolling, 24 pt markers).
@@ -95,7 +100,7 @@ Linux-compilable (and therefore tested): `SidebarItem`, `OverviewNavigation`, `A
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureOverviewTests` — 59 tests.
+`cd Packages/GTDKit && swift test --filter FeatureOverviewTests` — 74 tests.
 The SwiftUI files (`OverviewView`, `ActionListView`, `ActionDetailView`, `OverviewCommands`,
 `OverviewCalendarStrip`) are
 compiled only on a Mac — see the task's Result for what to check there.

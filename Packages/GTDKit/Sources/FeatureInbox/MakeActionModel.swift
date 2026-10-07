@@ -70,7 +70,10 @@ public final class MakeActionModel {
     }
 
     /// Draft, validation flags and cap state — the inbox card's, unchanged.
-    public var card: ActionCardState
+    public var card: ActionCardState {
+        // #94 — what is typed over a list item, a step or a "What's next?" line is kept.
+        didSet { if card.draft != oldValue.draft { keepDraft() } }
+    }
 
     /// The draft. Views bind straight to it.
     public var draft: InboxDraft {
@@ -94,6 +97,11 @@ public final class MakeActionModel {
     /// The sheet a sub-flow is showing: `waiting`, `project` or the cap's forced choice.
     public var sheet: InboxSession.Sheet?
 
+    /// What the card's Next exit writes: `next`, or `in-progress` for a card opened by a drop
+    /// on In progress / "Begin action" (#87) — the card asks what Next asks, and filing it
+    /// starts the action instead of only committing to it.
+    public private(set) var nextExitStatus: ActionStatus = .next
+
     public private(set) var refusal: InboxSession.Refused?
 
     public var keyBindings: KeyBindings
@@ -109,6 +117,7 @@ public final class MakeActionModel {
         self.source = .listItem(item)
         self.keyBindings = bindings
         self.card = ActionCardState(draft: InboxDraft(item: item))
+        restoreDraft()
     }
 
     /// The card over an existing action that was dropped onto `target` and is not ready for it
@@ -131,6 +140,7 @@ public final class MakeActionModel {
         if !missing.isEmpty { card.flag(missing) }
         self.card = card
         if target == .waiting { sheet = .waiting }
+        if target == .inProgress { nextExitStatus = .inProgress }
     }
 
     /// #76 — the card over an existing action, opened from its status badge in a project's step
@@ -162,6 +172,7 @@ public final class MakeActionModel {
         self.keyBindings = bindings
         self.card = ActionCardState(
             draft: InboxDraft(title: stepText, what: stepText, project: project))
+        restoreDraft()
     }
 
     /// P5 — the card over a new action typed into "What's next?": the typed line is the title
@@ -177,6 +188,7 @@ public final class MakeActionModel {
         self.keyBindings = bindings
         self.card = ActionCardState(
             draft: InboxDraft(title: newActionTitle, what: newActionTitle, project: project))
+        restoreDraft()
     }
 
     // MARK: - Derived
@@ -231,7 +243,7 @@ public final class MakeActionModel {
             return
         }
         switch exit {
-        case .next: await file(status: .next)
+        case .next: await file(status: nextExitStatus)
         case .someday: await file(status: .someday)
         case .waiting: sheet = .waiting
         case .done: await file(status: .done)
@@ -277,6 +289,86 @@ public final class MakeActionModel {
         sheet = nil
         card.clearCap()
         card.clearFlags()
+    }
+
+    // MARK: - Drafts over notes without action fields (#94)
+
+    /// Where the card keeps what is typed when its note has no place for action fields — a
+    /// list item (L1: only its notes), a project step (only its line), a "What's next?" line
+    /// (no note yet). `nil` over an existing action: that one keeps its edits in the action
+    /// itself (`keptEdits`, #85).
+    public var draftKey: String? {
+        switch source {
+        case let .listItem(item): InputDraftKey.makeActionOverListItem(item.id)
+        case let .projectStep(project, _, text): InputDraftKey.makeActionOverStep(project: project, text: text)
+        case let .newProjectAction(project, title):
+            InputDraftKey.makeActionOverWhatsNext(project: project, title: title)
+        case .action: nil
+        }
+    }
+
+    /// The key the card's follow-up sheet keeps its `who` and date under.
+    public var waitingDraftKey: String? {
+        if case let .action(action) = source { return InputDraftKey.waiting(action.id) }
+        return draftKey.map(InputDraftKey.waiting)
+    }
+
+    /// The drafts store the card's sheets keep their fields in.
+    public var inputDrafts: InputDrafts { model.inputDrafts }
+
+    /// The draft the card opened with, before anything was typed or restored.
+    @ObservationIgnored private var openingDraft: InboxDraft?
+
+    /// The card opens with what was typed over the same note the last time it was left —
+    /// `Close`, `Esc`, a swipe, ⌘Q, a crash — without filing. Every way out keeps it: this
+    /// card has no `Cancel`, only `Close`. Filing clears it.
+    private func restoreDraft() {
+        openingDraft = card.draft
+        guard let draftKey, let saved = model.inputDrafts.value(InboxDraft.self, for: draftKey) else { return }
+        card.draft = saved
+    }
+
+    private func keepDraft() {
+        guard let draftKey, !isFiled, let openingDraft else { return }
+        model.inputDrafts.keep(card.draft == openingDraft ? nil : card.draft, for: draftKey)
+    }
+
+    // MARK: - Closing keeps the edits (#85)
+
+    /// What closing the card without filing writes, or `nil` when it writes nothing.
+    ///
+    /// Over an existing action (a drop, `Move to…`, a step's status badge) the fields typed or
+    /// chosen are kept in the action — title, `Why?`/`What?`, chips, dates, an existing project —
+    /// and only the move is cancelled: status and the waiting pair stay the note's own. Built
+    /// on the action **as the vault has it now**, so a field changed elsewhere meanwhile and
+    /// not touched on the card is not reverted. A project the picker was about to create is not
+    /// created. The other sources have nowhere to keep action fields — a list item carries only
+    /// its notes (L1), a step only its line, "What's next?" nothing yet — so they keep nothing.
+    public var keptEdits: Action? {
+        guard !isFiled, case let .action(original) = source,
+              let current = model.snapshot.action(original.id) else { return nil }
+        let start = InboxDraft(action: original)
+        var edited = current
+        func take<V: Equatable>(_ path: WritableKeyPath<InboxDraft, V>, into apply: (V) -> Void) {
+            if draft[keyPath: path] != start[keyPath: path] { apply(draft[keyPath: path]) }
+        }
+        take(\.title) { edited.title = $0 }
+        take(\.body) { edited.preamble = $0 }
+        take(\.why) { edited.why = $0 }
+        take(\.what) { edited.what = $0 }
+        take(\.contexts) { edited.contexts = $0 }
+        take(\.timeBucket) { edited.timeEstimate = $0?.minutes }
+        take(\.deferDate) { edited.deferDate = $0 }
+        take(\.due) { edited.due = $0 }
+        if draft.newProjectTitle == nil { take(\.project) { edited.project = $0 } }
+        return edited == current ? nil : edited
+    }
+
+    /// #85 — writes `keptEdits` (`updateAction`). A refusal reaches the shell's alert. Harmless
+    /// to call twice: the second call finds nothing left to write.
+    public func keepEdits() async {
+        guard let edited = keptEdits else { return }
+        await model.perform(.updateAction(edited))
     }
 
     // MARK: - Keys
@@ -406,6 +498,9 @@ public final class MakeActionModel {
             sheet = nil
             refusal = nil
             isFiled = true
+            // #94 — filed: the kept draft and the follow-up sheet's have done their job.
+            if let draftKey { model.inputDrafts.clear(draftKey) }
+            if let waitingDraftKey { model.inputDrafts.clear(waitingDraftKey) }
         case let .refused(reason):
             if case .capReached = reason { sheet = .cap }
             refuse(reason)

@@ -14,6 +14,9 @@ public struct UnsavedText: Codable, Sendable, Equatable, Identifiable {
     public enum Kind: String, Codable, Sendable {
         case action
         case listItem
+        /// #85 — a half-processed inbox card: `text` is the note's body with the card's
+        /// `Why?`/`What?` written in.
+        case inbox
     }
 
     public var kind: Kind
@@ -56,6 +59,10 @@ public struct UnsavedText: Codable, Sendable, Equatable, Identifiable {
         case .listItem:
             guard let item = snapshot.listItem(note) else { return nil }
             return .updateListItem(note, title: title ?? item.title, notes: text ?? item.notes)
+        case .inbox:
+            // A rename is a second command; the typed title stays in `copyText`.
+            guard snapshot.inboxItem(note) != nil, let text else { return nil }
+            return .editInboxBody(note, text)
         }
     }
 }

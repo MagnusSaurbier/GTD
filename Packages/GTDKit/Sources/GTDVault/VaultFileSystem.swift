@@ -9,15 +9,31 @@ public struct VaultFileInfo: Sendable, Equatable, Hashable {
     public var path: String
     public var size: Int
     public var modified: Date
+    /// The file's birth (creation) time, `nil` where the file system or platform reports none.
+    /// Not part of the fingerprint: an atomic save — every app write — replaces the file and
+    /// with it the birth time, and it always changes `modified` too.
+    public var created: Date?
     /// `false` for an iCloud item that has been evicted and only exists as a `.…​.icloud`
     /// placeholder. Such files are reported as `VaultIssue`s until the download finishes (N3 §7.4).
     public var isDownloaded: Bool
 
-    public init(path: String, size: Int, modified: Date, isDownloaded: Bool = true) {
+    public init(
+        path: String, size: Int, modified: Date, created: Date? = nil, isDownloaded: Bool = true
+    ) {
         self.path = path
         self.size = size
         self.modified = modified
+        self.created = created
         self.isDownloaded = isDownloaded
+    }
+
+    /// When this file came into being, for a capture that does not say so itself (an inbox note
+    /// without `created`, #89): the birth time, or the modification time where there is none.
+    /// The earlier of the two wins — a copy or a restore can carry an old modification time
+    /// into a new file, and the content cannot be younger than its last change.
+    public var captureDate: Date {
+        guard let created else { return modified }
+        return min(created, modified)
     }
 
     /// Cache key of the incremental index — any change means "read and decode again".

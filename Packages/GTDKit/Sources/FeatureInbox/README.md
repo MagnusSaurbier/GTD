@@ -11,15 +11,16 @@ Inbox processing: one card at a time, LIFO, forced order, exit only by quitting 
   `MakeActionModel(model:action:target:missing:bindings:)` — the same card over an **existing
   action** that was dropped onto a tier it is not ready for (`MovePlan.card`): starts from the
   action's own values with `missing` already marked, opens the waiting sheet at once for
-  `.waiting`, and sends `updateAction` (a project created from the picker is born first by
+  `.waiting`, files its Next exit as `in-progress` when the target was In progress
+  (`nextExitStatus`, #87), and sends `updateAction` (a project created from the picker is born first by
   `createProject`). `source` says which; `item` is `nil` for an action.
 - `MoveCoordinator(model:bindings:)` + `View.moveNoteHost(_:)` — drag-to-category (E3): the
   shell applies the modifier once (the Mac window, the iPhone's Next tab); it sets the
   `\.moveNote` environment for every row and drop target below and presents the dialogue a drop
-  needs over the coordinator: the action card, `DeferDateSheet`, the project picker
+  needs over the coordinator: the action card, the project picker
   (`ProjectChoiceSheet`, shared with the card's `+ project` chip) or the list picker
   (`ListChoiceSheet`, shared with the inbox's `More…` slot — a drop onto Lists sends
-  `moveActionToList`). `move(_:to:)` runs `GTDAppCore.MovePlan`; `confirmDefer`,
+  `moveActionToList`). `move(_:to:)` runs `GTDAppCore.MovePlan`;
   `chooseProject`, `createProject`, `chooseList`, `createListAndMove`, `cancel()`.
 - `MakeActionCardView(model:onFinished:)` — **Make action**'s view: the opened action card alone
   (STYLEGUIDE §3.5 step 2a), the same field layout and `ActionCardBar` the inbox uses for its own
@@ -78,7 +79,9 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
   (sending `promoteListItem`) or an `Action` (sending `updateAction`; `ActionCardState.previousStatus`
   is set so the card asks exactly what `Reducer.normalize` asks of a note already in a tier).
   Same draft, same validation, same cap flow; exits → Next / ← Someday / Waiting / Done;
-  `cancel()` leaves the note as it was. There is no step 1 under it, so `Esc` blurs then
+  `cancel()` leaves the note as it was — except that over an existing action the fields typed
+  are kept on close (`keptEdits`/`keepEdits()`, #85: status and the waiting pair stay, only the
+  move is cancelled; `MakeActionCardView` calls it on disappear). There is no step 1 under it, so `Esc` blurs then
   cancels, and `undo` belongs to the list, not to the card.
 - `MoveCoordinator.swift` — a drop or `Move to…` → `MovePlan` → perform at once, or hold the
   `dialogue` (`card` / `deferDate` / `pickProject`) until it confirms or is cancelled.
@@ -96,7 +99,24 @@ Linux-compilable (this is where all the logic lives, and all of it is unit-teste
   (`InboxRefusal.notAvailable`) rather than quietly doing it — that is what keeps **Trash and
   `Defer to review` reachable from step 1 only** (I4c, I5).
 - **Collapsing keeps the draft.** It survives until the card is filed or the session ends; a
-  fresh card always starts at step 1 with an empty draft.
+  fresh card always starts at step 1 with the draft its note holds — empty for a new capture.
+- **Leaving the session keeps the card (#85).** `saveProgress()` writes the current card into
+  its inbox note (`saveInboxProgress`: `InboxDraft.progress(over:)` — body with `Why?`/`What?`,
+  chips, the notes panel joined to the capture text — then the title as a rename) and leaves it
+  in the inbox; `InboxDraft(item:)` reads it all back. `InboxProcessingView` calls it on
+  disappear (Close, `Esc`, swipe-away, the review moving on), `AppModel.flushHeldEdits` on ⌘Q /
+  backgrounding (the session is a `HeldEdits`; `unsavedText` feeds the crash journal), and
+  `Defer to review` writes the same before deferring. A list filing clears stored chips first
+  (`persistEdits(clearingProgress:)`). The Knowledge sheet edits `draft.notes` itself, so
+  `Cancel` there keeps them.
+- **Sub-sheets and "Make action" keep a draft (#94).** The follow-up sheet (`waitingDraftKey`),
+  `Defer to review` (`deferReasonDraftKey`), `New list…` (`InputDraftKey.newListInPicker`, also
+  from a drop) and Knowledge's `New folder` keep their text in `InputDrafts` and reopen with it;
+  their `Cancel` clears it, a successful filing / list creation clears it in the session or
+  `MoveCoordinator`. `MakeActionModel` over a list item, a project step (keyed by its text) or a
+  "What's next?" line keeps its whole `InboxDraft` (`draftKey`; `InboxDraft` is `Codable`) on
+  every change and restores it in `init`; filing clears it. Over an existing action there is no
+  draft — #85's `keptEdits` writes the action.
 - Nothing is pre-filled and no suggestion is ever persisted: the last-used knowledge folder and
   the +7 d follow-up are **suggested** until the user taps them (§1, STYLEGUIDE §3.1). The
   suggestion travels as its own field of `KnowledgePickerModel`, never as a chosen folder.

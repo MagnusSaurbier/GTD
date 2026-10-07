@@ -18,7 +18,10 @@ binding spec for the wizard frame, deck cards, stat tiles and heatmap.
 Linux-compilable (all the logic, all of it unit-tested):
 
 - `ReviewSession` — `@MainActor @Observable`. Pages, the two gates, every sweep and deck action,
-  the stats, `save()`. Views hold no decisions.
+  the stats, `save()`. Views hold no decisions. The deferred-item card is kept as a
+  `DeferredCardDraft` (card draft + `System fix`) in `InputDrafts` while it is typed on
+  (`keepDeferredCard`), given back when the item comes up again (`keptDeferredCard`) and cleared
+  by `fileDeferred` (#94) — a draft, not a write into the inbox note.
 - `ReviewPage` / `ReviewStage` / `ReviewRailItem` — the wizard is a flat, ordered page list; the
   four stages of §10 are a grouping over it (the rail).
 - `ReviewSessionState` (+ `WeeklyReviewAnswers`, `ReviewQuestion`, `SystemsCheckAnswers`,

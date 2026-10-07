@@ -98,7 +98,6 @@ struct RulesListTests {
         #expect(Rules.visibleActions(withLists, today: today).count == 1)
         #expect(Rules.waitingList(withLists, today: today).isEmpty)
         #expect(Rules.chaseItems(withLists, today: today).isEmpty)
-        #expect(Rules.deferredList(withLists, today: today).isEmpty)
         #expect(Rules.countsTowardCap(withLists, today: today) == 1)
         #expect(Rules.archiveCandidates(withLists, today: today).isEmpty)
         #expect(Rules.timeline(withLists, from: TestVault.day(-100), to: TestVault.day(100))

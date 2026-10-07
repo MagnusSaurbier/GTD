@@ -34,7 +34,26 @@ struct DecodeTests {
     /// The hidden legacy state must never reach a status picker (R-1).
     @Test func theLegacyTrashStateIsNotInAllCases() {
         #expect(!ActionStatus.allCases.contains(.legacyTrashed))
-        #expect(ActionStatus.allCases == [.next, .someday, .inProgress, .waiting, .done])
+        #expect(ActionStatus.allCases
+            == [.next, .someday, .inProgress, .agent, .review, .waiting, .done])
+    }
+
+    /// #87 — `agent` and `review` are statuses a `status:` line can carry, and they survive the
+    /// round trip word for word.
+    @Test func agentAndReviewAreReadAndWritten() throws {
+        for word in ["agent", "review"] {
+            let text = "---\nstatus: \(word)\n---\n# Why?\nx\n"
+            let action = try NoteCodec.decodeAction(id: actionID, text: text)
+            #expect(action.status.rawValue == word)
+            #expect(action.status.isOnBoard)
+            #expect(!action.status.countsTowardCap)
+            #expect(NoteCodec.encode(action) == text)
+        }
+        // A status change patches only the status line.
+        let next = "---\nstatus: next\n---\n# Why?\nx\n"
+        var action = try NoteCodec.decodeAction(id: actionID, text: next)
+        action.status = .review
+        #expect(NoteCodec.encode(action) == "---\nstatus: review\n---\n# Why?\nx\n")
     }
 
 
@@ -66,7 +85,8 @@ struct DecodeTests {
         #expect(action.contexts == ["mac", "deep-work"])
         #expect(action.timeEstimate == 30)
         #expect(action.project == NoteID(path: "Projects/Applications/DAAD/DAAD.md"))
-        #expect(action.deferDate == Day(year: 2026, month: 9, day: 20))
+        // #86 — a waiting note keeps its own follow-up date; the legacy defer date is folded away.
+        #expect(action.deferDate == nil)
         #expect(action.due == Day(year: 2026, month: 9, day: 24))
         #expect(action.waitingFor == "Prof. Weber")
         #expect(action.followUpDate == Day(year: 2026, month: 9, day: 30))

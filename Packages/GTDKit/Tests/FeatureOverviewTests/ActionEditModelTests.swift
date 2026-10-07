@@ -295,6 +295,39 @@ struct ActionEditModelTests {
         #expect(model.snapshot.action(editor.id)?.status == .someday)
     }
 
+    // MARK: - Begin action (#87)
+
+    /// "Begin action" is offered for every open action that is not in progress yet, and
+    /// writes `in-progress`.
+    @Test func beginStartsANextAction() async {
+        let (model, editor) = make(fixture(status: .next))
+        #expect(editor.canBegin)
+        editor.begin()
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(editor.id)?.status == .inProgress)
+        #expect(!editor.canBegin)
+    }
+
+    @Test func beginIsOfferedFromAgentAndReviewToo() {
+        #expect(make(fixture(status: .agent)).1.canBegin)
+        #expect(make(fixture(status: .review)).1.canBegin)
+        #expect(make(fixture(status: .someday)).1.canBegin)
+        #expect(!make(fixture(status: .inProgress)).1.canBegin)
+    }
+
+    /// Beginning a Someday note enters Next's tier: a gap is refused and named, nothing moves.
+    @Test func beginningAnIncompleteSomedayNoteIsRefusedWithItsGaps() async {
+        let (model, editor) = make(fixture(status: .someday))
+        editor.begin()
+        await editor.waitForPendingSave()
+        guard case .missingFields(let fields)? = editor.lastError as? GTDError else {
+            Issue.record("expected missingFields, got \(String(describing: editor.lastError))")
+            return
+        }
+        #expect(fields == [.timeEstimate])
+        #expect(model.snapshot.action(editor.id)?.status == .someday)
+    }
+
     /// W1 — waiting is only ever written together with who and a follow-up date.
     @Test func waitingIsWrittenWithWhoAndFollowUp() async throws {
         let (model, editor) = make(fixture())
@@ -306,6 +339,42 @@ struct ActionEditModelTests {
         #expect(saved.waitingFor == "Lena")
         #expect(saved.followUpDate == Fixtures.day(7))
         #expect(editor.lastError == nil)
+    }
+
+    /// #86 — the detail's Defer chip defers: the item waits with that follow-up date and no
+    /// who, the chip shows the date, and clearing it brings the item back to Next.
+    @Test func theDeferChipMakesADeferralAndClearingItUndefers() async throws {
+        var action = fixture(status: .next)
+        action.timeEstimate = 30
+        let (model, editor) = make(action)
+        editor.setDeferDate(Fixtures.day(5))
+        await editor.waitForPendingSave()
+
+        let saved = try #require(model.snapshot.action(editor.id))
+        #expect(saved.status == .waiting)
+        #expect(saved.waiting == WaitingInfo(followUp: Fixtures.day(5)))
+        #expect(editor.deferDate == Fixtures.day(5))
+
+        editor.setDeferDate(nil)
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(editor.id)?.status == .next)
+        #expect(editor.deferDate == nil)
+        #expect(editor.lastError == nil)
+    }
+
+    /// #86 — on a Someday item the Defer chip is its own defer date: it stays Someday.
+    @Test func theDeferChipOnASomedayItemKeepsItSomeday() async throws {
+        let (model, editor) = make(fixture(status: .someday))
+        editor.setDeferDate(Fixtures.day(5))
+        await editor.waitForPendingSave()
+        let saved = try #require(model.snapshot.action(editor.id))
+        #expect(saved.status == .someday)
+        #expect(saved.deferDate == Fixtures.day(5))
+        #expect(editor.deferDate == Fixtures.day(5))
+        editor.setDeferDate(nil)
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(editor.id)?.deferDate == nil)
+        #expect(model.snapshot.action(editor.id)?.status == .someday)
     }
 
     /// The user's 2026-09-24 report: context and time chips on an imported waiting item (no

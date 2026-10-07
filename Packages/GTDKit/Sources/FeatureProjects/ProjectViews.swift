@@ -241,6 +241,19 @@ private struct NewProjectSheet: View {
             }
         }
         .padding(Spacing.cardPadding)
+        // #94 — no `Cancel` here: however the sheet is left, what was typed comes back.
+        .keepsDraft(sheetDraft, key: InputDraftKey.newProject, in: model.inputDrafts, isEmpty: \.isEmpty)
+    }
+
+    private var sheetDraft: Binding<NewProjectDraft> {
+        Binding(
+            get: { NewProjectDraft(title: title, newAreaTitle: newAreaTitle, area: selectedArea) },
+            set: {
+                title = $0.title
+                newAreaTitle = $0.newAreaTitle
+                // An area deleted since is not chosen again.
+                selectedArea = $0.area.flatMap { id in model.snapshot.areas.contains { $0.id == id } ? id : nil }
+            })
     }
 
     private func create() async {
@@ -250,6 +263,7 @@ private struct NewProjectSheet: View {
             newAreaTitle: newAreaTitle.trimmingCharacters(in: .whitespaces).isEmpty ? nil : newAreaTitle)
         do {
             try await listModel.createProject(draft)
+            model.inputDrafts.clear(InputDraftKey.newProject)
             dismiss()
         } catch {
             errorMessage = "\(error)"
@@ -335,7 +349,8 @@ public struct ProjectDetailView: View {
         .task(id: projectID) {
             guard detailModel?.projectID != projectID else { return }
             detailModel = detail
-            newStepText = ""
+            // `newStepText` follows the project through `keepsDraft` below (#94): the field
+            // shows this project's kept text, or nothing.
             highlightedSuggestion = nil
             cardRequest = nil
             demotionNotice = nil
@@ -468,9 +483,12 @@ public struct ProjectDetailView: View {
                 if let index = highlightedSuggestion, suggestions.indices.contains(index) {
                     link(suggestions[index], detail)
                 } else {
+                    // #94 — the text goes only once the step is in the note; a refusal keeps it
+                    // in the field and reaches the alert.
+                    let text = newStepText
                     Task {
-                        try? await detail.addStep(newStepText)
-                        newStepText = ""
+                        guard await model.report({ try await detail.addStep(text) }) else { return }
+                        if newStepText == text { newStepText = "" }
                     }
                 }
             }
@@ -616,6 +634,9 @@ private struct StepRow: View {
                     .onChange(of: isFocused) { _, focused in
                         if !focused { commit() }
                     }
+                    // #94 — the row going away with the field focused (another project, a
+                    // closed window) still hands the edit over.
+                    .onDisappear { commit() }
             }
 
             switch standing {
@@ -821,7 +842,15 @@ public struct WhatsNextSheet: View {
     public var body: some View {
         if let card {
             ProjectActionCard(card) { filed in
-                if filed { dismiss() } else { self.card = nil }
+                if filed {
+                    // #94 — the typed line became an action: its draft is done with.
+                    if case .newProjectAction = card.source {
+                        model.inputDrafts.clear(InputDraftKey.whatsNext(projectID))
+                    }
+                    dismiss()
+                } else {
+                    self.card = nil
+                }
             }
         } else {
             chooser
@@ -917,6 +946,8 @@ public struct WhatsNextSheet: View {
         .frame(width: next.hasSomedayPile ? SheetMetrics.idealWidth : nil)
         #endif
         .task { if whatsNextModel == nil { whatsNextModel = next } }
+        // #94 — the typed line survives every way out ("Nothing yet", `Done`, a swipe, ⌘Q).
+        .keepsDraft($freeText, key: InputDraftKey.whatsNext(projectID), in: model.inputDrafts)
     }
 
     private func openFreeText() {
@@ -975,6 +1006,8 @@ public struct ConvertToProjectSheet: View {
     @State private var selectedStepIndex: Int? = 0
     @State private var errorMessage: String?
     @State private var didSeed = false
+    /// What the sheet opened with (#94): a draft is kept only once the person changed it.
+    @State private var seeded: ConvertToProjectDraft?
     @State private var card: MakeActionModel?
 
     public init(action: NoteID) {
@@ -1030,8 +1063,25 @@ public struct ConvertToProjectSheet: View {
                 title = draft.title
                 steps = draft.steps
                 selectedStepIndex = draft.steps.isEmpty ? nil : 0
+                seeded = sheetDraft
+                // #94 — the title and step chosen the last time the sheet was left.
+                if let kept = model.inputDrafts.value(ConvertToProjectDraft.self, for: draftKey) {
+                    title = kept.title
+                    selectedStepIndex = kept.selectedStepIndex.flatMap { steps.indices.contains($0) ? $0 : nil }
+                }
             }
         }
+        // No `Cancel` on this sheet: every way out keeps the edits; `Done` clears them.
+        .onChange(of: sheetDraft) { _, draft in
+            guard let seeded else { return }
+            model.inputDrafts.keep(draft == seeded ? nil : draft, for: draftKey)
+        }
+    }
+
+    private var draftKey: String { InputDraftKey.convertToProject(actionID) }
+
+    private var sheetDraft: ConvertToProjectDraft {
+        ConvertToProjectDraft(title: title, selectedStepIndex: selectedStepIndex)
     }
 
     private func convertNow(_ convert: ConvertToProjectModel) async {
@@ -1042,6 +1092,7 @@ public struct ConvertToProjectSheet: View {
             errorMessage = "\(error)"
             return
         }
+        model.inputDrafts.clear(draftKey)
         guard let index = selectedStepIndex, draft.steps.indices.contains(index) else {
             dismiss()
             return

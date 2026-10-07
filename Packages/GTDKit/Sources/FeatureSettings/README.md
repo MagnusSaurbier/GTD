@@ -69,6 +69,11 @@ This target must **not** import `GTDVault`: folder picking returns a plain `URL`
 - Removing/renaming a context only edits `GTDConfig`; it never rewrites existing action
   frontmatter. `affectedActionCount` is shown so the user knows what stays behind (no lying
   defaults — nothing is silently fixed up).
+- Name fields keep a draft (#94, `InputDrafts`): `Add a context`, `Add a list` and onboarding's
+  new-vault name come back when Settings / that step opens again; a context or list rename's
+  typed name comes back when the same one is renamed again. `Cancel` clears; a refused add or
+  rename keeps the text (context add/rename refusals now reach the shell's alert instead of
+  `try?`).
 - `VaultIssuesView`'s "Open in Obsidian" goes through `GTDAppCore.ObsidianLink` with
   `\.vaultRootPath` (hidden without a root, i.e. on fixtures). "Reveal" still only passes the
   vault-relative `VaultIssue.path` — best-effort, a known limitation.
