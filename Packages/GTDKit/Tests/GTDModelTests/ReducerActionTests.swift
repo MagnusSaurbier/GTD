@@ -27,6 +27,9 @@ struct ReducerActionTests {
         CapCase(occupied: 15, cap: 15, status: .someday, refused: false),
         CapCase(occupied: 15, cap: 15, status: .done, refused: false),
         CapCase(occupied: 15, cap: 15, status: .waiting, refused: false),
+        // #87 — handed to an agent / waiting for review: no cap slot.
+        CapCase(occupied: 15, cap: 15, status: .agent, refused: false),
+        CapCase(occupied: 15, cap: 15, status: .review, refused: false),
         CapCase(occupied: 0, cap: 1, status: .next, refused: false),
         CapCase(occupied: 1, cap: 1, status: .next, refused: true),
     ])
@@ -47,6 +50,34 @@ struct ReducerActionTests {
         let id = TestVault.actionID("Next 0")
         let result = try Reducer.reduce(vault, .setStatus(id, .someday, waiting: nil), env: env)
         #expect(Rules.countsTowardCap(result.snapshot, today: env.today) == 16)
+    }
+
+    /// #87 — a Next item handed to an agent frees its slot; taking it back (review → in
+    /// progress) needs one again, and at the cap that is refused like any promotion.
+    @Test func handingToAnAgentFreesTheSlotAndTakingItBackNeedsOne() throws {
+        var vault = TestVault.nextOccupied(15)
+        // A complete note, so the refusal at the end is about the cap and nothing else (R-3).
+        vault.actions[0] = TestVault.action(
+            "Next 0", .next, contexts: ["mac"], timeEstimate: 10, why: "It matters.", what: "Do it.")
+        let id = TestVault.actionID("Next 0")
+        let handed = try Reducer.reduce(vault, .setStatus(id, .agent, waiting: nil), env: env)
+        #expect(Rules.countsTowardCap(handed.snapshot, today: env.today) == 14)
+        let review = try Reducer.reduce(handed.snapshot, .setStatus(id, .review, waiting: nil), env: env)
+        #expect(review.snapshot.action(id)?.status == .review)
+        let filled = try Reducer.reduce(review.snapshot, .createAction(ActionDraft(
+            title: "Fifteenth", status: .next, contexts: ["mac"], timeEstimate: 10,
+            why: "The last slot.", what: "Do it.")), env: env)
+        #expect(TestVault.error(filled.snapshot, .setStatus(id, .inProgress, waiting: nil), env: env)
+            == .nextCapReached(cap: 15))
+    }
+
+    /// #87 — handing a bare Someday note to an agent asks for nothing (like demoting).
+    @Test func aBareSomedayNoteCanBeHandedToAnAgent() throws {
+        var vault = TestVault.nextOccupied(0)
+        vault.actions.append(TestVault.action("Idee", .someday))
+        let id = TestVault.actionID("Idee")
+        let result = try Reducer.reduce(vault, .setStatus(id, .agent, waiting: nil), env: env)
+        #expect(result.snapshot.action(id)?.status == .agent)
     }
 
     @Test func promotingFromSomedayAtTheCapIsRefused() {
@@ -127,11 +158,11 @@ struct ReducerActionTests {
         #expect(action.followUpDate == nil)
     }
 
-    // MARK: - D1 × R-2: defer and Next
+    // MARK: - D1 × R-2 × #86: deferring is waiting
 
-    /// R-2 (reverses the 2026-09-19 refusal): a Next item may carry a future `defer`. It is
-    /// hidden until its date and does not occupy a slot while hidden.
-    @Test func aDeferredActionMayOccupyANextSlotAndIsHiddenUntilItsDate() throws {
+    /// #86 — a defer date is a who-less follow-up date: the item moves to Waiting, holds no
+    /// slot, and on its date is back in Next with the `back` badge.
+    @Test func deferringAnActionMakesItAWhoLessWaitingItem() throws {
         let vault = TestVault.snapshot(actions: [TestVault.action(
             "Plan the timetable", .someday, contexts: ["mac"], timeEstimate: 30,
             why: "The semester starts.", what: "Draw it up.")])
@@ -142,21 +173,78 @@ struct ReducerActionTests {
 
         let result = try Reducer.reduce(vault, .updateAction(deferred), env: env)
         let stored = try #require(result.snapshot.action(id))
-        #expect(stored.status == .next)
-        #expect(stored.deferDate == TestVault.day(10))
-        #expect(!Rules.isVisible(stored, today: env.today))
+        #expect(stored.status == .waiting)
+        #expect(stored.followUpDate == TestVault.day(10))
+        #expect(stored.waitingFor == nil)
+        #expect(stored.deferDate == nil)
+        #expect(Rules.waitingList(result.snapshot, today: env.today).map(\.id) == [id])
         #expect(Rules.nextList(result.snapshot, today: env.today).isEmpty)
         #expect(Rules.countsTowardCap(result.snapshot, today: env.today) == 0)
         // …and on its date it is back in Next, with the `back` badge.
         let onTheDay = TestVault.day(10)
         #expect(Rules.nextList(result.snapshot, today: onTheDay).map(\.id) == [id])
+        #expect(Rules.waitingList(result.snapshot, today: onTheDay).isEmpty)
         #expect(Rules.countsTowardCap(result.snapshot, today: onTheDay) == 1)
         #expect(Rules.returnedFromDeferBadge(for: stored, today: onTheDay) != nil)
     }
 
-    /// R-2 — a full Next plus a deferred Next item is legal: the hidden one holds no slot.
-    /// When it returns, Next is simply over the cap; nothing is demoted automatically.
-    @Test func aDeferredNextItemDoesNotConsumeASlotUntilItReturns() throws {
+    /// #86 — the inbox card's defer chip on a card filed to Next files it as a deferral.
+    @Test(arguments: [ActionStatus.next, .inProgress])
+    func aNewActionWithADeferDateLandsInWaiting(status: ActionStatus) throws {
+        let result = try Reducer.reduce(TestVault.snapshot(), .createAction(ActionDraft(
+            title: "Später", status: status, contexts: ["mac"], timeEstimate: 10,
+            deferDate: TestVault.day(3), why: "Later.", what: "Do it.")), env: env)
+        let stored = try #require(result.snapshot.actions.first)
+        #expect(stored.status == .waiting)
+        #expect(stored.waiting == WaitingInfo(followUp: TestVault.day(3)))
+        #expect(stored.deferDate == nil)
+    }
+
+    /// #86 (user decision) — Someday keeps its tier: a card filed to Someday with the defer
+    /// chip stays `someday` + `defer`, hidden until the date, then back in Someday.
+    @Test func aDeferredSomedayItemKeepsItsTierAndComesBackToSomeday() throws {
+        let result = try Reducer.reduce(TestVault.snapshot(), .createAction(ActionDraft(
+            title: "Später", status: .someday, deferDate: TestVault.day(3), what: "Later.")), env: env)
+        let stored = try #require(result.snapshot.actions.first)
+        #expect(stored.status == .someday)
+        #expect(stored.deferDate == TestVault.day(3))
+        #expect(stored.followUpDate == nil)
+        #expect(Rules.sidebarCounts(result.snapshot, today: env.today).someday == 0)
+        #expect(Rules.waitingList(result.snapshot, today: env.today).isEmpty)
+        #expect(Rules.sidebarCounts(result.snapshot, today: TestVault.day(3)).someday == 1)
+        #expect(Rules.countsTowardCap(result.snapshot, today: TestVault.day(3)) == 0)
+
+        // Editing it keeps tier and date; moving it to another tier drops the date.
+        var edited = stored
+        edited.why = "Still later."
+        let kept = try Reducer.reduce(result.snapshot, .updateAction(edited), env: env)
+        #expect(kept.snapshot.action(stored.id)?.status == .someday)
+        #expect(kept.snapshot.action(stored.id)?.deferDate == TestVault.day(3))
+        var refiled = stored
+        refiled.status = .waiting
+        refiled.followUpDate = TestVault.day(9)
+        let moved = try Reducer.reduce(result.snapshot, .updateAction(refiled), env: env)
+        #expect(moved.snapshot.action(stored.id)?.deferDate == nil)
+        #expect(moved.snapshot.action(stored.id)?.followUpDate == TestVault.day(9))
+        let demoted = try Reducer.reduce(result.snapshot, .setStatus(stored.id, .waiting,
+            waiting: WaitingInfo(followUp: TestVault.day(9))), env: env)
+        #expect(demoted.snapshot.action(stored.id)?.deferDate == nil)
+    }
+
+    /// A waiting item keeps the who and date its own sheet gave it; a defer date fills in only
+    /// a missing follow-up date.
+    @Test func aWaitingDraftKeepsItsOwnWhoAndDate() throws {
+        let result = try Reducer.reduce(TestVault.snapshot(), .createAction(ActionDraft(
+            title: "Warten", status: .waiting, deferDate: TestVault.day(3),
+            waiting: WaitingInfo(who: "Lena", followUp: TestVault.day(5)), what: "Ask.")), env: env)
+        let stored = try #require(result.snapshot.actions.first)
+        #expect(stored.waiting == WaitingInfo(who: "Lena", followUp: TestVault.day(5)))
+        #expect(stored.deferDate == nil)
+    }
+
+    /// R-2 — a full Next plus a deferral is legal: the waiting one holds no slot. When it
+    /// returns, Next is simply over the cap; nothing is demoted automatically.
+    @Test func aDeferralDoesNotConsumeASlotUntilItReturns() throws {
         let vault = TestVault.nextOccupied(15)
         let result = try Reducer.reduce(vault, .createAction(ActionDraft(
             title: "Später", status: .next, contexts: ["mac"], timeEstimate: 10,
@@ -172,29 +260,49 @@ struct ReducerActionTests {
         #expect(Rules.nextList(result.snapshot, today: afterwards).count == 16)
     }
 
-    @Test func aDeferDateInThePastOrTodayIsFineInNext() throws {
+    @Test func aDeferDateInThePastOrTodayIsBackInNextAtOnce() throws {
         let vault = TestVault.snapshot()
         for offset in [-1, 0] {
             let result = try Reducer.reduce(vault, .createAction(ActionDraft(
                 title: "Zurück \(offset)", status: .next, contexts: ["mac"], timeEstimate: 10,
                 deferDate: TestVault.day(offset), why: "Committed.", what: "Do it.")), env: env)
-            #expect(result.snapshot.actions.count == 1)
+            #expect(Rules.nextList(result.snapshot, today: env.today).count == 1)
         }
     }
 
-    /// A vault edited by hand into the contradiction stays editable — the rule refuses only the
-    /// *new* contradiction.
-    @Test func anExistingDeferredNextActionCanStillBeEdited() throws {
+    /// #86 — a deferral that is back in Next is judged as a Next item: starting it asks for
+    /// nothing new, even when it lacks Next's fields (it entered waiting without them).
+    @Test func startingADeferralThatIsBackAsksForNothing() throws {
+        let back = TestVault.action("Zurück", .waiting, waiting: WaitingInfo(followUp: TestVault.day(-1)))
+        let vault = TestVault.snapshot(actions: [back])
+        let started = try Reducer.reduce(vault, .setStatus(back.id, .inProgress, waiting: nil), env: env)
+        #expect(started.snapshot.action(back.id)?.status == .inProgress)
+        #expect(started.snapshot.action(back.id)?.followUpDate == nil)
+        // One still waiting is judged as waiting: Next asks for its fields.
+        let waiting = TestVault.action("Später", .waiting, waiting: WaitingInfo(followUp: TestVault.day(2)))
+        #expect(TestVault.error(TestVault.snapshot(actions: [waiting]),
+                                .setStatus(waiting.id, .next, waiting: nil), env: env)
+                == .missingFields([.why, .what, .context, .timeEstimate]))
+    }
+
+    /// An action still carrying a `defer` in memory (built by hand; the codec folds every one it
+    /// reads) is folded on its next edit, and picking a tier drops the date instead of turning
+    /// the choice into waiting.
+    @Test func aLegacyDeferredActionIsFoldedOnEditAndDropsTheDateOnATierChoice() throws {
         // R-3 — a note already in Next with gaps stays editable; that is the point here.
         let stray = TestVault.action("Hand-edited", .next, deferDate: TestVault.day(10))
         let vault = TestVault.snapshot(actions: [stray])
         var edited = stray
         edited.why = "Repaired in the app"   // …even though it still has no What? (R-3)
         let result = try Reducer.reduce(vault, .updateAction(edited), env: env)
-        #expect(result.snapshot.action(stray.id)?.why == "Repaired in the app")
-        // …and demoting it works.
+        let stored = try #require(result.snapshot.action(stray.id))
+        #expect(stored.why == "Repaired in the app")
+        #expect(stored.status == .waiting)
+        #expect(stored.followUpDate == TestVault.day(10))
+        // …and demoting it works, without the date sneaking back in as waiting.
         let demoted = try Reducer.reduce(vault, .setStatus(stray.id, .someday, waiting: nil), env: env)
         #expect(demoted.snapshot.action(stray.id)?.status == .someday)
+        #expect(demoted.snapshot.action(stray.id)?.deferDate == nil)
     }
 
     // MARK: - A4: contexts are a closed list

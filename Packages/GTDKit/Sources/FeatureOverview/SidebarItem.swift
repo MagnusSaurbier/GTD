@@ -8,18 +8,20 @@ import DesignSystem
 public enum SidebarItem: Hashable, Sendable, CaseIterable {
     case inbox
     case next
+    /// #87 — the In progress board: in progress | agent | review.
+    case inProgress
     case someday
     case waiting
     case lists
     case projects
-    case deferred
     case review
     case routines
 
-    /// The counted sections, in the order of STYLEGUIDE §4.1 — they form the first sidebar group
-    /// and own `⌘1…⌘7`.
+    /// The counted sections, in the order of STYLEGUIDE §4.1 (In progress right under Next,
+    /// #87) — they form the first sidebar group and own `⌘1…⌘n`. There is no Deferred section:
+    /// a deferral is a who-less waiting item and is listed under Waiting (#86).
     public static let counted: [SidebarItem] = [
-        .inbox, .next, .someday, .waiting, .lists, .projects, .deferred,
+        .inbox, .next, .inProgress, .someday, .waiting, .lists, .projects,
     ]
 
     /// The second sidebar group: the two guided flows.
@@ -29,11 +31,11 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: Copy.inbox
         case .next: Copy.next
+        case .inProgress: Copy.inProgress
         case .someday: Copy.someday
         case .waiting: Copy.waiting
         case .lists: Copy.lists
         case .projects: OverviewCopy.projects
-        case .deferred: OverviewCopy.deferred
         case .review: Copy.weeklyReview
         case .routines: OverviewCopy.routines
         }
@@ -43,17 +45,17 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: Symbols.inbox
         case .next: Symbols.next
+        case .inProgress: Symbols.inProgress
         case .someday: Symbols.someday
         case .waiting: Symbols.waiting
         case .lists: Symbols.listBullet
         case .projects: Symbols.projects
-        case .deferred: Symbols.deferred
         case .review: Symbols.weeklyReview
         case .routines: Symbols.routineGeneric
         }
     }
 
-    /// `⌘1…⌘7` — the counted sections only (STYLEGUIDE §4.5).
+    /// `⌘1…⌘n` — the counted sections only (STYLEGUIDE §4.5).
     public var shortcutNumber: Int? {
         SidebarItem.counted.firstIndex(of: self).map { $0 + 1 }
     }
@@ -79,9 +81,9 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     public var moveDestination: MoveDestination? {
         switch self {
         case .next: .next
+        case .inProgress: .inProgress
         case .someday: .someday
         case .waiting: .waiting
-        case .deferred: .deferred
         case .projects: .projects
         case .lists: .lists
         case .inbox, .review, .routines: nil
@@ -89,10 +91,10 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     }
 
     /// D3 — the calendar strip is docked only under the lists whose items are *dated*: Next
-    /// (due), Waiting (follow-up) and Deferred (defer). Everywhere else it was dead space.
+    /// (due) and Waiting (follow-up, deferrals included). Everywhere else it was dead space.
     public var showsCalendarStrip: Bool {
         switch self {
-        case .next, .waiting, .deferred: true
+        case .next, .waiting: true
         default: false
         }
     }
@@ -111,7 +113,7 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
     /// forced order, I1).
     public var emptyDetailBody: String? {
         switch self {
-        case .next, .someday, .waiting, .deferred: OverviewMacCopy.pickAnAction
+        case .next, .inProgress, .someday, .waiting: OverviewMacCopy.pickAnAction
         case .lists: OverviewMacCopy.pickAnItem
         case .projects: OverviewMacCopy.pickAProject
         case .inbox: OverviewMacCopy.inboxIsProcessed
@@ -124,11 +126,11 @@ public enum SidebarItem: Hashable, Sendable, CaseIterable {
         switch self {
         case .inbox: counts.inbox
         case .next: counts.next
+        case .inProgress: counts.inProgress
         case .someday: counts.someday
         case .waiting: counts.waiting
         case .lists: counts.lists
         case .projects: counts.projects
-        case .deferred: counts.deferred
         default: nil
         }
     }

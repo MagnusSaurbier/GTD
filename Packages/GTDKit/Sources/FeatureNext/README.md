@@ -13,6 +13,13 @@ overdue follow-ups (E1, E2, W2).
     needs the app shell, since `FeatureNext` must not import `FeatureInbox`. `nil` hides the
     quick-add button/`⌘N`.
 - `NextViewMode { full, onTheGo }`.
+- `InProgressBoardView(selection:onOpen:)` (#87) — the In progress board: In progress · Agent ·
+  Review side by side when the width allows, else one list with a section per column; context
+  chips + a Project menu filter every column (screen state, not persisted). Cards are draggable
+  onto another column or a sidebar section; the card menu has `Move to column` and `Move to…`.
+  Moves go through the host's `moveNote` handler (`MovePlan`), so the host must apply
+  `FeatureInbox.moveNoteHost()` (the Mac window and the iPhone tab do). Logic:
+  `InProgressBoardModel` (Linux-compilable, `FeatureNextTests/InProgressBoardModelTests`).
 - Linux-compilable: `NextListModel` (filtering, sections, cap, empty states, row commands),
   `NextFilterStore` (+ `UserDefaultsNextFilterStore`, `InMemoryNextFilterStore`).
 
@@ -36,12 +43,12 @@ overdue follow-ups (E1, E2, W2).
   (→ in-progress), demote to Someday, set waiting (`WaitingInfoSheet`), defer (`DateValueChip` in
   a small sheet). Every swipe action has a context-menu twin — the Mac has no swipes and
   VoiceOver cannot reach one (STYLEGUIDE §8).
-- **Deferring a Next row changes only the date** (R-2, ARCHITECTURE §6): a Next item may carry a
-  future `defer`. It is hidden until then and holds no cap slot while hidden
-  (`Rules.countsTowardCap(_:today:)`); on its date it is back with the `back` badge. Nothing is
-  demoted behind the user's back.
-- **`showsCapSheet`** is the R-2 flag the view acts on: Next can be over the cap when a deferred
-  item returns, and the `Next is full` sheet is then presented **once per foreground**
+- **Deferring a Next row is waiting** (#86, ARCHITECTURE §6): `setDefer` sends
+  `setStatus(.waiting)` with the date as follow-up and no who (a chase item keeps its who). The
+  row waits in Waiting and holds no cap slot (`Rules.countsTowardCap(_:today:)`); on its date it
+  is back here with the `back` badge. Nothing is demoted behind the user's back.
+- **`showsCapSheet`** is the R-2 flag the view acts on: Next can be over the cap when a deferral
+  returns, and the `Next is full` sheet is then presented **once per foreground**
   (`enteredForeground()` arms it, `capSheetShown()` puts it down) until something is demoted.
   `NextView` wires this itself (T11): `@Environment(\.scenePhase)` calls `enteredForeground()` on
   every transition to `.active`, and `NextCapSheet` (built locally from `DesignSystem` pieces —
@@ -104,4 +111,4 @@ not compile on Linux; build them on a Mac (`scripts/check.sh --app`).
 
 ## Testing
 
-`cd Packages/GTDKit && swift test --filter FeatureNextTests` — 32 tests.
+`cd Packages/GTDKit && swift test --filter FeatureNextTests` — 45 tests.

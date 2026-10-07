@@ -116,10 +116,17 @@ public struct UndoToast: View {
 /// returned `WaitingInfo` until the user confirms it: a default must never be written silently.
 /// `Set waiting` stays disabled until a date is confirmed; a blank who is sent as `nil`, never
 /// an empty string, so no `waitingFor:` line is written (D39, "no lying defaults").
+///
+/// #94 — given `drafts` and a `draftKey`, the typed `who` and a chosen date are kept there while
+/// the sheet is open and come back when it opens again for the same note: the sheet has no
+/// `Cancel`, so every way out (a swipe, `Esc`, a click outside, ⌘Q) keeps them. The caller
+/// clears the draft once `Set waiting` went through.
 public struct WaitingInfoSheet: View {
     private let initial: WaitingInfo?
     private let suggestedWho: [String]
     private let today: Day
+    private let drafts: InputDrafts?
+    private let draftKey: String?
     private let onSave: (WaitingInfo) -> Void
 
     @State private var who: String
@@ -141,11 +148,15 @@ public struct WaitingInfoSheet: View {
         initial: WaitingInfo? = nil,
         suggestedWho: [String] = [],
         today: Day = Day.today(),
+        drafts: InputDrafts? = nil,
+        draftKey: String? = nil,
         onSave: @escaping (WaitingInfo) -> Void
     ) {
         self.initial = initial
         self.suggestedWho = suggestedWho
         self.today = today
+        self.drafts = drafts
+        self.draftKey = draftKey
         self.onSave = onSave
         _who = State(initialValue: initial?.who ?? "")
         _followUp = State(initialValue: initial?.followUp)
@@ -219,6 +230,9 @@ public struct WaitingInfoSheet: View {
             // A click into the field ends the walk, as on the inbox card.
             if focused { walk = nil }
         }
+        .keepsDraft(sheetDraft, key: draftKey, in: drafts, isEmpty: { [initial] draft in
+            draft.isEmpty || draft == WaitingSheetDraft(who: initial?.who ?? "", followUp: initial?.followUp)
+        })
         #if os(iOS)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -227,6 +241,16 @@ public struct WaitingInfoSheet: View {
             }
         }
         #endif
+    }
+
+    /// The two values as one draft (#94).
+    private var sheetDraft: Binding<WaitingSheetDraft> {
+        Binding(
+            get: { WaitingSheetDraft(who: who, followUp: followUp) },
+            set: {
+                who = $0.who
+                followUp = $0.followUp
+            })
     }
 
     /// Stops per row: the follow-up chip, the who suggestions, `Set waiting`.

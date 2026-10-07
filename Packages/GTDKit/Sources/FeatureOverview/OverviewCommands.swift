@@ -75,7 +75,7 @@ public struct OverviewCommands: Commands {
         }
     }
 
-    /// `⌘1…⌘7`, in the order of `SidebarItem.counted`.
+    /// `⌘1…`, one per entry of `SidebarItem.counted`, in its order (spare digits stay unused).
     private static let digits: [KeyEquivalent] = ["1", "2", "3", "4", "5", "6", "7"]
 }
 #endif

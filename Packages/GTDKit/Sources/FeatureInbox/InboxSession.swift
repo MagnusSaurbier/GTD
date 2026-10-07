@@ -72,7 +72,10 @@ public final class InboxSession {
 
     /// Draft, validation flags and cap state of the current card — the same value type
     /// `MakeActionModel` drives, so neither re-implements a rule (`ActionCard.swift`).
-    public var card: ActionCardState
+    public var card: ActionCardState {
+        // #85 — the crash journal follows what is typed (`unsavedText`).
+        didSet { if card.draft != oldValue.draft { model.heldEditsChanged() } }
+    }
 
     /// The current card's draft. Views bind straight to it.
     public var draft: InboxDraft {
@@ -148,6 +151,9 @@ public final class InboxSession {
         var toastLabel: String
     }
     private var history: [Filing] = []
+    /// #85 — the save in flight, so a second one (Close, then the view going away) waits for it
+    /// instead of renaming the same note twice.
+    private var progressSave: Task<Void, Never>?
 
     public init(
         model: AppModel,
@@ -168,6 +174,8 @@ public final class InboxSession {
         self.hintPending = !defaults.flag(forKey: InboxDefaultsKey.didShowSwipeHint)
         self.card = ActionCardState(draft: items.first.map(InboxDraft.init(item:)) ?? InboxDraft())
         self.draftItemID = items.first?.id
+        // #85 — quitting or backgrounding the app saves the card like closing it does.
+        model.register(self)
     }
 
     // MARK: - Derived
@@ -448,7 +456,9 @@ public final class InboxSession {
     /// not vanish while the user clears it.
     public var showsBody: Bool {
         guard let current else { return false }
-        return !CaptureText.isEmptyBody(current.body)
+        // A card closed half-way (#85) keeps `Why?`/`What?` in the body; they are the action
+        // card's fields, so only the capture text above them counts here.
+        return !CaptureText.isEmptyBody(InboxBody.read(current.body).lead)
     }
 
     private var isWorkingOnCurrentCard: Bool {
@@ -498,7 +508,7 @@ public final class InboxSession {
         let filedStep = step
         let filedCard = card
         do {
-            let filedID = try await persistEdits(for: item.id)
+            let filedID = try await persistEdits(for: item.id, clearingProgress: true)
             try await model.send(.fileInbox(filedID, decision))
             card.clearFlags()
             card.clearCap()
@@ -523,20 +533,87 @@ public final class InboxSession {
     /// renames this session made, so a cap retry neither sends an edit twice nor files under the
     /// old name. The queue follows the rename at once, so a `refresh()` — the cap sheet, a
     /// failed filing — keeps the card and its draft instead of treating the renamed note as new.
-    private func persistEdits(for original: NoteID) async throws -> NoteID {
+    private func persistEdits(for original: NoteID, clearingProgress: Bool = false) async throws -> NoteID {
         let id = renamedIDs[original] ?? original
         guard let stored = model.snapshot.inboxItem(id) else { return id }
-        if draft.body != stored.body {
-            try await model.send(.editInboxBody(id, draft.body))
+        // Only the capture text: `Why?`/`What?` a closed card kept (#85) stay as they are, and
+        // the action filing takes them from the draft (or, left empty, from the note).
+        let kept = InboxBody.read(stored.body)
+        let body = InboxBody(lead: draft.body, why: kept.why, what: kept.what).written(over: stored.body)
+        if clearingProgress, stored.progress != InboxProgress(body: body) {
+            // A list item carries nothing but its notes (L1): chips a closed card left in the
+            // frontmatter must not ride along into `Lists/`.
+            try await model.send(.saveInboxProgress(id, InboxProgress(body: body)))
+        } else if body != stored.body {
+            try await model.send(.editInboxBody(id, body))
         }
+        return try await persistTitle(of: id)
+    }
+
+    /// The title field's rename (C3), on the note as it is called now. Returns the id it has after.
+    private func persistTitle(of id: NoteID) async throws -> NoteID {
+        guard let stored = model.snapshot.inboxItem(id) else { return id }
         guard CaptureText.renamedTitle(draft.title) != stored.title else { return id }
         try await model.send(.renameInboxItem(id, title: draft.title))
         // The reducer refused anything it could not name, so the name exists here.
         let target = model.snapshot.config.layout.inboxPath(
             title: CaptureText.renamedTitle(draft.title) ?? stored.title)
         follow(id, to: target)
-        renamedIDs[original] = target
+        for (original, renamed) in renamedIDs where renamed == id { renamedIDs[original] = target }
+        renamedIDs[id] = target
         return target
+    }
+
+    // MARK: - Closing keeps the card (#85)
+
+    /// True while the card holds something its inbox note does not: a field typed, a chip
+    /// chosen, the title changed. Closing the session (or quitting the app) writes it.
+    public var hasUnsavedProgress: Bool {
+        guard let item = current, draftItemID == item.id,
+              let stored = model.snapshot.inboxItem(item.id) else { return false }
+        return draft.progress(over: stored) != stored.progress || titleChanged(from: stored)
+    }
+
+    private func titleChanged(from stored: InboxItem) -> Bool {
+        guard let title = draft.noteTitle else { return false }
+        return title != stored.title
+    }
+
+    /// #85 — leaving the session (Close, `Esc`, the sheet swiped away, the review moving on, the
+    /// app quitting) writes what the current card holds into its inbox note — body, `Why?` /
+    /// `What?`, chips (`InboxDraft.progress(over:)`), and the title as a rename — and leaves it
+    /// **in the inbox**, unprocessed. Writes nothing when nothing changed, so calling it twice is
+    /// harmless; a second call waits for the first. A refusal (a taken title, a stale-write
+    /// conflict) reaches the shell's alert or conflict sheet like any other write; the body is
+    /// written before the rename, so a refused rename never costs the text.
+    public func saveProgress() async {
+        let previous = progressSave
+        let work = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self else { return }
+            await self.model.report { try await self.writeProgress() }
+            self.model.heldEditsChanged()
+        }
+        progressSave = work
+        await work.value
+    }
+
+    /// The writes behind `saveProgress()` and `Defer to review`: the whole card into the note,
+    /// then the rename. Returns the id the note has after.
+    @discardableResult
+    private func writeProgress() async throws -> NoteID? {
+        guard let item = current, draftItemID == item.id,
+              let stored = model.snapshot.inboxItem(item.id) else { return nil }
+        let progress = draft.progress(over: stored)
+        if progress != stored.progress {
+            try await model.send(.saveInboxProgress(item.id, progress))
+            if let saved = model.snapshot.inboxItem(item.id) {
+                queue = queue.map { $0.id == item.id ? saved : $0 }
+            }
+        }
+        // A blank title is not a name to give the file; the note keeps the one it has.
+        guard draft.noteTitle != nil else { return item.id }
+        return try await persistTitle(of: item.id)
     }
 
     /// Points the queue and the card at a renamed note, keeping its place and its draft.
@@ -590,6 +667,8 @@ public final class InboxSession {
             return false
         }
         newListRefusal = nil
+        // #94 — the list exists: the picker's `New list…` draft is done with.
+        model.inputDrafts.clear(InputDraftKey.newListInPicker)
         // The reducer sanitises the name; file into the list it actually made.
         let created = model.snapshot.list(named: VaultLayout.sanitize(name))?.name
             ?? VaultLayout.sanitize(name)
@@ -608,8 +687,23 @@ public final class InboxSession {
             refuse(.notAvailable(.waiting, in: step))
             return
         }
+        let key = waitingDraftKey
+        let filedBefore = processed
         await fileAction(status: .waiting, waiting: info, as: .waiting)
+        // #94 — the follow-up sheet's draft is done with once the card is filed.
+        if processed > filedBefore, let key { model.inputDrafts.clear(key) }
     }
+
+    // MARK: - Sub-sheet drafts (#94)
+
+    /// Where the follow-up sheet keeps the current card's `who` and date while it is open.
+    public var waitingDraftKey: String? { current.map { InputDraftKey.waiting($0.id) } }
+
+    /// Where `Defer to review` keeps the current card's reason while it is open.
+    public var deferReasonDraftKey: String? { current.map { InputDraftKey.deferReason($0.id) } }
+
+    /// The drafts store the sheets keep their fields in.
+    public var inputDrafts: InputDrafts { model.inputDrafts }
 
     /// I4a/R-8 — the `+ project` chip.
     public func chooseProject(_ id: NoteID?) { card.draft.chooseProject(id) }
@@ -641,8 +735,12 @@ public final class InboxSession {
         }
         let filedCard = card
         do {
-            let deferredID = try await persistEdits(for: item.id)
+            // #85 — the card leaves the queue but stays an inbox note: everything it holds is
+            // kept in it, so the review (or the next session) opens it as it was left.
+            let deferredID = try await writeProgress() ?? item.id
             try await model.send(.deferInboxToReview(deferredID, reason: trimmed))
+            // #94 — the reason is in the note now; the sheet's draft is done with.
+            model.inputDrafts.clear(InputDraftKey.deferReason(item.id))
             finish(item: item.renamed(to: deferredID), card: filedCard, step: .step1, target: .deferToReview,
                    toastLabel: CardTarget.deferToReview.undoToastLabel())
         } catch let error as GTDError {
@@ -1116,5 +1214,26 @@ private extension InboxItem {
         return InboxItem(
             id: id, body: body, created: created, reviewReason: reviewReason,
             passthrough: passthrough)
+    }
+}
+
+// MARK: - Held edits (#56, #85)
+
+extension InboxSession: AppModel.HeldEdits {
+    /// The app is about to stop running (⌘Q, backgrounding): the card is kept like on Close.
+    public func flush() async {
+        await saveProgress()
+    }
+
+    /// The card's unsaved text for the crash journal: the body as closing would write it, and
+    /// the title when it changed. Chips are not text and are not journalled.
+    public var unsavedText: UnsavedText? {
+        guard let item = current, draftItemID == item.id,
+              let stored = model.snapshot.inboxItem(item.id) else { return nil }
+        let body = draft.progress(over: stored).body
+        let title = titleChanged(from: stored) ? draft.title : nil
+        let text = body != stored.body ? body : nil
+        guard title != nil || text != nil else { return nil }
+        return UnsavedText(kind: .inbox, path: item.id.path, title: title, text: text, savedAt: now())
     }
 }

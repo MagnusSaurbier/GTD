@@ -28,7 +28,7 @@ import Foundation
 /// | C3/R-4 an inbox note's title is its file name; renaming it is a move; filing keeps it | `renameInboxItem`, `fileInbox` |
 /// | R-4 a body that is only the Why/What template skeleton is carried over as empty | `fileInbox`, `CaptureText.isEmptyBody` |
 /// | I4a/R-8 the project chip, including the project it creates | `makeAction`, `resolveProject` |
-/// | R-2 a Next item may be deferred; it just does not occupy a slot while hidden | `Rules` |
+/// | R-2/#86 deferring is waiting: a `defer` date becomes a who-less follow-up date | `normalize`, `Rules.isBackInNext` |
 /// | P3 only active projects put actions into Next; leaving `active` demotes | `normalize`, `updateProject` |
 /// | P4/P5 completion logs, ticks the step and asks "what's next?" | `settle` |
 /// | R5 one routine-log entry per step per day per device | `logRoutineStep` |
@@ -83,6 +83,9 @@ public enum Reducer {
 
         case let .editInboxBody(id, body):
             return try editInboxBody(s, id: id, body: body)
+
+        case let .saveInboxProgress(id, progress):
+            return try saveInboxProgress(s, id: id, progress: progress)
 
         case let .fileInbox(id, decision):
             return try fileInbox(s, id: id, decision: decision, env: env)
@@ -224,6 +227,23 @@ public enum Reducer {
         return Reduction(snapshot: next)
     }
 
+    /// #85 — what a half-processed card had when it was closed. Nothing is validated: this is a
+    /// draft, kept so it is not lost, and filing the card later asks for everything a filing
+    /// asks for. A time estimate of `0` or less is "undecided" (§1), never stored.
+    private static func saveInboxProgress(
+        _ s: VaultSnapshot, id: NoteID, progress: InboxProgress
+    ) throws(GTDError) -> Reduction {
+        guard let index = s.inbox.firstIndex(where: { $0.id == id }) else { throw .notFound(id) }
+        var next = s
+        next.inbox[index].body = progress.body
+        next.inbox[index].contexts = progress.contexts
+        next.inbox[index].timeEstimate = progress.timeEstimate.flatMap { $0 > 0 ? $0 : nil }
+        next.inbox[index].project = progress.project
+        next.inbox[index].deferDate = progress.deferDate
+        next.inbox[index].due = progress.due
+        return Reduction(snapshot: next)
+    }
+
     /// I5 — the escape hatch. The app asks *why* the item does not fit; the reason travels into
     /// the weekly review so the gap can be fixed. Such items leave the processing queue.
     private static func deferInboxToReview(
@@ -266,10 +286,21 @@ public enum Reducer {
         case let .action(draft):
             var filed = draft
             filed.title = title
-            filed.preamble = CaptureText.filedBody(body: item.body, notes: "")
+            // #85 — a card closed half-way kept its `Why?`/`What?` in the inbox body. They are
+            // the action's sections now, not text above them; a field the draft leaves empty
+            // takes the stored one, so nothing typed into the note is lost by filing it.
+            let stored = InboxBody.read(item.body)
+            filed.preamble = CaptureText.filedBody(body: stored.lead, notes: "")
+            if filed.why.isEmpty { filed.why = stored.why }
+            if filed.what.isEmpty { filed.what = stored.what }
             // I4a/R-8 — the `+ project` chip may name a project that does not exist yet;
             // `makeAction` creates it, so filing the card stays one command and one commit.
-            let action = try makeAction(from: filed, in: &next, env: env, created: item.created)
+            var action = try makeAction(from: filed, in: &next, env: env, created: item.created)
+            if InboxBody.hasSections(item.body) {
+                // Sections of the user's own around `Why?`/`What?` come along as written.
+                action.body = InboxBody(lead: action.preamble, why: action.why, what: action.what)
+                    .written(over: item.body)
+            }
             next.actions.append(action)
             extraOps.append(.move(from: item.id.path, to: action.id.path))
             renames.record(item.id, as: action.id)
@@ -404,6 +435,9 @@ public enum Reducer {
 
         var updated = previous
         updated.status = status
+        // #86 — picking a tier is the answer to "when": a defer date does not turn the choice
+        // into waiting behind the user's back, nor keep it hidden.
+        if status != .waiting { updated.deferDate = nil }
         try normalize(&updated, previous: previous, waiting: waiting, in: s, env: env)
 
         var next = s
@@ -1193,6 +1227,8 @@ public enum Reducer {
 
     /// Everything that must be true of an action after any command touched it.
     ///
+    /// - #86 deferring is waiting: an open action never keeps a `defer` date; it becomes a
+    ///   who-less waiting item following up on that day (`Action.foldingDeferIntoWaiting`).
     /// - W1/D39 `waiting` needs a **follow-up date**; who is optional. Leaving `waiting` clears both.
     /// - I4/D12/R-3 a *new* transition into a tier brings what that tier requires
     ///   (`RequiredField.missing`), and a note already in its tier is never judged again.
@@ -1218,6 +1254,23 @@ public enum Reducer {
         }
 
         if let estimate = action.timeEstimate, estimate <= 0 { action.timeEstimate = nil }
+
+        // #86 — a defer date is a who-less follow-up date. A command that asks for Next (or
+        // in-progress) *and* a defer date (the inbox card's defer chip, "defer" in Next) files
+        // the item as waiting; one that asks for waiting keeps the who and date it brings.
+        // Someday keeps its tier and its defer date: hidden until then, back in Someday.
+        var waiting = waiting
+        // A deferred Someday item that leaves Someday with its date untouched (the detail's
+        // status picker) is being re-filed, not deferred again: the date goes.
+        if let previous, previous.status == .someday, action.status != .someday,
+           action.deferDate != nil, action.deferDate == previous.deferDate {
+            action.deferDate = nil
+        }
+        if action.deferDate != nil, !action.status.isClosed {
+            let wasWaiting = action.status == .waiting
+            action = action.foldingDeferIntoWaiting()
+            if !wasWaiting { waiting = nil }    // the folded who-less date is the info
+        }
 
         if action.status == .waiting {
             // W1/D39 — the date is the commitment; who is optional, and an empty who writes no
@@ -1251,9 +1304,11 @@ public enum Reducer {
         // R-3 — validation before leaving (STYLEGUIDE §3.6). It runs after the rules about the
         // *world* (a project must be active) and before the cap is counted, so a card that is
         // missing a field hears about the field rather than about the cap it never reached.
+        // #86 — a deferral that is back in Next is judged as a Next item: starting it or
+        // filing it into Next again asks for nothing new.
         let missing = RequiredField.missing(
             status: action.status,
-            previous: previous?.status,
+            previous: previous.map { Rules.effectiveStatus($0, today: env.today) },
             why: action.why,
             what: action.what,
             contexts: action.contexts,
@@ -1261,10 +1316,9 @@ public enum Reducer {
             followUpDate: action.followUpDate)
         guard missing.isEmpty else { throw .missingFields(missing) }
 
-        // R-2 — a Next item may carry a future `defer`. It is hidden until its date and does not
-        // occupy a slot while hidden (`Rules.countsTowardCap(_:today:)`); on its date it comes
-        // back into Next with the `back` badge, and an over-cap Next is shown, never repaired
-        // behind the user's back. The 2026-09-19 refusal is gone.
+        // R-2/#86 — a deferral holds no Next slot while it waits (`Rules.countsTowardCap`); on
+        // its date it comes back into Next with the `back` badge, and an over-cap Next is
+        // shown, never repaired behind the user's back.
 
         if action.status.isClosed {
             if action.completedDate == nil { action.completedDate = env.now }

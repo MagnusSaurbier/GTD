@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import GTDModel
 import GTDAppCore
 
-/// One note being dragged between categories (E3): a row in Next, Someday, Waiting or Deferred
+/// One note being dragged between categories (E3): a row in Next, Someday or Waiting
 /// picked up and dropped on a sidebar section or a project row. The payload is the `NoteID`
 /// alone — what happens on the drop is decided by `MovePlan`, never by the row.
 ///
@@ -179,9 +179,12 @@ public struct MoveToMenu: View {
         (.next, Copy.next, Symbols.next),
         (.someday, Copy.someday, Symbols.someday),
         (.waiting, Copy.waiting, Symbols.waiting),
-        (.deferred, Copy.deferred, Symbols.deferred),
         (.projects, Copy.projectEllipsis, Symbols.projects),
         (.lists, Copy.listEllipsis, Symbols.listBullet),
+        // #87 — the In progress board's columns; the In progress row/tab is the drop twin.
+        (.inProgress, Copy.inProgress, Symbols.inProgress),
+        (.agent, Copy.agent, Symbols.agent),
+        (.review, Copy.review, Symbols.review),
     ]
 }
 #endif

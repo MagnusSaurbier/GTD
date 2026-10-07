@@ -130,7 +130,6 @@ struct PerformanceTests {
         _ = Bench.measure("Rules.sidebarCounts") { Rules.sidebarCounts(snapshot, today: today) }
         _ = Bench.measure("Rules.nextList") { Rules.nextList(snapshot, today: today) }
         _ = Bench.measure("Rules.waitingList") { Rules.waitingList(snapshot, today: today) }
-        _ = Bench.measure("Rules.deferredList") { Rules.deferredList(snapshot, today: today) }
         let rows = Bench.measure("Rules.projectRows") { Rules.projectRows(snapshot, today: today) }
         _ = Bench.measure("Rules.stalledProjects") { Rules.stalledProjects(snapshot, today: today) }
         _ = Bench.measure("Rules.timeline(±90 d)") {

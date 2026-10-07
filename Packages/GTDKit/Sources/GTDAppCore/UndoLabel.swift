@@ -55,7 +55,7 @@ public enum UndoLabel {
             // Not undoable (`Rules.isUndoable`); never reaches the toast.
             "Last change"
         case .toggleCheckbox: "Toggled checkbox"
-        case .updateAction, .updateProject, .editInboxBody: "Edited"
+        case .updateAction, .updateProject, .editInboxBody, .saveInboxProgress: "Edited"
         case .renameInboxItem: "Renamed"
         case .saveWeeklyReview, .logRoutineStep, .setRoutineTime, .updateConfig, .archiveCompleted:
             // Not undoable (`Rules.isUndoable`); never reaches the toast.
@@ -68,6 +68,8 @@ public enum UndoLabel {
         switch status {
         case .next, .inProgress: "Next"
         case .someday: "Someday"
+        case .agent: "Agent"
+        case .review: "Review"
         case .waiting: "Waiting"
         case .done: "Done"
         case .legacyTrashed: "Trash"

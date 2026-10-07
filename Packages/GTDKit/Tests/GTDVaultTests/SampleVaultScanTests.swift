@@ -187,7 +187,7 @@ struct SampleVaultFileSystemTests {
         let classifier = VaultClassifier()
 
         let paths = try fs.listFiles().map(\.path)
-        #expect(paths.count == 62, "the sample vault has 62 files; got \(paths.count)")
+        #expect(paths.count == 64, "the sample vault has 64 files; got \(paths.count)")
         #expect(paths.filter { classifier.kind(of: $0) == .other }.isEmpty,
                 "unclassified: \(paths.filter { classifier.kind(of: $0) == .other })")
         #expect(paths.contains("GTD/Config.md"))

@@ -9,6 +9,8 @@ import FeatureLists
 /// The iPhone's four tabs (N5, STYLEGUIDE §4.2).
 enum AppTab: Hashable, CaseIterable {
     case next
+    /// #87 — the In progress board.
+    case inProgress
     case inbox
     case lists
     case routines
@@ -26,6 +28,8 @@ final class AppRouter {
     var tab: AppTab = .next
     /// Pushed action details in the Next tab.
     var nextPath: [NoteID] = []
+    /// Pushed action details in the In progress tab (#87).
+    var inProgressPath: [NoteID] = []
     /// The Lists tab's push stack: lists home → one list's items → the item editor (L5).
     var listsPath: [ListsRoute] = []
 
@@ -106,6 +110,7 @@ final class AppRouter {
     /// unit-tested on Linux.
     func apply(snapshot: VaultSnapshot, renames: RenameMap = .empty) {
         nextPath = NavigationRemap.path(nextPath, renames: renames, in: snapshot)
+        inProgressPath = NavigationRemap.path(inProgressPath, renames: renames, in: snapshot)
         listsPath = AppRouter.remap(listsPath, renames: renames, snapshot: snapshot)
         routineRun = NavigationRemap
             .selection(routineRun?.note, renames: renames) { id in
