@@ -446,8 +446,9 @@ struct ReducerProjectTests {
     @Test func theStalledProjectIsTheOneWithoutAVisibleOpenAction() {
         let vault = Fixtures.sampleSnapshot
         #expect(Rules.stalledProjects(vault, today: Fixtures.today).map(\.id) == [Fixtures.flatProject.id])
-        // Its only action is deferred into the future, so nothing is moving today (D1 × P4).
-        #expect(vault.actions.contains { $0.project == Fixtures.flatProject.id })
+        // It has steps but no open action at all (P4).
+        #expect(!Fixtures.flatProject.openSteps.isEmpty)
+        #expect(!vault.actions.contains { $0.project == Fixtures.flatProject.id && !$0.status.isClosed })
     }
 
     @Test func completingTheLastOpenActionMakesAProjectStalled() throws {

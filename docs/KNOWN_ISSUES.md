@@ -66,8 +66,8 @@ of the same fact.
   is one file per day, and a fresh run reads only today's. Every entry still carries its own real
   day, so no log is ever wrong (`FeatureRoutines/README.md`).
 - **The Next list is never truncated to the cap.** An over-cap vault must stay repairable;
-  `capSignal` shows `17/15`. Since R-2 this is also reachable without hand-editing: a deferred
-  Next item comes back on its date into an already full list. Nothing is demoted automatically —
+  `capSignal` shows `17/15`. Since R-2 this is also reachable without hand-editing: a deferral
+  (a who-less waiting item, #86) comes back on its date into an already full list. Nothing is demoted automatically —
   `NextListModel.showsCapSheet` asks for the `Next is full` sheet once per foreground until the
   user demotes something; `NextView` presents it as `NextCapSheet` (T11: `Demote` buttons +
   `Cancel`, no "send to Someday instead" — STYLEGUIDE §3.6).

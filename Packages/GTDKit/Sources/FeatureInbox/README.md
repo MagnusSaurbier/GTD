@@ -11,15 +11,16 @@ Inbox processing: one card at a time, LIFO, forced order, exit only by quitting 
   `MakeActionModel(model:action:target:missing:bindings:)` — the same card over an **existing
   action** that was dropped onto a tier it is not ready for (`MovePlan.card`): starts from the
   action's own values with `missing` already marked, opens the waiting sheet at once for
-  `.waiting`, and sends `updateAction` (a project created from the picker is born first by
+  `.waiting`, files its Next exit as `in-progress` when the target was In progress
+  (`nextExitStatus`, #87), and sends `updateAction` (a project created from the picker is born first by
   `createProject`). `source` says which; `item` is `nil` for an action.
 - `MoveCoordinator(model:bindings:)` + `View.moveNoteHost(_:)` — drag-to-category (E3): the
   shell applies the modifier once (the Mac window, the iPhone's Next tab); it sets the
   `\.moveNote` environment for every row and drop target below and presents the dialogue a drop
-  needs over the coordinator: the action card, `DeferDateSheet`, the project picker
+  needs over the coordinator: the action card, the project picker
   (`ProjectChoiceSheet`, shared with the card's `+ project` chip) or the list picker
   (`ListChoiceSheet`, shared with the inbox's `More…` slot — a drop onto Lists sends
-  `moveActionToList`). `move(_:to:)` runs `GTDAppCore.MovePlan`; `confirmDefer`,
+  `moveActionToList`). `move(_:to:)` runs `GTDAppCore.MovePlan`;
   `chooseProject`, `createProject`, `chooseList`, `createListAndMove`, `cancel()`.
 - `MakeActionCardView(model:onFinished:)` — **Make action**'s view: the opened action card alone
   (STYLEGUIDE §3.5 step 2a), the same field layout and `ActionCardBar` the inbox uses for its own

@@ -261,7 +261,9 @@ extension RequiredField {
             if blank(what) { missing.append(.what) }
             if contexts.filter({ !blank($0) }).isEmpty { missing.append(.context) }
             if (timeEstimate ?? 0) <= 0 { missing.append(.timeEstimate) }
-        case .someday:
+        case .someday, .agent, .review:
+            // #87 — handing a note to an agent or back for review is not a commitment of the
+            // person's time (no cap slot), so it asks no more than Someday does.
             // Only a note that does not exist yet is asked for a `What?` here: a card being
             // filed, a list item being promoted. **Demoting is never blocked** — it is how an
             // over-cap or half-filled vault is repaired, and the review deck lives on it.

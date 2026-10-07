@@ -94,6 +94,11 @@ public final class MakeActionModel {
     /// The sheet a sub-flow is showing: `waiting`, `project` or the cap's forced choice.
     public var sheet: InboxSession.Sheet?
 
+    /// What the card's Next exit writes: `next`, or `in-progress` for a card opened by a drop
+    /// on In progress / "Begin action" (#87) — the card asks what Next asks, and filing it
+    /// starts the action instead of only committing to it.
+    public private(set) var nextExitStatus: ActionStatus = .next
+
     public private(set) var refusal: InboxSession.Refused?
 
     public var keyBindings: KeyBindings
@@ -131,6 +136,7 @@ public final class MakeActionModel {
         if !missing.isEmpty { card.flag(missing) }
         self.card = card
         if target == .waiting { sheet = .waiting }
+        if target == .inProgress { nextExitStatus = .inProgress }
     }
 
     /// #76 — the card over an existing action, opened from its status badge in a project's step
@@ -231,7 +237,7 @@ public final class MakeActionModel {
             return
         }
         switch exit {
-        case .next: await file(status: .next)
+        case .next: await file(status: nextExitStatus)
         case .someday: await file(status: .someday)
         case .waiting: sheet = .waiting
         case .done: await file(status: .done)

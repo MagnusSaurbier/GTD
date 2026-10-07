@@ -98,6 +98,37 @@ struct MoveCoordinatorTests {
         #expect(moved?.timeEstimate == TimeBucket.upTo30.minutes)
     }
 
+    /// #87 — a Someday item dropped on In progress (or begun) opens the same card; its Next
+    /// exit then *starts* the action — status `in-progress`, not merely `next`.
+    @Test func filingTheCardOpenedByInProgressStartsTheAction() async {
+        let (mover, app) = make()
+        let item = action(app, status: .someday) { $0.timeEstimate == nil }
+        await mover.move(item.id, to: .inProgress)
+        guard case let .card(card)? = mover.dialogue else { Issue.record("no card"); return }
+        #expect(card.nextExitStatus == .inProgress)
+
+        card.draft.why = "Because."
+        if card.draft.what.isEmpty { card.draft.what = "Do it." }
+        card.draft.contexts = [app.snapshot.config.contexts.first!]
+        card.draft.timeBucket = .upTo30
+        await card.take(.next)
+
+        #expect(card.isFiled, "\(String(describing: card.refusal))")
+        #expect(app.snapshot.action(item.id)?.status == .inProgress)
+    }
+
+    /// #87 — a Next item moves straight to In progress, Agent and Review: no dialogue.
+    @Test func aNextItemMovesAcrossTheBoardAtOnce() async {
+        let (mover, app) = make()
+        let item = action(app, status: .next)
+        for destination in [MoveDestination.inProgress, .agent, .review] {
+            #expect(mover.accepts(item.id, destination))
+            await mover.move(item.id, to: destination)
+            #expect(mover.dialogue == nil)
+        }
+        #expect(app.snapshot.action(item.id)?.status == .review)
+    }
+
     /// Cancelling the card leaves the note exactly where it was.
     @Test func cancellingTheCardLeavesTheNoteAlone() async {
         let (mover, app) = make()
@@ -131,24 +162,6 @@ struct MoveCoordinatorTests {
         #expect(moved?.status == .waiting)
         #expect(moved?.followUpDate == followUp)
         #expect(moved?.waitingFor == "Len")
-    }
-
-    // MARK: Deferred
-
-    @Test func droppingOnDeferredAsksForADateAndDefers() async {
-        let (mover, app) = make()
-        let item = action(app, status: .next) { $0.deferDate == nil }
-
-        await mover.move(item.id, to: .deferred)
-        guard case let .deferDate(asked)? = mover.dialogue else { Issue.record("no date sheet"); return }
-        #expect(asked.id == item.id)
-
-        let date = Day(year: 2026, month: 10, day: 5)
-        await mover.confirmDefer(asked, date: date)
-
-        #expect(mover.dialogue == nil)
-        #expect(app.snapshot.action(item.id)?.deferDate == date)
-        #expect(Rules.deferredList(app.snapshot, today: Fixtures.today).contains { $0.id == item.id })
     }
 
     // MARK: Projects

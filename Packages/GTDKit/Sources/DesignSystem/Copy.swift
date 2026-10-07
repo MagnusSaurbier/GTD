@@ -17,6 +17,10 @@ public enum Copy {
     /// The single "not now" tier (A3); the two older ones were merged into it.
     public static let someday = "Someday"
     public static let waiting = "Waiting"
+    /// #87 — the In progress board (sidebar row, iPhone tab) and its three columns.
+    public static let inProgress = "In progress"
+    public static let agent = "Agent"
+    public static let review = "Review"
     public static let project = "Project"
     /// Title of the projects **list** screen (the singular names one project or the field).
     public static let projects = "Projects"
@@ -24,8 +28,6 @@ public enum Copy {
     public static let knowledge = "Knowledge"
     public static let trash = "Trash"
     public static let deferLabel = "Defer"
-    /// The Deferred section — items hidden by a future `defer` (D1).
-    public static let deferred = "Deferred"
     /// A row's context-menu submenu that twins the drag onto a sidebar section (E3, §8).
     public static let moveTo = "Move to"
     /// The note's `obsidian://` link, bottom of the action and project detail (`NoteFileLinks`).
@@ -66,6 +68,18 @@ public enum Copy {
     public static let skip = "Skip"
     /// Row context menu (E1, T21) — start working on it now (→ `in-progress`).
     public static let start = "Start"
+    /// #87 — the action detail's prominent button: status → `in-progress`.
+    public static let beginAction = "Begin action"
+    /// #87 — the board's card menu that moves a card to another column.
+    public static let moveToColumn = "Move to column"
+    /// #87 — the board's project filter: header, and the choice that lifts it.
+    public static let projectFilterHeader = "Project"
+    public static let allProjects = "All projects"
+    /// #87 — an empty board / an empty column.
+    public static let emptyBoardTitle = "Nothing in progress"
+    public static let emptyBoardBody = "Begin an action from its detail, or drag one here."
+    public static let emptyBoardFilteredBody = "Nothing on the board fits these filters."
+    public static let emptyColumn = "Nothing here"
     /// Chase quick action (W2, T21) — whatever you were waiting for arrived.
     public static let resolved = "Resolved"
     /// Toolbar / `⌘N` quick capture (I7, T21).
@@ -314,7 +328,9 @@ public enum Copy {
         switch status {
         case .next: next
         case .someday: someday
-        case .inProgress: "In progress"
+        case .inProgress: inProgress
+        case .agent: agent
+        case .review: review
         case .waiting: waiting
         case .done: done
         case .legacyTrashed: trash

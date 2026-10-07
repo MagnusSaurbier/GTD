@@ -88,10 +88,11 @@ public struct WeeklyStats: Sendable, Equatable {
             $0.status == .done && ($0.completedDate.map(fallsInWeek) ?? false)
         }
 
-        // "Next" occupancy matches `Rules`/`ActionStatus.countsTowardCap` everywhere else in the
-        // app (`in-progress` counts too); hidden (deferred) items are excluded, as in every list.
+        // "Next" occupancy matches `Rules.countsTowardCap` everywhere else in the app
+        // (`in-progress` counts too, and so does a deferral that is back, #86; one still
+        // waiting does not).
         let nextItems = Rules.visibleActions(snapshot, today: reviewDay)
-            .filter { $0.status.countsTowardCap }
+            .filter { Rules.effectiveStatus($0, today: reviewDay).countsTowardCap }
         // Age = time since capture (`created`); items with no `created` (hand-edited notes) are
         // left out of the distribution rather than faked to age 0 (§1 "no lying defaults").
         let nextAges: [(id: NoteID, days: Int)] = nextItems.compactMap { action in
@@ -113,7 +114,7 @@ public struct WeeklyStats: Sendable, Equatable {
 
         // A status change rewrites the file, so `modified` also approximates "waiting since".
         let waitingByAgeDays = snapshot.actions
-            .filter { $0.status == .waiting }
+            .filter { $0.status == .waiting && !Rules.isBackInNext($0, today: reviewDay) }
             .compactMap { action in (action.modified ?? action.created).map(age(since:)) }
             .sorted()
 
