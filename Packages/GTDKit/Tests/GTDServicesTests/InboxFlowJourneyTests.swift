@@ -480,6 +480,57 @@ struct InboxFlowJourneyTests {
         #expect(rescanned.issues.isEmpty)
     }
 
+    // MARK: - #85 a card closed half-way is kept in its note
+
+    /// Close a half-processed card: everything it had lands in the inbox note, which stays in the
+    /// inbox and reads back with it; filed later, the action carries each section once and the
+    /// chips as its own; filed to Knowledge instead, the chips do not ride along.
+    @Test func aCardClosedHalfWayIsKeptInItsNoteAndFiledFromThere() async throws {
+        let vault = try TestVault.onDisk(deviceID: "mac-1")
+        defer { vault.cleanUp() }
+        let root = try #require(vault.root)
+        try await vault.backend.start()
+        let model = AppModel(backend: vault.backend, today: { Fixtures.today })
+        defer { model.stop() }
+        await settle(model) { !$0.actions.isEmpty }
+
+        let writer = InboxWriter(fileSystem: PlainFileSystem(root: root), calendar: Fixtures.calendar)
+        let first = try writer.capture(text: "renew the bike lock", at: Fixtures.date(Fixtures.today, 9, 0))
+        let second = try writer.capture(text: "lecture notes on queues", at: Fixtures.date(Fixtures.today, 9, 5))
+        await vault.store.simulateChangeForTesting()
+        _ = await settle(model) { s in s.inbox.contains { $0.id == first } && s.inbox.contains { $0.id == second } }
+
+        let progress = InboxProgress(
+            body: InboxBody(why: "The old one rusted shut.", what: "- [ ] buy a new one").written(over: ""),
+            contexts: ["errands"], timeEstimate: 30)
+        try await model.send(.saveInboxProgress(first, progress))
+        try await model.send(.saveInboxProgress(second, InboxProgress(
+            body: InboxBody(lead: "", why: "For the exam.").written(over: ""), contexts: ["home"])))
+
+        let kept = try #require(try vault.text(first.path))
+        #expect(kept.contains("contexts: [errands]"))
+        #expect(kept.contains("timeEstimate: 30"))
+        #expect(kept.contains("# Why?\nThe old one rusted shut."))
+        let rescanned = try vault.rescan()
+        #expect(rescanned.inboxItem(first)?.progress == progress, "it reads back as it was left")
+        #expect(Rules.inboxQueue(rescanned).contains { $0.id == first }, "still in the inbox")
+
+        try await model.send(.fileInbox(first, .action(ActionDraft(
+            title: "", status: .someday, contexts: ["errands"], timeEstimate: 30,
+            why: "The old one rusted shut.", what: "- [ ] buy a new one"))))
+        let actionPath = model.snapshot.config.layout.actionPath(title: first.title).path
+        let action = try #require(try vault.text(actionPath))
+        #expect(action.components(separatedBy: "# Why?").count == 2, "one Why? section")
+        #expect(action.components(separatedBy: "# What?").count == 2, "one What? section")
+        #expect(action.contains("contexts: [errands]"))
+
+        try await model.send(.fileInbox(second, .knowledge(.folder(""), notes: "")))
+        let notePath = model.snapshot.config.layout.knowledgePath(folder: "", title: second.title).path
+        let note = try #require(try vault.text(notePath))
+        #expect(!note.contains("contexts:"), "a Knowledge note carries no action chips")
+        #expect(note.contains("For the exam."), "what was typed comes along")
+    }
+
     // MARK: - Helpers
 
     /// Same poll as `EndToEndJourneyTests`: a store change reaches `AppModel` over three hops, so

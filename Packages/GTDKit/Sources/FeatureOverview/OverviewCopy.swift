@@ -14,7 +14,6 @@ enum OverviewCopy {
     // the singular (§6.2 fixed vocabulary).
     static let projects = "Projects"
     static let routines = "Routines"
-    static let deferred = "Deferred"
 
     // Shell chrome
     static let go = "Go"

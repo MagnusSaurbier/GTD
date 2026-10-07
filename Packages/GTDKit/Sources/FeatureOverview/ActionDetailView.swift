@@ -127,6 +127,18 @@ private struct ActionDetailEditor: View {
                     errorBanner(editor)
                 }
 
+                // #87 — the easily visible way to start: status → in progress.
+                if editor.canBegin {
+                    Button {
+                        editor.begin()
+                    } label: {
+                        Label(Copy.beginAction, systemImage: Symbols.beginAction)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(Color.gtdAccent)
+                }
+
                 labelled(OverviewCopy.status) {
                     FlowLayout {
                         ForEach(statusChoices, id: \.self) { choice in
@@ -298,7 +310,13 @@ private struct ActionDetailEditor: View {
                 initial: editor.waiting,
                 suggestedWho: suggestedWho,
                 today: today,
-                onSave: { editor.setWaiting($0) })
+                drafts: model.inputDrafts,
+                draftKey: InputDraftKey.waiting(editor.id),
+                onSave: {
+                    editor.setWaiting($0)
+                    // #94 — set (a refusal lands in the editor's banner, not in the draft).
+                    model.inputDrafts.clear(InputDraftKey.waiting(editor.id))
+                })
         }
         .sheet(isPresented: $isConvertPresented) {
             ConvertToProjectSheet(action: editor.id)
@@ -326,7 +344,7 @@ private struct ActionDetailEditor: View {
 
     /// `waiting` is reached through `WaitingInfoSheet` (W1), never by tapping a chip.
     private var statusChoices: [ActionStatus] {
-        [.next, .inProgress, .someday, .waiting]
+        [.next, .inProgress, .agent, .review, .someday, .waiting]
     }
 
     /// Names already used elsewhere, offered as dashed suggestions in the waiting sheet.

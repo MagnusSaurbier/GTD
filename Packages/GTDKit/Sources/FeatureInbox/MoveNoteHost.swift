@@ -59,10 +59,6 @@ private struct MoveNoteHostModifier: ViewModifier {
                     NavigationStack {
                         MakeActionCardView(model: model) { coordinator.cancel() }
                     }
-                case let .deferDate(action):
-                    DeferDateSheet(initial: action.deferDate, today: coordinator.today) { date in
-                        Task { await coordinator.confirmDefer(action, date: date) }
-                    }
                 case let .pickList(action):
                     ListChoiceSheet(
                         lists: coordinator.allLists,
@@ -72,7 +68,8 @@ private struct MoveNoteHostModifier: ViewModifier {
                         onChoose: { name in Task { await coordinator.chooseList(action, named: name) } },
                         onCreate: { name in Task { await coordinator.createListAndMove(action, named: name) } },
                         onNameChanged: { coordinator.clearNewListRefusal() },
-                        onCancel: { coordinator.cancel() })
+                        onCancel: { coordinator.cancel() },
+                        drafts: model.inputDrafts)
                     #if os(iOS)
                         .presentationDetents([.medium, .large])
                     #endif

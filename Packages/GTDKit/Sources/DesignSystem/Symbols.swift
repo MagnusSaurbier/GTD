@@ -9,6 +9,21 @@ public enum Symbols {
     /// Someday — the single "not now" tier (STYLEGUIDE §7).
     public static let someday = "moon.zzz"
     public static let waiting = "hourglass"
+    /// #87 — the In progress board and its columns. Not in STYLEGUIDE §7 yet (the guide is a
+    /// synced vault note).
+    public static let inProgress = "play.circle"
+    public static let agent = "cpu"
+    public static let review = "eye"
+    /// The symbol of one In progress board column (#87).
+    public static func board(_ status: ActionStatus) -> String {
+        switch status {
+        case .agent: agent
+        case .review: review
+        default: inProgress
+        }
+    }
+    /// The detail's "Begin action" button (#87).
+    public static let beginAction = "play.fill"
     public static let chase = "bell.badge"
     public static let projects = "square.stack"
     public static let area = "folder"

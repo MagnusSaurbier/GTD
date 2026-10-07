@@ -20,7 +20,7 @@ are tested *against* these files. No SwiftUI; compiles on Linux.
 
 6 inbox items (one deferred to review, one 11 days old), 28 actions across every status with
 **Next at cap − 1** (14 of 15: 2 `in-progress` + 12 `next`), 2 areas, 5 projects (one on hold,
-one stalled), one overdue waiting item (chase), two deferred and three due-soon items, the
+one stalled), one overdue waiting item (chase), two deferred items (one who-less waiting item, one Someday item hidden until its defer date, #86) and three due-soon items, the
 Morning (8 steps) and Bedtime (5 steps) routines, 10 days of routine log, a `KW 37` review note,
 a `Knowledge/` folder tree, and the three lists of §5a — Read (3 open + 1 in `Done/`), Watch (2)
 and Wish (1). Every list folder holds a file on purpose: git does not track empty directories, so

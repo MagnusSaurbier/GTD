@@ -22,18 +22,18 @@ private enum Support {
         _ title: String,
         status: ActionStatus = .next,
         due: Day? = nil,
-        deferDate: Day? = nil,
+        deferredUntil: Day? = nil,
         waitingFor: String? = nil,
         followUpDate: Day? = nil
     ) -> Action {
+        // #86 — a deferral is a who-less waiting item following up on its day.
         Action(
             id: NoteID(path: "Actions/\(title).md"),
             title: title,
-            status: status,
-            deferDate: deferDate,
+            status: deferredUntil == nil ? status : .waiting,
             due: due,
             waitingFor: waitingFor,
-            followUpDate: followUpDate)
+            followUpDate: deferredUntil ?? followUpDate)
     }
 
     static func routine(_ title: String, time: DayTime) -> Routine {
@@ -91,13 +91,13 @@ struct NotificationPlannerTests {
         let today = Day(year: 2026, month: 6, day: 15)
         let now = Support.instant(today, 9, 0, calendar: utc)
         let snapshot = VaultSnapshot(actions: [
-            Support.action("Stale defer", deferDate: today.adding(days: -1)),
+            Support.action("Stale defer", deferredUntil: today.adding(days: -1)),
             Support.action("Stale due", due: today.adding(days: -5)),
             Support.action(
                 "Stale waiting", status: .waiting,
                 waitingFor: "Bob", followUpDate: today.adding(days: -2)),
             // Today's morning notification has already fired by 09:00.
-            Support.action("Defers today but too late", deferDate: today),
+            Support.action("Defers today but too late", deferredUntil: today),
         ])
 
         let planned = NotificationPlanner.plan(snapshot: snapshot, now: now, calendar: utc)
@@ -108,7 +108,7 @@ struct NotificationPlannerTests {
         let today = Day(year: 2026, month: 6, day: 15)
         let now = Support.instant(today, 9, 0, calendar: utc)
         let snapshot = VaultSnapshot(actions: [
-            Support.action("Comes back tomorrow", deferDate: today.adding(days: 1)),
+            Support.action("Comes back tomorrow", deferredUntil: today.adding(days: 1)),
         ])
 
         let planned = NotificationPlanner.plan(snapshot: snapshot, now: now, calendar: utc)
@@ -146,6 +146,32 @@ struct NotificationPlannerTests {
         #expect(NotificationPlanner.plan(snapshot: snapshot, now: now, calendar: utc).isEmpty)
     }
 
+    /// #86 — a who-less waiting item comes *back* on its date ("Back today"); one with a who is
+    /// a follow-up. Never both.
+    @Test func aWhoLessWaitingItemIsADeferReturnNotAFollowUp() {
+        let today = Day(year: 2026, month: 6, day: 15)
+        let now = Support.instant(today, 6, 0, calendar: utc)
+        let snapshot = VaultSnapshot(actions: [
+            Support.action("Deferral", status: .waiting, followUpDate: today.adding(days: 1)),
+            Support.action("Chase", status: .waiting, waitingFor: "Bob", followUpDate: today.adding(days: 2)),
+        ])
+        let planned = NotificationPlanner.plan(snapshot: snapshot, now: now, calendar: utc)
+        #expect(Set(planned.map(\.id)) == [
+            "deferReturn:Actions/Deferral.md:\(today.adding(days: 1).iso)",
+            "followUp:Actions/Chase.md:\(today.adding(days: 2).iso)",
+        ])
+    }
+
+    /// #86 — a deferred Someday item comes back on its defer date ("Back today").
+    @Test func aDeferredSomedayItemIsADeferReturn() {
+        let today = Day(year: 2026, month: 6, day: 15)
+        let now = Support.instant(today, 6, 0, calendar: utc)
+        var later = Support.action("Irgendwann", status: .someday)
+        later.deferDate = today.adding(days: 3)
+        let planned = NotificationPlanner.plan(snapshot: VaultSnapshot(actions: [later]), now: now, calendar: utc)
+        #expect(planned.map(\.id) == ["deferReturn:Actions/Irgendwann.md:\(today.adding(days: 3).iso)"])
+    }
+
     // MARK: - Collapse rule
 
     @Test func threeSameMorningItemsCollapseIntoOneSummary() {
@@ -153,7 +179,7 @@ struct NotificationPlannerTests {
         let now = Support.instant(today, 6, 0, calendar: utc)
         let target = today.adding(days: 2)
         let snapshot = VaultSnapshot(actions: [
-            Support.action("A back today", deferDate: target),
+            Support.action("A back today", deferredUntil: target),
             Support.action("B due today", due: target),
             Support.action("C waiting", status: .waiting, waitingFor: "X", followUpDate: target),
         ])
@@ -172,7 +198,7 @@ struct NotificationPlannerTests {
         let now = Support.instant(today, 6, 0, calendar: utc)
         let target = today.adding(days: 2)
         let snapshot = VaultSnapshot(actions: [
-            Support.action("A back today", deferDate: target),
+            Support.action("A back today", deferredUntil: target),
             Support.action("C waiting", status: .waiting, waitingFor: "X", followUpDate: target),
         ])
         var settings = DeviceNotificationSettings.default
@@ -192,7 +218,7 @@ struct NotificationPlannerTests {
         var settings = DeviceNotificationSettings.default
         settings.enabledKinds = [.dueApproaching]
         let snapshot = VaultSnapshot(actions: [
-            Support.action("Deferred", deferDate: today.adding(days: 1)),
+            Support.action("Deferred", deferredUntil: today.adding(days: 1)),
             Support.action("Due", due: today.adding(days: 3)),
             Support.action(
                 "Waiting", status: .waiting, waitingFor: "X", followUpDate: today.adding(days: 1)),
@@ -281,7 +307,7 @@ struct NotificationPlannerTests {
         let today = Day(year: 2026, month: 6, day: 15)
         let now = Support.instant(today, 9, 0, calendar: utc)
         let snapshot = VaultSnapshot(actions: [
-            Support.action("Stable", deferDate: today.adding(days: 3)),
+            Support.action("Stable", deferredUntil: today.adding(days: 3)),
         ])
         let first = NotificationPlanner.plan(snapshot: snapshot, now: now, calendar: utc)
         let laterNow = Support.instant(today, 9, 30, calendar: utc)
@@ -367,7 +393,7 @@ struct NotificationPlannerTests {
         let today = Day(year: 2026, month: 6, day: 15)
         let now = Support.instant(today, 0, 0, calendar: kolkata)
         let snapshot = VaultSnapshot(actions: [
-            Support.action("Deferred", deferDate: today.adding(days: 1)),
+            Support.action("Deferred", deferredUntil: today.adding(days: 1)),
         ])
 
         let planned = NotificationPlanner.plan(snapshot: snapshot, now: now, calendar: kolkata)

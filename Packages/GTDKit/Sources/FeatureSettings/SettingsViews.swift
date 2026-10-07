@@ -121,6 +121,10 @@ public struct OnboardingView: View {
             TextField(SettingsCopy.newVaultNamePlaceholder, text: $newVaultName)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(chooseNewVaultLocation)
+                // #94 — a typed name survives leaving onboarding (⌘Q, `Back`) and comes back.
+                .keepsDraft(
+                    $newVaultName, key: InputDraftKey.newVaultName, in: model.inputDrafts,
+                    isEmpty: { InputDrafts.isBlank($0) || $0 == SettingsCopy.newVaultDefaultName })
             if let createRefusal {
                 Text(createRefusal)
                     .font(Typo.meta)
@@ -150,7 +154,10 @@ public struct OnboardingView: View {
             let refusal = await onCreateVault(location, name)
             isCreating = false
             createRefusal = refusal
-            if refusal == nil { step = .validate }
+            if refusal == nil {
+                model.inputDrafts.clear(InputDraftKey.newVaultName)
+                step = .validate
+            }
         }
     }
 
@@ -351,12 +358,36 @@ public struct SettingsView: View {
             TextField("Name", text: $renameText)
             Button("Rename") {
                 if let old = renamingContext {
-                    Task { try? await session.renameContext(old, to: renameText) }
+                    let new = renameText
+                    // #94 — the typed name stays kept until the rename went through; a
+                    // refusal reaches the alert instead of vanishing.
+                    Task {
+                        if await model.report({ try await session.renameContext(old, to: new) }) {
+                            model.inputDrafts.clear(InputDraftKey.settingsRenameContext(old))
+                        }
+                    }
                 }
                 renamingContext = nil
             }
-            Button("Cancel", role: .cancel) { renamingContext = nil }
+            Button("Cancel", role: .cancel) {
+                // The one deliberate discard (#94).
+                if let old = renamingContext {
+                    model.inputDrafts.clear(InputDraftKey.settingsRenameContext(old))
+                }
+                renamingContext = nil
+            }
         }
+        // #94 — Settings' name fields keep what was typed when Settings is left (a closed
+        // window, another tab, ⌘Q) and show it again; a rename's draft comes back when the same
+        // context or list is renamed again. Only `Cancel` discards.
+        .keepsDraft($newContextName, key: InputDraftKey.settingsNewContext, in: model.inputDrafts)
+        .keepsDraft($newListName, key: InputDraftKey.settingsNewList, in: model.inputDrafts)
+        .keepsDraft(
+            $renameText, key: renamingContext.map(InputDraftKey.settingsRenameContext),
+            in: model.inputDrafts, isEmpty: { [renamingContext] in InputDrafts.isBlank($0) || $0 == renamingContext })
+        .keepsDraft(
+            $renameListText, key: renamingList.map(InputDraftKey.settingsRenameList),
+            in: model.inputDrafts, isEmpty: { [renamingList] in InputDrafts.isBlank($0) || $0 == renamingList })
     }
 
     // MARK: Contexts (A4)
@@ -404,8 +435,12 @@ public struct SettingsView: View {
                     .onSubmit { isAddContextFocused = false }
                 Button("Add") {
                     let name = newContextName
-                    newContextName = ""
-                    Task { try? await session.addContext(name) }
+                    // #94 — the field empties once the context exists; a refusal keeps the
+                    // name and reaches the alert.
+                    Task {
+                        guard await model.report({ try await session.addContext(name) }) else { return }
+                        if newContextName == name { newContextName = "" }
+                    }
                 }
                 .disabled(newContextName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -578,6 +613,8 @@ public struct SettingsView: View {
             }
             HStack {
                 Button(Copy.cancel) {
+                    // The one deliberate discard (#94).
+                    model.inputDrafts.clear(InputDraftKey.settingsRenameList(name))
                     renamingList = nil
                     renameListRefusal = nil
                 }
@@ -623,6 +660,7 @@ public struct SettingsView: View {
         Task {
             do {
                 try await session.renameList(old, to: new)
+                model.inputDrafts.clear(InputDraftKey.settingsRenameList(old))
                 renamingList = nil
                 renameListRefusal = nil
             } catch let error as GTDError {

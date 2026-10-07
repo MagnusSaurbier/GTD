@@ -6,7 +6,7 @@ import GTDFixtures
 import DesignSystem
 @testable import FeatureWaiting
 
-/// `WaitingListModel` — staleness ordering, defer grouping, timeline bucketing (across month and
+/// `WaitingListModel` — staleness ordering, deferrals, timeline bucketing (across month and
 /// year boundaries), overdue detection and the calendar-strip signal mapping. Linux-testable,
 /// fixtures with a fixed `today` throughout (T23).
 @MainActor
@@ -176,36 +176,20 @@ struct FeatureWaitingTests {
         #expect(list.suggestedBump == today.adding(days: 7))
     }
 
-    // MARK: - Defer grouping (D1)
+    // MARK: - Deferrals (#86)
 
-    @Test func deferredGroupsIntoThisWeekAndLater() {
+    /// A deferral is a who-less waiting item: listed with the others until its date, gone from
+    /// the list once it is back in Next.
+    @Test func deferralsWaitHereUntilTheyAreBack() {
         let today = Day(year: 2026, month: 9, day: 19)
         let list = makeList(actions: [
-            makeAction("Tomorrow", status: .someday, deferDate: today.adding(days: 1)),
-            makeAction("In a week", status: .someday, deferDate: today.adding(days: 7)),
-            makeAction("Just over a week", status: .someday, deferDate: today.adding(days: 8)),
-            makeAction("A month out", status: .someday, deferDate: today.adding(days: 30)),
-            makeAction("Already returned", status: .someday, deferDate: today.adding(days: -1)),
-            makeAction("Not deferred", status: .someday),
+            makeAction("Tomorrow", status: .waiting, followUp: today.adding(days: 1)),
+            makeAction("A month out", status: .waiting, followUp: today.adding(days: 30)),
+            makeAction("Already back", status: .waiting, followUp: today),
+            makeAction("Chase", status: .waiting, who: "Lena", followUp: today.adding(days: -1)),
         ], today: today)
-
-        #expect(list.deferredThisWeek.map(\.title) == ["Tomorrow", "In a week"])
-        #expect(list.deferredLater.map(\.title) == ["Just over a week", "A month out"])
-    }
-
-    @Test func unDeferredClearsTheDeferDate() {
-        let today = Day(year: 2026, month: 9, day: 19)
-        let list = makeList(actions: [], today: today)
-        let action = makeAction("A", status: .someday, deferDate: today.adding(days: 10))
-        #expect(list.unDeferred(action).deferDate == nil)
-    }
-
-    @Test func redeferredSetsTheNewDeferDate() {
-        let today = Day(year: 2026, month: 9, day: 19)
-        let list = makeList(actions: [], today: today)
-        let action = makeAction("A", status: .someday, deferDate: today.adding(days: 10))
-        #expect(list.redeferred(action, to: today.adding(days: 20)).deferDate == today.adding(days: 20))
-        #expect(list.redeferred(action, to: nil).deferDate == nil)
+        #expect(list.waiting.map(\.title) == ["Chase", "Tomorrow", "A month out"])
+        #expect(list.metaParts(for: list.waiting[1]).count == 1)   // no who, no dangling separator
     }
 
     // MARK: - Timeline bucketing across a month boundary (D3)
@@ -260,19 +244,19 @@ struct FeatureWaitingTests {
             makeAction("Overdue due date", status: .next, due: today.adding(days: -1)),
             makeAction("Due today (not in the pile)", status: .next, due: today),
             makeAction("Overdue follow-up", status: .waiting, who: "X", followUp: today.adding(days: -2)),
-            makeAction("Stale defer date", status: .someday, deferDate: today.adding(days: -3)),
+            makeAction("Stale deferral", status: .waiting, followUp: today.adding(days: -3)),
             makeAction("Future due date", status: .next, due: today.adding(days: 5)),
         ], today: today)
 
         let pile = list.overduePile
         let titles = Set(pile.map(\.title))
-        #expect(titles == ["Overdue due date", "Overdue follow-up", "Stale defer date"])
+        #expect(titles == ["Overdue due date", "Overdue follow-up", "Stale deferral"])
         #expect(pile.allSatisfy { $0.day < today })
 
         let kinds = Dictionary(uniqueKeysWithValues: pile.map { ($0.title, $0.kind) })
         #expect(kinds["Overdue due date"] == .due)
         #expect(kinds["Overdue follow-up"] == .followUp)
-        #expect(kinds["Stale defer date"] == .deferred)
+        #expect(kinds["Stale deferral"] == .followUp)
     }
 
     // MARK: - Calendar-strip marker colour (STYLEGUIDE §2.2 / §3.10)
@@ -303,12 +287,13 @@ struct FeatureWaitingTests {
         #expect(step(5) == nil)
     }
 
-    @Test func deferredMarkersAreNeverTinted() {
+    /// A deferral's marker (a who-less follow-up, #86) is never tinted: it is not a chase.
+    @Test func deferralMarkersAreNeverTinted() {
         let today = Day(year: 2026, month: 9, day: 19)
-        let list = makeList(actions: [], today: today)
+        let list = makeList(actions: [makeAction("A", status: .waiting, followUp: today)], today: today)
         for delta in [-10, -1, 0, 1, 10] {
             let step = list.signalStep(for: Rules.TimelineEntry(
-                day: today.adding(days: delta), action: NoteID(path: "Actions/A.md"), title: "A", kind: .deferred))
+                day: today.adding(days: delta), action: NoteID(path: "Actions/A.md"), title: "A", kind: .followUp))
             #expect(step == nil)
         }
     }
@@ -360,24 +345,12 @@ struct FeatureWaitingTests {
         #expect(list.followUpSignal(for: none) == nil)
     }
 
-    // MARK: - Copy
-
-    /// The deferred screen is titled with the section's name, not with the date chip's field
-    /// label: the sidebar said "Deferred" while the window title said "Defer"
-    /// (walkthrough 2026-09-19). `SidebarRoutingTests` pins the sidebar's half of this.
-    @Test func deferredScreenIsTitledDeferred() {
-        #expect(WaitingCopy.deferredTitle == "Deferred")
-        #expect(WaitingCopy.deferredTitle != Copy.deferLabel)
-    }
-
     // MARK: - Empty snapshot
 
     @Test func emptySnapshotProducesEmptyLists() {
         let today = Day(year: 2026, month: 9, day: 19)
         let list = makeList(actions: [], today: today)
         #expect(list.waiting.isEmpty)
-        #expect(list.deferredThisWeek.isEmpty)
-        #expect(list.deferredLater.isEmpty)
         #expect(list.overduePile.isEmpty)
         #expect(list.recentWho.isEmpty)
         #expect(list.timeline(days: 14).count == 14)

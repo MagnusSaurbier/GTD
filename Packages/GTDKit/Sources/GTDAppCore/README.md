@@ -44,10 +44,11 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   feature target or on `FeatureSettings` (ARCHITECTURE §2) — `GTDAppCore` is the one target all
   three already depend on.
 - `MoveDestination` / `MovePlan` — drag-to-category (E3). `MovePlan.plan(action:to:snapshot:today:)`
-  says what a row dropped on `.next`/`.someday`/`.waiting`/`.deferred`/`.projects`/`.project(id)`/
-  `.lists`/`.list(name)` needs: `.alreadyThere`, `.perform(command)` (nothing missing),
+  says what a row dropped on `.next`/`.someday`/`.waiting`/`.projects`/`.project(id)`/
+  `.lists`/`.list(name)`/`.inProgress`/`.agent`/`.review` (the In progress board, #87) needs: `.alreadyThere`, `.perform(command)` (nothing missing),
   `.card(status:missing:)` (the action card with those fields marked — `RequiredField.missing`
-  with the action's real `previous` status), `.deferDate`, `.pickProject`, `.pickList`;
+  with the action's `previous` status as it behaves today — a deferral that is back counts as
+  Next, `Rules.effectiveStatus`, #86), `.pickProject`, `.pickList`;
   `accepts(…)` is the drop highlight. The
   reducer stays the authority; this only decides whether a dialogue is needed before sending.
 - `ObsidianLink` — the one builder of "Open in Obsidian" URLs: `url(for: NoteID, vaultRoot:form:)`
@@ -94,6 +95,17 @@ No SwiftUI (only `Observation`), so it compiles and tests on Linux.
   reports its `unsavedText` (typed title/body only) and calls `heldEditsChanged()`; the model
   forwards it to `unsavedJournal` (`UnsavedTextJournal`, #56), the crash-safe copy the shell
   hands every model. `restoreUnsaved` / `discardUnsaved` settle what an earlier run left.
+  Kinds: `.action`, `.listItem`, and `.inbox` (#85, the inbox session: restores the body with
+  `editInboxBody`; a typed title alone is copy-only).
+- **`DismissedInput.keeps(_:settled:)`** (#85) — a one-field sheet (quick capture, a list's `+`)
+  left without its buttons still sends what was typed; only `Cancel` discards.
+- **`InputDrafts`** (#94, `AppModel.inputDrafts`) — what an open dialog holds that has no place in
+  the vault yet, as `Codable` values under an `InputDraftKey` (dialog + note path). `keep` (nil
+  clears) writes a moment after typing pauses, `writeNow` at once (`flushHeldEdits` calls it);
+  `value(_:for:)` restores; an undecodable draft is left alone, an unreadable store is reported
+  in `failure` (the shell's alert). The shell hands one file-backed store to every model; the
+  default is in memory. The rule: typing keeps, the main button clears once it went through,
+  `Cancel` clears. `WaitingSheetDraft` is the follow-up sheet's value.
 - `snapshots()` is synchronous on purpose, so an actor backend must implement it `nonisolated`.
   `SnapshotHub` does the fan-out under an `NSLock` — the one justified `@unchecked Sendable`
   in this target. Its first element is always the current snapshot.

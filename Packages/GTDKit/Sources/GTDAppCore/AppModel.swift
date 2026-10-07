@@ -228,6 +228,11 @@ public final class AppModel {
     /// it creates; `nil` (tests, previews) keeps no copy.
     public var unsavedJournal: UnsavedTextJournal?
 
+    /// #94 — what open dialogs hold that has no place in the vault yet (`InputDrafts`). The
+    /// shell hands its one file-backed store to every model it creates; the default keeps
+    /// drafts in memory for this run only (tests, previews).
+    @ObservationIgnored public var inputDrafts = InputDrafts()
+
     /// Editors register themselves; they are held weakly and forgotten once they are gone.
     public func register(_ holder: any HeldEdits) {
         holders = holders.filter { $0.value.value != nil }
@@ -246,6 +251,7 @@ public final class AppModel {
         for holder in holders.values.compactMap(\.value) { await holder.flush() }
         heldEditsChanged()
         unsavedJournal?.writeNow()
+        inputDrafts.writeNow()
     }
 
     /// #56 — writes text an earlier run never saved back into its note. `false` when the note

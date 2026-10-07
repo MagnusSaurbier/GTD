@@ -12,7 +12,7 @@ import DesignSystem
 
 /// What the user has decided about the card in front of them. Nothing here is written to the
 /// vault until the card is filed, and nothing is pre-filled (§1 "no lying defaults").
-public struct InboxDraft: Sendable, Equatable {
+public struct InboxDraft: Sendable, Equatable, Codable {
     /// The note's title, editable in place. For an inbox card it is the **file name** (C3): a
     /// changed title renames `Inbox/<title>.md` before the card is filed. For L4's "Make action"
     /// it is the list item's title.
@@ -60,8 +60,41 @@ public struct InboxDraft: Sendable, Equatable {
         self.newProjectTitle = newProjectTitle
     }
 
+    /// A capture as the card opens it. A card that was closed half-way (#85) kept its `Why?` /
+    /// `What?` in the note's body and its chips in the frontmatter, so it opens with them again;
+    /// `body` is then only the capture text above the headings (`InboxBody`).
     public init(item: InboxItem) {
-        self.init(title: item.title, body: item.body)
+        let stored = InboxBody.read(item.body)
+        self.init(
+            title: item.title,
+            body: stored.lead,
+            why: stored.why,
+            what: stored.what,
+            contexts: item.contexts,
+            timeBucket: TimeBucket(minutes: item.timeEstimate),
+            deferDate: item.deferDate,
+            due: item.due,
+            project: item.project)
+    }
+
+    /// #85 — what closing the card keeps in the inbox note `stored`: the body with `Why?` /
+    /// `What?` written in (only the pieces that changed, `InboxBody.written(over:)`) and the
+    /// chips. The notes panel of the Knowledge / List card has no place of its own in an inbox
+    /// note, so it joins the capture text — exactly where a Knowledge or list filing would put
+    /// it. A project the picker was about to create is not kept: it does not exist yet.
+    public func progress(over stored: InboxItem) -> InboxProgress {
+        let lead = notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? body : CaptureText.filedBody(body: body, notes: notes)
+        // A stored estimate the chip shows as its bucket (45 → `60`) is kept as written.
+        let minutes = TimeBucket(minutes: stored.timeEstimate) == timeBucket
+            ? stored.timeEstimate : timeBucket?.minutes
+        return InboxProgress(
+            body: InboxBody(lead: lead, why: why, what: what).written(over: stored.body),
+            contexts: contexts,
+            timeEstimate: minutes,
+            project: project,
+            deferDate: deferDate,
+            due: due)
     }
 
     /// L4 — "Make action" starts from the list item: its title is kept, and so are its notes

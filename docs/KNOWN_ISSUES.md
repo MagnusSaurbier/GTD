@@ -66,8 +66,8 @@ of the same fact.
   is one file per day, and a fresh run reads only today's. Every entry still carries its own real
   day, so no log is ever wrong (`FeatureRoutines/README.md`).
 - **The Next list is never truncated to the cap.** An over-cap vault must stay repairable;
-  `capSignal` shows `17/15`. Since R-2 this is also reachable without hand-editing: a deferred
-  Next item comes back on its date into an already full list. Nothing is demoted automatically —
+  `capSignal` shows `17/15`. Since R-2 this is also reachable without hand-editing: a deferral
+  (a who-less waiting item, #86) comes back on its date into an already full list. Nothing is demoted automatically —
   `NextListModel.showsCapSheet` asks for the `Next is full` sheet once per foreground until the
   user demotes something; `NextView` presents it as `NextCapSheet` (T11: `Demote` buttons +
   `Cancel`, no "send to Someday instead" — STYLEGUIDE §3.6).
@@ -85,6 +85,25 @@ of the same fact.
   of them; the check is that nothing implements them by accident.
 
 ## 4. Smaller things worth knowing
+
+- **Leaving an input dialog keeps what was typed (#85, #94).** Covered and unit-tested: the inbox
+  card (kept in its inbox note on Close/`Esc`/swipe-away/review/⌘Q/crash journal, `Defer to
+  review`), the Knowledge sheet's notes, the "Make action" card over an existing action, quick
+  capture and a list's `+` (sent unless `Cancel` was pressed) — #85; and as a **draft that the
+  same dialog restores when it opens again** (`InputDrafts`, device-local, never the vault) — #94:
+  the follow-up sheet (`who`/date, every caller), the `Defer to review` reason, `New list…`, the
+  Knowledge sheet's `New folder`, the "Make action" card over a list item / project step /
+  "What's next?" line, the new-project and "Turn into project" sheets, "What's next?"'s line, the
+  project's `New step`, the review's deferred-item card and its `System fix`, Settings' add/rename
+  name fields, onboarding's new-vault name. A draft comes back only in its own dialog, for the same
+  note: nothing announces it elsewhere, and a draft whose note was renamed or filed by another
+  route stays in `input-drafts.json` unseen (never pruned). **Not covered, deliberately:** every
+  search field, including the project picker's search that doubles as `Create project "<text>"`;
+  the conflict sheet (cannot be dismissed — Done writes the merge, "Keep the vault's version" is
+  its Cancel; only ⌘Q/a crash while it is open loses the merge text); date-only sheets (defer
+  date) hold no typed text. None of it has been seen on screen; `docs/MANUAL_TEST.md` §1.6 has the
+  checks. On step 1 a card closed half-way shows only its capture text — its `Why?`/`What?`
+  reappear when the action card opens.
 
 - **Lists are complete end to end (§5a), but only their Mac sidebar row has been seen running.**
   The domain (folder layout, item note, classifier, the eight commands, the `Rules` queries), the
@@ -171,6 +190,11 @@ of the same fact.
   whole text, so it always writes the full text as the body (the card then shows it under the
   title) and fails instead of adding ` 2` when the name is taken. None of it has been seen on a
   device yet.
+- **Dating a capture by its birth time (#89) has not run on a real iCloud vault.** On APFS the
+  birth time is read and settable (`CaptureDateTests`); whether a file captured on the iPhone
+  arrives on the Mac with its original birth time (or with the download moment, where only the
+  earlier modification time saves the order) is unverified. The first app write stamps
+  `created:`, so the question only matters for captures not yet touched by the app.
 - **The staleness thresholds (14 d / 30 d / inbox 7 d / due 3 d / follow-up 2 d) are first
   guesses.** STYLEGUIDE §10 says to tune them after two real weekly reviews, with real data.
 

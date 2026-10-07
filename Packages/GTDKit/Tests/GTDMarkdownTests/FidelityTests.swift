@@ -93,7 +93,6 @@ struct FidelityTests {
         action.contexts = ["mac", "deep-work"]
         action.timeEstimate = 90
         action.project = NoteID(path: "Projects/A B/A B.md")
-        action.deferDate = Day(year: 2026, month: 1, day: 2)
         action.due = Day(year: 2027, month: 12, day: 31)
         action.waitingFor = "Prof. Weber"
         action.followUpDate = Day(year: 2026, month: 2, day: 3)
@@ -108,7 +107,6 @@ struct FidelityTests {
         #expect(back.contexts == action.contexts)
         #expect(back.timeEstimate == action.timeEstimate)
         #expect(back.project == action.project)
-        #expect(back.deferDate == action.deferDate)
         #expect(back.due == action.due)
         #expect(back.waitingFor == action.waitingFor)
         #expect(back.followUpDate == action.followUpDate)
@@ -223,7 +221,6 @@ struct FidelityTests {
             action.contexts = ["calls", "campus"]
             action.timeEstimate = 45
             action.project = NoteID(path: "Projects/Wohnungssuche/Wohnungssuche.md")
-            action.deferDate = Day(year: 2026, month: 11, day: 1)
             action.due = Day(year: 2026, month: 11, day: 5)
             action.waitingFor = "Someone: with a colon"
             action.followUpDate = Day(year: 2026, month: 11, day: 8)
@@ -237,7 +234,6 @@ struct FidelityTests {
             #expect(back.contexts == ["calls", "campus"], "\(path)")
             #expect(back.timeEstimate == 45, "\(path)")
             #expect(back.project == action.project, "\(path)")
-            #expect(back.deferDate == action.deferDate, "\(path)")
             #expect(back.due == action.due, "\(path)")
             #expect(back.waitingFor == action.waitingFor, "\(path)")
             #expect(back.followUpDate == action.followUpDate, "\(path)")

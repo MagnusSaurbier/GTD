@@ -14,6 +14,7 @@ Funds the semester abroad without a side job.
 - [ ] Write motivation letter → [[Actions/Write DAAD motivation letter]]
 - [ ] Ask Prof. Weber for a reference
 - [ ] Submit the online form
+- [ ] Check the DAAD budget table → [[Actions/Check the DAAD budget table]]
 
 # Log
 - 2026-09-08 Collect DAAD transcripts

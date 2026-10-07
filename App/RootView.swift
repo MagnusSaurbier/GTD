@@ -85,7 +85,11 @@ private struct GlobalFlows: ViewModifier {
             }
             // I7 — capture, then process that one card.
             .sheet(isPresented: $router.isCapturePresented) {
-                QuickCaptureSheet { text in
+                QuickCaptureSheet(onKeep: { text in
+                    // #85 — the sheet went away without `Capture` or `Cancel`: the text is
+                    // captured all the same, without starting processing.
+                    Task { _ = await composition.capture(text: text) }
+                }) { text in
                     router.isCapturePresented = false
                     // One presentation at a time: let the capture sheet finish dismissing before
                     // processing takes the screen, and give the vault scan a moment to pick the
@@ -169,6 +173,7 @@ private struct GlobalFlows: ViewModifier {
     private var currentError: AppError? {
         composition.error ?? model.writeFailure.map(AppError.init) ?? model.lastError.map(AppError.init)
             ?? composition.unsavedJournal.failure.map { AppError(message: Copy.unsavedJournalFailed($0)) }
+            ?? composition.inputDrafts.failure.map { AppError(message: Copy.inputDraftsFailed($0)) }
     }
 
     private var errorPresented: Binding<Bool> {
@@ -179,6 +184,7 @@ private struct GlobalFlows: ViewModifier {
         composition.error = nil
         model.clearError()
         composition.unsavedJournal.clearFailure()
+        composition.inputDrafts.clearFailure()
     }
 }
 
@@ -265,9 +271,14 @@ private struct Lifecycle: ViewModifier {
 /// One field, one button. Capture is deliberately the dumbest screen in the app: it writes the
 /// raw text and gets out of the way — processing happens straight after (I7, LIFO).
 struct QuickCaptureSheet: View {
+    /// #85 — the sheet was left without either button (swiped away, `Esc`, a click outside)
+    /// with text typed: the shell captures it so written content is never lost.
+    var onKeep: (String) -> Void = { _ in }
     let onCapture: (String) -> Void
 
     @State private var text = ""
+    /// `Cancel` or `Capture` pressed: going away then sends nothing more.
+    @State private var isSettled = false
     @FocusState private var focused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -282,11 +293,17 @@ struct QuickCaptureSheet: View {
                 .lineLimit(3...)
                 .focused($focused)
             HStack {
-                Button(AppCopy.cancel) { dismiss() }
+                Button(AppCopy.cancel) {
+                    isSettled = true
+                    dismiss()
+                }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.textSecondary)
                 Spacer()
-                Button(AppCopy.capture) { onCapture(text) }
+                Button(AppCopy.capture) {
+                    isSettled = true
+                    onCapture(text)
+                }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.gtdAccent)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -304,6 +321,9 @@ struct QuickCaptureSheet: View {
         .presentationDragIndicator(.visible)
         #endif
         .onAppear { focused = true }
+        .onDisappear {
+            if DismissedInput.keeps(text, settled: isSettled) { onKeep(text) }
+        }
     }
 }
 
