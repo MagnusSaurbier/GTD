@@ -23,9 +23,23 @@ its text** (C3, 2026-09-22): the app shows the file name as the note's title, ne
    Expression* on, applied to step 3's result. These are the characters a file name or a wikilink
    cannot carry (`VaultLayout.sanitize`). Name the result `Name` (long-press the result chip →
    Rename Variable).
-5. **Format Date** — Date: *Current Date*, Format: *ISO 8601*. This becomes the `created:` value;
-   name it `Created`.
-6. **Text** — contents exactly:
+5. *(No date step.)* A capture does not need a `created:` line: the app dates a note without one
+   by the file's **creation (birth) time**, and stamps that date into the note's frontmatter the
+   first time it writes the note for you (processing, editing, filing). An earlier version of
+   this recipe built `created:` with **Format Date**; a mis-wired date chip there froze the value
+   for weeks, so dozens of captures sorted as ties (#89). Leave the date to the file.
+6. **Text** — contents exactly *[Provided Input]* (the Shortcuts variable chip for step 1's
+   dictated/typed text — insert it, don't type the brackets). That is the whole note: plain text,
+   no frontmatter. `NoteCodec.decodeInboxItem` reads it, and `CaptureCodecRoundTripTests` in
+   `GTDIntentsTests` pins it.
+   Recipe A always keeps the full text as the body — it cannot tell whether the name carried all
+   of it — so a short capture shows its text twice on the card (name and body). `InboxWriter`
+   (recipe B) writes a body only when the name could not carry the whole text.
+
+   **Keeping an explicit `created:`** is still fine — a stated `created:` always wins over the
+   file's date. Then add **Format Date** before this step: Date: *Current Date*, Date Format:
+   *Custom*, Format String exactly `yyyy-MM-dd'T'HH:mm:ssxxx` (gives `2026-10-04T09:15:00+02:00`),
+   name the result `Created`, and make the Text
 
    ```
    ---
@@ -34,12 +48,8 @@ its text** (C3, 2026-09-22): the app shows the file name as the note's title, ne
    [Provided Input]
    ```
 
-   ("[Created]" and "[Provided Input]" are the Shortcuts variable chips for step 5's result and
-   step 1's dictated/typed text — insert them, don't type the brackets.) `NoteCodec.decodeInboxItem`
-   parses exactly this; `CaptureCodecRoundTripTests` in `GTDIntentsTests` pins the literal string.
-   Recipe A always keeps the full text as the body — it cannot tell whether the name carried all
-   of it — so a short capture shows its text twice on the card (name and body). `InboxWriter`
-   (recipe B) writes a body only when the name could not carry the whole text.
+   Check that the `Created` chip really is that **Format Date** result of *Current Date*: a chip pointing at
+   a fixed date writes the same `created:` into every capture.
 7. **Save File** — Service: *iCloud Drive* (wherever the Obsidian vault lives), File Path:
    `<vault>/Inbox/[Name].md` (insert the `Name` variable; the full path looks like
    `Obsidian/MyVault/Inbox/buy running shoes.md`), Input: the **Text** result from step 6.
@@ -100,7 +110,7 @@ recipe A — or just say "Hey Siri, capture to GTD" once Siri suggests the phras
 **Advantage over A:** collisions are handled properly (` 2`, ` 3`… suffixes, see
 `InboxWriter.capture`), a long first line is cut to a 60-character name at a word boundary, and
 errors are spoken instead of Shortcuts' generic "file already exists"
-failure. **Disadvantage:** requires the app to be installed and a vault already chosen — recipe A
+failure; `InboxWriter` writes `created:` itself, from the moment of the capture. **Disadvantage:** requires the app to be installed and a vault already chosen — recipe A
 works from a bare Shortcuts app with only a folder path, which is why A ships as the default.
 
 **Unverified — check on a device (T30 Result):** whether iOS resolves a security-scoped bookmark

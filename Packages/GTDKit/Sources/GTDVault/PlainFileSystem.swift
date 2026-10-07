@@ -53,7 +53,7 @@ public struct PlainFileSystem: VaultFileSystem {
             }
             guard !VaultPath.name(of: entry.path).hasPrefix(".") else { continue }
             files[entry.path] = VaultFileInfo(
-                path: entry.path, size: entry.size, modified: entry.modified)
+                path: entry.path, size: entry.size, modified: entry.modified, created: entry.created)
         }
 
         for path in evicted {
@@ -72,6 +72,7 @@ public struct PlainFileSystem: VaultFileSystem {
         var isDirectory: Bool
         var size: Int
         var modified: Date
+        var created: Date? = nil
     }
 
     /// Recursive walk that keeps `.icloud` placeholders (they are hidden) but skips every other
@@ -92,7 +93,7 @@ public struct PlainFileSystem: VaultFileSystem {
                     at: folderURL,
                     includingPropertiesForKeys: [
                         .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey,
-                        .contentModificationDateKey,
+                        .contentModificationDateKey, .creationDateKey,
                     ],
                     options: [])
             } catch {
@@ -103,6 +104,7 @@ public struct PlainFileSystem: VaultFileSystem {
                 let path = VaultPath.join(folder, name)
                 let values = try? child.resourceValues(forKeys: [
                     .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey,
+                    .creationDateKey,
                 ])
                 // A symlink could point outside the vault or form a cycle. Never follow one:
                 // the vault root itself may be a symlink (it is standardised in `init`), but
@@ -120,7 +122,8 @@ public struct PlainFileSystem: VaultFileSystem {
                     out.append(Entry(
                         path: path, isDirectory: false,
                         size: values?.fileSize ?? 0,
-                        modified: values?.contentModificationDate ?? .distantPast))
+                        modified: values?.contentModificationDate ?? .distantPast,
+                        created: values?.creationDate))
                 }
             }
         }
@@ -142,11 +145,13 @@ public struct PlainFileSystem: VaultFileSystem {
                                  modified: Date(timeIntervalSince1970: 0), isDownloaded: false)
         }
         guard !isDirectory.boolValue else { return nil }
-        let values = try? target.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let values = try? target.resourceValues(
+            forKeys: [.fileSizeKey, .contentModificationDateKey, .creationDateKey])
         return VaultFileInfo(
             path: VaultPath.normalize(path),
             size: values?.fileSize ?? 0,
-            modified: values?.contentModificationDate ?? .distantPast)
+            modified: values?.contentModificationDate ?? .distantPast,
+            created: values?.creationDate)
     }
 
     public func exists(_ path: String) -> Bool {
