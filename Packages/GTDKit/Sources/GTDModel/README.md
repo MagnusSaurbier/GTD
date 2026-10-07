@@ -146,3 +146,9 @@ Everything here is domain code: no `import SwiftUI`, no I/O, no markdown. A chan
 to the reducer is a change to what the app *means* — read `docs/CONTRIBUTING-AGENTS.md` first.
 `swift test --filter GTDModelTests` — 223 tests. `TestVault` builds tiny snapshots for the rule tables,
 `GTDFixtures.sampleSnapshot` is used where a rule needs a whole system.
+
+## Action names (#95)
+
+A new action whose `Actions/<title>.md` is taken is named apart by `Reducer.freeActionID`:
+`<first 5 letters of the project> - <title>`, then `_2`, `_3`, …; its title is that name. A rename onto
+a taken name is still `.titleCollision`.

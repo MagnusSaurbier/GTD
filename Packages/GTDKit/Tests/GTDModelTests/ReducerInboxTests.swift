@@ -407,11 +407,14 @@ struct ReducerInboxTests {
         #expect(result.extraOps.isEmpty)
     }
 
-    @Test func aTitleThatAlreadyExistsIsACollision() {
+    /// #95 — an action whose name is taken is named apart instead of refused (see
+    /// `ReducerActionTests.aTakenNameGetsTheProjectPrefixThenASuffix`); a list item still is.
+    @Test func aTitleThatAlreadyExistsIsNamedApartForAnActionAndRefusedForAListItem() throws {
         let existing = TestVault.action("call the Hausverwaltung")
-        #expect(TestVault.error(
+        let filed = try Reducer.reduce(
             vault(actions: [existing]), .fileInbox(capture.id, .action(complete())), env: env)
-            == .titleCollision("call the Hausverwaltung"))
+        #expect(filed.snapshot.actions.map(\.id.path).sorted()
+                == ["Actions/call the Hausverwaltung.md", "Actions/call the Hausverwaltung_2.md"])
 
         let item = TestVault.listItem("Read", "call the Hausverwaltung")
         let withItem = TestVault.snapshot(

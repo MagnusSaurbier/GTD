@@ -1200,9 +1200,10 @@ public enum Reducer {
     ) throws(GTDError) -> Action {
         var draft = draft
         draft.project = try resolveProject(for: draft, in: &s)
-        let title = try requireTitle(draft.title)
-        let id = s.config.layout.actionPath(title: title)
-        guard !pathExists(id, in: s) else { throw .titleCollision(title) }
+        let wanted = try requireTitle(draft.title)
+        let id = freeActionID(
+            title: wanted, project: draft.project.flatMap { s.project($0)?.title }, in: s)
+        let title = id.title
 
         var action = Action(
             id: id,
@@ -1363,6 +1364,31 @@ public enum Reducer {
         let after = Rules.countsTowardCap(new, today: today)
         guard after > cap, after > Rules.countsTowardCap(old, today: today) else { return }
         throw .nextCapReached(cap: cap)
+    }
+
+    /// #95 — every action note sits in the one `Actions/` folder, so a new action whose name is
+    /// taken is not refused but named apart: first `<first 5 letters of its project> - <title>`,
+    /// then `<that name>_2`, `_3`, … (without a project straight to the suffix). The note's
+    /// title is its file name, so the action is called what the file is called. A **rename**
+    /// still refuses a taken name (`updateAction`): there the user chose the name.
+    static func freeActionID(title: String, project: String?, in s: VaultSnapshot) -> NoteID {
+        let layout = s.config.layout
+        let plain = layout.actionPath(title: title)
+        guard pathExists(plain, in: s) else { return plain }
+
+        var base = VaultLayout.sanitize(title)
+        if let project {
+            let prefix = String(VaultLayout.sanitize(project).prefix(5))
+                .trimmingCharacters(in: .whitespaces)
+            let prefixed = layout.actionPath(title: "\(prefix) - \(title)")
+            guard pathExists(prefixed, in: s) else { return prefixed }
+            base = prefixed.title
+        }
+        // `sanitize` cuts a name at 120 characters; keep room for the suffix or it is cut off.
+        base = String(base.prefix(110))
+        var n = 2
+        while pathExists(layout.actionPath(title: "\(base)_\(n)"), in: s) { n += 1 }
+        return layout.actionPath(title: "\(base)_\(n)")
     }
 
     private static func pathExists(_ id: NoteID, in s: VaultSnapshot) -> Bool {
