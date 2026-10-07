@@ -798,6 +798,8 @@ public struct WhatsNextSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var whatsNextModel: WhatsNextModel?
     @State private var freeText = ""
+    /// The Someday row `↓`/`↑` has moved to; Return opens it instead of the typed line.
+    @State private var highlightedSomeday: Int?
     @State private var card: MakeActionModel?
 
     public init(project: NoteID) {
@@ -835,13 +837,55 @@ public struct WhatsNextSheet: View {
                 }
             }
 
+            // #84 — the project's Someday pile, narrowed as the user types; picking one opens
+            // the card over that note instead of writing a new one.
+            let someday = next.somedaySuggestions(for: freeText)
             HStack {
                 TextField("New action", text: $freeText)
                     .textFieldStyle(.plain)
                     .font(Typo.body)
-                    .onSubmit(openFreeText)
+                    .onChange(of: freeText) { highlightedSomeday = nil }
+                    .onKeyPress(.downArrow) {
+                        guard !someday.isEmpty else { return .ignored }
+                        highlightedSomeday = min((highlightedSomeday ?? -1) + 1, someday.count - 1)
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        guard let current = highlightedSomeday else { return .ignored }
+                        highlightedSomeday = current == 0 ? nil : current - 1
+                        return .handled
+                    }
+                    .onKeyPress(.escape) {
+                        guard highlightedSomeday != nil else { return .ignored }
+                        highlightedSomeday = nil
+                        return .handled
+                    }
+                    .onSubmit {
+                        if let index = highlightedSomeday, someday.indices.contains(index) {
+                            open(someday[index])
+                        } else {
+                            openFreeText()
+                        }
+                    }
                 Button(Copy.done, action: openFreeText)
                     .disabled(freeText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+
+            // The list keeps the height of a full, scrolling one whatever the filter leaves, so
+            // the sheet does not jump while the user types.
+            if next.hasSomedayPile {
+                Text(Copy.someday).font(Typo.meta).foregroundStyle(Color.textSecondary)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        ForEach(Array(someday.enumerated()), id: \.element.id) { index, action in
+                            SomedaySuggestionRow(action: action, isHighlighted: index == highlightedSomeday) {
+                                open(action)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: SheetMetrics.inlineRowsMaxHeight)
             }
 
             if next.isStalled {
@@ -857,6 +901,9 @@ public struct WhatsNextSheet: View {
             }
         }
         .padding(Spacing.cardPadding)
+        #if os(macOS)
+        .frame(width: next.hasSomedayPile ? SheetMetrics.idealWidth : nil)
+        #endif
         .task { if whatsNextModel == nil { whatsNextModel = next } }
     }
 
@@ -864,6 +911,38 @@ public struct WhatsNextSheet: View {
         let title = freeText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
         card = MakeActionModel(model: model, project: projectID, newActionTitle: title)
+    }
+
+    private func open(_ action: Action) {
+        highlightedSomeday = nil
+        card = MakeActionModel(model: model, changingStatusOf: action)
+    }
+}
+
+/// One of the project's Someday actions under What's next?'s field (#84).
+private struct SomedaySuggestionRow: View {
+    let action: Action
+    let isHighlighted: Bool
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: Spacing.m) {
+                Image(systemName: Symbols.someday)
+                    .foregroundStyle(Color.textTertiary)
+                Text(action.title)
+                    .font(Typo.body)
+                    .foregroundStyle(Color.ink)
+                    .lineLimit(1)
+                Spacer(minLength: Spacing.s)
+            }
+            .padding(.vertical, Spacing.xs)
+            .padding(.horizontal, Spacing.s)
+            .background(isHighlighted ? Color.accentWash : Color.clear,
+                        in: RoundedRectangle(cornerRadius: Radius.cell))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

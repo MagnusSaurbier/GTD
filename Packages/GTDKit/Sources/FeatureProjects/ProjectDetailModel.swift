@@ -65,11 +65,35 @@ public final class ProjectDetailModel {
         return .settled
     }
 
-    /// #76 — the project's active actions that no step points at. The one list shows them
-    /// under the steps, so every step and every Next item of the project is in one place.
+    /// #76 — the project's open actions that no step points at. The one list shows them under
+    /// the steps, so every step and every open action of the project is in one place.
+    ///
+    /// #84 — every open status counts, not only Next: Someday and Waiting notes that carried
+    /// `project:` before #76 never got a step, and deferred ones are the project's too. Next and
+    /// In progress come first in `activeActions`' order, then Waiting, then Someday, each
+    /// alphabetical.
     public var looseActions: [Action] {
         let linked = Set(steps.compactMap(\.promotedTo))
-        return activeActions.filter { !linked.contains($0.id) }
+        let active = activeActions.filter { !linked.contains($0.id) }
+        let shown = Set(active.map(\.id))
+        let rest = model.snapshot.actions
+            .filter {
+                $0.project == projectID && !$0.status.isClosed
+                    && !linked.contains($0.id) && !shown.contains($0.id)
+            }
+            .sorted {
+                let (l, r) = (Self.looseRank($0.status), Self.looseRank($1.status))
+                return l != r ? l < r : $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
+        return active + rest
+    }
+
+    private static func looseRank(_ status: ActionStatus) -> Int {
+        switch status {
+        case .next, .inProgress: 0
+        case .waiting: 1
+        default: 2
+        }
     }
 
     // MARK: - Header
