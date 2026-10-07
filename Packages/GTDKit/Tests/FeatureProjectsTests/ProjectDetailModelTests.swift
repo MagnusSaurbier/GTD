@@ -292,8 +292,30 @@ struct ProjectDetailModelTests {
         let detail = ProjectDetailModel(project: Fixtures.daadProject.id, model: model)
         let linked = Set(detail.steps.compactMap(\.promotedTo))
         #expect(detail.looseActions.allSatisfy { !linked.contains($0.id) })
-        #expect(Set(detail.looseActions.map(\.id)).union(linked.intersection(Set(detail.activeActions.map(\.id))))
-            == Set(detail.activeActions.map(\.id)))
+        let active = Set(detail.activeActions.map(\.id))
+        #expect(Set(detail.looseActions.map(\.id)).intersection(active).union(linked.intersection(active))
+            == active)
+    }
+
+    /// #84 — Someday, Waiting and deferred notes of the project join the list too (after the
+    /// Next ones), done ones never; a note a step links to still shows only as that step.
+    @Test func looseActionsIncludeEveryOpenStatusOfTheProject() {
+        var snapshot = Fixtures.sampleSnapshot
+        let here = Fixtures.daadProject.id
+        let layout = VaultLayout.default
+        func add(_ title: String, _ status: ActionStatus, deferDate: Day? = nil) {
+            snapshot.actions.append(Action(
+                id: layout.actionPath(title: title), title: title, status: status,
+                project: here, deferDate: deferDate))
+        }
+        add("B someday", .someday)
+        add("A someday deferred", .someday, deferDate: Fixtures.today.adding(days: 30))
+        add("Waiting one", .waiting)
+        add("Done one", .done)
+        let detail = ProjectDetailModel(project: here, model: makeModel(snapshot: snapshot))
+        let titles = detail.looseActions.map(\.title)
+        #expect(Array(titles.suffix(3)) == ["Waiting one", "A someday deferred", "B someday"])
+        #expect(!titles.contains("Done one"))
     }
 
     /// `→ Next` opens the inbox card over the action; its Someday exit moves it and the step
