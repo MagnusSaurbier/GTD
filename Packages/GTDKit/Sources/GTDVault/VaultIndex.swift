@@ -198,9 +198,10 @@ public struct VaultIndex: Sendable {
         do {
             switch kind {
             case .inbox:
-                // A capture from outside the app has no `created`; the file's date stands in.
+                // A capture from outside the app may have no `created`; the file's birth time
+                // stands in (#89), and the app's first write of the note stamps it.
                 return entry(.inbox(try parser.inboxItem(
-                    id: id, text: text, fileDate: info.modified)))
+                    id: id, text: text, fileDate: info.captureDate)))
             case .action:
                 var action = try parser.action(id: id, text: text)
                 // The only field the codec cannot know: file mtime drives the staleness
