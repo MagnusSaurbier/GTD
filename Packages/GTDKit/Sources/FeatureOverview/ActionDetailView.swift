@@ -310,7 +310,13 @@ private struct ActionDetailEditor: View {
                 initial: editor.waiting,
                 suggestedWho: suggestedWho,
                 today: today,
-                onSave: { editor.setWaiting($0) })
+                drafts: model.inputDrafts,
+                draftKey: InputDraftKey.waiting(editor.id),
+                onSave: {
+                    editor.setWaiting($0)
+                    // #94 — set (a refusal lands in the editor's banner, not in the draft).
+                    model.inputDrafts.clear(InputDraftKey.waiting(editor.id))
+                })
         }
         .sheet(isPresented: $isConvertPresented) {
             ConvertToProjectSheet(action: editor.id)

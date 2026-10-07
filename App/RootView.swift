@@ -173,6 +173,7 @@ private struct GlobalFlows: ViewModifier {
     private var currentError: AppError? {
         composition.error ?? model.writeFailure.map(AppError.init) ?? model.lastError.map(AppError.init)
             ?? composition.unsavedJournal.failure.map { AppError(message: Copy.unsavedJournalFailed($0)) }
+            ?? composition.inputDrafts.failure.map { AppError(message: Copy.inputDraftsFailed($0)) }
     }
 
     private var errorPresented: Binding<Bool> {
@@ -183,6 +184,7 @@ private struct GlobalFlows: ViewModifier {
         composition.error = nil
         model.clearError()
         composition.unsavedJournal.clearFailure()
+        composition.inputDrafts.clearFailure()
     }
 }
 

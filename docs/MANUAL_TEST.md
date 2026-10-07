@@ -188,6 +188,17 @@ You need a full Next list: demote or complete until the Next sidebar count reads
 - [ ] Type notes in the Knowledge sheet, `Cancel`, `Close`: the notes are in the inbox note.
 - [ ] Quick capture / a list's `+`: type, then swipe the sheet away (or `Esc`) — the capture /
       item exists. Type, then `Cancel` — nothing is written.
+- [ ] **Dialogs keep a draft (#94, build 0.51).** For each, type something, leave without the main
+      button (`Esc`, swipe down, click outside; once with ⌘Q and relaunch), reopen the same dialog
+      for the same note — the text is back — then press `Cancel` where there is one and reopen:
+      empty. The inbox card's `Waiting` sheet (`who` + date), `Defer to review` reason, `More…` ›
+      `New list…`, Knowledge › `New folder`; "Make action" on a list item; `↗ Promote` on a project
+      step; "What's next?" (the line, and the card it opens); the `+` new-project sheet;
+      "Turn into project"; the project's `New step` (switch to another project and back on the
+      Mac: each keeps its own); the review's deferred card + `System fix`; Settings `Add a
+      context`, `Add a list`, a list rename (close Settings, rename the same list again);
+      onboarding's new-vault name. Filing / creating clears the draft: the dialog opens empty next
+      time. Nothing appears in the vault until the main button is pressed.
 - [ ] Capture something new mid-session (`⌘N`): it queues **behind** a card you have already
       opened, and jumps to the front only if the current card is an untouched step-1 card.
 - [ ] Process the queue to zero: the reward moment appears with `n processed · m min` and a

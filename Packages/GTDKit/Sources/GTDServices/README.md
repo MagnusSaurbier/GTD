@@ -24,6 +24,8 @@ Foundation-only — every file here compiles and is tested on Linux.
 - `UndoJournal` (actor) — device-local, persisted in Application Support, keeps 20 entries.
 - `FileUnsavedTextStore` — the crash journal's file (`unsaved-text.json` beside the undo journal,
   #56): atomic writes, removed when empty, a damaged file throws instead of reading as empty.
+- `FileInputDraftStore` — the dialog drafts' file (`input-drafts.json` beside it, #94; fixture
+  runs `input-drafts-fixtures.json`), same rules.
 - `ServiceError` — `.nothingToUndo`, `.undoStale(path:)`, `.writeDiscarded`, `.staleWrite(path:)`.
 
 ## Invariants

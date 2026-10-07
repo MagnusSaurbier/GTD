@@ -202,6 +202,11 @@ public enum Copy {
         "GTD can't keep a safety copy of unsaved typing on this device: \(reason)"
     }
 
+    /// #94 — the dialog drafts' file could not be read or written.
+    public static func inputDraftsFailed(_ reason: String) -> String {
+        "GTD can't keep what open dialogs hold on this device: \(reason)"
+    }
+
     public static let capSheetTitle = "Next is full"
     public static let capSheetBody = "Demote one to make room."
     /// The `Next is full` sheet's other exit (STYLEGUIDE §3.6: "Demote one … or cancel") and any

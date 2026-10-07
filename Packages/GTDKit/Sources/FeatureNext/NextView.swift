@@ -117,8 +117,15 @@ private struct NextListContent: View {
             showToast(newValue)
         }
         .sheet(item: $waitingSheetAction) { action in
-            WaitingInfoSheet(initial: action.waiting, today: list.today) { info in
-                run { try await list.setWaiting(action, info) }
+            WaitingInfoSheet(
+                initial: action.waiting, today: list.today,
+                drafts: model.inputDrafts, draftKey: InputDraftKey.waiting(action.id)
+            ) { info in
+                run {
+                    try await list.setWaiting(action, info)
+                    // #94 — set: the sheet's draft is done with.
+                    model.inputDrafts.clear(InputDraftKey.waiting(action.id))
+                }
             }
         }
         .sheet(item: $deferSheetAction) { action in

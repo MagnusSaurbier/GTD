@@ -70,7 +70,10 @@ public final class MakeActionModel {
     }
 
     /// Draft, validation flags and cap state — the inbox card's, unchanged.
-    public var card: ActionCardState
+    public var card: ActionCardState {
+        // #94 — what is typed over a list item, a step or a "What's next?" line is kept.
+        didSet { if card.draft != oldValue.draft { keepDraft() } }
+    }
 
     /// The draft. Views bind straight to it.
     public var draft: InboxDraft {
@@ -114,6 +117,7 @@ public final class MakeActionModel {
         self.source = .listItem(item)
         self.keyBindings = bindings
         self.card = ActionCardState(draft: InboxDraft(item: item))
+        restoreDraft()
     }
 
     /// The card over an existing action that was dropped onto `target` and is not ready for it
@@ -168,6 +172,7 @@ public final class MakeActionModel {
         self.keyBindings = bindings
         self.card = ActionCardState(
             draft: InboxDraft(title: stepText, what: stepText, project: project))
+        restoreDraft()
     }
 
     /// P5 — the card over a new action typed into "What's next?": the typed line is the title
@@ -183,6 +188,7 @@ public final class MakeActionModel {
         self.keyBindings = bindings
         self.card = ActionCardState(
             draft: InboxDraft(title: newActionTitle, what: newActionTitle, project: project))
+        restoreDraft()
     }
 
     // MARK: - Derived
@@ -283,6 +289,48 @@ public final class MakeActionModel {
         sheet = nil
         card.clearCap()
         card.clearFlags()
+    }
+
+    // MARK: - Drafts over notes without action fields (#94)
+
+    /// Where the card keeps what is typed when its note has no place for action fields — a
+    /// list item (L1: only its notes), a project step (only its line), a "What's next?" line
+    /// (no note yet). `nil` over an existing action: that one keeps its edits in the action
+    /// itself (`keptEdits`, #85).
+    public var draftKey: String? {
+        switch source {
+        case let .listItem(item): InputDraftKey.makeActionOverListItem(item.id)
+        case let .projectStep(project, _, text): InputDraftKey.makeActionOverStep(project: project, text: text)
+        case let .newProjectAction(project, title):
+            InputDraftKey.makeActionOverWhatsNext(project: project, title: title)
+        case .action: nil
+        }
+    }
+
+    /// The key the card's follow-up sheet keeps its `who` and date under.
+    public var waitingDraftKey: String? {
+        if case let .action(action) = source { return InputDraftKey.waiting(action.id) }
+        return draftKey.map(InputDraftKey.waiting)
+    }
+
+    /// The drafts store the card's sheets keep their fields in.
+    public var inputDrafts: InputDrafts { model.inputDrafts }
+
+    /// The draft the card opened with, before anything was typed or restored.
+    @ObservationIgnored private var openingDraft: InboxDraft?
+
+    /// The card opens with what was typed over the same note the last time it was left —
+    /// `Close`, `Esc`, a swipe, ⌘Q, a crash — without filing. Every way out keeps it: this
+    /// card has no `Cancel`, only `Close`. Filing clears it.
+    private func restoreDraft() {
+        openingDraft = card.draft
+        guard let draftKey, let saved = model.inputDrafts.value(InboxDraft.self, for: draftKey) else { return }
+        card.draft = saved
+    }
+
+    private func keepDraft() {
+        guard let draftKey, !isFiled, let openingDraft else { return }
+        model.inputDrafts.keep(card.draft == openingDraft ? nil : card.draft, for: draftKey)
     }
 
     // MARK: - Closing keeps the edits (#85)
@@ -450,6 +498,9 @@ public final class MakeActionModel {
             sheet = nil
             refusal = nil
             isFiled = true
+            // #94 — filed: the kept draft and the follow-up sheet's have done their job.
+            if let draftKey { model.inputDrafts.clear(draftKey) }
+            if let waitingDraftKey { model.inputDrafts.clear(waitingDraftKey) }
         case let .refused(reason):
             if case .capReached = reason { sheet = .cap }
             refuse(reason)

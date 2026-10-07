@@ -714,7 +714,9 @@ struct InboxSessionView: View {
         case .project:
             ProjectSheet(session: session)
         case .waiting:
-            WaitingInfoSheet(today: session.today) { info in
+            WaitingInfoSheet(
+                today: session.today, drafts: session.inputDrafts, draftKey: session.waitingDraftKey
+            ) { info in
                 Task { await session.confirmWaiting(info) }
             }
         case .deferToReview:
