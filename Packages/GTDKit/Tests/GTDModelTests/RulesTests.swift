@@ -57,7 +57,7 @@ struct RulesTests {
         #expect(chase.count == 1)
         #expect(chase.first?.waitingFor == "Prof. Weber")
         let waiting = Rules.waitingList(snapshot, today: today)
-        #expect(waiting.count == 3)
+        #expect(waiting.count == 4)       // 3 with a who, 1 deferral to Next (#86)
         // W2 — sorted by staleness: the longest-overdue follow-up first.
         #expect(waiting.map { $0.followUpDate! } == waiting.map { $0.followUpDate! }.sorted())
         #expect(Rules.waitingSince(waiting[0], today: today, calendar: Fixtures.calendar) == 28)
@@ -68,29 +68,28 @@ struct RulesTests {
         #expect(stalled.map(\.id) == [Fixtures.flatProject.id])
     }
 
-    @Test func deferredItemsAreHidden() {
-        let deferred = Rules.deferredList(snapshot, today: today)
-        #expect(deferred.count == 2)
-        let visible = Rules.visibleActions(snapshot, today: today).map(\.id)
-        #expect(deferred.allSatisfy { !visible.contains($0.id) })
-        #expect(deferred.map { $0.deferDate! } == deferred.map { $0.deferDate! }.sorted())
+    /// #86 — deferrals are who-less waiting items: listed under Waiting, never under Next,
+    /// and holding no cap slot until their date.
+    @Test func deferralsWaitInWaiting() {
+        let deferrals = Rules.waitingList(snapshot, today: today).filter(\.isWhoLessWaiting)
+        #expect(deferrals.count == 1)
+        let next = Rules.nextList(snapshot, today: today).map(\.id)
+        #expect(deferrals.allSatisfy { !next.contains($0.id) })
+        #expect(deferrals.allSatisfy { !Rules.isBackInNext($0, today: today) })
     }
 
     @Test func sidebarCounts() {
         let counts = Rules.sidebarCounts(snapshot, today: today)
         #expect(counts.inbox == 5)
         #expect(counts.next == 14)
-        #expect(counts.someday == 6)      // 8 in the tier, 2 of them deferred
-        #expect(counts.waiting == 3)
-        #expect(counts.deferred == 2)
+        #expect(counts.someday == 6)      // 7 in the tier, 1 of them hidden until its defer date
+        #expect(counts.waiting == 4)      // 1 of them a deferral to Next (#86)
         #expect(counts.projects == 4)
         // E3 — every count matches the list its row opens.
         #expect(counts.next == Rules.nextList(snapshot, today: today).count)
         #expect(counts.waiting == Rules.waitingList(snapshot, today: today).count)
         #expect(counts.inbox == Rules.inboxQueue(snapshot).count)
-        #expect(counts.deferred == Rules.deferredList(snapshot, today: today).count)
-        #expect(counts.someday + counts.deferred
-                == snapshot.actions.count { $0.status == .someday })
+        #expect(counts.someday + 1 == snapshot.actions.count { $0.status == .someday })
     }
 
     @Test func capSignalOnlyAppearsAtTheCap() {
@@ -134,11 +133,12 @@ struct RulesTests {
         #expect(!Rules.suggestsProject(single))
     }
 
-    @Test func timelineCoversDeferDueAndFollowUp() {
+    @Test func timelineCoversDueAndFollowUpDeferralsIncluded() {
         let entries = Rules.timeline(snapshot, from: today, to: today.adding(days: 13))
         #expect(entries.contains { $0.kind == .due })
         #expect(entries.contains { $0.kind == .followUp })
-        #expect(entries.contains { $0.kind == .deferred })
+        // A deferral's date is its follow-up date (#86).
+        #expect(entries.contains { $0.kind == .followUp && $0.title == "Write the tenant profile" })
         #expect(entries.map(\.day) == entries.map(\.day).sorted())
         // Out of range is out of the strip, and closed actions never appear.
         #expect(entries.allSatisfy { $0.day >= today && $0.day <= today.adding(days: 13) })
@@ -261,18 +261,31 @@ struct SignalRuleTests {
         #expect(signals(action).isEmpty)
     }
 
-    // D1 — `back` on the day the item returns, and only then.
+    // D1/#86 — `back` on the day a deferral (who-less waiting) returns, and only then; it is
+    // never a `chase` item.
     @Test(arguments: [(0, true), (-1, false), (-5, false)])
     func returnedFromDefer(offset: Int, hasBadge: Bool) {
-        let action = TestVault.action("Zurück", .someday, deferDate: TestVault.day(offset), modified: 0)
+        let action = TestVault.action(
+            "Zurück", .waiting, waiting: WaitingInfo(followUp: TestVault.day(offset)), modified: 0)
         let badge = Rules.returnedFromDeferBadge(for: action, today: today, calendar: calendar)
         #expect((badge != nil) == hasBadge)
         #expect(badge?.step == (hasBadge ? .neutral : nil))
+        #expect(!signals(action).contains { if case .chase = $0.kind { true } else { false } })
     }
 
-    @Test func aFutureDeferDateCarriesNoBadge() {
-        let action = TestVault.action("Später", .someday, deferDate: TestVault.day(3), modified: 0)
+    @Test func aFutureDeferralCarriesNoBadge() {
+        let action = TestVault.action(
+            "Später", .waiting, waiting: WaitingInfo(followUp: TestVault.day(3)), modified: 0)
         #expect(Rules.returnedFromDeferBadge(for: action, today: today, calendar: calendar) == nil)
+    }
+
+    /// #86 — a waiting item **with** a who never comes back by itself: it is a `chase`.
+    @Test func aWaitingItemWithAWhoIsAChaseNotABack() {
+        let action = TestVault.action(
+            "Warten", .waiting, waiting: WaitingInfo(who: "Lena", followUp: TestVault.day(0)), modified: 0)
+        #expect(Rules.returnedFromDeferBadge(for: action, today: today, calendar: calendar) == nil)
+        #expect(signals(action).contains { $0.kind == .chase(days: 0) })
+        #expect(!Rules.isBackInNext(action, today: today))
     }
 
     // inbox: older than 7 days ⇒ aging
@@ -305,7 +318,7 @@ struct SignalRuleTests {
         #expect(Rules.signals(for: project, in: busy, today: today).isEmpty)
     }
 
-    /// P4 — `someday` and deferred actions are not commitments, so they leave a project stalled.
+    /// P4 — `someday` actions are not commitments, so they leave a project stalled.
     /// The `someday` row replaces the old second-tier exception: the merged tier is not a
     /// commitment either, so an active project whose only action is Someday is stalled
     /// (ARCHITECTURE §6).
@@ -324,12 +337,15 @@ struct SignalRuleTests {
         #expect(Rules.isStalled(project, in: vault, today: today) == stalled)
     }
 
-    @Test func aDeferredActionLeavesItsProjectStalled() {
+    /// #86 — a deferral is a waiting item, and waiting keeps a project off the stalled list
+    /// (before #86 a deferred action was hidden and left its project stalled).
+    @Test func aDeferralKeepsItsProjectAlive() {
         let project = TestVault.project("Wohnungssuche")
         let vault = TestVault.snapshot(
-            actions: [TestVault.action("Profil", .someday, project: project.id, deferDate: TestVault.day(9))],
+            actions: [TestVault.action(
+                "Profil", .waiting, project: project.id, waiting: WaitingInfo(followUp: TestVault.day(9)))],
             projects: [project])
-        #expect(Rules.isStalled(project, in: vault, today: today))
+        #expect(!Rules.isStalled(project, in: vault, today: today))
     }
 
     @Test func onlyActiveProjectsCanStall() {
@@ -350,14 +366,48 @@ struct SignalRuleTests {
         #expect(steps.first == .overdue)
     }
 
-    // D1 — visibility boundary: hidden until the day it names, visible on that day.
+    // D1/#86 — a deferral waits in Waiting until the day it names, and is back in Next on
+    // that day: listed there, holding a slot, gone from Waiting and from the chase section.
     @Test(arguments: [(-1, true), (0, true), (1, false)])
-    func deferVisibilityBoundary(offset: Int, visible: Bool) {
-        let action = TestVault.action("Später", .someday, deferDate: TestVault.day(offset))
+    func deferralReturnBoundary(offset: Int, back: Bool) {
+        let action = TestVault.action(
+            "Später", .waiting, waiting: WaitingInfo(followUp: TestVault.day(offset)))
         let vault = TestVault.snapshot(actions: [action])
+        #expect(Rules.isVisible(action, today: today))
+        #expect(Rules.isBackInNext(action, today: today) == back)
+        #expect(Rules.effectiveStatus(action, today: today) == (back ? .next : .waiting))
+        #expect(Rules.nextList(vault, today: today).count == (back ? 1 : 0))
+        #expect(Rules.countsTowardCap(vault, today: today) == (back ? 1 : 0))
+        #expect(Rules.waitingList(vault, today: today).count == (back ? 0 : 1))
+        #expect(Rules.chaseItems(vault, today: today).isEmpty)
+        let counts = Rules.sidebarCounts(vault, today: today)
+        #expect(counts.next == (back ? 1 : 0))
+        #expect(counts.waiting == (back ? 0 : 1))
+    }
+
+    /// #86 (user decision) — a deferred Someday item keeps its tier: hidden from every list
+    /// until its date, then back in Someday with the `back` badge — never in Waiting or Next.
+    @Test(arguments: [(-1, true, false), (0, true, true), (1, false, false)])
+    func deferredSomedayReturnsToSomeday(offset: Int, visible: Bool, badge: Bool) {
+        let action = TestVault.action("Später", .someday, deferDate: TestVault.day(offset), modified: 0)
+        let vault = TestVault.snapshot(actions: [action])
+        #expect(action.foldingDeferIntoWaiting() == action)
         #expect(Rules.isVisible(action, today: today) == visible)
-        #expect(Rules.visibleActions(vault, today: today).isEmpty == !visible)
-        #expect(Rules.deferredList(vault, today: today).isEmpty == visible)
+        #expect(Rules.sidebarCounts(vault, today: today).someday == (visible ? 1 : 0))
+        #expect(Rules.waitingList(vault, today: today).isEmpty)
+        #expect(Rules.nextList(vault, today: today).isEmpty)
+        #expect((Rules.returnedFromDeferBadge(for: action, today: today, calendar: calendar) != nil) == badge)
+        #expect(Rules.timeline(vault, from: TestVault.day(-5), to: TestVault.day(5))
+                    .map(\.kind) == [.deferred])
+    }
+
+    /// #86 — a blank who is no who: such an item is a deferral.
+    @Test func aBlankWhoIsNoWho() {
+        let action = TestVault.action(
+            "Später", .waiting, waiting: WaitingInfo(who: "  ", followUp: TestVault.day(-1)))
+        #expect(action.isWhoLessWaiting)
+        #expect(Rules.isBackInNext(action, today: today))
+        #expect(!TestVault.action("Nächste", .next).isWhoLessWaiting)
     }
 
     // W2 — a follow-up due today is already a chase item.

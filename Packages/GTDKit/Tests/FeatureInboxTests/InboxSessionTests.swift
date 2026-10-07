@@ -361,6 +361,43 @@ struct InboxSessionTests {
         #expect(action.project == nil)
     }
 
+    /// #86 — the card's defer chip files the action as a deferral: it ends up in Waiting with
+    /// the defer date as follow-up and no who, whichever tier the card was sent to.
+    @Test func aDeferredCardEndsUpInWaiting() async {
+        let (session, model, _) = await InboxTestSupport.openedActionCard()
+        session.draft.why = "The window does not close."
+        session.draft.what = "Ring the Hausverwaltung"
+        session.draft.contexts = ["calls"]
+        session.draft.timeBucket = .upTo10
+        session.draft.deferDate = Fixtures.day(4)
+
+        await session.take(.next)
+
+        let action = try! #require(model.snapshot.actions.first { $0.title == filedTitle })
+        #expect(action.status == .waiting)
+        #expect(action.waitingFor == nil)
+        #expect(action.followUpDate == Fixtures.day(4))
+        #expect(action.deferDate == nil)
+        #expect(Rules.waitingList(model.snapshot, today: Fixtures.today).contains { $0.id == action.id })
+        #expect(!Rules.nextList(model.snapshot, today: Fixtures.today).contains { $0.id == action.id })
+    }
+
+    /// #86 (user decision) — a card filed to Someday with the defer chip stays Someday: hidden
+    /// until the date, then back in Someday.
+    @Test func aDeferredSomedayCardStaysSomeday() async {
+        let (session, model, _) = await InboxTestSupport.openedActionCard()
+        session.draft.what = "Ring the Hausverwaltung"
+        session.draft.deferDate = Fixtures.day(4)
+
+        await session.take(.someday)
+
+        let action = try! #require(model.snapshot.actions.first { $0.title == filedTitle })
+        #expect(action.status == .someday)
+        #expect(action.deferDate == Fixtures.day(4))
+        #expect(!Rules.isVisible(action, today: Fixtures.today))
+        #expect(Rules.isVisible(action, today: Fixtures.day(4)))
+    }
+
     /// C3 — a changed title renames the inbox file before the card is filed, so the filed note
     /// carries the new name. Undo puts the card back under that name, with its draft.
     @Test func aChangedTitleRenamesTheFileBeforeFiling() async {

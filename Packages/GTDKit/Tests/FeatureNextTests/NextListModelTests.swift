@@ -249,8 +249,8 @@ struct NextListModelTests {
 
     // MARK: - R-2: a deferred Next item comes back into a full list
 
-    /// R-2 — a Next item with a future `defer` is hidden and holds no slot; on its date it is
-    /// back in the list and counts again. Nothing is demoted automatically.
+    /// R-2/#86 — a deferral waits in Waiting and holds no slot; on its date it is back in the
+    /// list and counts again. Nothing is demoted automatically.
     @Test func aDeferredNextItemHoldsNoSlotUntilItsDateReturns() async throws {
         let model = makeModel()
         let list = NextListModel(model: model, mode: .full, store: InMemoryNextFilterStore())
@@ -450,7 +450,9 @@ struct NextListModelTests {
         #expect(updated.followUpDate == Fixtures.day(3))
     }
 
-    @Test func setDeferHidesTheActionUntilTheDate() async throws {
+    /// #86 — deferring is waiting: the row moves to Waiting with the date as its follow-up and
+    /// no who, holds no slot, and is back in Next on that day.
+    @Test func setDeferMovesTheActionToWaitingUntilTheDate() async throws {
         let model = makeModel()
         let list = NextListModel(model: model, mode: .full, store: InMemoryNextFilterStore())
         let action = try #require(model.snapshot.actions.first { $0.status == .next && $0.deferDate == nil })
@@ -458,12 +460,25 @@ struct NextListModelTests {
         try await list.setDefer(action, to: Fixtures.day(5))
 
         let updated = try #require(model.snapshot.action(action.id))
-        #expect(updated.deferDate == Fixtures.day(5))
-        // R-2 — a Next item may carry a future defer. Nothing is demoted behind the user's back:
-        // the row simply leaves the list until its date, and holds no slot while it is hidden.
-        #expect(updated.status == .next)
-        #expect(!list.items.contains { $0.id == action.id }, "deferred actions are hidden until the date (D1)")
+        #expect(updated.status == .waiting)
+        #expect(updated.waitingFor == nil)
+        #expect(updated.followUpDate == Fixtures.day(5))
+        #expect(updated.deferDate == nil)
+        #expect(!list.items.contains { $0.id == action.id }, "a deferral waits until its date (D1)")
         #expect(list.capCount == Rules.countsTowardCap(model.snapshot, today: Fixtures.today))
+        #expect(Rules.nextList(model.snapshot, today: Fixtures.day(5)).contains { $0.id == action.id })
+    }
+
+    /// Deferring a chase item keeps the who it waits on: only the date moves.
+    @Test func setDeferOnAChaseItemKeepsItsWho() async throws {
+        let model = makeModel()
+        let list = NextListModel(model: model, mode: .full, store: InMemoryNextFilterStore())
+        let chase = try #require(Rules.chaseItems(model.snapshot, today: Fixtures.today).first)
+
+        try await list.setDefer(chase, to: Fixtures.day(5))
+
+        let updated = try #require(model.snapshot.action(chase.id))
+        #expect(updated.waiting == WaitingInfo(who: chase.waitingFor, followUp: Fixtures.day(5)))
     }
 
     @Test func setDeferWithoutADateNeedsNoDemotion() async throws {

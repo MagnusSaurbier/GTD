@@ -206,20 +206,11 @@ public enum Fixtures {
                why: "Two of them are due on Monday.",
                what: "Drop them at the TUM Stammgelände library desk."),
 
-        // someday (8) — two of them deferred into the future
+        // someday (6)
         action("Set up the new bank account", .someday,
                contexts: ["mac"], estimate: 60, created: -25, modified: -25,
                why: "The old account charges 5 € a month.",
                what: "Open the DKB account online."),
-        action("Write the tenant profile", .someday,
-               contexts: ["mac"], estimate: 30, project: flatProject.id,
-               deferDate: day(9), created: -13, modified: -13,
-               why: "Landlords ask for it before a viewing.",
-               what: "One page: who I am, what I earn, references."),
-        action("Plan the semester timetable", .someday,
-               contexts: ["mac"], estimate: 60, deferDate: day(20), created: -18, modified: -18,
-               why: "Registration opens in October.",
-               what: "Check overlaps between the two seminars."),
         action("Deep-clean the kitchen", .someday,
                contexts: ["home"], estimate: 90, created: -34, modified: -34,
                why: "The sublet hand-over will be checked.",
@@ -241,6 +232,18 @@ public enum Fixtures {
                contexts: ["home", "deep-work"], created: -120, modified: -100,
                why: "A reason to finally use the ESP32 in the drawer.",
                what: "Sensor, case, a tiny dashboard."),
+
+        // deferred (2, #86) — one deferral to Next (waiting with no who, back in Next on its
+        // follow-up date) and one Someday item hidden until its defer date, then back in Someday
+        action("Write the tenant profile", .waiting,
+               contexts: ["mac"], estimate: 30,
+               waiting: WaitingInfo(followUp: day(9)), created: -13, modified: -13,
+               why: "Landlords ask for it before a viewing.",
+               what: "One page: who I am, what I earn, references."),
+        action("Plan the semester timetable", .someday,
+               contexts: ["mac"], estimate: 60, deferDate: day(20), created: -18, modified: -18,
+               why: "Registration opens in October.",
+               what: "Check overlaps between the two seminars."),
 
         // waiting (3) — one follow-up overdue (chase), one due in a day, one far out
         action("Reference letter from Prof. Weber", .waiting,

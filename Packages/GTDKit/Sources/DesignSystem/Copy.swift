@@ -24,8 +24,6 @@ public enum Copy {
     public static let knowledge = "Knowledge"
     public static let trash = "Trash"
     public static let deferLabel = "Defer"
-    /// The Deferred section — items hidden by a future `defer` (D1).
-    public static let deferred = "Deferred"
     /// A row's context-menu submenu that twins the drag onto a sidebar section (E3, §8).
     public static let moveTo = "Move to"
     /// The note's `obsidian://` link, bottom of the action and project detail (`NoteFileLinks`).
