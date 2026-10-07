@@ -72,7 +72,6 @@ enum AppCopy {
     static let pickVault = "Choose folder…"
     static let routines = "Routines"
     static let projects = "Projects"
-    static let deferred = "Deferred"
     static let goTo = "Go"
 
     /// Why the app could not open the saved vault folder, for the onboarding alert.

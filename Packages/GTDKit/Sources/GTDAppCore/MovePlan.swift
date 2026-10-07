@@ -11,13 +11,18 @@ public enum MoveDestination: Hashable, Sendable {
     case next
     case someday
     case waiting
-    case deferred
     case projects
     case project(NoteID)
     /// The Lists *section* — the person picks the list (the inbox's own list picker).
     case lists
     /// One list by name: the action becomes an item of it (`moveActionToList`).
     case list(String)
+    /// #87 — the In progress sidebar row / tab, and the board's first column.
+    case inProgress
+    /// #87 — the board's Agent column.
+    case agent
+    /// #87 — the board's Review column.
+    case review
 }
 
 /// What a drop (or a `Move to…` choice) has to do, decided without SwiftUI so the rules are
@@ -35,8 +40,6 @@ public enum MovePlan: Equatable, Sendable {
     /// The target tier needs fields the note does not have: open the action card, aimed at
     /// `status`, with `missing` marked (R-3, STYLEGUIDE §3.6).
     case card(status: ActionStatus, missing: [RequiredField])
-    /// Deferred is not a status but a date (R-2): ask for one.
-    case deferDate
     /// The Projects *section*: ask which project.
     case pickProject
     /// The Lists *section*: ask which list — the same picker as the inbox's `More…` sheet.
@@ -46,21 +49,20 @@ public enum MovePlan: Equatable, Sendable {
     public static func plan(
         action: Action, to destination: MoveDestination, snapshot: VaultSnapshot, today: Day
     ) -> MovePlan {
+        // #86 — a deferral that is back sits in Next, so it is judged as a Next item.
+        let status = Rules.effectiveStatus(action, today: today)
         switch destination {
         case .next:
             // `in-progress` is a Next item that has been started (A3): dropping it on Next
             // changes nothing.
-            guard !action.status.countsTowardCap else { return .alreadyThere }
-            return move(action, to: .next)
+            guard !status.countsTowardCap else { return .alreadyThere }
+            return move(action, from: status, to: .next)
         case .someday:
-            guard action.status != .someday else { return .alreadyThere }
-            return move(action, to: .someday)
+            guard status != .someday else { return .alreadyThere }
+            return move(action, from: status, to: .someday)
         case .waiting:
-            guard action.status != .waiting else { return .alreadyThere }
-            return move(action, to: .waiting)
-        case .deferred:
-            if let deferDate = action.deferDate, deferDate > today { return .alreadyThere }
-            return .deferDate
+            guard status != .waiting else { return .alreadyThere }
+            return move(action, from: status, to: .waiting)
         case .projects:
             return .pickProject
         case let .project(id):
@@ -72,6 +74,17 @@ public enum MovePlan: Equatable, Sendable {
             return .pickList
         case let .list(name):
             return .perform(.moveActionToList(action.id, list: name))
+        case .inProgress:
+            // "Begin action" (#87): from Next it is the A3 start; from anywhere else it enters
+            // Next's tier, so the card asks what Next asks and the reducer checks the cap.
+            guard status != .inProgress else { return .alreadyThere }
+            return move(action, from: status, to: .inProgress)
+        case .agent:
+            guard status != .agent else { return .alreadyThere }
+            return move(action, from: status, to: .agent)
+        case .review:
+            guard status != .review else { return .alreadyThere }
+            return move(action, from: status, to: .review)
         }
     }
 
@@ -83,10 +96,12 @@ public enum MovePlan: Equatable, Sendable {
         plan(action: action, to: destination, snapshot: snapshot, today: today) != .alreadyThere
     }
 
-    private static func move(_ action: Action, to status: ActionStatus) -> MovePlan {
+    private static func move(
+        _ action: Action, from previous: ActionStatus, to status: ActionStatus
+    ) -> MovePlan {
         let missing = RequiredField.missing(
             status: status,
-            previous: action.status,
+            previous: previous,
             why: action.why,
             what: action.what,
             contexts: action.contexts,

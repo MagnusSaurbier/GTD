@@ -93,8 +93,7 @@ SwiftUI (inside `#if canImport(SwiftUI)`):
   project row, the `\.moveNote` environment (`MoveNoteHandler`: `accepts`/`move` over
   `GTDAppCore.MoveDestination`, set by the shell that hosts the dialogues, `nil` where there is
   nowhere to move to) and `MoveToMenu(id:)`, the drag's context-menu twin (renders nothing
-  without a handler). `DeferDateSheet(initial:today:onConfirm:)` — a `DateValueChip` in the
-  smallest sheet that can hold one, for a defer date asked outside a card.
+  without a handler). There is no Deferred target: deferring is moving to Waiting (#86).
 - Reward moments (§5): `RewardMoment.inboxZero(processed:minutes:)`,
   `.routineComplete(routine:done:total:)`, `.reviewComplete(done:total:)` — no third kind.
 - Review pieces (§3.10, Mac-only): `StatTile`, `RoutineHeatmap` (+ `HeatmapCellState`),

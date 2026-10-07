@@ -9,8 +9,9 @@ import DesignSystem
 ///
 /// A drop that needs nothing goes straight to `AppModel.perform` (a refusal reaches the
 /// shell's alert; the undo toast covers the move). A drop that needs more opens **the same
-/// action card the inbox uses** (`MakeActionModel` over the action, `MovePlan.card`), the
-/// defer-date sheet (Deferred is a date, R-2) or the project picker (the Projects section).
+/// action card the inbox uses** (`MakeActionModel` over the action, `MovePlan.card`) or the
+/// project picker (the Projects section). There is no Deferred target: deferring is moving to
+/// Waiting with a follow-up date and no who (#86).
 /// Once that dialogue confirms, the note sits in its new category; cancelling leaves it where
 /// it was. Free of SwiftUI so the flow is unit-tested; `moveNoteHost(_:)` is its view.
 @MainActor
@@ -21,8 +22,6 @@ public final class MoveCoordinator {
     public enum Dialogue: Identifiable {
         /// `MovePlan.card` — the action card, aimed at the tier that was dropped on.
         case card(MakeActionModel)
-        /// `MovePlan.deferDate`.
-        case deferDate(Action)
         /// `MovePlan.pickProject`.
         case pickProject(Action)
         /// `MovePlan.pickList` — the inbox's list picker (`More…`), over an action.
@@ -31,7 +30,6 @@ public final class MoveCoordinator {
         public var id: String {
             switch self {
             case let .card(model): "card:\(model.source.id.path)"
-            case let .deferDate(action): "defer:\(action.id.path)"
             case let .pickProject(action): "project:\(action.id.path)"
             case let .pickList(action): "list:\(action.id.path)"
             }
@@ -40,7 +38,7 @@ public final class MoveCoordinator {
         public var action: NoteID {
             switch self {
             case let .card(model): model.source.id
-            case let .deferDate(action), let .pickProject(action), let .pickList(action): action.id
+            case let .pickProject(action), let .pickList(action): action.id
             }
         }
     }
@@ -83,8 +81,6 @@ public final class MoveCoordinator {
             dialogue = .card(MakeActionModel(
                 model: model, action: action, target: status, missing: missing,
                 bindings: keyBindings))
-        case .deferDate:
-            dialogue = .deferDate(action)
         case .pickProject:
             dialogue = .pickProject(action)
         case .pickList:
@@ -131,15 +127,6 @@ public final class MoveCoordinator {
             ?? VaultLayout.sanitize(name)
         await chooseList(action, named: created)
         return true
-    }
-
-    /// The defer-date sheet's `Done`. A cleared date is a "not deferred after all" and is
-    /// written as such (§1: undecided is empty).
-    public func confirmDefer(_ action: Action, date: Day?) async {
-        dialogue = nil
-        var updated = action
-        updated.deferDate = date
-        await model.perform(.updateAction(updated))
     }
 
     /// The project picker's choice: attach `project`, replacing what the action named before

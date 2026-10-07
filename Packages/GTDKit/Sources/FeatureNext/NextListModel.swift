@@ -260,14 +260,14 @@ public final class NextListModel {
         try await model.send(.setStatus(action.id, .waiting, waiting: info))
     }
 
-    /// R-2 — a Next item may carry a future `defer`. Deferring a row therefore changes exactly
-    /// one thing: the date. The row disappears from Next until then and stops occupying a slot
-    /// (`Rules.countsTowardCap(_:today:)`); on its date it comes back with the `back` badge.
-    /// Nothing is demoted behind the user's back, here or in the reducer.
+    /// R-2/#86 — deferring is waiting: the row moves to Waiting with `day` as its follow-up
+    /// date and no who, stops occupying a slot (`Rules.countsTowardCap(_:today:)`), and on
+    /// that day comes back into Next by itself with the `back` badge. A chase item keeps the
+    /// who it waits on and only gets the new date. A cleared date changes nothing.
     public func setDefer(_ action: Action, to day: Day?) async throws {
-        guard var updated = model.snapshot.action(action.id) else { return }
-        updated.deferDate = day
-        try await model.send(.updateAction(updated))
+        guard let day, let current = model.snapshot.action(action.id) else { return }
+        let who = current.status == .waiting ? current.waitingFor : nil
+        try await model.send(.setStatus(current.id, .waiting, waiting: WaitingInfo(who: who, followUp: day)))
     }
 
     /// Chase quick action: push the follow-up out instead of chasing today.

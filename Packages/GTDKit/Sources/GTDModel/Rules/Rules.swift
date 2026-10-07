@@ -35,31 +35,18 @@ public enum Rules {
 
     // MARK: - Visibility
 
-    /// D1 — a defer date hides an action from every list until the day it names.
+    /// A5/D1 — open actions are listed, except a deferred Someday item before its date: it is
+    /// hidden from every list until then and comes back to Someday (#86). Every other deferral
+    /// is a who-less waiting item, listed in Waiting (`DeferIsWaiting.swift`).
     public static func isVisible(_ action: Action, today: Day) -> Bool {
         guard !action.status.isClosed else { return false }        // A5
         if let deferDate = action.deferDate, deferDate > today { return false }
         return true
     }
 
-    /// Everything a list may show today: open actions whose defer date has arrived (A5, D1).
+    /// Everything a list may show today: open actions not hidden by a defer date (A5, D1).
     public static func visibleActions(_ s: VaultSnapshot, today: Day) -> [Action] {
         s.actions.filter { isVisible($0, today: today) }
-    }
-
-    /// Actions hidden by their defer date, soonest first (D1).
-    public static func deferredList(_ s: VaultSnapshot, today: Day) -> [Action] {
-        s.actions
-            .filter { action in
-                guard !action.status.isClosed, let deferDate = action.deferDate else { return false }
-                return deferDate > today
-            }
-            .sorted { lhs, rhs in
-                let l = lhs.deferDate ?? today
-                let r = rhs.deferDate ?? today
-                if l != r { return l < r }
-                return lhs.id.path < rhs.id.path
-            }
     }
 
     // MARK: - Next and the cap
@@ -67,12 +54,18 @@ public enum Rules {
     /// How many actions occupy a Next slot **today** (A3; ARCHITECTURE §6: `in-progress`
     /// counts too).
     ///
-    /// R-2: a Next item may carry a future `defer`. While it is hidden it is not a commitment
-    /// for today, so it does not occupy a slot; on its defer date it comes back and counts
-    /// again — possibly pushing Next over the cap, which is shown (`16/15`) and never repaired
-    /// automatically. `checkCap` only blocks commands that make the number worse.
+    /// R-2/#86: a deferred item is a who-less waiting item and holds no slot while it waits;
+    /// on its follow-up date it is back in Next and counts again — possibly pushing Next over
+    /// the cap, which is shown (`16/15`) and never repaired automatically. `checkCap` only
+    /// blocks commands that make the number worse.
     public static func countsTowardCap(_ s: VaultSnapshot, today: Day) -> Int {
-        s.actions.count { $0.status.countsTowardCap && isVisible($0, today: today) }
+        s.actions.count { occupiesNext($0, today: today) }
+    }
+
+    /// The action is in Next today: `next`/`in-progress`, or a deferral that is back (#86).
+    static func occupiesNext(_ action: Action, today: Day) -> Bool {
+        guard isVisible(action, today: today) else { return false }
+        return action.status.countsTowardCap || isBackInNext(action, today: today)
     }
 
     /// True when no further action fits into Next (A3, I4).
@@ -92,7 +85,7 @@ public enum Rules {
         today: Day
     ) -> [Action] {
         visibleActions(s, today: today)
-            .filter { $0.status.countsTowardCap }
+            .filter { occupiesNext($0, today: today) }
             .filter { matches($0, contexts: contexts) }
             .filter { fits($0, timeAvailable: timeAvailable) }
             .sorted(by: nextIsOrdered)
@@ -141,9 +134,42 @@ public enum Rules {
         return lhs.id.path < rhs.id.path
     }
 
+    // MARK: - In progress board (#87)
+
+    /// One column of the In progress board: the visible actions in `status` (one of
+    /// `ActionStatus.boardStatuses`), filtered by context (E1: at least one of the chosen ones)
+    /// and by project (`nil` = every project, and actions without one). Hidden (deferred)
+    /// actions stay hidden, as in every list (D1). Ordered like Next: nearest `due`, then the
+    /// oldest capture, then the path — total, so the board never reshuffles.
+    public static func boardColumn(
+        _ s: VaultSnapshot,
+        status: ActionStatus,
+        contexts: [String] = [],
+        project: NoteID? = nil,
+        today: Day
+    ) -> [Action] {
+        visibleActions(s, today: today)
+            .filter { $0.status == status }
+            .filter { matches($0, contexts: contexts) }
+            .filter { project == nil || $0.project == project }
+            .sorted(by: nextIsOrdered)
+    }
+
+    /// The projects the board's project filter offers: every project that one of the board's
+    /// visible actions names, by title then path. A dangling link (#53) is offered too — under
+    /// its file name — so such a card can still be filtered to.
+    public static func boardProjects(_ s: VaultSnapshot, today: Day) -> [NoteID] {
+        let ids = Set(visibleActions(s, today: today)
+            .filter { $0.status.isOnBoard }
+            .compactMap(\.project))
+        func title(_ id: NoteID) -> String { s.project(id)?.title ?? id.title }
+        return ids.sorted { (title($0), $0.path) < (title($1), $1.path) }
+    }
+
     // MARK: - Waiting
 
     /// Waiting items whose follow-up date has arrived — shown above Next as "chase" (W2).
+    /// Only items with a who: a who-less one is back in Next itself (#86).
     public static func chaseItems(_ s: VaultSnapshot, today: Day) -> [Action] {
         waitingList(s, today: today).filter { action in
             guard let followUp = action.followUpDate else { return false }
@@ -152,10 +178,11 @@ public enum Rules {
     }
 
     /// The waiting view (W2), sorted by staleness: the longest-overdue follow-up first,
-    /// then the oldest capture.
+    /// then the oldest capture. Deferred items are in it too — a deferral is a who-less waiting
+    /// item — until their follow-up date puts them back in Next (#86).
     public static func waitingList(_ s: VaultSnapshot, today: Day) -> [Action] {
         visibleActions(s, today: today)
-            .filter { $0.status == .waiting }
+            .filter { $0.status == .waiting && !isBackInNext($0, today: today) }
             .sorted { lhs, rhs in
                 let l = lhs.followUpDate?.serial ?? Int.max
                 let r = rhs.followUpDate?.serial ?? Int.max
@@ -177,7 +204,8 @@ public enum Rules {
 
     /// P4 — the actions that actually move a project: open, visible today, and committed.
     /// `someday` is explicitly *not* a commitment, so it does not keep a project off the
-    /// stalled list; a deferred action does not either, because it is hidden until its date.
+    /// stalled list. A waiting item does (deferred ones included, #86): the project is moving,
+    /// it just waits.
     public static func openActions(of project: NoteID, in s: VaultSnapshot, today: Day) -> [Action] {
         visibleActions(s, today: today)
             .filter { $0.project == project && $0.status != .someday }
@@ -208,8 +236,7 @@ public enum Rules {
     }
 
     /// P4 with the project's visible actions already in hand — the same rule `isStalled` and
-    /// `openActions` apply: `someday` is not a commitment, and a deferred action is not now
-    /// (deferred actions are not in `visible` at all).
+    /// `openActions` apply: `someday` is not a commitment.
     private static func isStalled(_ project: Project, visible: [Action]) -> Bool {
         guard project.status == .active else { return false }
         return !visible.contains { $0.status != .someday }
@@ -256,7 +283,7 @@ public enum Rules {
                 return ProjectRow(
                     project: project,
                     activeActions: visible
-                        .filter { $0.status.countsTowardCap }
+                        .filter { occupiesNext($0, today: today) }
                         .sorted(by: nextIsOrdered),
                     remainingSteps: project.openSteps.count,
                     isStalled: isStalled(project, visible: visible))
@@ -365,8 +392,8 @@ public enum Rules {
 
     // MARK: - Sidebar
 
-    /// Live counts for the Mac sidebar (E3). Every count matches the list the row opens, so
-    /// deferred actions are counted only under `deferred`.
+    /// Live counts for the Mac sidebar (E3). Every count matches the list the row opens: a
+    /// deferral counts under `waiting` until it is back, then under `next` (#86).
     public struct SidebarCounts: Sendable, Equatable {
         public var inbox: Int
         public var next: Int
@@ -375,7 +402,8 @@ public enum Rules {
         /// Open items across every list — one sidebar row for all lists (E3, §5a).
         public var lists: Int
         public var projects: Int
-        public var deferred: Int
+        /// #87 — every card on the In progress board (in progress + agent + review).
+        public var inProgress: Int
 
         public init(
             inbox: Int,
@@ -384,7 +412,7 @@ public enum Rules {
             waiting: Int,
             lists: Int,
             projects: Int,
-            deferred: Int
+            inProgress: Int = 0
         ) {
             self.inbox = inbox
             self.next = next
@@ -392,7 +420,7 @@ public enum Rules {
             self.waiting = waiting
             self.lists = lists
             self.projects = projects
-            self.deferred = deferred
+            self.inProgress = inProgress
         }
     }
 
@@ -401,12 +429,12 @@ public enum Rules {
         let visible = visibleActions(s, today: today)
         return SidebarCounts(
             inbox: inboxQueue(s).count,
-            next: visible.count { $0.status.countsTowardCap },
+            next: visible.count { occupiesNext($0, today: today) },
             someday: visible.count { $0.status == .someday },
-            waiting: visible.count { $0.status == .waiting },
+            waiting: visible.count { $0.status == .waiting && !isBackInNext($0, today: today) },
             lists: openListItemCount(s),
             projects: s.projects.count { $0.status == .active },
-            deferred: deferredList(s, today: today).count)
+            inProgress: visible.count { $0.status.isOnBoard })
     }
 
     // MARK: - Signals (STYLEGUIDE §2.2)
@@ -433,17 +461,23 @@ public enum Rules {
             }
         }
 
-        // waiting: follow-up soon / passed ⇒ chase (W2)
+        // waiting: follow-up soon / passed ⇒ chase (W2). A who-less one is a deferral: on its
+        // date it is back in Next with the `back` badge instead (D1, #86; the badge lives for
+        // `returnedFromDeferDays` days).
         if action.status == .waiting, let followUp = action.followUpDate {
             let delta = followUp.days(since: today)
-            if delta <= 0 {
+            if action.isWhoLessWaiting, delta <= 0 {
+                if -delta < policy.returnedFromDeferDays {
+                    out.append(Signal(kind: .returnedFromDefer, step: .neutral))
+                }
+            } else if delta <= 0 {
                 out.append(Signal(kind: .chase(days: -delta), step: .attention))
             } else if delta <= policy.followUpSoonDays {
                 out.append(Signal(kind: .followUpSoon(followUp), step: .aging))
             }
         }
 
-        // D1 — the item came back today (the badge lives for `returnedFromDeferDays` days).
+        // D1/#86 — a deferred Someday item came back to Someday today.
         if let deferDate = action.deferDate, !action.status.isClosed,
            deferDate <= today, today.days(since: deferDate) < policy.returnedFromDeferDays {
             out.append(Signal(kind: .returnedFromDefer, step: .neutral))
@@ -502,7 +536,7 @@ public enum Rules {
         }
     }
 
-    /// The `back` badge for an item whose defer date has just arrived (D1).
+    /// The `back` badge for a deferral whose follow-up date has just arrived (D1, #86).
     public static func returnedFromDeferBadge(
         for action: Action, today: Day, policy: StalenessPolicy = .default, calendar: Calendar = .current
     ) -> Signal? {
@@ -553,6 +587,8 @@ public enum Rules {
 
     // MARK: - Timeline (D3)
 
+    /// A deferral to Next is a who-less follow-up (#86); `deferred` marks the day a deferred
+    /// Someday item comes back.
     public enum TimelineKind: Sendable, Equatable, Hashable, CaseIterable {
         case deferred
         case due
@@ -574,7 +610,8 @@ public enum Rules {
         }
     }
 
-    /// Defer, due and follow-up dates of all open actions in `from...to` (D3).
+    /// Defer, due and follow-up dates of all open actions in `from...to` (D3; a deferral to
+    /// Next shows as its follow-up date, a deferred Someday item as its defer date, #86).
     public static func timeline(_ s: VaultSnapshot, from: Day, to: Day) -> [TimelineEntry] {
         guard from <= to else { return [] }
         var out: [TimelineEntry] = []
