@@ -37,6 +37,11 @@ struct FuzzRoundTripTests {
             let note = fuzz.actionNote(requireKnownHeading: true)
             let id = NoteID(path: "Actions/Fuzzed \(seed).md")
             let before = try NoteCodec.decodeAction(id: id, text: note, timeZone: vaultTimeZone)
+            // #86 — a note with a legacy `defer:` is rewritten as waiting by any edit that leaves
+            // it open, on purpose (`PatchTests`); "nothing else moved" holds for every other note.
+            if try NoteCodec.decodeStoredAction(id: id, text: note, timeZone: vaultTimeZone).deferDate != nil {
+                continue
+            }
 
             let mutation = fuzz.pick(Mutation.all)
             var after = before
@@ -203,9 +208,6 @@ struct FuzzRoundTripTests {
             Mutation(name: "project",
                      apply: { $0.project = $0.project == nil ? NoteID(path: "Projects/Fuzz/Fuzz.md") : nil },
                      reads: { $0.project?.path ?? "-" }),
-            Mutation(name: "deferDate",
-                     apply: { $0.deferDate = $0.deferDate == nil ? Day(year: 2027, month: 1, day: 3) : nil },
-                     reads: { $0.deferDate.map(\.iso) ?? "-" }),
             Mutation(name: "due",
                      apply: { $0.due = $0.due == nil ? Day(year: 2027, month: 2, day: 4) : nil },
                      reads: { $0.due.map(\.iso) ?? "-" }),

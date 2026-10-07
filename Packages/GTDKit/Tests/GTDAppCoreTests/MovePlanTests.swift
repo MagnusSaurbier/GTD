@@ -64,17 +64,18 @@ struct MovePlanTests {
         #expect(MovePlan.accepts(action: action(.next), destination: .someday, snapshot: snapshot, today: today))
     }
 
-    // MARK: Deferred
+    // MARK: Deferrals (#86)
 
-    @Test func deferredAsksForADate() {
-        #expect(plan(action(.next), .deferred) == .deferDate)
-        // A defer date that has already arrived is not "deferred" (D1): ask again.
-        #expect(plan(action(.next, deferDate: today), .deferred) == .deferDate)
-    }
-
-    @Test func anAlreadyDeferredItemStaysWhereItIs() {
-        let later = Day(year: 2026, month: 10, day: 1)
-        #expect(plan(action(.next, deferDate: later), .deferred) == .alreadyThere)
+    /// A deferral that is back is a Next item: dropping it on Next does nothing, and dropping
+    /// it on Waiting asks for a new follow-up date like any Next item.
+    @Test func aDeferralThatIsBackIsJudgedAsNext() {
+        var back = action(.waiting)
+        back.followUpDate = today
+        #expect(plan(back, .next) == .alreadyThere)
+        #expect(plan(back, .waiting) == .card(status: .waiting, missing: [.followUpDate]))
+        var later = action(.waiting)
+        later.followUpDate = today.adding(days: 3)
+        #expect(plan(later, .waiting) == .alreadyThere)
     }
 
     // MARK: Projects

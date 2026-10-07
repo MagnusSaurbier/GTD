@@ -289,10 +289,6 @@ private struct ContentColumn: View {
             ListsSectionsView(
                 selection: navigation.openListItem,
                 onOpen: { navigation.open(listItem: $0) })
-        case .deferred:
-            DeferredView(
-                selection: navigation.openAction,
-                onOpen: { navigation.open(action: $0) })
         case .projects:
             ProjectsListView(
                 selection: navigation.openProject,

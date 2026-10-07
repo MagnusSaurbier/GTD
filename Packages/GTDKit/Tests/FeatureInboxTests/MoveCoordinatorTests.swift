@@ -164,24 +164,6 @@ struct MoveCoordinatorTests {
         #expect(moved?.waitingFor == "Len")
     }
 
-    // MARK: Deferred
-
-    @Test func droppingOnDeferredAsksForADateAndDefers() async {
-        let (mover, app) = make()
-        let item = action(app, status: .next) { $0.deferDate == nil }
-
-        await mover.move(item.id, to: .deferred)
-        guard case let .deferDate(asked)? = mover.dialogue else { Issue.record("no date sheet"); return }
-        #expect(asked.id == item.id)
-
-        let date = Day(year: 2026, month: 10, day: 5)
-        await mover.confirmDefer(asked, date: date)
-
-        #expect(mover.dialogue == nil)
-        #expect(app.snapshot.action(item.id)?.deferDate == date)
-        #expect(Rules.deferredList(app.snapshot, today: Fixtures.today).contains { $0.id == item.id })
-    }
-
     // MARK: Projects
 
     @Test func droppingOnAProjectRowAttachesItReplacingTheOldOne() async {

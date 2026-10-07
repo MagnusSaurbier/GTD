@@ -341,6 +341,42 @@ struct ActionEditModelTests {
         #expect(editor.lastError == nil)
     }
 
+    /// #86 — the detail's Defer chip defers: the item waits with that follow-up date and no
+    /// who, the chip shows the date, and clearing it brings the item back to Next.
+    @Test func theDeferChipMakesADeferralAndClearingItUndefers() async throws {
+        var action = fixture(status: .next)
+        action.timeEstimate = 30
+        let (model, editor) = make(action)
+        editor.setDeferDate(Fixtures.day(5))
+        await editor.waitForPendingSave()
+
+        let saved = try #require(model.snapshot.action(editor.id))
+        #expect(saved.status == .waiting)
+        #expect(saved.waiting == WaitingInfo(followUp: Fixtures.day(5)))
+        #expect(editor.deferDate == Fixtures.day(5))
+
+        editor.setDeferDate(nil)
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(editor.id)?.status == .next)
+        #expect(editor.deferDate == nil)
+        #expect(editor.lastError == nil)
+    }
+
+    /// #86 — on a Someday item the Defer chip is its own defer date: it stays Someday.
+    @Test func theDeferChipOnASomedayItemKeepsItSomeday() async throws {
+        let (model, editor) = make(fixture(status: .someday))
+        editor.setDeferDate(Fixtures.day(5))
+        await editor.waitForPendingSave()
+        let saved = try #require(model.snapshot.action(editor.id))
+        #expect(saved.status == .someday)
+        #expect(saved.deferDate == Fixtures.day(5))
+        #expect(editor.deferDate == Fixtures.day(5))
+        editor.setDeferDate(nil)
+        await editor.waitForPendingSave()
+        #expect(model.snapshot.action(editor.id)?.deferDate == nil)
+        #expect(model.snapshot.action(editor.id)?.status == .someday)
+    }
+
     /// The user's 2026-09-24 report: context and time chips on an imported waiting item (no
     /// follow-up date) showed "Still missing: Follow-up" and the edit was gone on leaving.
     @Test func chipsOnAWaitingNoteWithoutAFollowUpDateAreSaved() async throws {

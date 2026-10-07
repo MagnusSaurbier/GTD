@@ -85,7 +85,8 @@ struct DecodeTests {
         #expect(action.contexts == ["mac", "deep-work"])
         #expect(action.timeEstimate == 30)
         #expect(action.project == NoteID(path: "Projects/Applications/DAAD/DAAD.md"))
-        #expect(action.deferDate == Day(year: 2026, month: 9, day: 20))
+        // #86 — a waiting note keeps its own follow-up date; the legacy defer date is folded away.
+        #expect(action.deferDate == nil)
         #expect(action.due == Day(year: 2026, month: 9, day: 24))
         #expect(action.waitingFor == "Prof. Weber")
         #expect(action.followUpDate == Day(year: 2026, month: 9, day: 30))

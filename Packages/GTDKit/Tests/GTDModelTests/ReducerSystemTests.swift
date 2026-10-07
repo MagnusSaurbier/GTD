@@ -93,7 +93,6 @@ struct ReducerSystemTests {
             Rules.nextList(vault, today: today),
             Rules.onTheGoNextList(vault, today: today),
             Rules.waitingList(vault, today: today),
-            Rules.deferredList(vault, today: today),
             Rules.visibleActions(vault, today: today),
         ]
         for list in lists {

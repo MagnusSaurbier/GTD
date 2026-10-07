@@ -13,11 +13,11 @@ struct SidebarRoutingTests {
         #expect(SidebarItem.allCases.allSatisfy { !$0.title.isEmpty && !$0.symbol.isEmpty })
     }
 
-    /// STYLEGUIDE §4.1: Inbox · Next · In progress (#87) · Someday · Waiting · Lists · Projects ·
-    /// Deferred, then Review and Routines.
+    /// STYLEGUIDE §4.1: Inbox · Next · In progress (#87) · Someday · Waiting · Lists · Projects,
+    /// then Review and Routines. There is no Deferred section: deferrals are listed under Waiting (#86).
     @Test func countedSectionsAreTheOnesOfTheStyleGuide() {
         #expect(SidebarItem.counted == [
-            .inbox, .next, .inProgress, .someday, .waiting, .lists, .projects, .deferred,
+            .inbox, .next, .inProgress, .someday, .waiting, .lists, .projects,
         ])
         #expect(SidebarItem.flows == [.review, .routines])
         #expect(Set(SidebarItem.counted).union(SidebarItem.flows) == Set(SidebarItem.allCases))
@@ -70,7 +70,7 @@ struct SidebarRoutingTests {
     /// D3 / M4 — the calendar strip is docked only under the lists whose items carry dates.
     @Test func calendarStripIsDockedOnlyUnderTheDatedLists() {
         let docked = SidebarItem.allCases.filter(\.showsCalendarStrip)
-        #expect(Set(docked) == [.next, .waiting, .deferred])
+        #expect(Set(docked) == [.next, .waiting])
     }
 
     /// M3 — the guided flows span content + detail; every other section keeps the list/detail pair.
@@ -161,13 +161,6 @@ struct SidebarRoutingTests {
         let counts = Rules.sidebarCounts(Fixtures.sampleSnapshot, today: Fixtures.today)
         #expect(SidebarItem.lists.count(counts) == counts.lists)
         #expect(counts.lists == Rules.openListItemCount(Fixtures.sampleSnapshot))
-    }
-
-    /// The Deferred section is named "Deferred" in the sidebar; `FeatureWaiting.DeferredView`
-    /// titles its screen with the same word rather than with `Copy.deferLabel` ("Defer"), the
-    /// date chip's field label (walkthrough 2026-09-19).
-    @Test func deferredSectionIsCalledDeferred() {
-        #expect(SidebarItem.deferred.title == "Deferred")
     }
 
     // MARK: - Navigation
@@ -282,7 +275,6 @@ struct SidebarRoutingTests {
         #expect(SidebarItem.next.moveDestination == .next)
         #expect(SidebarItem.someday.moveDestination == .someday)
         #expect(SidebarItem.waiting.moveDestination == .waiting)
-        #expect(SidebarItem.deferred.moveDestination == .deferred)
         #expect(SidebarItem.projects.moveDestination == .projects)
         #expect(SidebarItem.lists.moveDestination == .lists)
         for item in [SidebarItem.inbox, .review, .routines] {
